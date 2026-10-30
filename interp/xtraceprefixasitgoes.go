@@ -77,8 +77,9 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 	defer func() { r.openTrace = outer }()
 	stopped := false
 	// Held across the entries rather than per entry, so each value sees the
-	// ones in front of it. See expandPrefixTraceValuesHolding.
-	var held heldPrefix
+	// ones in front of it, with the export attribute the route gives each.
+	// See expandPrefixTraceValuesHolding.
+	held := heldPrefix{route: r.heldExportRouteOf(argv)}
 	defer held.release(r)
 	// And an element write's subscript is read where its entry stands, so the
 	// element is held for the entries behind it. See

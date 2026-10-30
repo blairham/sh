@@ -120,6 +120,15 @@ func (r *Runner) prefixBeforeADeclarationsOperand(assigns []*syntax.Assign, argv
 	if !answered {
 		return false
 	}
+	// Held with the export attribute the declaration's route gives each
+	// entry, so a child the operand starts is handed what the route will:
+	// `export v=old; v=new typeset y=$(printenv v)` is `y=` in ksh93u+,
+	// which takes the attribute off at `typeset`, and `v=old; v=new export
+	// y=$(printenv v)` is `y=new` there (#7003). See
+	// interp/prefixheldexport.go.
+	if !held.route.set {
+		held.route = r.heldExportRouteOf(argv)
+	}
 	// The same walk the trace makes, and deliberately the same one: it skips
 	// a frozen name and a refused subscripted word, so a prefix this shell
 	// never evaluates is not evaluated here either, and it records each value

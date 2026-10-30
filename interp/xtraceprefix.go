@@ -216,8 +216,9 @@ func (r *Runner) expandPrefixTraceValues(assigns []*syntax.Assign, argv []string
 	// and needed here for the same reason: this pass expands every value
 	// before the route has applied one, so without it `set -x` alone would
 	// make `K=v1 A=${K#v} f` hand the body nothing in the dialects whose
-	// routes expand as they store.
-	var held heldPrefix
+	// routes expand as they store. With the export attribute the route
+	// gives each entry — see interp/prefixheldexport.go.
+	held := heldPrefix{route: r.heldExportRouteOf(argv)}
 	defer held.release(r)
 	r.expandPrefixTraceValuesHolding(assigns, &held, "", r.prefixSubscriptsReadHere(assigns, argv))
 }

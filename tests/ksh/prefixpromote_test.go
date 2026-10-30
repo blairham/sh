@@ -24,8 +24,8 @@ import (
 // `z=2` in the other five columns, and the bare `z=2` below is that same fact
 // where the shell can answer it itself.
 func TestAPrefixAtABuiltinUnexportsTheNameHere(t *testing.T) {
-	if got := ksh.Semantics().PrefixExportAtABuiltin; got != interp.PrefixExportAtABuiltinOff {
-		t.Errorf("PrefixExportAtABuiltin = %v, want %v", got, interp.PrefixExportAtABuiltinOff)
+	if got := ksh.Semantics().PrefixExportAtABuiltin; got != interp.PrefixExportAtABuiltinOffExceptAtExport {
+		t.Errorf("PrefixExportAtABuiltin = %v, want %v", got, interp.PrefixExportAtABuiltinOffExceptAtExport)
 	}
 	out, st := runKsh(t, t.TempDir(), `export z=1
 z=2 typeset -p z

@@ -181,11 +181,13 @@ func aPrefixIsWritten(assigns []*syntax.Assign) bool {
 // a[1]=v q=1 f`: `+ w=1`, the identifier complaint, `+ q=1`, `+ f`.
 //
 // local is the declaration the prefix becomes a local under, or "" — see
-// Runner.prefixLocalDeclaration.
+// Runner.prefixLocalDeclaration. argv is the command, which says what export
+// attribute each held entry carries — see interp/prefixheldexport.go.
 //
 // Reports whether it wrote those lines, so the caller writes the command alone.
 func (r *Runner) walkThePrefixBeforeTheRedirections(
 	assigns []*syntax.Assign,
+	argv []string,
 	walk prefixWalk,
 	traceEach bool,
 	local string,
@@ -206,7 +208,7 @@ func (r *Runner) walkThePrefixBeforeTheRedirections(
 	// walk is the one place the two columns that take it expand *every*
 	// value before any of them has been applied, which is what made
 	// `K=v1 A=${K#v} f` hand the body nothing. See interp/prefixsees.go.
-	var held heldPrefix
+	held := heldPrefix{route: r.heldExportRouteOf(argv)}
 	defer held.release(r)
 	wrote := false
 	for _, a := range assigns {

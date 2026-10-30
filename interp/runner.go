@@ -9992,7 +9992,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		if !answered {
 			return nil
 		}
-		tracedHere = r.walkThePrefixBeforeTheRedirections(c.Assigns, walk,
+		tracedHere = r.walkThePrefixBeforeTheRedirections(c.Assigns, argv, walk,
 			tracesPrefix && !prefixFollows && r.tracesEachPrefixEntryOnItsOwnLine(), local)
 		if r.unspecified {
 			return nil
@@ -10277,8 +10277,9 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			subscripts = subscriptsForTheChild
 		}
 		// Held across the entries, so each value sees the ones in front of
-		// it. See expandPrefixTraceValuesHolding.
-		var held heldPrefix
+		// it, with the export attribute the route gives each. See
+		// expandPrefixTraceValuesHolding and interp/prefixheldexport.go.
+		held := heldPrefix{route: r.heldExportRouteOf(argv)}
 		for i := range c.Assigns {
 			one := c.Assigns[i : i+1]
 			a := one[0]
@@ -10532,38 +10533,15 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				break
 			}
 			callHeld = append(callHeld, held)
-			if scoped {
-				// A cell the call owns is exported for the call, whatever
-				// the axis below says about a prefix the shell owns: the
-				// prefix is the call's environment, and every child the body
-				// starts is handed it. See
-				// Semantics.PrefixToAKeywordFunctionIsScopedToTheCall. Except
-				// an array, which no export attribute goes on: measured
-				// 2026-10-15 on ksh93u+, `function f { typeset -p x;
-				// printenv x; }; x=(a b) f` lists `typeset -a x=(a b)` and
-				// the child finds no `x` (#6547).
-				r.exportedPut(held, !r.prefixStoresAnArray(a))
-				continue
-			}
-			// The export attribute for the duration, which the two readings
-			// move in opposite directions rather than one of them leaving it
-			// alone: where the prefix is the command's *environment* the name
-			// gains the attribute, and where it is a plain assignment to this
-			// shell the name **loses** it. So the axis is asked on every
-			// name, including one that was exported before the call —
-			// `export v=1; f(){ env; }; v=9 f` hands the child `v=9` in six
-			// columns and tells it nothing in ksh93, where `typeset -p v`
-			// inside the body prints a plain `v=9`. An earlier reading asked
-			// only on a name that was not exported already, on the premise
-			// that one that was reaches every child either way; the ksh93
-			// column is what that premise is false in.
-			answer := r.sem().PrefixToAFunctionIsExported
 			if r.prefixStoresAnArray(a) {
 				// An array, which takes no export attribute and drops one
-				// the name had, whichever way the axis reads the prefix. See
-				// Runner.prefixStoresAnArray.
+				// the name had, whichever way the axes read the prefix — a
+				// cell the call owns included: measured 2026-10-15 on
+				// ksh93u+, `function f { typeset -p x; printenv x; }; x=(a b)
+				// f` lists `typeset -a x=(a b)` and the child finds no `x`
+				// (#6547). See Runner.prefixStoresAnArray.
 				r.exportedPut(held, false)
-			} else if on := r.ask(answer, "an assignment before a function being exported for the call"); on || answer == No {
+			} else if on, moves := r.prefixExportAtAFunction(scoped, true); moves {
 				// Recorded as `false` rather than deleted, because deleting
 				// it only makes the name unspoken and an unspoken name the
 				// shell was born with is still exported. See isExported.
@@ -10827,48 +10805,12 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				// otherwise, and drops one the name had. See
 				// Runner.prefixStoresAnArray.
 				r.exportedPut(landsOn, false)
-			} else if kind.throughCommand && (kind.kind == prefixBeforeExternal ||
-				r.sem().PrefixExportAtABuiltin != PrefixExportAtABuiltinOff) {
-				// `command` is a precommand word rather than a command, so
-				// the prefix in front of it belongs to whatever it goes on
-				// to run — and when that is an external, belonging to it
-				// means being in its environment. Setting the name is not
-				// enough for that: a child is handed the *exported* names,
-				// so `v=1; v=9 command env` showed the child nothing where
-				// bash 5.3, ksh93, zsh and dash all show it `v=9` (#2408).
-				// Unanimous, so it is done here and not asked.
-				//
-				// Only through `command`. A prefix before a builtin that
-				// runs text of its own is where the panel splits — bash
-				// shows the child `v=9` for `v=9 eval env` and the other
-				// three show it nothing — so exporting for every builtin
-				// would take three columns with it to answer one.
-				//
+			} else if on, moves := r.prefixExportAtThisBuiltin(kind, landsOn, true); moves {
 				// The attribute is put back by restoreVars along with the
 				// value: savedVar records the export tri-state precisely so
 				// a name that was never exported goes back to unspoken
 				// rather than to a recorded `false`.
-				r.exportedPut(landsOn, true)
-			} else if on, moves := r.prefixExportAtABuiltin(); moves {
-				// Every other builtin, where the panel does split and the
-				// attribute moves in both directions: bash hands the builtin
-				// an environment and exports the name, ksh93 reads the prefix
-				// as an ordinary assignment and takes the attribute off a
-				// name that had it, and the rest leave it exactly as it was.
-				// See Semantics.PrefixExportAtABuiltin.
-				//
-				// `command` in front of a builtin is that builtin's prefix
-				// in the column that takes the attribute off: measured
-				// 2026-10-16 on ksh93u+, `v=9 command eval '/usr/bin/printenv
-				// v'` finds nothing and `$v` is 9 afterwards, where bash and
-				// dash hand the child `v=9` (#6859).
-				//
-				// And a name carrying a case letter keeps it there: `typeset
-				// -xu v=x; v=abc :` hands a child `v=ABC`, where `typeset -x
-				// v=x; v=abc :` hands it nothing.
-				if on || !r.caseLetterKeepsTheExport(landsOn) {
-					r.exportedPut(landsOn, on)
-				}
+				r.exportedPut(landsOn, on)
 			}
 		}
 		// A `{name}` this command stored, seen through the prefix — the same
@@ -11178,8 +11120,10 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	// its own and there was nothing for the next entry to read — see
 	// interp/prefixsees.go, where the panel is. Released before the
 	// environment is read, so the child is handed the prefix and not this
-	// shell's cells rewritten.
-	var held heldPrefix
+	// shell's cells rewritten. Exported while it is held, since it is the
+	// child's environment: `v=old; v=new w=$(printenv v) printenv w` is `new`
+	// in every column (#7003). See interp/prefixheldexport.go.
+	held := heldPrefix{route: heldExportRoute{set: true, kind: external}}
 	// The PATH the prefix supplies, if it supplies one, held so that the
 	// search below is made with it — see reachPrefixedPath.
 	prefixPath, pathFromPrefix := "", false

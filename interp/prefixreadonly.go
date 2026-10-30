@@ -44,6 +44,12 @@ type prefixCommand struct {
 	kind prefixCommandKind
 	// throughCommand says `command` was the word written, whatever it named.
 	throughCommand bool
+	// word is the function or builtin the command word resolves to, looking
+	// through `command` and a transparent modifier, and "" for an external.
+	// One builtin moves its prefix's export attribute by name — see
+	// PrefixExportAtABuiltinOffExceptAtExport — and a function's form decides it
+	// for a function. See interp/prefixheldexport.go.
+	word string
 }
 
 // prefixCommandOf reads the command a prefix stands in front of.
@@ -55,7 +61,7 @@ func (r *Runner) prefixCommandOf(argv []string) prefixCommand {
 	p := prefixCommand{}
 	for len(argv) > 0 {
 		if _, ok := r.funcs[argv[0]]; ok {
-			p.kind = prefixBeforeFunction
+			p.kind, p.word = prefixBeforeFunction, argv[0]
 			return p
 		}
 		if _, ok := r.lookupBuiltin(argv[0]); ok {
@@ -101,6 +107,7 @@ func (r *Runner) prefixCommandOf(argv []string) prefixCommand {
 				argv = argv[1:]
 				continue
 			}
+			p.word = argv[0]
 			if r.IsSpecialBuiltinHere(argv[0]) {
 				p.kind = prefixBeforeSpecialBuiltin
 				return p

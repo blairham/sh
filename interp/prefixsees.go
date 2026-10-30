@@ -53,7 +53,13 @@ import (
 // One entry at a time, from the caller's own loop, so the ordering is the
 // caller's — an entry it refused or skipped holds nothing, which is what
 // keeps a refused prefix from being seen by the one behind it.
-type heldPrefix struct{ undo []savedVar }
+type heldPrefix struct {
+	undo []savedVar
+	// route is the command the prefix stands in front of, where the walk
+	// knows it, so a held scalar carries the export attribute the route's
+	// store will give it. See interp/prefixheldexport.go.
+	route heldExportRoute
+}
 
 // hold records the name's current state and writes the value over it.
 //
@@ -61,12 +67,20 @@ type heldPrefix struct{ undo []savedVar }
 // value on its way to a store the route below will make for real, and a
 // discipline function or a produced parameter's writer fired here would fire
 // twice for one assignment.
+//
+// With the export attribute the route gives the entry, so that a command
+// substitution behind it hands a child what the route will (#7003).
 func (h *heldPrefix) hold(r *Runner, name, value string) {
 	h.undo = append(h.undo, r.saveVar(name))
 	r.arraysDel(name)
 	r.dropAssocTable(name)
 	r.attrClear(name, attrRemoved)
 	r.varsPut(name, value)
+	if h.route.set {
+		if on, moves := r.heldPrefixExport(h.route, name); moves {
+			r.exportedPut(name, on)
+		}
+	}
 }
 
 // holdArray is hold for an entry that puts an array under its name.

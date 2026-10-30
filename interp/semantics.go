@@ -1553,7 +1553,9 @@ type Semantics struct {
 	// *builtin* — so it decides what a builtin that reads the attribute back
 	// sees, and what a child the builtin starts is told. See
 	// PrefixExportAtABuiltinPolicy: three answers, because the panel moves
-	// the attribute in both directions and one column moves it neither way.
+	// the attribute in both directions and one column moves it neither way —
+	// and a fourth, because the column that takes it off puts it on at
+	// `export` (#7003).
 	//
 	// The same question PrefixToAFunctionIsExported asks about a function, at
 	// the other kind of command, and a separate axis because a column that
@@ -41350,6 +41352,32 @@ const (
 	// column — and for the same reading: a prefix that is an ordinary
 	// assignment to this shell has no reason to be in anybody's environment.
 	PrefixExportAtABuiltinOff
+	// PrefixExportAtABuiltinOffExceptAtExport is PrefixExportAtABuiltinOff at
+	// every builtin but one: in front of the `export` utility the prefix is
+	// exported as each entry is assigned, so the entries and the operands
+	// behind it see it exported, and where the prefix persists it stays
+	// exported. ksh93u+. Measured 2026-10-30 from `-c` under `env -i
+	// PATH=/usr/bin:/bin`, `printenv` being /usr/bin/printenv:
+	//
+	//	                                         ksh93u+  bash 5.3  zsh 5.9.2      dash, ash
+	//	                                                  -o posix  posixbuiltins
+	//	v=old; v=new export y=1; printenv v      new      new       (nothing)      (nothing)
+	//	  …and then echo $v                      new      new       new            new
+	//	v=old; v=new export y=$(printenv v)      y=new    y=        y=             y=
+	//	v=old; v=new w=$(printenv v) export y=1  w=new
+	//
+	// The other columns answer `export` as they answer every builtin: bash
+	// exports a builtin's prefix anyway, and is `y=` in the second row only
+	// because it expands the operand before the prefix
+	// (Semantics.PrefixExpandedBeforeADeclarationsOperand); zsh, dash and
+	// BusyBox ash leave the attribute alone. ksh93u+ answers the same for
+	// `command export`, with no operand at all, and inside either form of
+	// function, where the prefix stays exported in the shell's globals.
+	//
+	// **It is the word and not the attribute.** `v=new typeset -x y=1` and
+	// `v=new readonly y=1` leave `v` unexported in ksh93u+, which takes the
+	// attribute off at those as at every other builtin (#7003).
+	PrefixExportAtABuiltinOffExceptAtExport
 )
 
 func (p PrefixExportAtABuiltinPolicy) String() string {
@@ -41360,6 +41388,8 @@ func (p PrefixExportAtABuiltinPolicy) String() string {
 		return "the attribute left alone"
 	case PrefixExportAtABuiltinOff:
 		return "unexported for the builtin"
+	case PrefixExportAtABuiltinOffExceptAtExport:
+		return "unexported for the builtin, exported for `export`"
 	}
 	return "unspecified"
 }

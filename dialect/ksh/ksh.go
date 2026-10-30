@@ -1916,7 +1916,11 @@ func Semantics() interp.Semantics {
 	// `typeset a=($(echo OP >&2))` — a utility this shell does not keep a
 	// prefix for, so the split above is not what decides it (#3814).
 	s.PrefixExpandedBeforeADeclarationsOperand = interp.Yes
-	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinOff
+	// Off at every builtin but `export`, which exports its own prefix as it
+	// is assigned and leaves it exported: measured 2026-10-30, `v=old;
+	// v=new export y=1; printenv v` is `new`, and `v=new w=$(printenv v)
+	// export y=1` leaves `w=new` (#7003).
+	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinOffExceptAtExport
 	// And a listing with no operand walks the **environment** the command
 	// was handed, so the prefix's entry is in it and counts as exported
 	// whatever that row just did to the attribute: `m=1; m=9 export -p`

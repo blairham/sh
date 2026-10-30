@@ -42,7 +42,7 @@ func (r *Runner) prefixExportAtABuiltin() (on, moves bool) {
 	switch r.sem().PrefixExportAtABuiltin {
 	case PrefixExportAtABuiltinOn:
 		return true, true
-	case PrefixExportAtABuiltinOff:
+	case PrefixExportAtABuiltinOff, PrefixExportAtABuiltinOffExceptAtExport:
 		return false, true
 	case PrefixExportAtABuiltinUnchanged:
 		return false, false

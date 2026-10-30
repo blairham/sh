@@ -892,6 +892,9 @@ func Diagnostics() interp.Diagnostics {
 		// f zz` for a function and `+x.sh:4> B=4 /bin/echo c` for an
 		// external.
 		TracePrefixAssignment: interp.TracePrefixOnTheCommandLineRepeatingThePrefix,
+		// The command behind `command`, `builtin` and `exec` is written
+		// without them. See interp/xtraceprecommand.go (#6967).
+		TraceLeavesOutPrecommandModifiers: true,
 		// The subject and the arm's patterns, once per arm it tries, where
 		// bash prints the header as written once and the other two print
 		// nothing. The line count is the information: it says how far down

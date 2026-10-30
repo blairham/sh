@@ -511,6 +511,14 @@ func (r *Runner) traceCommandWords(words []string, d *Diagnostics) []string {
 		}
 		quoted[i] = r.traceQuote(w, d.TraceQuoting, meta)
 	}
+	// And the modifier words out of the line, in the dialect that writes the
+	// command the scan left. See interp/xtraceprecommand.go.
+	if t := r.precommandTraceScan(words); t.out > 0 || t.named {
+		quoted = quoted[t.out:]
+		if t.named && len(quoted) > 0 {
+			quoted[0] = r.traceQuote(t.name, d.TraceQuoting, d.TraceMetacharacters)
+		}
+	}
 	return quoted
 }
 

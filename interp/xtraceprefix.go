@@ -227,6 +227,17 @@ func (r *Runner) tracePrefixRepeatsBeforeTheCommand(argv []string) bool {
 		// well.
 		return false
 	}
+	if t := r.precommandTraceScan(argv); t.out > 0 && t.out < len(argv) {
+		// And it is asked of the command the scan left, not of a modifier
+		// in front: `x=1 exec /usr/bin/true` is one prompt, `x=1 exec true`
+		// two, and `x=1 builtin command true` one, as `command` alone is.
+		// See interp/xtraceprecommand.go. A modifier with nothing behind it
+		// is still answered for itself (#7097).
+		if t.throughCommand {
+			return false
+		}
+		argv = argv[t.out:]
+	}
 	if _, ok := r.funcs[argv[0]]; ok {
 		return true
 	}

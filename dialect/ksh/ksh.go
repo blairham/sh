@@ -2952,6 +2952,14 @@ func Semantics() interp.Semantics {
 	// 2012-08-01, where zsh counts from 2 (#6899).
 	s.SubshellExitTrapFiresWhereItStopped = interp.Yes
 	s.SubshellExitTrapFiresAtItsOpeningLine = interp.No
+	// And an `eval` the subshell ran is the line it stopped on, not the
+	// last line of the text: `eval "$x"` on line 9, with `$x` three lines
+	// ending `exit 0`, is counted from 9 whether the text exits or runs
+	// out. The same line stands for the ERR trap the `eval` fires and for a
+	// `case $LINENO` after it. Measured 2026-10-30 on ksh93u+ 2012-08-01,
+	// where the text's own numbering had leaked out as the subshell's line
+	// (#6955).
+	s.EvalPutsTheCallersLineBack = interp.Yes
 	s.QuitIgnoredWhenNotInteractive = interp.No
 	// unanswered BuiltinReadsOptions: ksh93's `builtin` is another command,
 	// one that registers builtins from a library, and is not the one this

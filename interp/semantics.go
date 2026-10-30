@@ -29621,6 +29621,34 @@ type Semantics struct {
 	// sides with bash here, not with its sibling (#2462).
 	EvalTextContinuesTheCallersLines Answer
 
+	// EvalPutsTheCallersLineBack puts the shell back on the `eval`'s own
+	// line once its text is done — run out, or unwound by an `exit` — as a
+	// `.` and a function call already do in every column. The other reading
+	// leaves it on the last line the text ran, in the text's numbering.
+	//
+	// Only visible to what reads the line before the next command sets it:
+	// an ERR trap fired by the `eval` itself, a `case` subject in the
+	// column that reads the previous line, and an EXIT trap counted from
+	// where the shell stopped. Measured 2026-10-30 over script files, a
+	// three-line trap body whose second line fails and whose third writes
+	// `$LINENO`, the text held in `x` so its lines are not the file's:
+	//
+	//	                                          ksh93u+  bash 5.3  zsh 5.9.2  ash
+	//	( trap…; eval "$x" ) on 9, $x ends `exit 0` on its 3
+	//	                                          line 10  —         line 3     line 11
+	//	the same, the text running out            line 10  —         (the `(`)  line 11
+	//	ERR, `eval "$x"` on 10, $x ends `false`   E=10     E=10      not fired  —
+	//	`case $LINENO` after `eval "$x"` on 7     7        —         —          —
+	//
+	// ksh93 and bash put the line back: the trap body is counted on from the
+	// `eval`'s line 9, and the ERR trap the `eval` fires reads its own line,
+	// where this read the text's 3 and the bash text's continued 12. zsh
+	// and BusyBox ash read the text's line — zsh its own numbering, under
+	// the text's `(eval)` name, ash its continued one. dash reads the line
+	// nowhere here: its trap bodies number from their own first line and it
+	// has no ERR (#6955).
+	EvalPutsTheCallersLineBack Answer
+
 	// ArithBaseAbove36 admits `37#…` through `64#…`, whose letters split
 	// into cases and whose last two digits are `@` and `_`. bash — all three
 	// builds — ksh93 and BusyBox ash take the full 64, where `$((64#@))` is
@@ -37544,7 +37572,12 @@ func PosixSemantics() Semantics {
 		// nothing about how the text is numbered, so this follows the
 		// panel: three of the five number it from one (#2462).
 		EvalTextContinuesTheCallersLines: No,
-		ArithBaseAbove36:                 Yes,
+		// Nor where the line stands once the text is done, which is read
+		// only before the next command sets it. Left where the text put it,
+		// which is what this package did before the axis existed; ksh93 and
+		// bash say otherwise themselves (#6955).
+		EvalPutsTheCallersLineBack: No,
+		ArithBaseAbove36:           Yes,
 		// The standard's numeral is C's, where a leading zero opens an octal
 		// constant — so a base cannot be written with one, and a radix prefix
 		// needs at least one digit after it. Neither is a base spelling the

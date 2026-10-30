@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -44,6 +45,12 @@ const dyingExitHook = "SH_TEST_DYING_EXIT_HOOK"
 // dyingTailExec has the shell half become the last command of its string
 // rather than fork it, as bash 5.3 does with a lone simple command there.
 const dyingTailExec = "SH_TEST_DYING_TAIL_EXEC"
+
+// dyingInteractiveAlarm answers Semantics.InteractiveAlarm in the shell half,
+// as the number of an interp.InteractiveAlarmAnswer, and answers
+// Semantics.InteractiveIgnoresResourceLimitSignals yes beside it where the
+// alarm is ignored, which is the one dialect that has both.
+const dyingInteractiveAlarm = "SH_TEST_DYING_INTERACTIVE_ALARM"
 
 // deathDeadline is how long a shell that has been asked to die is given
 // before this test gives up on it and says so.
@@ -119,6 +126,12 @@ func dieRunningAsAShell() {
 	}
 	if hook := os.Getenv(dyingExitHook); hook != "" {
 		sh.Semantics.ExitHook = hook
+	}
+	if a, err := strconv.Atoi(os.Getenv(dyingInteractiveAlarm)); err == nil {
+		sh.Semantics.InteractiveAlarm = interp.InteractiveAlarmAnswer(a)
+		if sh.Semantics.InteractiveAlarm == interp.InteractiveAlarmIsIgnored {
+			sh.Semantics.InteractiveIgnoresResourceLimitSignals = interp.Yes
+		}
 	}
 	if os.Getenv(dyingExitTrapRuns) != "" {
 		// And what a `wait` the signal gave up reports, which no EXIT trap

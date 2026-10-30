@@ -2098,6 +2098,12 @@ func Semantics() interp.Semantics {
 	s.QuitIgnoredWhenNotInteractive = interp.Yes
 	// And the ignore survives `trap -`, as it does in bash.
 	s.QuitResetRestoresTheDefault = interp.No
+	// Interactive, an untrapped XCPU, XFSZ or ALRM ends it as it ends a
+	// shell that is not: measured 2026-10-30 on BusyBox 1.37.0 in the pinned image, under `-i -c` and from another
+	// process during a `read`, a `sleep` and a busy loop (#7058). See
+	// interp.Semantics.InteractiveAlarm.
+	s.InteractiveIgnoresResourceLimitSignals = interp.No
+	s.InteractiveAlarm = interp.InteractiveAlarmKills
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	// A subshell's own EXIT trap runs however the subshell ended. Measured

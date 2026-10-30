@@ -9,10 +9,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/blairham/sh/interp"
 )
 
 // namedSignal is a signal and the word a script writes for it.
@@ -62,7 +65,8 @@ func TestAnUntrappedSignalFromOutsideEndsTheShell(t *testing.T) {
 
 // The same under `-i`, which is a different road to the watch: an interactive
 // shell hands it a second answer about what it ignores. bash 5.3, bash 3.2 and
-// dash die of all of these under `-i -c` as well; see #7046 for the two
+// dash die of all of these under `-i -c` as well; see
+// TestAnInteractiveShellAnswersAnAlarmFromOutsideItsOwnWay for the two
 // interactive shells that do something else with ALRM and XCPU.
 func TestAnInteractiveShellDiesOfAnUntrappedUserSignal(t *testing.T) {
 	dieRunningAsAShell()
@@ -75,6 +79,70 @@ func TestAnInteractiveShellDiesOfAnUntrappedUserSignal(t *testing.T) {
 			}
 			if strings.Contains(out, "goroutine") {
 				t.Errorf("wrote a goroutine dump: %q", firstLine(out))
+			}
+		})
+	}
+}
+
+// Two interactive shells answer an untrapped ALRM from outside with something
+// other than its default action, and one of them answers XCPU that way too.
+//
+// Measured 2026-10-30 with `/bin/kill -SIG` from another process at a shell
+// under `-i -c` in a `read`, an external `sleep` and a busy loop, and at a
+// prompt in a session on a pseudo-terminal: zsh 5.9.2 writes `zsh: timeout`
+// at the prompt and exits 14, and ksh93u+ carries on — for ALRM, and for XCPU
+// and XFSZ as well — where bash 5.3.20, bash 3.2.57, dash and BusyBox ash die
+// of each (#7058). See interp.Semantics.InteractiveAlarm.
+func TestAnInteractiveShellAnswersAnAlarmFromOutsideItsOwnWay(t *testing.T) {
+	dieRunningAsAShell()
+	answered := func(a interp.InteractiveAlarmAnswer, interactive bool) []string {
+		env := []string{dyingInteractiveAlarm + "=" + strconv.Itoa(int(a))}
+		if interactive {
+			env = append(env, dyingInteractive+"=1")
+		}
+		return env
+	}
+	for _, hold := range outsideSignalHolds {
+		t.Run(hold.name, func(t *testing.T) {
+			ws, out := signaledInAGroupOfItsOwn(t, "^TestAnInteractiveShellAnswersAnAlarmFromOutsideItsOwnWay$",
+				outsideSignal{hold: hold.src, sig: syscall.SIGALRM, env: answered(interp.InteractiveAlarmTimesOut, true)})
+			if ws.Signaled() || ws.ExitStatus() != int(syscall.SIGALRM) || out != "testsh: timeout\n" {
+				t.Errorf("a timeout: ended %v, wrote %q; want an exit at %d and %q",
+					ws, out, int(syscall.SIGALRM), "testsh: timeout\n")
+			}
+		})
+	}
+	for _, c := range []struct {
+		name        string
+		answer      interp.InteractiveAlarmAnswer
+		interactive bool
+		setup       string
+		sig         syscall.Signal
+		survives    bool
+	}{
+		{"ignored", interp.InteractiveAlarmIsIgnored, true, "", syscall.SIGALRM, true},
+		{"ignored, and a trap does not run", interp.InteractiveAlarmIsIgnored, true, "trap 'echo T' ALRM; ", syscall.SIGALRM, true},
+		{"ignored, XCPU beside it", interp.InteractiveAlarmIsIgnored, true, "", syscall.SIGXCPU, true},
+		{"the default action", interp.InteractiveAlarmKills, true, "", syscall.SIGALRM, false},
+		{"a timeout given back to the default", interp.InteractiveAlarmTimesOut, true, "trap - ALRM; ", syscall.SIGALRM, false},
+		{"a timeout is not interactive's", interp.InteractiveAlarmTimesOut, false, "", syscall.SIGALRM, false},
+		{"an ignore is not interactive's", interp.InteractiveAlarmIsIgnored, false, "", syscall.SIGALRM, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			hold := "read line; echo after"
+			o := outsideSignal{setup: c.setup, hold: hold, sig: c.sig, env: answered(c.answer, c.interactive)}
+			if c.survives {
+				// Then the hold has to end on its own for the shell to be
+				// seen carrying on.
+				o.hold, o.stdinClosed = "sleep 0.3; echo after", true
+			}
+			ws, out := signaledInAGroupOfItsOwn(t, "^TestAnInteractiveShellAnswersAnAlarmFromOutsideItsOwnWay$", o)
+			if !c.survives {
+				diedOf(t, ws, out, c.sig)
+				return
+			}
+			if ws.Signaled() || ws.ExitStatus() != 0 || out != "after\n" {
+				t.Errorf("ended %v, wrote %q; want %q at 0", ws, out, "after\n")
 			}
 		})
 	}

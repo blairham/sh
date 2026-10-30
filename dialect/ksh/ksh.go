@@ -2953,6 +2953,15 @@ func Semantics() interp.Semantics {
 	// untrapped QUIT kills it with or without the reset, so that route asks
 	// nothing.
 	s.QuitResetRestoresTheDefault = interp.No
+	// Interactive, it ignores an untrapped XCPU and XFSZ as it does TERM —
+	// the reset above keeps that ignore too, and `( … )` ends on one at 256
+	// plus the number — and keeps a handler for ALRM that does nothing,
+	// inside the parentheses as well. Measured 2026-10-30 under `-i -c` and
+	// at a pseudo-terminal, from the script and from another process
+	// (#7058). Not interactive it dies of all three. See
+	// interp.Semantics.InteractiveAlarm.
+	s.InteractiveIgnoresResourceLimitSignals = interp.Yes
+	s.InteractiveAlarm = interp.InteractiveAlarmIsIgnored
 	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	// A `return` in an EXIT trap's body names the status the shell leaves

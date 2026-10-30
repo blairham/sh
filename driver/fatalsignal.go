@@ -4,6 +4,7 @@
 package driver
 
 import (
+	"io"
 	"os"
 	"os/signal"
 	"sync"
@@ -169,6 +170,10 @@ var fatalWatch struct {
 	// takes hands the current shell a death it has an EXIT trap to run
 	// first. See interp.Runner.TakesAFatalSignal.
 	takes atomic.Pointer[takesAFatalSignal]
+	// alarm answers whether the current shell, with no trap for SIGALRM,
+	// ends on it as a timeout, and says what to write where. See
+	// interp.Runner.TimesOutOnAnAlarm.
+	alarm atomic.Pointer[alarmTimeout]
 	// bornIgnoring is what the process was ignoring when the watch was set
 	// up, for the two signals the runtime lets an inherited ignore stand for.
 	// Written once, before the watch starts, and only read after.
@@ -251,6 +256,17 @@ func watchFatalSignals(r *interp.Runner) {
 					// has run. See interp/outsidedeath.go.
 					continue
 				}
+				if alarm := fatalWatch.alarm.Load(); sig == syscall.SIGALRM && alarm != nil {
+					if say, status, timesOut := alarm.answer(); timesOut {
+						// Not a death in this dialect's interactive shell:
+						// measured 2026-10-30, zsh 5.9.2 at a prompt writes
+						// `zsh: timeout` and exits 14 for an ALRM from
+						// another process, where bash, dash and ash die of
+						// it and ksh93 carries on (#7058).
+						_, _ = io.WriteString(alarm.stderr, say)
+						os.Exit(status)
+					}
+				}
 				if hangup := fatalWatch.hangup.Load(); sig == syscall.SIGHUP && hangup != nil {
 					if status, exits := (*hangup)(); exits {
 						// Not a death in this dialect: measured 2026-10-29,
@@ -289,6 +305,13 @@ func watchWhatTheShellIgnores(r *interp.Runner) {
 	// again here for the same reason. See interp.Runner.TakesAFatalSignal.
 	takes := takesAFatalSignal(r.TakesAFatalSignal())
 	fatalWatch.takes.Store(&takes)
+	// And whether an alarm ends it as a timeout, which only an interactive
+	// shell does: taken again here for the same reason.
+	alarm := alarmTimeout{answer: r.TimesOutOnAnAlarm(), stderr: r.Stderr}
+	if alarm.stderr == nil {
+		alarm.stderr = io.Discard
+	}
+	fatalWatch.alarm.Store(&alarm)
 	if r.Interactive && fatalWatch.ch != nil && !signal.Ignored(syscall.SIGTERM) {
 		signal.Notify(fatalWatch.ch, syscall.SIGTERM)
 	}
@@ -343,6 +366,19 @@ func watched(sig syscall.Signal) bool {
 		}
 	}
 	return false
+}
+
+// alarmTimeout is interp.Runner.TimesOutOnAnAlarm's answer and the stream the
+// shell writes its diagnostics to, where the watch says what the shell would.
+//
+// Ended by the watch rather than handed over, so it runs no EXIT trap and the
+// location it writes is the shell's name alone. That is zsh's answer at a
+// prompt, which is where the signal comes from in practice — a TMOUT is a
+// prompt's timer — and it is short of zsh's under `-i -c` while a command
+// runs, which writes `zsh:1: timeout` and runs the trap.
+type alarmTimeout struct {
+	answer func() (say string, status int, timesOut bool)
+	stderr io.Writer
 }
 
 // takesAFatalSignal is interp.Runner.TakesAFatalSignal's answer.

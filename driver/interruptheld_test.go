@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -83,6 +84,9 @@ func TestAnInterruptWaitsForTheForegroundProgram(t *testing.T) {
 		{"in a pipeline, by any program", `/bin/sh -c "kill -INT \$PPID; sleep 0.1" | cat; echo survived`, interp.InterruptWaitsForAnyProgram, "survived\n"},
 		{"not in a pipeline, for a lone program", `/bin/sh -c "kill -INT \$PPID; sleep 0.1" | cat; echo survived`, interp.InterruptWaitsForALoneProgram, ""},
 		{"not in a substitution", `x=$(/bin/sh -c "kill -INT \$PPID; sleep 0.1"); echo survived`, interp.InterruptWaitsForAnyProgram, ""},
+		// Nor in a `<(…)` body, which nothing waits for: the shell is in a
+		// builtin, and every reference dies there at once.
+		{"not in a <(…) body", `read x < <(/bin/sh -c "kill -INT \$PPID; sleep 0.2"); echo survived`, interp.InterruptWaitsForAnyProgram, ""},
 		{"the program died of it too", `/bin/sh -c "kill -INT \$PPID; sleep 0.2; kill -INT \$\$; sleep 1"; echo survived`, interp.InterruptWaitsForAnyProgram, ""},
 		// Inside parentheses, for a lone program (#5541): pending past the
 		// program, cleared by the next one, and ending the shell when the
@@ -111,3 +115,50 @@ func TestAnInterruptWaitsForTheForegroundProgram(t *testing.T) {
 // diesMark ends a row's wanted output where the shell writes that much and
 // then dies of SIGINT.
 const diesMark = "\x00dies"
+
+// **Where the dialect does not hold an interrupt for the program, it still
+// waits for the program before dying of it** (#7059). Measured 2026-10-30
+// under `-c`, SIGINT sent to the shell's pid alone, from another process and
+// from the program itself: zsh 5.9.2, dash and BusyBox ash die of it in every
+// row below, but only once the program — or the `( … )`, pipeline,
+// substitution or function call it stands in — is done, with the
+// parentheses' `echo in` written first. A builtin holds nothing, so a shell in
+// a loop of its own dies where the interrupt lands. This shell died at once in
+// every row and left the program running.
+//
+// The program writes its marker after the interrupt and only then exits, so
+// the marker being there once the shell has died is what says the shell
+// waited for it. It writes nothing else, so nothing it leaves running can hold
+// the output this test reads.
+func TestAnInterruptEndsTheShellOnlyOnceTheProgramIsDone(t *testing.T) {
+	runHeldAsAShell()
+	const name = "TestAnInterruptEndsTheShellOnlyOnceTheProgramIsDone"
+	dir := t.TempDir()
+	for i, c := range []struct {
+		name   string
+		src    string
+		out    string
+		waited bool
+	}{
+		{"a program", `P; echo after`, "", true},
+		{"parentheses run to their end", `( P; echo in ); echo after`, "in\n", true},
+		{"a substitution", `x=$(P; echo in); echo "after $x"`, "", true},
+		{"a pipeline", `P | cat >/dev/null; echo after`, "", true},
+		{"a function", `f() { P; echo inf; }; f; echo after`, "", true},
+		{"a <(…) body holds nothing", `read x < <(/bin/sh -c "exec 2>/dev/null; sleep 0.2; kill -INT $$; sleep 3; : >M"); echo after`, "", false},
+		{"a builtin holds nothing", `/bin/sh -c "exec >/dev/null 2>&1; sleep 0.2; kill -INT $$; sleep 3; : >M" & while :; do :; done`, "", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			marker := filepath.Join(dir, strconv.Itoa(i))
+			program := `/bin/sh -c "exec >/dev/null 2>&1; kill -INT $$; sleep 0.3; : >` + marker + `"`
+			src := strings.ReplaceAll(strings.Replace(c.src, "P", program, 1), ">M", ">"+marker)
+			ws, out := heldRun(t, name, src, interp.InterruptEndsTheShell)
+			_, err := os.Stat(marker)
+			waited := err == nil
+			if !ws.Signaled() || ws.Signal() != syscall.SIGINT || out != c.out || waited != c.waited {
+				t.Errorf("%s: %v, wrote %q, waited for the program %v; want %q, killed by SIGINT, waited %v",
+					c.src, ws, out, waited, c.out, c.waited)
+			}
+		})
+	}
+}

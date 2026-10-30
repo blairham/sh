@@ -19,7 +19,10 @@ const (
 	// did before the question was asked.
 	InterruptDeferralUnspecified InterruptDeferral = iota
 	// InterruptEndsTheShell is zsh, dash and BusyBox ash: the shell dies of
-	// it at once, whatever it is waiting for.
+	// it whatever the program it waits for does — but only once that program,
+	// or the `( … )`, pipeline or substitution it is part of, is done. A
+	// builtin holds nothing, so one in a `read`, a `wait` or a loop of its own
+	// dies where the interrupt lands. See Runner.foregroundProgramEnded.
 	InterruptEndsTheShell
 	// InterruptWaitsForALoneProgram is ksh93: the shell waits for the
 	// program, and dies of the interrupt only if the program did — but only
@@ -81,12 +84,31 @@ func (r *Runner) InterruptHeld() func() bool {
 // to wait for holds an interrupt, and counts the wait where it does. The
 // matching call is foregroundProgramEnded.
 func (r *Runner) holdingInterrupts() bool {
-	if r.interrupts == nil || r.HoldInterrupts == nil || r.Interactive || r.inCommandSubst || r.bg != nil {
+	if r.interrupts == nil || r.HoldInterrupts == nil || r.Interactive || r.bg != nil {
+		return false
+	}
+	if r.pipeEnd != nil {
+		// A `<(…)` body, which nothing waits for: the shell is busy with the
+		// command that named it, and dies where the interrupt lands if that
+		// is a builtin. Measured 2026-10-30, `read x < <(P); echo after`
+		// with P sending SIGINT to `$$` and sleeping on: bash 5.3, bash 3.2,
+		// ksh93 and zsh die of it at once, where this shell held it for P in
+		// the bash dialect and carried on.
 		return false
 	}
 	switch r.sem().InterruptWaitsForTheProgram {
+	case InterruptEndsTheShell:
+		// Anywhere the shell would be waiting for the program's process, a
+		// substitution included: the death is the shell's either way, and
+		// only its moment is held.
 	case InterruptWaitsForAnyProgram:
+		if r.inCommandSubst {
+			return false
+		}
 	case InterruptWaitsForALoneProgram:
+		if r.inCommandSubst {
+			return false
+		}
 		if r.inSubshell && !r.inParensBody {
 			// Inside parentheses it is held as at the top: that dialect
 			// runs them in its own process. Not in a pipeline element or
@@ -122,13 +144,33 @@ func (r *Runner) holdingInterrupts() bool {
 //	        bash: survived; ksh93: dies, 130
 //	x=$(/bin/sh -c "kill -INT \$PPID; sleep 0.1"); echo survived
 //	        bash 5.3.20 and ksh93: die, 130 (bash 3.2.57 survives)
+//
+// In zsh, dash and BusyBox ash the program decides nothing: the shell dies of
+// the interrupt whatever the program did, once it is done. Measured
+// 2026-10-30 under `-c`, SIGINT sent to the shell's pid alone from another
+// process 0.4 s in, or by the program itself to `$$` before it writes a
+// marker file and exits (#7059):
+//
+//	/bin/sleep 1.5; echo after           killed by INT at 1.5 s, nothing
+//	( /bin/sleep 1.5; echo in ); echo …  `in`, then killed at 1.5 s
+//	x=$(/bin/sleep 1.5; echo in); …      killed at 1.5 s, nothing
+//	f() { /bin/sleep 1.5; echo inf; }; f killed at 1.5 s, nothing
+//	/bin/sleep 1.5 | /bin/cat; echo …    killed at 1.5 s, nothing
+//	read x; …, a busy loop, `wait`       killed at 0.4 s
+//
+// in all three, with the marker written before the shell died in every row
+// that waits. This shell died at 0.4 s in every row and left the program
+// running. The death is recorded for the shell at the top, which takes it at
+// its next command: a `( … )` or a pipeline element is a copy that never
+// takes one, so it runs to its end first, as the child it stands for would —
+// the reference's child was never sent the signal at all.
 func (r *Runner) foregroundProgramEnded(diedOfInterrupt bool) {
 	box := r.interrupts
 	left := box.waits.Add(-1)
 	if !box.pending.Load() {
 		return
 	}
-	if diedOfInterrupt {
+	if diedOfInterrupt || r.sem().InterruptWaitsForTheProgram == InterruptEndsTheShell {
 		box.pending.Store(false)
 		r.recordSharedDeath("INT", syscall.SIGINT)
 		return

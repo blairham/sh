@@ -7794,8 +7794,16 @@ type Semantics struct {
 	//	        bash 5.3.20, ksh93: die, 130; bash 3.2.57 survives
 	//
 	// So bash holds it for any program but one in a substitution and ksh93
-	// for one the shell runs itself; zsh, dash and BusyBox ash die where it
-	// lands.
+	// for one the shell runs itself; zsh, dash and BusyBox ash die of it
+	// whatever the program does — but only once the program is done, or the
+	// `( … )`, pipeline or substitution it runs in, which goes on to its end
+	// first (#7059). Measured 2026-10-30, SIGINT to the shell's pid alone
+	// 0.4 s into `/bin/sleep 1.5`: all three die at 1.5 s, and print `in`
+	// first for `( /bin/sleep 1.5; echo in ); echo after`; in a `read`, a
+	// `wait` or a busy loop they die at 0.4 s. A `<(…)` body holds nothing
+	// in any column: nothing waits for it, and `read x < <(P)` dies at once
+	// in all four of bash 5.3, bash 3.2, ksh93 and zsh. See
+	// Runner.foregroundProgramEnded.
 	//
 	// Inside `( … )`, which ksh93 runs in its own process, the lone program
 	// holds it too, and a held interrupt the program survived stays pending

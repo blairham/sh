@@ -331,6 +331,10 @@ func (r *Runner) ResumeAfterExit() bool {
 // this could turn `exit` into something survivable.
 func (r *Runner) takeFileError() {
 	r.ctl, r.abandon, r.errexitStopped = controlNone, abandonRequested, false
+	// The shell is not ending after all, so a trap a call gave up on the
+	// way here comes back. See Runner.putBackALostExitTrap.
+	r.execDroppedTheExitTrap = false
+	r.putBackALostExitTrap()
 }
 
 // GiveUpTheFile ends the *file* a fatal error happened in rather than the

@@ -20928,6 +20928,18 @@ type Semantics struct {
 	// zsh 5.9.2, `exit 0` on line 6 of a six-line file locates the trap at
 	// 6 and the script running out at 7 (#6899); Runner.firedAt has the
 	// table, including the fatal errors that leave the shell past the end.
+	// A `return` that ends the script is a request in the same sense.
+	//
+	// The end is a file's and standard input's. A `-c` string that ran out
+	// is counted from its line 1 instead, as though its lines had gone with
+	// it — measured 2026-10-30 on zsh 5.9.2, a seven-line string ending on
+	// `:` locates the trap at 1 where the same text as a file or on standard
+	// input is at 8, and so does one ending on a `while` loop, a subshell, a
+	// `[[ ]]`, a function call, a `.` or an `eval` (#6953). Not modeled: a
+	// string whose last command is an `if` with a branch taken, a `for`, a
+	// `case` or a brace group locates it at that command's own line, because
+	// zsh runs the trap *inside* that command, under its redirections — `{
+	// :; } >/dev/null` as the last command sends the trap's output there too.
 	ExitTrapFiresPastTheEnd Answer
 
 	// ExitTrapFiresWhereTheScriptStopped counts the EXIT trap as having fired

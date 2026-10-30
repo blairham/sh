@@ -153,6 +153,11 @@ func TestAChildWritesTheTextItWasHandedOnItsOwn(t *testing.T) {
 			"+zsh:1> x=+zsh:1> a='' +zsh:1> true\n+zsh:1> x='' \n",
 		},
 		{
+			"the always half of a try",
+			`set -x; x=$( { f() { :; } } always { : $(echo a) } )`,
+			"+zsh:1> x=+zsh:1> echo a\n+zsh:1> : a\n+zsh:1> x='' \n",
+		},
+		{
 			"a condition in a group carries it",
 			`set -x; x=$( { [[ a == $(echo a) ]]; } )`,
 			"+zsh:1> x=+zsh:1> [[ a == +zsh:1> echo a\n+zsh:1> x=+zsh:1> [[ a == a+zsh:1> echo a\n" +

@@ -346,6 +346,9 @@ func (r *Runner) expandPrefixTraceValuesHolding(
 		value := r.prefixExpansion(a)
 		r.prefixEntryBecomesLocal(a, local)
 		joined := r.recordPrefixTraceValue(a, value)
+		if inTurn && !r.assignmentGaveUp() {
+			r.prefixEntryValueIsIn(a)
+		}
 		if inTurn && !r.assignmentGaveUp() && !r.placePrefixSubscript(a, subscripts == subscriptsForThisShell) {
 			return
 		}

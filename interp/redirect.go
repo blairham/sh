@@ -121,10 +121,10 @@ func (r *Runner) applyRedirList(
 	r.redirOwner = owner
 	defer func() { r.redirOwner = outerOwn }()
 	if len(rs) > 0 && r.openTrace != nil {
-		// A substitution in a redirection takes the text a child was handed,
-		// as one inside a compound command does. See
-		// Runner.inheritedTextIsTakenByACopy.
-		r.enteringACompound()
+		// Opening a redirection writes the text a child was handed, before
+		// the redirection is made and before a word of it expands. See
+		// Runner.writeHandedText.
+		r.writeHandedText()
 	}
 	var closers []io.Closer
 	// What this command has already aimed each stream at, so a second

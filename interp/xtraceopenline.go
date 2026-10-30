@@ -78,26 +78,33 @@ type openTraceLine struct {
 	// it is one; a bare list's line names none.
 	prefixOf *syntax.SimpleCmd
 	// lead is the part of a parent's line a child was handed and this line
-	// starts with, where nothing has written it yet. A child of this line
-	// copies it and takes it, so this line is written without it; a
-	// complaint writes it ahead of itself where this line is not written;
-	// and otherwise this line's own text is written behind it. Measured
+	// starts with, where nothing has written it yet. It is written out ahead
+	// of a copy of this line, so the copy starts without it; a complaint
+	// writes it ahead of itself where this line is not written; and
+	// otherwise this line's own text is written behind it. Measured
 	// 2026-10-30 on zsh 5.9.2 under -f -c (#6711):
 	//
 	//	x=$( a=1 true )               `+zsh:1> x=+zsh:1> a=1 +zsh:1> true`
 	//	x=$( a=$(echo s >&2) true )   `+zsh:1> x=+zsh:1> a=+zsh:1> echo s`, `s`,
 	//	                              then `+zsh:1> a='' +zsh:1> true`
+	//	x=$( a=$(f() { :; }) true )   `+zsh:1> x=+zsh:1> a='' +zsh:1> true`
 	//	x=$( a=1 b=${q?b} true )      `+zsh:1> x=`, then the complaint, and the
 	//	                              prefix's line is gone with the child
 	//
 	// where the prefix's line was opened without it, and the next line the
-	// child wrote took it instead.
+	// child wrote took it instead. The third row is a substitution that
+	// writes nothing: the text goes out all the same, so it is not the
+	// copy's to write. See Runner.writeHandedTextBeforeACopy.
 	lead string
-	// consumes says a child copied from this line takes the text it was
-	// handed, so this line no longer has it to write. A child's line does
-	// that once the child is inside a compound command or a redirection,
-	// and not before. See Runner.inheritedTextIsTakenByACopy.
-	consumes bool
+	// writtenBeforeACopy says the text a child was handed is written out
+	// before a copy is made from this line, so the copy starts without it.
+	// A child's line says so while the child is in a group or a `try`. See
+	// Runner.writeHandedTextBeforeACopy.
+	writtenBeforeACopy bool
+	// front is a prefix line's text ahead of the entry being expanded, and
+	// entry is that entry's word once its value is in, ahead of its
+	// subscript. See Runner.prefixEntryValueIsIn.
+	front, entry string
 }
 
 // writeOpenTraceLineAhead is the text of the open line to write ahead of a
@@ -373,57 +380,112 @@ func (r *Runner) openTraceTakesTheLiteral(a *syntax.Assign, words []string) {
 	r.openTrace.pending += wrapArrayLiteral(strings.Join(quoted, " "), d.TraceArrayLiteral) + " "
 }
 
-// enteringACompound marks the text a child was handed as taken by the next
-// copy of it, once the child is running a compound command or opening a
-// redirection. See Runner.inheritedTextIsTakenByACopy.
-func (r *Runner) enteringACompound() {
-	if line := r.openTrace; line != nil && line.inherited && line.owner == r && line.pending != "" {
-		line.consumes = true
+// The text a child was handed, written out where the child gets to certain
+// places rather than carried on its next line.
+//
+// A substitution's child holds the part of its parent's line nothing has
+// written yet, and writes it ahead of its first trace line (see
+// Runner.prefixLineForAChild). Before that line, three things write it out on
+// its own. Measured 2026-10-30 on zsh 5.9.2 under `-f -c`, both streams on one
+// pipe (#6711), where `f() { :; }` is a body that writes nothing:
+//
+//	x=$( for i in; do :; done )        `+zsh:1> x=`, then `+zsh:1> x='' `
+//	x=$( { f() { :; } } )              `+zsh:1> x='' ` alone
+//	x=$( { echo hi } 2>/dev/null )     `+zsh:1> x=` ahead of the redirection,
+//	                                   and `+zsh:1> echo hi` into the file
+//	x=$( { } 3>/dev/null )             `+zsh:1> x=`, then the parent's line
+//	x=$( { : $(f() { :; }); } )        `+zsh:1> x=+zsh:1> :`
+//	x=$( : $(echo a); : )              `+zsh:1> x=+zsh:1> echo a`, then
+//	                                   `+zsh:1> x=+zsh:1> : a`
+//	x=$( { f() { :; } }; : $(echo a); : )   the same two lines
+//
+// So entering a loop, an `if`, a subshell, `repeat` or `time` writes it, and
+// so does opening a redirection, before the redirection is made; and in a
+// group or a `try` a substitution in a command's words writes it before it
+// starts, where at the top of the body the substitution's copy carries it and
+// so does the command's own line. A group that writes nothing drops it, and so
+// does a function definition unless it carries a redirection: `x=$( f() { :; }
+// 2>/dev/null )` writes `+zsh:1> x=`. A `case`, a `[[ … ]]` and an assignment list
+// write a line of their own that carries it, in a group as well. See
+// handedTextOnEntry.
+
+// writeHandedText writes the text this child was handed and nothing has
+// written, now, on its own.
+func (r *Runner) writeHandedText() {
+	text := r.takeHandedText()
+	if text == "" {
+		return
 	}
+	r.awaitTraceTurn()
+	defer r.releaseTraceTurn()
+	// Written alone: no open line goes out with it.
+	line := r.openTrace
+	r.openTrace = nil
+	r.tracef("%s", text)
+	r.openTrace = line
 }
 
-// compoundForTheTrace reports whether c is one of the compound commands a
-// copy of a child's handed text is taken from inside. A `case` and a
-// `[[ … ]]` are not among them: each writes a line of its own that carries
-// the text. See Runner.inheritedTextIsTakenByACopy.
-func compoundForTheTrace(c syntax.Command) bool {
-	switch c.(type) {
-	case *syntax.Group, *syntax.Subshell, *syntax.IfClause, *syntax.LoopClause,
-		*syntax.ForClause, *syntax.ForArithClause, *syntax.SelectClause, *syntax.RepeatClause,
-		*syntax.TryClause:
-		return true
+// takeHandedText takes the text this child was handed out of whichever line
+// holds it: a prefix's line it leads, a line of this child's that carries it,
+// or the child's copy of its parent's line.
+func (r *Runner) takeHandedText() string {
+	line := r.openTrace
+	if line == nil || line.owner != r {
+		return ""
 	}
-	return false
-}
-
-// inheritedTextIsTakenByACopy empties the text a child was handed, out of
-// line and out of the line it carries, where a copy of line has just been made
-// and the child is inside a compound command or a redirection: the copy's
-// child writes it, and this child does not write it again. Measured
-// 2026-10-30 on zsh 5.9.2 under -f -c (#6711):
-//
-//	x=$( for i in $(echo a); do :; done )
-//	                 `+zsh:1> x=+zsh:1> echo a`, then `+zsh:1> i=a`
-//	x=$( { : $(echo a); } )          `… echo a`, then `+zsh:1> : a`
-//	x=$( : >$(echo /dev/null) )      `… echo /dev/null`, then `+zsh:1> :`
-//	x=$( if [[ $(echo a) == a ]]; then :; fi )
-//	                 `+zsh:1> x=+zsh:1> [[+zsh:1> echo a`, then `+zsh:1> [[ a == a ]]`
-//
-// where a copy made from a plain command's word leaves it for that command's
-// own line — `x=$( : $(echo a); : )` is `… echo a`, then `+zsh:1> x=+zsh:1> :
-// a` — and so does one made from a `[[ … ]]` or a `case` at the top of the
-// body, which writes it on every line it opens.
-func (r *Runner) inheritedTextIsTakenByACopy(line *openTraceLine) {
+	if line.lead != "" {
+		text := line.lead
+		line.pending, line.lead = strings.TrimPrefix(line.pending, text), ""
+		return text
+	}
 	in := line
 	if line.carries != nil {
 		in = line.carries
 	}
-	if !in.inherited || !in.consumes || in.pending == "" {
-		return
+	if !in.inherited || in.pending == "" {
+		return ""
 	}
+	text := in.pending
 	if line != in {
-		line.pending = strings.TrimPrefix(line.pending, in.pending)
-		line.carries = nil
+		line.pending, line.carries = strings.TrimPrefix(line.pending, text), nil
 	}
 	in.pending = ""
+	return text
+}
+
+// writeHandedTextBeforeACopy writes the handed text out ahead of a copy of
+// line, where the copy is not to carry it: a prefix's line always, and the
+// child's own copy of its parent's line while the child is in a group or a
+// `try`. See openTraceLine.lead and the measurements above writeHandedText.
+func (r *Runner) writeHandedTextBeforeACopy(line *openTraceLine) {
+	if line.lead != "" || line.inherited && line.writtenBeforeACopy {
+		r.writeHandedText()
+	}
+}
+
+// handedTextOnEntry is what entering c does to the text a child was handed,
+// and hands back what undoes it when c is done: it writes it, for a loop, an
+// `if`, a subshell, `repeat` and a definition carrying a redirection, and has
+// a substitution in a command's words write it first while c runs, for a
+// group and a `try`. See the measurements above writeHandedText.
+func (r *Runner) handedTextOnEntry(c syntax.Command) func() {
+	switch c.(type) {
+	case *syntax.IfClause, *syntax.LoopClause, *syntax.ForClause, *syntax.ForArithClause,
+		*syntax.SelectClause, *syntax.RepeatClause, *syntax.Subshell:
+		r.writeHandedText()
+	case *syntax.FuncDecl:
+		// A definition carrying a redirection writes it as one being opened
+		// does, though nothing is opened until the function is called.
+		if len(syntax.Redirections(c)) > 0 {
+			r.writeHandedText()
+		}
+	case *syntax.Group, *syntax.TryClause:
+		line := r.openTrace
+		if line == nil || !line.inherited || line.owner != r || line.pending == "" || line.writtenBeforeACopy {
+			break
+		}
+		line.writtenBeforeACopy = true
+		return func() { line.writtenBeforeACopy = false }
+	}
+	return func() {}
 }

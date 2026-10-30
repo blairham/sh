@@ -104,6 +104,7 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 		// less whatever of it has gone out already. See
 		// prefixLineForAChild and Runner.writeOpenTraceLineAhead.
 		line.pending = line.lead + strings.TrimPrefix(so()+target, line.flushed)
+		line.front, line.entry = so(), ""
 		frozen := r.attrHas(a.Name, attrReadonly)
 		var word string
 		if frozen {
@@ -122,6 +123,11 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 			}
 		}
 		if r.prefixWalkFailed(walk) {
+			// Where the value was in and the subscript failed, the line got
+			// as far as the whole entry. See Runner.prefixEntryValueIsIn.
+			if line.entry != "" {
+				target = line.entry + " "
+			}
 			done = append(done, target)
 			stopped = true
 			break
@@ -169,6 +175,31 @@ func (r *Runner) writeHeldPrefixTrace() {
 	r.traceTo = outer
 }
 
+// prefixEntryValueIsIn puts a subscripted entry's whole word on its prefix's
+// open line once the value is in, ahead of the reading of its subscript. A
+// substitution in the subscript copies the line with the value on it, and a
+// subscript that fails leaves the line there. Measured 2026-10-30 on zsh 5.9.2
+// under `-f -c`, with `f() { :; }; b=(x y z)` (#6711):
+//
+//	set -x; b[$(echo s >&2; echo 1)]=v f
+//	                       `+zsh:1> b[$(echo s >&2; echo 1)]=v +zsh:1> echo s`
+//	set -x; b[1/0]=v f     the complaint, then `+zsh:1> b[1/0]=v `
+//	set -x; b[${q?e}]=v f  the complaint, then `+zsh:1> b[${q?e}]=v `
+//
+// where the line held only `b[…]=`, as it does while the value expands.
+func (r *Runner) prefixEntryValueIsIn(a *syntax.Assign) {
+	line := r.openTrace
+	if line == nil || line.owner != r || line.prefixOf == nil || line.front == "" {
+		return
+	}
+	words := r.prefixTraceWords([]*syntax.Assign{a}, r.diag())
+	if len(words) != 1 {
+		return
+	}
+	line.entry = words[0]
+	line.pending = line.lead + strings.TrimPrefix(line.front+line.entry+" ", line.flushed)
+}
+
 // prefixLineForAChild is the copy of an unfinished trace line a substitution
 // starts with. The child writes it in front of its first trace line or its
 // first diagnostic, where the dialect's own buffered stream would, and drops
@@ -178,14 +209,13 @@ func (r *Runner) prefixLineForAChild() *openTraceLine {
 	if line == nil || line.owner != r || line.pending == "" {
 		return nil
 	}
-	copied := &openTraceLine{pending: line.pending, inherited: true, unflushed: line.unflushed, consumes: line.consumes}
-	if line.lead != "" {
-		// The child writes what this line was handed, and this line goes on
-		// without it. See openTraceLine.lead.
-		line.pending, line.lead = strings.TrimPrefix(line.pending, line.lead), ""
+	// Less the text this shell was handed, where that goes out first. See
+	// Runner.writeHandedTextBeforeACopy.
+	r.writeHandedTextBeforeACopy(line)
+	if line.pending == "" {
+		return nil
 	}
-	r.inheritedTextIsTakenByACopy(line)
-	return copied
+	return &openTraceLine{pending: line.pending, inherited: true, unflushed: line.unflushed}
 }
 
 // takeInheritedTraceLine is the copied line a child writes ahead of its

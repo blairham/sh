@@ -17,6 +17,8 @@ import "testing"
 // a substitution in an operand, and a pattern operand is expanded a second
 // time for the line. And a prefix that stopped the child on an exit request
 // is not written, where the inherited text goes out ahead of the complaint.
+// See TestAChildWritesTheTextItWasHandedOnItsOwn for where the text goes out
+// by itself.
 func TestASubstitutionCarriesItsParentsOpenLine(t *testing.T) {
 	for _, c := range []struct{ name, src, want string }{
 		{"a prefix", `set -x; x=$( a=1 true )`, "+zsh:1> x=+zsh:1> a=1 +zsh:1> true\n+zsh:1> x='' \n"},
@@ -103,6 +105,102 @@ func TestASubstitutionCarriesItsParentsOpenLine(t *testing.T) {
 		},
 		{"a for with no substitution", `set -x; x=$( for i in a; do :; done )`, "+zsh:1> x=+zsh:1> i=a\n+zsh:1> :\n+zsh:1> x='' \n"},
 		{"untraced", `n=0; [[ a == $((n++)) ]]; echo $n`, "1\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := runZsh(t, t.TempDir(), c.src)
+			if out != c.want {
+				t.Errorf("got %q, want %q", out, c.want)
+			}
+		})
+	}
+}
+
+// Three places write the text a child was handed on its own, ahead of
+// whatever comes next: entering a loop, an `if`, a subshell, `repeat` or
+// `time`; opening a redirection, before it is made; and, in a group or a
+// `try`, a substitution in a command's words. So the text is not lost when
+// what follows writes nothing (`f() { :; }` is a body that writes nothing),
+// and it reaches the stream a redirection is about to move. Measured
+// 2026-10-30 against zsh 5.9.2 under `-f -c`, both streams on one pipe
+// (#6711).
+func TestAChildWritesTheTextItWasHandedOnItsOwn(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{"standard error redirected", `set -x; x=$( { echo hi } 2>/dev/null )`, "+zsh:1> x=+zsh:1> x=hi \n"},
+		{
+			"standard error redirected and the child stopped",
+			`set -x; x=$( { : ${q?b} } 2>/dev/null; echo y )`,
+			"+zsh:1> x=+zsh:1> x='' \n",
+		},
+		{
+			"standard error onto the output",
+			`set -x; x=$( { echo hi } 2>&1 )`,
+			"+zsh:1> x=+zsh:1> x=$'+zsh:1> echo hi\\nhi' \n",
+		},
+		{"another descriptor redirected", `set -x; x=$( { } 3>/dev/null )`, "+zsh:1> x=+zsh:1> x='' \n"},
+		{"a definition with a redirection", `set -x; x=$( f() { :; } 2>/dev/null )`, "+zsh:1> x=+zsh:1> x='' \n"},
+		{"a loop that runs nothing", `set -x; x=$( for i in; do :; done )`, "+zsh:1> x=+zsh:1> x='' \n"},
+		{"an if that writes nothing", `set -x; x=$( if ! { }; then :; fi )`, "+zsh:1> x=+zsh:1> x='' \n"},
+		{"a subshell that writes nothing", `set -x; x=$( ( f() { :; } ) )`, "+zsh:1> x=+zsh:1> x='' \n"},
+		{
+			"a quiet substitution in a group",
+			`set -x; x=$( { : $(f() { :; }); } )`,
+			"+zsh:1> x=+zsh:1> :\n+zsh:1> x='' \n",
+		},
+		{
+			"a quiet substitution in a prefix",
+			`set -x; x=$( a=$(f() { :; }) true )`,
+			"+zsh:1> x=+zsh:1> a='' +zsh:1> true\n+zsh:1> x='' \n",
+		},
+		{
+			"a condition in a group carries it",
+			`set -x; x=$( { [[ a == $(echo a) ]]; } )`,
+			"+zsh:1> x=+zsh:1> [[ a == +zsh:1> echo a\n+zsh:1> x=+zsh:1> [[ a == a+zsh:1> echo a\n" +
+				"+zsh:1> x=+zsh:1> [[ a == a ]]\n+zsh:1> x='' \n",
+		},
+		// Controls: a group that writes nothing drops it, as a definition
+		// does, and what a group does ends with the group.
+		{"a group that writes nothing", `set -x; x=$( { f() { :; } } )`, "+zsh:1> x='' \n"},
+		{"a definition", `set -x; x=$( f() { :; } )`, "+zsh:1> x='' \n"},
+		{
+			"a word after a group",
+			`set -x; x=$( { f() { :; } }; : $(echo a); : )`,
+			"+zsh:1> x=+zsh:1> echo a\n+zsh:1> x=+zsh:1> : a\n+zsh:1> :\n+zsh:1> x='' \n",
+		},
+		{
+			"a quiet substitution at the top",
+			`set -x; x=$( : $(f() { :; }) )`,
+			"+zsh:1> x=+zsh:1> :\n+zsh:1> x='' \n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := runZsh(t, t.TempDir(), c.src)
+			if out != c.want {
+				t.Errorf("got %q, want %q", out, c.want)
+			}
+		})
+	}
+}
+
+// A subscripted prefix entry's subscript is read once its value is in, and
+// the line a substitution in the subscript copies, or a failing subscript
+// leaves, has the value on it. Measured 2026-10-30 against zsh 5.9.2 under
+// `-f -c`, both streams on one pipe (#6711).
+func TestASubscriptIsReadBehindItsEntrysValue(t *testing.T) {
+	const fn = `f() { echo "f y=$y"; }; b=(x y z); set -x; `
+	for _, c := range []struct{ name, src, want string }{
+		{
+			"a substitution in the subscript",
+			fn + `b[$(echo s >&2; echo 1)]=$(echo t >&2; echo v) y=$(echo u >&2)${b[1]} f`,
+			"+zsh:1> b[$(echo s >&2; echo 1)]=+zsh:1> echo t\nt\n+zsh:1> echo v\n" +
+				"+zsh:1> b[$(echo s >&2; echo 1)]=v +zsh:1> echo s\ns\n+zsh:1> echo 1\n" +
+				"+zsh:1> b[$(echo s >&2; echo 1)]=v y=+zsh:1> echo u\nu\n" +
+				"+zsh:1> b[$(echo s >&2; echo 1)]=v y=v +zsh:1> f\n+f:0> echo 'f y=v'\nf y=v\n",
+		},
+		{"a failing subscript", fn + `b[1/0]=v y=1 f`, "zsh:1: division by zero\n+zsh:1> b[1/0]=v "},
+		{"behind another entry", fn + `a=1 b[1/0]=v y=1 f`, "zsh:1: division by zero\n+zsh:1> a=1 b[1/0]=v "},
+		{"a refused subscript", fn + `b[${q?e}]=v y=1 f`, "zsh:1: q: e\n+zsh:1> b[${q?e}]=v "},
+		// The control: a failing value leaves the line at the name.
+		{"a failing value", fn + `b[1]=$((1/0)) y=1 f`, "zsh:1: division by zero\n+zsh:1> b[1]="},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, _ := runZsh(t, t.TempDir(), c.src)

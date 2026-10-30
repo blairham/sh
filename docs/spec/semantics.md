@@ -3123,6 +3123,55 @@ death were the same row until the oracle kept the signal, and one of
 these cases was scoring as a match against zsh's real SIGUSR1 death while
 our shell was hanging.
 
+### The same signals from another process
+
+A signal another process sends never reaches the raise above: the runtime's
+handler answers it, by the same three classes. The front end listens for the
+throwing class and dies of an untrapped one (#643); the third class was left to
+the runtime and ended nothing. Measured 2026-10-29 with `/bin/kill -SIG` from
+another process, each shell in a process group of its own, parked in a builtin
+`read` on a pipe, in an external `sleep` and in a busy loop:
+
+| signal | bash 5.3 · bash 3.2 · ksh93 · zsh · dash | ours before #7046 |
+| --- | --- | --- |
+| USR1 USR2 ALRM VTALRM XCPU | killed by it, all three places | carried on |
+| EMT (darwin) | killed by it | goroutine dump, exit 2 |
+| HUP | killed by it; zsh exits 1 | killed by it, zsh too |
+| PIPE XFSZ PROF | killed by it | carried on, and still does |
+
+Unanimous but for zsh's HUP, which is `HangupIsAnOrderlyExit` reached from
+outside. The front end now subscribes to the first two rows and to HUP and
+answers them as it answers the throwing class: a trap or an ignore first, then
+the death, or zsh's `exit 1`. The EXIT trap does not run on that route; nor did
+it for TERM before, where bash and ksh93 run it.
+
+**The last row is left alone on purpose.** PIPE and XFSZ are what the kernel
+raises at a write of the shell's *own* — into a pipe nobody reads, or past
+`ulimit -f` — and here a pipeline element, a subshell and a substitution body
+write from this process where every reference writes from a child. The kernel's
+copy of an element's broken pipe arrives exactly as a `kill` does, so a listener
+that died of it would end the shell for something every reference survives
+(`(while :; do echo y; done) | head -1; echo after` prints `after` in all five).
+PROF is consumed by the runtime's profiler before os/signal could be told.
+
+**A reset took the listener away.** `trap - SIG` in a shell that owns its
+process is `signal.Reset`, which takes every subscription the process has for
+the signal, the front end's among them. After `trap 'x' QUIT; trap - QUIT` an
+outside QUIT was a goroutine dump where bash 3.2, ksh93, zsh and dash die at 131
+(#7048). After `trap '' SIG; trap - SIG` the drain that takes the ignore off
+dropped every outside SIG for good, and the shell survived TERM, INT, HUP, QUIT,
+USR1, ALRM and EMT where all five die of each — bash 5.3's QUIT and zsh's HUP
+apart, which are their axes (#7047). The front end's reset now puts its
+listener back, except on a HUP or INT the process was born ignoring: `trap '' HUP;
+exec <shell> -c 'trap - HUP; …'` keeps the ignore in bash 5.3, bash 3.2, ksh93
+and dash.
+
+**A shell born ignoring any other signal cannot know it.** The runtime installs
+its own handler over an inherited `SIG_IGN` for every signal but HUP and INT and
+keeps no record anyone can read, so a shell started with USR1, ALRM or TERM
+ignored dies of an outside one where all five survive. TERM and QUIT were that
+way before; the signals above joined them.
+
 ## The one fatal signal that is not fatal
 
     kill -QUIT $$; echo after

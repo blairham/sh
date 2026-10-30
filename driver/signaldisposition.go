@@ -24,10 +24,18 @@ import (
 // signal.Reset for the other direction, which does not undo an ignore — interp
 // takes one off by subscribing a drain afterwards, where the ignore was its own.
 // See interp's dropOwnIgnore.
+//
+// Reset takes the front end's own watch off the signal with everything else,
+// so the watch is put back: without it a reset QUIT reached the runtime's
+// goroutine dump (#7048), and the drain that takes an ignore off dropped every
+// TERM from outside for the rest of the shell (#7047). The subscription is
+// also what takes the shell's own ignore off, ahead of interp's drain. See
+// watchAgain.
 func setSignalDisposition(sig syscall.Signal, ignore bool) {
 	if ignore {
 		signal.Ignore(sig)
 		return
 	}
 	signal.Reset(sig)
+	watchAgain(sig)
 }

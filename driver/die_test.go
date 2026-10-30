@@ -28,6 +28,10 @@ const dyingScript = "SH_TEST_DYING_SCRIPT"
 // dyingInteractive runs the shell half under `-i` as well.
 const dyingInteractive = "SH_TEST_DYING_INTERACTIVE"
 
+// dyingHangupExits answers Semantics.HangupIsAnOrderlyExit yes in the shell
+// half, which is the one dialect answer a death from outside asks about.
+const dyingHangupExits = "SH_TEST_DYING_HANGUP_EXITS"
+
 // deathDeadline is how long a shell that has been asked to die is given
 // before this test gives up on it and says so.
 //
@@ -83,6 +87,13 @@ func dieRunningAsAShell() {
 	// handler. Which way they are answered does not matter to it.
 	sh.Semantics.TrapBodyRunsWhatParsed = interp.Yes
 	sh.Semantics.SignalHandlerSeesEarlierStatus = interp.Yes
+	// And the unit `ulimit -f` counts in, for the one case that has a
+	// subshell write past it; the number is 1024 bytes either way it is
+	// read, which is all that case needs.
+	sh.Semantics.UlimitBlockIsKilobyte = interp.Yes
+	if os.Getenv(dyingHangupExits) != "" {
+		sh.Semantics.HangupIsAnOrderlyExit = interp.Yes
+	}
 	args := []string{"testsh", "-c", src}
 	if os.Getenv(dyingInteractive) != "" {
 		args = []string{"testsh", "-i", "-c", src}

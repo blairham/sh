@@ -111,6 +111,7 @@ ash   DebugTrapRunsBeforeTheCommand
 ash   DebugTrapRunsInSubshells
 ash   DebugActionArmingErrExitSkipsTheCommand
 ash   DebugTrapRunsInsideCalls
+ash   DeclarationArrayOperandsAreStoredInTurn
 ash   DeclarationListingFilter
 ash   DeclarationOperandSplitsAfterTheSubscript
 ash   DeclarationRereadsAParenthesizedValue
@@ -501,6 +502,7 @@ dash  DebugTrapRunsBeforeTheCommand
 dash  DebugTrapRunsInSubshells
 dash  DebugActionArmingErrExitSkipsTheCommand
 dash  DebugTrapRunsInsideCalls
+dash  DeclarationArrayOperandsAreStoredInTurn
 dash  DeclarationListingFilter
 dash  DeclarationOperandSplitsAfterTheSubscript
 dash  DeclarationRereadsAParenthesizedValue

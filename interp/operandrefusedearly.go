@@ -3,7 +3,11 @@
 
 package interp
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // A declaration's array literal that its store will refuse, refused before the
 // command opens its redirections and before the utility runs.
@@ -58,42 +62,56 @@ func (r *Runner) refuseArrayOperandsEarly(argv []string) bool {
 	}
 	indexed, table := declarationLettersAhead(argv)
 	for i := range r.arrayOperands {
-		a := r.arrayOperands[i].assign
-		// What the operand is about to write over is the name as it stands,
-		// and a produced parameter `unset` ended stands as an ordinary one.
-		// See Runner.endProducerUnsetEnded.
-		r.endProducerUnsetEnded(a.Name)
-		var refuse func()
-		switch {
-		case r.attrHas(a.Name, attrReadonly):
-			refuse = func() {
-				r.refuseWithTheReadonlySentence(a.Name, assignedAlone, r.sem().ReadonlyReassignmentFatal)
-			}
-		case indexed && !a.Append && r.assocDeclared(a.Name):
-			refuse = func() {
-				r.diagf("%s\n", Wording(r.diag().CannotConvertTableToArrayAtTheAssignment,
-					"%[1]s: cannot convert associative to indexed array", a.Name))
-				r.status, r.assignFailed = 1, true
-				r.abandonTheCommand()
-			}
-		case table && !a.Append && r.arrayDeclared(a.Name):
-			refuse = func() {
-				r.diagf("%s\n", Wording(r.diag().CannotConvertArrayToTableAtTheAssignment,
-					"%[1]s: cannot convert indexed to associative array", a.Name))
-				r.status, r.assignFailed = 1, true
-				r.abandonTheCommand()
-			}
-		default:
-			continue
+		if r.refuseArrayOperandEarly(r.arrayOperands[i].assign, indexed, table) {
+			return true
 		}
-		if !r.ask(r.sem().ArrayOperandRefusedBeforeTheCommand,
-			"a declaration's array literal refused before the command runs") {
-			return r.unspecified
+		if r.unspecified {
+			return true
 		}
-		refuse()
-		return true
 	}
 	return false
+}
+
+// refuseArrayOperandEarly is that refusal for one operand, under the kind
+// letters the line carries, and reports whether it was made. The walk that
+// places a literal in turn asks it at the literal's own turn, so the literals
+// in front of a refused one are in place — see
+// Runner.settleALiteralOperand. Reports false with r.unspecified set where
+// the axis went unanswered.
+func (r *Runner) refuseArrayOperandEarly(a *syntax.Assign, indexed, table bool) bool {
+	// What the operand is about to write over is the name as it stands,
+	// and a produced parameter `unset` ended stands as an ordinary one.
+	// See Runner.endProducerUnsetEnded.
+	r.endProducerUnsetEnded(a.Name)
+	var refuse func()
+	switch {
+	case r.attrHas(a.Name, attrReadonly):
+		refuse = func() {
+			r.refuseWithTheReadonlySentence(a.Name, assignedAlone, r.sem().ReadonlyReassignmentFatal)
+		}
+	case indexed && !a.Append && r.assocDeclared(a.Name):
+		refuse = func() {
+			r.diagf("%s\n", Wording(r.diag().CannotConvertTableToArrayAtTheAssignment,
+				"%[1]s: cannot convert associative to indexed array", a.Name))
+			r.status, r.assignFailed = 1, true
+			r.abandonTheCommand()
+		}
+	case table && !a.Append && r.arrayDeclared(a.Name):
+		refuse = func() {
+			r.diagf("%s\n", Wording(r.diag().CannotConvertArrayToTableAtTheAssignment,
+				"%[1]s: cannot convert indexed to associative array", a.Name))
+			r.status, r.assignFailed = 1, true
+			r.abandonTheCommand()
+		}
+	default:
+		return false
+	}
+	if !r.ask(r.sem().ArrayOperandRefusedBeforeTheCommand,
+		"a declaration's array literal refused before the command runs") {
+		return false
+	}
+	refuse()
+	return true
 }
 
 // declarationLettersAhead reads the option words in front of a declaration's

@@ -6450,6 +6450,64 @@ type Semantics struct {
 	// this preset is 5.3.
 	ExitTrapRunsInsideTheExitingCall Answer
 
+	// ExitTrapRunsInsideTheExitingText runs the EXIT trap while the `eval`
+	// text or the sourced file that a stop was raised in is still the place
+	// the shell is in, rather than once the shell has unwound to the top.
+	//
+	// The sibling of ExitTrapRunsInsideTheExitingCall, and a separate
+	// question because zsh answers the two differently: it leaves a
+	// function's frame before the trap runs, and leaves neither an `eval`'s
+	// nor a `.`'s. Measured 2026-10-30 over script files under
+	// `env -i PATH=/usr/bin:/bin`, the trap body three lines (`:`,
+	// `nosuch_t`, `echo L=$LINENO 1=$1`), `inc.sh` holding `exit 0`:
+	//
+	//	                                zsh 5.9.2 -f        bash 5.3.20       ksh93u+  dash  ash
+	//	( trap…; eval 'exit 0' ) on 7   (eval):1, L=1       script, line 2    script   script script
+	//	( trap…; . ./inc.sh ) on 7      ./inc.sh:1, L=1     ./inc.sh, line 2  script   script script
+	//	trap…; . ./inc.sh a             1=a                 1=a               1=       —     1=a
+	//	trap 'echo T' EXIT; { . ./inc.sh; } >/dev/null
+	//	                                nothing             nothing           T        T     T
+	//	the same around `eval 'exit 0'` nothing             nothing           T        T     T
+	//
+	// zsh names the text and counts the body's line from where the text
+	// stopped, sees the `.`'s operands as `$1`, and writes the body's
+	// output into a redirection standing around the `eval` or the `.`, all
+	// of which is the trap running before the text has been left. The
+	// same holds for `set -e` firing, `${x?word}` and a top-level `return`
+	// inside the text, on a script file, standard input and `-c` alike.
+	// ksh93, dash and BusyBox ash leave the text first: none of them puts
+	// the output into the redirection. ash's `1=a` is its positional
+	// parameters not being put back on the way out, and nothing else about
+	// that column moves with it (#7135).
+	//
+	// **Function frames are left first, in the dialect that says yes.**
+	// `f() { eval 'exit 0'; }; f` locates zsh's trap at the call's line in
+	// the script, and `eval 'f'` with `f() { exit 0; }` locates it in the
+	// text at the line that called `f` — so the trap runs in the innermost
+	// text that has no function frame standing below the stop.
+	//
+	// bash answers by the route: inside the sourced file from a script
+	// file or standard input — `./inc.sh` names it, `$1` and `BASH_SOURCE`
+	// are the file's, the redirection around the `.` takes the output —
+	// and after leaving it under `-c`, where `$1` and `BASH_SOURCE` are
+	// empty. Its `eval` text has no name of its own, so only the
+	// redirection rows tell its two readings apart. The bash preset keeps
+	// no, the `-c` answer and what this package did before the axis
+	// existed, until the route split is modeled (#7134). ksh93, dash and
+	// ash say no.
+	//
+	// A signal trap's body is no different: `trap 'eval "exit 0"' USR1`
+	// fired from line 6 locates zsh's EXIT trap at `(eval):6`, and
+	// `trap '. ./inc.sh' USR1` at `./inc.sh:2`.
+	//
+	// This runs the trap as the text ends. zsh goes further, and runs it
+	// where the `exit` was written, under the redirections the text itself
+	// set up — `eval '{ exit 0; } >/dev/null'` writes nothing there — and
+	// zsh and bash both do that at the top of a script. That is a question
+	// about the moment rather than about the text, and is not this axis
+	// (#7133).
+	ExitTrapRunsInsideTheExitingText Answer
+
 	// QuitIgnoredWhenNotInteractive makes an untrapped SIGQUIT do nothing at
 	// all rather than end the shell.
 	//
@@ -36123,6 +36181,12 @@ func PosixSemantics() Semantics {
 		// says otherwise itself, and zsh says its own third answer itself.
 		SubshellExitTrapFiresWhereItStopped:   No,
 		SubshellExitTrapFiresAtItsOpeningLine: No,
+		// The standard says the EXIT trap runs as the shell exits and
+		// nothing about which `eval` or `.` it is still inside then, so
+		// this follows the panel and what this package did before the axis
+		// existed: ksh93, dash and BusyBox ash leave the text first. zsh
+		// says otherwise itself.
+		ExitTrapRunsInsideTheExitingText: No,
 		// Standard input is read at a prompt under `-i` whatever kind of
 		// descriptor it is. ksh93 says otherwise itself.
 		InteractiveRewindableStdinIsAScript: No,

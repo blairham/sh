@@ -2771,6 +2771,11 @@ func Semantics() interp.Semantics {
 	// is 2.
 	s.ExitTrapRunsOnSignalDeath = interp.No
 	s.ExitTrapRunsInsideTheExitingCall = interp.No
+	// But it does run inside the `eval` text or the sourced file the stop
+	// was raised in, once any function frames are left: `( trap…; eval
+	// 'exit 0' )` is located `(eval):1` and a `.`'s is named after the file,
+	// with that file's `$1`. Measured 2026-10-30 on 5.9.2 under `-f` (#6954).
+	s.ExitTrapRunsInsideTheExitingText = interp.Yes
 	s.QuitIgnoredWhenNotInteractive = interp.Yes
 	// And zsh alone parts from bash on what `trap -` then means: it hands
 	// SIGQUIT back its default action, so `trap - QUIT; kill -QUIT $$` kills

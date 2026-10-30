@@ -53,3 +53,73 @@ func (r *Runner) insideAFunctionCall() bool {
 	}
 	return false
 }
+
+// runExitTrapInsideTheExitingText fires `trap … EXIT` while the `eval` text
+// or the sourced file a stop was raised in is still the place the shell is
+// in, rather than leaving it to Runner.Finish once the shell has unwound to
+// the top. Called by runSourcedText as the text stops, before any of what it
+// set up — the text's name, its line numbering, a `.`'s operands — is put
+// back. See [Semantics.ExitTrapRunsInsideTheExitingText] for the panel.
+//
+// At the end of the text and not at the `exit`, because the dialect that says
+// yes leaves a function's frame first: a call standing below the stop is left
+// whole, text it runs included, and the trap runs in the innermost text below
+// it — so this is asked at each text the unwinding passes through, and the
+// first one with no call standing under it is where the trap runs.
+//
+// Only for a stop the script asked for — `exit`, `set -e` firing, `${x?word}`
+// in the dialect that makes it one, or a `return` with nothing left to return
+// from. A signal's death, a canceled run and a fatal error are not measured
+// here and keep the trap where it was.
+func (r *Runner) runExitTrapInsideTheExitingText(ctx context.Context) {
+	if r.exitTrap == nil || !r.stopLeavesTheShell() || r.insideAFunctionCall() {
+		return
+	}
+	// The ends Runner.Finish and Runner.Run run no EXIT trap at all: running
+	// it here would run one they decline.
+	if r.canceledChunk || r.trapInterrupt || r.heldExitSkipsTheExitTrap {
+		return
+	}
+	// And an `exit` in the EXIT trap's own body, which is already running
+	// and would be entered again under itself.
+	if r.inExitTrap {
+		return
+	}
+	// The rest keep the trap where it was because nothing has measured them
+	// here: an interactive shell, a startup file, and a shell that hangs up
+	// its jobs as it leaves, which orders the hangup against the trap at the
+	// end of the shell — see Semantics.HangupAtExitPrecedesTheExitTrap. A
+	// signal trap's body is not among them: measured 2026-10-30 on zsh 5.9.2,
+	// `trap 'eval "exit 0"' USR1` and `trap '. ./inc.sh' USR1` fired from
+	// line 6 locate the EXIT trap at `(eval):6` and `./inc.sh:2`.
+	if r.Interactive || r.startupDepth > 0 || r.hangUpJobsAtExit && r.accountsForJobsAtExit() {
+		return
+	}
+	if !r.ask(r.sem().ExitTrapRunsInsideTheExitingText,
+		"the EXIT trap running inside the `eval` text or sourced file that stopped") {
+		return
+	}
+	// The stop goes on unwinding afterwards exactly as it was, so the
+	// constructs it still passes through see the same stop: a try block's
+	// cleanup half reads whether this was `set -e`, and a `return` is still
+	// a `return` to the subshell it ends. A body that exited replaces it, as
+	// it would have at the end of the shell.
+	ctl, abandon, errexit := r.ctl, r.abandon, r.errexitStopped
+	if !r.runExitTrap(ctx) {
+		r.ctl, r.abandon, r.errexitStopped = ctl, abandon, errexit
+	}
+}
+
+// stopLeavesTheShell reports whether the stop being carried is one the script
+// raised and nothing between here and the top will catch: an `exit`, `set -e`
+// firing or a `${x?word}`, or a `return` with no function and no sourced file
+// left to return from.
+func (r *Runner) stopLeavesTheShell() bool {
+	switch r.ctl {
+	case controlExit:
+		return r.exitRan || r.errexitStopped || r.abandon == abandonParamError
+	case controlReturn:
+		return r.sourceDepth == 0
+	}
+	return false
+}

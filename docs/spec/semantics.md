@@ -21386,6 +21386,59 @@ told apart, and an unanswered axis is a refusal — asking there would
 refuse the ordinary `trap … EXIT; exit` of a shell whose dialect had not
 answered.
 
+**`ExitTrapRunsInsideTheExitingText`** — bash no (yes from a script file
+or standard input, #7134) · dash no · ksh93 no · zsh yes · ash no
+
+Runs the EXIT trap while the `eval` text or the sourced file a stop was raised
+in is still the place the shell is in, rather than once the shell has unwound
+to the top. The sibling of the axis above, and a question of its own because
+zsh answers the two differently: it leaves a function's frame before the trap
+runs, and leaves neither an `eval`'s nor a `.`'s.
+
+Measured 2026-10-30 over script files under `env -i PATH=/usr/bin:/bin`. The
+trap body is three lines (`:`, `nosuch_t`, `echo L=$LINENO`), and `inc.sh`
+holds `exit 0` (#6954):
+
+| file | zsh 5.9.2 `-f` | bash 5.3.20 | ksh93u+ | dash 0.5.12 | BusyBox ash 1.37.0 |
+| --- | --- | --- | --- | --- | --- |
+| `( trap …; eval 'exit 0' )`, the `eval` on 7 | `(eval):1`, `L=1` | the script's name | the script's | the script's | the script's |
+| `( trap …; . ./inc.sh )`, the `.` on 7 | `./inc.sh:1`, `L=1` | `./inc.sh: line 2` | the script's | the script's | the script's |
+| `set -- top; . ./inc.sh a`, the trap writing `$1` | `a` | `a` | `top` | `top` (no operands) | `a` |
+| `{ . ./inc.sh; } >/dev/null`, the trap writing `T` | nothing | nothing | `T` | `T` | `T` |
+| `{ eval 'exit 0'; } >/dev/null` | nothing | nothing | `T` | `T` | `T` |
+
+zsh names the text, counts the body's line from where the text stopped, reads
+the `.`'s operands as `$1`, and writes into a redirection standing around the
+`eval` or the `.`. That is the trap running before the text is left. It holds
+on a script file, on standard input and under `-c`, and for `set -e` firing,
+`${x?word}` and a top-level `return` inside the text as well as for `exit`. A
+signal trap's body that runs the text is no different: `trap 'eval "exit 0"'
+USR1` fired from line 6 is located at `(eval):6`.
+
+**Function frames are left first.** `f() { eval 'exit 0'; }; f` locates zsh's
+trap at the call's line in the script, and `eval 'f'` with `f() { exit 0; }`
+locates it in the text, at the line that called `f`. So the trap runs in the
+innermost text that has no function frame standing below the stop. The same
+holds with `setopt posixtraps`, where the caller's trap is not set aside for
+the call: `f() { . ./inc.sh; }; f` called on line 7 is located at 7.
+
+ksh93, dash and ash leave the text first, and none of them writes into the
+redirection. ash's `a` is a separate question: whether a `.` left through
+`exit` puts the caller's parameters back (#7135).
+
+bash answers by the route. From a script file or standard input it runs the
+trap inside the sourced file: the file names it, and `$1` and `BASH_SOURCE`
+are the file's. Under `-c` both are empty. The preset keeps no, the `-c`
+answer, until the split is modeled (#7134).
+
+This is about the text and not the moment. zsh runs the trap where the `exit`
+was written, under the redirections the text itself set up, so
+`eval '{ exit 0; } >/dev/null'` writes nothing there. zsh and bash both do the
+same at the top of a script. That is #7133.
+
+Not asked in an interactive shell, in a startup file, or where the shell hangs
+up its jobs as it leaves. None of these has been measured inside a text.
+
 **`LoopControlOutsideALoopIsFatal`** — bash no · dash no · ksh93 no · zsh
 yes
 

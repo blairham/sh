@@ -19,8 +19,9 @@ import (
 // lines are not the file's: the subshell's trap after `eval "$x"` on line 9,
 // whose text ends `exit 0` on its line 3, is at 3; the shell's own after an
 // `eval` on line 5 whose text's line 2 is `exit 0` is at 2. Only `$LINENO` is
-// held here. zsh also names the location `(eval)` there, as if the trap ran
-// inside the text, which this shell does not do and which is #6954.
+// held here. zsh also names the location `(eval)` there, because the trap runs
+// inside the text: TestTheExitTrapRunsInsideTheTextThatExited holds that
+// (#6954).
 func TestAnExitInEvalTextLocatesTheExitTrapInTheText(t *testing.T) {
 	const body = "trap \":\nnosuch_t\necho L=\\$LINENO\" EXIT\n"
 	for _, c := range []struct{ name, src, out string }{

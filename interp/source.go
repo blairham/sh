@@ -1107,6 +1107,12 @@ func (r *Runner) runSourcedText(ctx context.Context, src string, s sourced) int 
 		// that has stopped reading never meets them.
 		consume(len(src), -1, false)
 	}
+	if stopped {
+		// Before anything this text set up is put back, in the dialect whose
+		// EXIT trap runs while the text that stopped is still the place the
+		// shell is in. See Runner.runExitTrapInsideTheExitingText.
+		r.runExitTrapInsideTheExitingText(ctx)
+	}
 	// Cleared only when there was nothing to run, which is where the two
 	// measured facts part company. `false; eval ""` and `false; . empty.sh`
 	// both end at 0 in every shell in the panel, so text with no commands in

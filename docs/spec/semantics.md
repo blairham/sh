@@ -27029,6 +27029,32 @@ with the last command on line 7 is counted from 7, where zsh counts from 2 —
 and bash and dash number a trap body from its own first line, so neither reads
 where it fired.
 
+**`EvalPutsTheCallersLineBack`** — bash yes · dash no · ksh93 yes · zsh no · ash no
+
+Puts the shell back on the `eval`'s own line once its text is done — run out,
+or unwound by an `exit` — as a `.` and a function call do in every column. The
+other reading leaves it on the last line the text ran. Only what reads the
+line before the next command sets it can tell: the ERR trap the `eval` fires,
+a `case $LINENO` in the column whose subject reads the previous line, and an
+EXIT trap counted from where the shell stopped. Script files, 2026-10-30, the
+text held in `x` so its lines are not the file's, a three-line trap body whose
+second line fails and whose third writes `$LINENO` (#6955):
+
+| file | ksh93u+ | bash 5.3 | zsh 5.9.2 | BusyBox ash 1.37.0 |
+| --- | --- | --- | --- | --- |
+| `( trap …; eval "$x" )`, the `eval` on 9, `$x` ending `exit 0` on its 3 | `line 10`, `L=11` | — | `L=3`, named `(eval)` | `line 11` |
+| the same with the text running out | `line 10` | — | the `(`'s line | `line 11` |
+| `trap 'echo E=$LINENO' ERR`, `eval "$x"` on 6, `$x` ending `false` | `E=3`, `E=6` | `E=8`, `E=6` | `E=3` alone | — |
+| `case $LINENO` on 8 after `eval "$x"` on 7 | `7` | — | — | — |
+| `( …; f )`, `f` exiting, called on 10 (control) | `line 11` | — | `L=10` | — |
+
+The `eval` on line 9 in ksh93 is counted on from 9, not from the text's own 3
+and not from 9 plus the text's 3 less one: an `eval` written across lines 7 to
+11 is counted from 7 as well. zsh and ash read the text's line, zsh in its own
+numbering and ash in the caller's it continues. dash reads the line nowhere
+here — its trap bodies number from their own first line and it has no ERR —
+and keeps the reading this package had before the axis.
+
 The `exit` half holds for the shell's own trap too, and is folded into
 `ExitTrapFiresPastTheEnd`'s yes: `exit 0` on line 6 of a six-line file,
 `false; exit`, `set -e; false` on line 7 and `: ${x?word}` on line 6 each

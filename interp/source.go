@@ -1254,12 +1254,24 @@ func biEval(r *Runner, ctx context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
-	return r.runSourced(ctx, strings.Join(args, " "), sourced{
+	// Where the `eval` stands, which is where two columns put the shell back
+	// once the text is done — however it ended, an `exit` unwinding it
+	// included, as a `.` and a function call do in every column. Without it
+	// the text's own last line stood as the shell's until the next command,
+	// so a subshell's EXIT trap, an ERR trap fired by the `eval` and a `case
+	// $LINENO` after it all read a line of the text. See
+	// Semantics.EvalPutsTheCallersLineBack.
+	evalLine := r.line
+	st := r.runSourced(ctx, strings.Join(args, " "), sourced{
 		eval:         true,
 		label:        "eval",
 		syntaxStatus: r.diag().SyntaxStatus(),
 		builtinText:  true,
 	})
+	if r.sem().EvalPutsTheCallersLineBack == Yes {
+		r.line = evalLine
+	}
+	return st
 }
 
 // evalOptions reads whatever of a leading dash-word this shell reads as

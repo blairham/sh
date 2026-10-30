@@ -471,6 +471,13 @@ func Semantics() interp.Semantics {
 	// physical line, which is the only arrangement that can tell this from
 	// the physical reading (#2462).
 	s.EvalTextContinuesTheCallersLines = interp.Yes
+	// And once the text is done the line is the `eval`'s again: an ERR trap
+	// the `eval` itself fires reads its own line, not the text's last.
+	// Measured 2026-10-30 on 5.3.20, a three-line text held in `x` and
+	// ending `false`, `eval "$x"` on line 10: the `false` inside fires at
+	// 12 and the `eval` at 10, where this said 12 twice; bash 3.2.57 says
+	// 10 for the `eval` as well (#6955).
+	s.EvalPutsTheCallersLineBack = interp.Yes
 	s.SelectLayout = interp.SelectMenuVerticalThenColumns
 	s.SelectPromptNeedsTerminal = interp.No
 	s.AliasParsesOptions = interp.Yes

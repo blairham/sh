@@ -7,8 +7,9 @@ package repl
 
 import (
 	"os"
-	"os/signal"
 	"syscall"
+
+	"github.com/blairham/sh/internal/sigbook"
 )
 
 // resizeWaking wires the terminal's size changes to a wake the editor waits
@@ -21,7 +22,7 @@ func resizeWaking() (*promptSignal, func()) {
 		return nil, func() {}
 	}
 	sizes := make(chan os.Signal, 1)
-	signal.Notify(sizes, syscall.SIGWINCH)
+	sigbook.Notify(sizes, syscall.SIGWINCH)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -30,7 +31,7 @@ func resizeWaking() (*promptSignal, func()) {
 		}
 	}()
 	return wake, func() {
-		signal.Stop(sizes)
+		sigbook.Stop(sizes)
 		close(sizes)
 		<-done
 		wake.close()

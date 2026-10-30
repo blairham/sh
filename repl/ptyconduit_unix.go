@@ -11,11 +11,11 @@ import (
 	"encoding/hex"
 	"io"
 	"os"
-	"os/signal"
 	"sync"
 	"syscall"
 
 	"github.com/blairham/sh/internal/pty"
+	"github.com/blairham/sh/internal/sigbook"
 	"github.com/blairham/sh/internal/tty"
 )
 
@@ -352,7 +352,7 @@ func (c *ptyConduit) resize() {
 func (c *ptyConduit) watchResize() {
 	c.winch = make(chan os.Signal, 1)
 	c.winchDone = make(chan struct{})
-	signal.Notify(c.winch, syscall.SIGWINCH)
+	sigbook.Notify(c.winch, syscall.SIGWINCH)
 	go func() {
 		defer close(c.winchDone)
 		for range c.winch {
@@ -371,7 +371,7 @@ func (c *ptyConduit) close() {
 			// Stop the delivery, end the loop, and wait for it: the watcher
 			// may be inside a resize right now, and that resize is holding
 			// the descriptor closed two lines below.
-			signal.Stop(c.winch)
+			sigbook.Stop(c.winch)
 			close(c.winch)
 			<-c.winchDone
 		}

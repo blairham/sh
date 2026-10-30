@@ -12,7 +12,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"os/signal"
 	"slices"
 	"strconv"
 	"strings"
@@ -22,6 +21,7 @@ import (
 	"github.com/blairham/sh/internal/acp"
 	"github.com/blairham/sh/internal/boundary"
 	"github.com/blairham/sh/internal/event"
+	"github.com/blairham/sh/internal/sigbook"
 	"github.com/blairham/sh/internal/termhost"
 	"github.com/blairham/sh/repl"
 )
@@ -165,9 +165,13 @@ func connectACP(self, dash string, sh driver.Shell, allow bool, authMethod, prom
 	// early, because the agent is in a group of its own now and a ^C at the
 	// terminal no longer reaches it: the shell has to end it, and it cannot
 	// do that from inside a read of standard input that will not return.
+	//
+	// Through the book, because a command the agent asks for may start with
+	// one of these ignored, and the window that arranges that takes every
+	// subscription the process has for it. See internal/sigbook.
 	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, endSignals...)
-	defer signal.Stop(sigs)
+	sigbook.Notify(sigs, endSignals...)
+	defer sigbook.Stop(sigs)
 	talked := make(chan int, 1)
 	go func() { talked <- talk(self, dash, ctx, client, authMethod, next) }()
 

@@ -891,7 +891,7 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	sub.retagTrapBoundary(trapContextBackground)
 	// And the two keyboard signals off, for what the job starts, where
 	// there is no job control to put it out of the keyboard's reach. See
-	// interp/asyncinterrupts.go (#5414).
+	// interp/childdispositions.go (#5414).
 	if !r.monitor && !r.Interactive {
 		sub.asyncIgnoresInterrupts = true
 	}

@@ -5,9 +5,10 @@ package repl
 
 import (
 	"os"
-	"os/signal"
 	"sync/atomic"
 	"syscall"
+
+	"github.com/blairham/sh/internal/sigbook"
 )
 
 // catchInterrupt keeps ^C and ^Z from reaching the shell while a command runs.
@@ -49,7 +50,10 @@ func catchInterrupt() (*interrupts, func()) {
 	// SIGTSTP for the same reason as SIGINT, and with the same distinction:
 	// caught, so the *job* stops and the shell does not. Ignoring it would be
 	// inherited across exec and nothing would ever stop.
-	signal.Notify(in.ch, syscall.SIGINT, syscall.SIGTSTP)
+	// Through the book, because a command that has to start with INT
+	// ignored takes every subscription the process has for it away, and the
+	// session's own is one of them. See internal/sigbook.
+	sigbook.Notify(in.ch, syscall.SIGINT, syscall.SIGTSTP)
 	done := make(chan struct{})
 	go func() {
 		for {
@@ -65,7 +69,7 @@ func catchInterrupt() (*interrupts, func()) {
 		}
 	}()
 	return in, func() {
-		signal.Stop(in.ch)
+		sigbook.Stop(in.ch)
 		close(done)
 	}
 }

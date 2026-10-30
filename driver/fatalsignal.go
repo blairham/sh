@@ -177,8 +177,7 @@ var fatalWatch struct {
 	// one, so a shell that never does keeps the runtime's default.
 	holdOnce sync.Once
 	// ch is the watch's subscription, kept so a start that had to ignore
-	// the keyboard signals can hand them back to it. See
-	// startIgnoringInterrupts.
+	// a signal can hand it back. See startWithDispositions.
 	ch chan os.Signal
 }
 
@@ -293,33 +292,6 @@ func watchWhatTheShellIgnores(r *interp.Runner) {
 	if r.Interactive && fatalWatch.ch != nil && !signal.Ignored(syscall.SIGTERM) {
 		signal.Notify(fatalWatch.ch, syscall.SIGTERM)
 	}
-}
-
-// startIgnoringInterrupts starts a program of an asynchronous list with
-// SIGINT and SIGQUIT ignored, so that it inherits them that way, and hands
-// the two back afterwards. See interp/asyncinterrupts.go for the rule and the
-// measurement (#5414).
-//
-// signal.Ignore undoes every subscription the process had for the two, and
-// signal.Reset cannot undo an ignore — see interp's restoreDispositions — so
-// what goes back is a subscription: this watch's, which dies of an untrapped
-// arrival exactly as the runtime's default would have. interp puts its own
-// trap subscriptions back beside it. A signal the script itself had ignored
-// is left ignored.
-func startIgnoringInterrupts(start func() error) error {
-	keyboard := []os.Signal{syscall.SIGINT, syscall.SIGQUIT}
-	var handBack []os.Signal
-	for _, sig := range keyboard {
-		if !signal.Ignored(sig) {
-			handBack = append(handBack, sig)
-		}
-	}
-	signal.Ignore(keyboard...)
-	err := start()
-	if ch := fatalWatch.ch; ch != nil && len(handBack) > 0 {
-		signal.Notify(ch, handBack...)
-	}
-	return err
 }
 
 // holdInterrupts is interp.Runner.HoldInterrupts for a shell that owns the

@@ -33,27 +33,36 @@ func TestAShellThatIsItsProcessHandsAnIgnoreToItsChildren(t *testing.T) {
 	dieRunningAsAShell()
 	const probe = `/bin/sh -c '/bin/sh -c "kill -USR1 \$\$; echo alive-\$((6*7))"; echo probed-$((2*3))'`
 	for _, tc := range []struct {
-		name, prep string
-		survives   bool
+		name, src string
+		survives  bool
 	}{
 		// The control, and the reason the other rows mean anything: with
 		// nothing arranged the grandchild dies, so the probe can say so.
-		{"nothing arranged", "", false},
-		{"ignored", "trap '' USR1; ", true},
-		{"ignored, then reset", "trap '' USR1; trap - USR1; ", false},
+		{"nothing arranged", probe, false},
+		{"ignored", "trap '' USR1; " + probe, true},
+		{"ignored, then reset", "trap '' USR1; trap - USR1; " + probe, false},
 		// A handled signal is reset to its default by exec, which is the
 		// difference between a handler and an ignore that a child can see.
-		{"handled", "trap ':' USR1; ", false},
-		// A subshell is a pretend process, and its ignore is its own.
-		{"ignored in a subshell", "(trap '' USR1); ", false},
+		{"handled", "trap ':' USR1; " + probe, false},
+		// A subshell is a pretend process, and its ignore is its own: the
+		// commands it starts inherit it, and nothing after it does (#7049).
+		{"ignored in a subshell", "(trap '' USR1); " + probe, false},
+		{"ignored in the subshell that starts it", "(trap '' USR1; " + probe + "); :", true},
+		// And the mirror, which takes the ignore off for the length of the
+		// start rather than putting one on.
+		{"ignored, then reset in a subshell", "trap '' USR1; (trap - USR1; " + probe + "); :", false},
+		// The replacement inherits what the shell ignored, and so does the
+		// command the shell becomes at the end of its string (#7050).
+		{"ignored, then exec", "trap '' USR1; exec " + probe, true},
+		{"ignored, and not last", "trap '' USR1; " + probe + "; :", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, out := waitStatusOfAShell(t, "^TestAShellThatIsItsProcessHandsAnIgnoreToItsChildren$", tc.prep+probe)
+			_, out := waitStatusOfAShell(t, "^TestAShellThatIsItsProcessHandsAnIgnoreToItsChildren$", tc.src)
 			if !strings.Contains(out, "probed-6") {
-				t.Fatalf("%s: the probe never finished, so it answered nothing: %q", tc.prep+probe, out)
+				t.Fatalf("%s: the probe never finished, so it answered nothing: %q", tc.src, out)
 			}
 			if got := strings.Contains(out, "alive-42"); got != tc.survives {
-				t.Errorf("%s: the grandchild survived = %v, want %v (wrote %q)", tc.prep+probe, got, tc.survives, out)
+				t.Errorf("%s: the grandchild survived = %v, want %v (wrote %q)", tc.src, got, tc.survives, out)
 			}
 		})
 	}

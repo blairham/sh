@@ -139,13 +139,15 @@ func ownsItsDispositions(sig syscall.Signal, ignore bool) {
 	signal.Reset(sig)
 }
 
-// A shebang-less script is a second Runner in the shell's own process, and a
-// shell that owns its dispositions hands it the hook so that its commands
-// inherit what it ignores. The cost was the caller's subscriptions, which the
+// A shebang-less script is a second Runner in the shell's own process, and it
+// used to be handed SetSignalDisposition so that its commands would inherit
+// what it ignored. The cost was the caller's subscriptions, which the
 // script's ignore took away and its end did not give back: measured
 // 2026-10-29, `trap 'echo caught' USR1`, a shebang-less script ignoring USR1,
 // then a USR1 from another process — `caught` in bash 5.3, bash 3.2, ksh93,
 // zsh and dash, and nothing at all from this shell's five binaries (#7044).
+// The script keeps its ignore to itself now (#7051); this is the row that
+// says the signal after it still reaches the caller.
 func TestAShebangLessScriptsIgnoreLeavesTheCallersHandler(t *testing.T) {
 	kill := externalKill(t)
 	restoreDispositionsAfter(t, []string{"USR1"})
@@ -162,7 +164,7 @@ func TestAShebangLessScriptsIgnoreLeavesTheCallersHandler(t *testing.T) {
 		"echo done\n"
 	s := startSteppedWith(t, src, func(r *interp.Runner) {
 		reportsAKilledJob(r)
-		r.SetSignalDisposition = ownsItsDispositions
+		ownsTheProcess(r)
 	})
 	s.reach(t, "ready")
 	if out, err := exec.Command(kill, "-USR1", strconv.Itoa(os.Getpid())).CombinedOutput(); err != nil {
@@ -175,9 +177,9 @@ func TestAShebangLessScriptsIgnoreLeavesTheCallersHandler(t *testing.T) {
 	}
 }
 
-// And the other half of handing a shebang-less script the hook: the commands
-// the script starts inherit what it ignores, which is the reason it is handed
-// over at all. Measured 2026-10-29, a shebang-less script ignoring INT and
+// And the other half: the commands the script starts inherit what it
+// ignores, which a script that keeps its ignore to itself gives them through
+// StartWithDispositions, a start at a time. Measured 2026-10-29, a shebang-less script ignoring INT and
 // then starting a child that raises it at itself: the child survives in bash
 // 5.3, bash 3.2, ksh93, zsh and dash. The control is the same script with no
 // ignore, which is what says the probe can report a death.

@@ -156,7 +156,7 @@ func (r *Runner) startMasked(cmd *exec.Cmd) error {
 	// os/exec copies a stream through, or a pidfd, held for the child's life
 	// on a number no forking shell holds. See claimStartLeftovers.
 	return withTransientFds(func() error {
-		return r.startWithAsyncDispositions(
+		return r.startWithDispositions(
 			func() error { return claimStartLeftovers(cmd, func() error { return startFromDir(cmd) }) },
 		)
 	})

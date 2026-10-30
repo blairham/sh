@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	"github.com/blairham/sh/interp"
 )
@@ -89,6 +90,25 @@ import (
 // TERM from outside could end, where all five die of it (#7047). So the
 // front end's half of a reset subscribes the watch again — see watchAgain —
 // and the watch decides as it always has, by the shell's table.
+//
+// # A shell with an EXIT trap takes the death over
+//
+// Ending the process from this goroutine is right for a shell with nothing to
+// run on its way out, and wrong for one with an EXIT trap in a dialect that
+// runs one on a death: bash 5.3, bash 3.2 and ksh93 run `trap cleanup EXIT`
+// for a TERM, a HUP or a USR1 from another process, at once, wherever they are
+// standing, and then die of it. This shell never did (#7054). So before it
+// dies the watch offers the signal to the shell — interp.Runner's
+// TakesAFatalSignal, which takes it only where there is a trap to run — and
+// the shell runs the trap and ends the process itself, through the same
+// DieBySignal as a signal it sent itself. TERM and INT, which the runtime
+// would end the process with before the watch heard of them, come to the
+// watch once the shell first has such a trap: see listenForFatalSignals.
+//
+// A shell that does not take the death within handOverGrace — one standing
+// somewhere nothing gives up for it — has it taken back and dies here, as
+// before. A second signal while the trap runs is not offered: it ends the
+// process at once, as it ends bash.
 
 // fatalSignals are the ones the Go runtime treats as throwing: it prints a
 // goroutine dump and exits rather than letting the default action run.
@@ -146,6 +166,9 @@ var fatalWatch struct {
 	// ends the way `exit` does rather than by the signal, and with which
 	// status. See interp.Runner.UntrappedHangupExit.
 	hangup atomic.Pointer[func() (int, bool)]
+	// takes hands the current shell a death it has an EXIT trap to run
+	// first. See interp.Runner.TakesAFatalSignal.
+	takes atomic.Pointer[takesAFatalSignal]
 	// bornIgnoring is what the process was ignoring when the watch was set
 	// up, for the two signals the runtime lets an inherited ignore stand for.
 	// Written once, before the watch starts, and only read after.
@@ -223,6 +246,12 @@ func watchFatalSignals(r *interp.Runner) {
 					// interp.Semantics.InterruptWaitsForTheProgram.
 					continue
 				}
+				if takes := fatalWatch.takes.Load(); takes != nil && handedOver(*takes, sig) {
+					// The shell has an EXIT trap to run first and has taken
+					// the death; it ends the process itself once the trap
+					// has run. See interp/outsidedeath.go.
+					continue
+				}
 				if hangup := fatalWatch.hangup.Load(); sig == syscall.SIGHUP && hangup != nil {
 					if status, exits := (*hangup)(); exits {
 						// Not a death in this dialect: measured 2026-10-29,
@@ -257,6 +286,10 @@ func watchFatalSignals(r *interp.Runner) {
 func watchWhatTheShellIgnores(r *interp.Runner) {
 	ignores := r.IgnoresUntrapped()
 	fatalWatch.ignores.Store(&ignores)
+	// And whether it takes a death over, which is never at a prompt: taken
+	// again here for the same reason. See interp.Runner.TakesAFatalSignal.
+	takes := takesAFatalSignal(r.TakesAFatalSignal())
+	fatalWatch.takes.Store(&takes)
 	if r.Interactive && fatalWatch.ch != nil && !signal.Ignored(syscall.SIGTERM) {
 		signal.Notify(fatalWatch.ch, syscall.SIGTERM)
 	}
@@ -338,4 +371,61 @@ func watched(sig syscall.Signal) bool {
 		}
 	}
 	return false
+}
+
+// takesAFatalSignal is interp.Runner.TakesAFatalSignal's answer.
+type takesAFatalSignal func(sig syscall.Signal) (claimed <-chan struct{}, revoke func() bool, taken bool)
+
+// handOverGrace is how long the watch waits for a shell it has handed a death
+// to take it, before taking it back and ending the process without the EXIT
+// trap, as it did before the shell could take one at all.
+//
+// The shell takes it at its next command, and the waits it spends its time in
+// are given up for it, so a taken death is taken in microseconds; the grace
+// is for a wait nothing gives up — a write into a pipe nobody reads, say —
+// where the alternative is a shell that the signal does not end at all. It is
+// generous against a loaded machine for that reason: running out early costs
+// the script its cleanup, and running out late costs a shell nothing could
+// hand the death to this long, once.
+const handOverGrace = 2 * time.Second
+
+// handedOver offers sig to the shell as a death to take, and reports whether
+// it took it: false where it had nothing to run first, and false where it did
+// not take it within handOverGrace, which the watch then answers as it
+// answers any other untrapped fatal signal.
+func handedOver(takes takesAFatalSignal, sig syscall.Signal) bool {
+	claimed, revoke, taken := takes(sig)
+	if !taken {
+		return false
+	}
+	grace := time.NewTimer(handOverGrace)
+	defer grace.Stop()
+	select {
+	case <-claimed:
+		return true
+	case <-grace.C:
+		// Taken back unless the shell took it in the meantime, in which case
+		// the shell is the one ending the process.
+		return !revoke()
+	}
+}
+
+// listenForFatalSignals is interp.Runner.ListenForFatalSignals for a shell that
+// owns the process: TERM and INT come to the watch, which offers them to the
+// shell before dying of them, rather than ending the process where the
+// runtime's default would.
+//
+// Not a signal the process was born ignoring, nor one the shell ignores now:
+// a subscription takes an ignore away, from every child as well. A reset
+// subscribes the watch again — see watchAgain.
+func listenForFatalSignals() {
+	ch := fatalWatch.ch
+	if ch == nil {
+		return
+	}
+	for _, sig := range []syscall.Signal{syscall.SIGTERM, syscall.SIGINT} {
+		if !fatalWatch.bornIgnoring[sig] && !signal.Ignored(sig) {
+			signal.Notify(ch, sig)
+		}
+	}
 }

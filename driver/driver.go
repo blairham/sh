@@ -3141,6 +3141,10 @@ func (sh *Shell) newRunnerAs(
 		// process, which is the only kind a child inherits. See
 		// signaldisposition.go.
 		r.SetSignalDisposition = setSignalDisposition
+		// And the signals the runtime would end the process with where they
+		// land, heard by the watch once the shell has an EXIT trap to run
+		// before dying of one. See fatalsignal.go.
+		r.ListenForFatalSignals = listenForFatalSignals
 	}
 	// The part of composing a shell that is not a field, applied here and
 	// *remembered*, because interp has one shell of its own to build: the

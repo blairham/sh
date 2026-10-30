@@ -2642,6 +2642,14 @@ func Semantics() interp.Semantics {
 	// 0.2 v; echo "$? [$v]"; }` is `1 [old]` here, against bash 5.3's `142
 	// [part]`. ksh93's row (#2272).
 	s.ReadTimeoutKeepsWhatArrived = interp.No
+	// ...except for the fields whose separator arrived, which are kept,
+	// each in its own name, and the same at a trapped signal that gives the
+	// read up: `x y ` into `a b c` with `a=A b=B c=C` is `st=1 a=[x] b=[y]
+	// c=[C]` at either ending, and `x y` into one name leaves it as it was.
+	// A field is assigned here as its separator is read, and the last name
+	// only at the line's end. Measured 2026-10-30 in the pinned image,
+	// BusyBox v1.37.0; the rows are on the field (#7028).
+	s.ReadEndedShortKeepsOnlyCompleteFields = interp.Yes
 	// A count does not stop `read` judging the names after the first:
 	// `printf 'XYZW\n' | read -n 3 a 1bad b` complains `read: '1bad': bad
 	// variable name` at 1, exactly as it does without the count, and `-n 3`

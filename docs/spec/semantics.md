@@ -34493,9 +34493,10 @@ descriptor was opened, not of pipe against fifo; see the next section.
 
 **What arrives after the read was given up is the next reader's, whole, in
 all three.** What arrived before it is the first read's: dash and ksh93 keep it
-in the name, ash drops it — ash assigns a field as its separator arrives, so a
-read given up mid-field touches no name (#7028). None of them leaves it in the
-stream.
+in the name, ash keeps only the fields whose separator arrived — it assigns a
+field as its separator is read, so a read given up mid-field touches no name.
+That is `Semantics.ReadEndedShortKeepsOnlyCompleteFields`; see *What a read that
+ends short keeps* below (#7028). None of them leaves it in the stream.
 
 This shell read on a goroutine so that a signal could end the wait, and that
 read stayed parked on the stream after the builtin had returned — so it took
@@ -34570,7 +34571,8 @@ second answers the same in all three):
 | dash | `T U`, `st=1 len=131072 next=0` | the same |
 | ksh93 | `T U`, `st=258 len=131072 next=0` | `T U`, `st=0 len=131072 next=4` |
 
-ash answers `st=1 len=0`, which is #7028 rather than this.
+ash answers `st=1 len=0`: one name and no separator, so it keeps nothing of
+what arrived (`ReadEndedShortKeepsOnlyCompleteFields`, #7028).
 
 **Part of a line, then a wait the signal lands in.** `ab` waiting, INT 0.3 s
 in, `cd` and `end` half a second after:
@@ -34583,7 +34585,8 @@ in, `cd` and `end` half a second after:
 With nothing in, `read -r -u3 l` is `T`, `st=258 l=[]` in ksh93 — a signal that
 lands during the wait gives a `-u` read up whether or not it has begun.
 
-ash gives all of these up at 1 with `l` empty (#7028). A pipe is a descriptor
+ash gives all of these up at 1 and keeps nothing in `l`, which was empty
+before the read (`ReadEndedShortKeepsOnlyCompleteFields`, #7028). A pipe is a descriptor
 open for reading alone: `{ printf ab; …; echo cd; } | read -r l` in ksh93 is
 `st=0 l=[abcd]`, from `-c` and in the current shell alike, and a fifo opened
 `<` answers as the pipe does — on descriptor 0 or 3, opened by the harness or
@@ -34654,6 +34657,62 @@ read on through a trapped signal and never ask it.
   and the end of the line, the order is `T W`, and a signal already waiting
   has its handler run as the read begins. Here the handler runs once the read
   is over (`W T`), in all four.
+
+#### What a read that ends short keeps
+
+`Semantics.ReadEndedShortKeepsOnlyCompleteFields` (#7028). A read that ends
+short of its line, at its `-t` deadline or given up for a trapped signal, has
+some of the line and not the rest. dash and ksh93 assign what arrived at a
+give-up, as an end of input does, and bash does the same at a deadline, where
+ksh93 assigns nothing (`ReadTimeoutKeepsWhatArrived`). BusyBox ash does neither.
+It assigns a field as its separator is read and the last name only at the end
+of the line, so what a short read leaves is the fields whose separator arrived,
+each in its own name, and the field still arriving, the last name and every
+name after it as they were. The two endings are one case there.
+
+Measured 2026-10-30 from `-c`, `a=A b=B c=C l=old REPLY=R`, a fifo opened both
+ways on descriptor 3 and the text written to it before the read. The deadline is
+`read -t 0.3` with nothing more coming. The signal is INT a second in, with an
+INT trap `echo T`. BusyBox ash 1.37.0 in the pinned image, both endings, status
+1 throughout:
+
+| text | read | BusyBox ash |
+| --- | --- | --- |
+| `x y` | `-r a b` | `a=[x] b=[B]` |
+| `x y ` | `-r a b c` | `a=[x] b=[y] c=[C]` |
+| `x y z ` | `-r a b` | `a=[x] b=[B]` |
+| `x  y` | `-r a b c` | `a=[x] b=[B] c=[C]` |
+| `x y` | `-r l` | `l=[old]` |
+| nothing | `-r l` | `l=[old]` |
+| `x\ y z ` | `a b c` | `a=[x y] b=[z] c=[C]` |
+| `x\ ` | `a b` | `a=[A] b=[B]` |
+| `:y`, `IFS=:` | `-r a b c` | `a=[] b=[B] c=[C]` |
+| `x::`, `IFS=:` | `-r a b c` | `a=[x] b=[] c=[C]` |
+| `x y ` | `-r` | `REPLY=[R]` |
+
+The deadline answers the same under `-n 9` and `-d Q`, and the next read takes
+what is written after, whole, in every row. The same rows on this machine:
+
+| | ending | `x y ` into `a b c` | `x y z ` into `a b` | `x y` into `l` | nothing into `l` |
+| --- | --- | --- | --- | --- | --- |
+| dash 0.5.12 | signal | `a=[x] b=[y] c=[]` | `a=[x] b=[y z]` | `l=[x y]` | `l=[]` |
+| ksh93u+ | signal, 258 | `a=[x] b=[y] c=[]` | `a=[x] b=[y z]` | `l=[x y]` | `l=[]` |
+| ksh93u+ | deadline | nothing assigned | nothing assigned | `l=[old]` | `l=[old]` |
+| bash 5.3.20 | deadline, 142 | `a=[x] b=[y] c=[]` | `a=[x] b=[y z]` | `l=[x y]` | `l=[]` |
+
+A field is complete when a separator follows it in what arrived, the separator
+not written behind a backslash, so the splitting is the one the names are
+filled by. A run of IFS whitespace is one separator, and with IFS set and empty
+nothing is.
+
+The axis is asked at every give-up of a read into names in a dialect that gives
+reads up for a trapped signal (a read given up only for a death from outside,
+in a dialect that does not, is the shell about to die and is not asked), and at
+a deadline only where the dialect keeps nothing there and a field ahead of the
+last name is complete, since everywhere else keeping the complete fields and keeping nothing
+leave the same names. Not asked of `-a`, `-A` or `-N`, which no shell with this
+reading has. Pinned by `TestAReadThatEndsShortKeepsWhatTheShellsKeep` and, for
+the axis itself, `TestEachAnswerToAReadThatEndsShort`.
 
 #### When a signal ends a timed read's wait
 

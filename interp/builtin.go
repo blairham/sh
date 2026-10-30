@@ -6814,6 +6814,11 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// nothing. Assigning happens before the status is decided, not instead
 	// of it.
 	status := 0
+	// complete is what a read that ended short keeps, in the dialect that
+	// keeps only the fields whose separator arrived, and nil everywhere else.
+	// See Semantics.ReadEndedShortKeepsOnlyCompleteFields.
+	var complete []string
+	keepsComplete := false
 	switch end {
 	case endTimeout:
 		status = orDefault(r.diag().ReadTimeoutStatus, 1)
@@ -6827,7 +6832,24 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			if r.unspecified {
 				return 2
 			}
-			return status
+			// Except, in one of them, the fields whose separator arrived.
+			// Asked only where there is one ahead of the last name, which
+			// is the one place keeping them and keeping nothing differ.
+			if array != "" || exact || len(args) < 2 {
+				return status
+			}
+			complete = r.readCompleteFields(text, lits)
+			if r.unspecified {
+				return 2
+			}
+			if len(complete) == 0 || !r.ask(r.sem().ReadEndedShortKeepsOnlyCompleteFields,
+				"a `read` that ends short keeping only the fields whose separator arrived") {
+				if r.unspecified {
+					return 2
+				}
+				return status
+			}
+			keepsComplete = true
 		}
 	case endEOF:
 		status = 1
@@ -6838,6 +6860,27 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			r.readAbandonedBy = 0
 			if r.sem().ReadAbandonedReportsTheSignal == Yes {
 				status = 256 + int(sig)
+			}
+			// And what it keeps, which is what arrived in two of the three
+			// columns that give a read up and only its complete fields in
+			// the third. Asked ahead of the counts below, which are about an
+			// input that ended rather than a read that was given up, and only
+			// in a dialect that gives a read up for a trapped signal: one
+			// that does not gives a read up only for a death from outside,
+			// which the shell is about to die of. See outsidedeath.go.
+			if array == "" && !exact && r.sem().ReadIsAbandonedByATrappedSignal == Yes {
+				if r.ask(r.sem().ReadEndedShortKeepsOnlyCompleteFields,
+					"a `read` that ends short keeping only the fields whose separator arrived") {
+					complete = r.readCompleteFields(text, lits)
+					if r.unspecified {
+						return 2
+					}
+					keepsComplete = true
+					break
+				}
+				if r.unspecified {
+					return 2
+				}
 			}
 		}
 		switch {
@@ -7005,6 +7048,9 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		}
 		fill, badName, bad = i, name, true
 		break
+	}
+	if keepsComplete {
+		return r.readKeepingCompleteFields(args, fill, complete, status, echo, defaulted, &refused, badName, bad)
 	}
 	if count >= 0 && (array != "" || len(args[:fill]) > 1 || !exact) {
 		// Asked only where the answer could show: an array to fill, a second
@@ -7258,6 +7304,62 @@ func (r *Runner) readArrayRefusalStatus(own int) int {
 		return own
 	}
 	return r.arrayStoreRefusalStatus(r.status)
+}
+
+// readCompleteFields is the fields of text whose separator arrived: every
+// field it splits into but the last, and the last as well where text ends on
+// a separator that was not escaped. A read that ended short keeps these and
+// no more in the dialect that answers
+// Semantics.ReadEndedShortKeepsOnlyCompleteFields.
+//
+// The splitting is the one the names are filled by, so an escaped separator
+// is data here as it is there — `x\ y z ` under `read a b c` is the two
+// complete fields `x y` and `z` — and a run of IFS whitespace is one
+// separator. With IFS set and empty nothing separates, so no field is ever
+// complete.
+func (r *Runner) readCompleteFields(text string, lits []bool) []string {
+	ifs, set := r.ifs()
+	fields, _, _ := splitFieldsAt(text, lits, nil, ifs, r.ifsSpace(ifs), set, false, false, r.countsTheLocalesWideUnits)
+	if len(fields) > 0 && !endsOnASeparator(text, lits, ifs) {
+		fields = fields[:len(fields)-1]
+	}
+	return fields
+}
+
+// endsOnASeparator reports whether the last character of text is one of ifs
+// and was not written behind a backslash.
+func endsOnASeparator(text string, lits []bool, ifs string) bool {
+	last, size := utf8.DecodeLastRuneInString(text)
+	if size == 0 || !strings.ContainsRune(ifs, last) {
+		return false
+	}
+	for i := len(text) - size; i < len(text); i++ {
+		if lits != nil && lits[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// readKeepingCompleteFields fills names from the fields of a read that ended
+// short, in the dialect that keeps only the complete ones: each name but the
+// last the script wrote takes the complete field in its place, and the field
+// still arriving, the last name and every name past the complete fields are
+// left as they were. See Semantics.ReadEndedShortKeepsOnlyCompleteFields.
+//
+// The last name is never filled, because it takes the rest of the line, and
+// the rest of a line that never ended is not there to take.
+func (r *Runner) readKeepingCompleteFields(
+	args []string, fill int, complete []string, status int, echo readEcho,
+	defaulted bool, refused *bool, badName string, bad bool,
+) int {
+	n := min(fill, len(args)-1, len(complete))
+	for i := range n {
+		if st, stop := r.readFill(args[i], complete[i], n-i-1, defaulted, refused, echo); stop {
+			return st
+		}
+	}
+	return r.readRefusedOrStatus(*refused, status, badName, bad)
 }
 
 // readRefusedOrStatus folds a refusal the builtin went on past into the

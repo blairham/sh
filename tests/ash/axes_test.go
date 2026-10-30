@@ -66,6 +66,12 @@ func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 			"ReadTimeoutKeepsWhatArrived — reachable only once the axis above was answered",
 		},
 		{
+			"an expired read with a complete field",
+			`mkfifo p; exec 3<>p; a=A b=B; printf 'x y' >p; read -t 0.05 -r a b <&3; echo "st=$? [$a][$b]"`,
+			"ReadEndedShortKeepsOnlyCompleteFields — asked at a deadline only where a " +
+				"field ahead of the last name is complete (#7028)",
+		},
+		{
 			"read -t 0 polling",
 			`printf 'a\nb\n' >f; exec <f; read -t 0 v; echo "st=$? v=[$v]"; read w; echo "w=[$w]"`,
 			"ReadZeroTimeout",

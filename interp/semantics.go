@@ -3098,6 +3098,72 @@ type Semantics struct {
 	// alone; the two are told apart by how long the read takes, not by what
 	// it assigns.
 	ReadTimeoutKeepsWhatArrived Answer
+	// ReadEndedShortKeepsOnlyCompleteFields decides what a `read` that ends
+	// short of its line leaves in its names, at its `-t` deadline or given up
+	// for a trapped signal (ReadIsAbandonedByATrappedSignal). Yes keeps only
+	// the fields whose separator arrived, each in the name it would have
+	// gone to. The field still arriving, the last name and every name after
+	// it are left as they were. No leaves the ending to its own rule: at the
+	// deadline ReadTimeoutKeepsWhatArrived, and at a give-up what arrived is
+	// assigned as at the end of the input, so the names it does not reach
+	// are cleared.
+	//
+	// BusyBox ash answers yes. A field there is assigned as its separator is
+	// read, and the last name, which takes the rest of the line, only at the
+	// line's end, so the two short endings are one case. Measured 2026-10-30
+	// in the pinned image (BusyBox v1.37.0) from -c, with `a=A b=B c=C
+	// l=old`, a fifo opened both ways on descriptor 3 and the text written
+	// to it before the read. The deadline is `read -t 0.3` with nothing more
+	// coming. The signal is an INT trap `echo T` and INT a second in. Every
+	// row is the same under both endings, at status 1, and the next read
+	// takes what is written after, whole:
+	//
+	//	`x y`       read -r a b       a=[x] b=[B]
+	//	`x y `      read -r a b c     a=[x] b=[y] c=[C]
+	//	`x y z `    read -r a b       a=[x] b=[B]
+	//	`x  y`      read -r a b c     a=[x] b=[B] c=[C]
+	//	`x y`       read -r l         l=[old]
+	//	nothing     read -r l         l=[old]
+	//	`x\ y z `   read a b c        a=[x y] b=[z] c=[C]
+	//	`x\ `       read a b          a=[A] b=[B]
+	//	`:y`        IFS=:, -r a b c   a=[] b=[B] c=[C]
+	//	`x::`       IFS=:, -r a b c   a=[x] b=[] c=[C]
+	//	`x y `      read -r           REPLY as it was
+	//
+	// The deadline also answers the same under `-n 9` and `-d Q`.
+	//
+	// The other columns, the same rows on this machine. At a give-up dash
+	// 0.5.12 and ksh93u+ 2012-08-01 assign what arrived: `x y ` into `a b c`
+	// is `a=[x] b=[y] c=[]`, `x y z ` into `a b` is `a=[x] b=[y z]`, `x y`
+	// into `l` is `l=[x y]` and nothing into `l` is `l=[]` (ksh93 at 258).
+	// At the deadline bash 5.3.20 assigns what arrived the same way, at
+	// 142, and ksh93u+ touches nothing (ReadTimeoutKeepsWhatArrived).
+	//
+	// Asked at every give-up of a read into names in a dialect that gives
+	// reads up for a trapped signal — not at one given up for a death from
+	// outside in a dialect that does not, which the shell is about to die of
+	// — and at a deadline only where the dialect keeps nothing there
+	// (ReadTimeoutKeepsWhatArrived is no) and a field ahead of the last name
+	// is complete. Everywhere else
+	// at a deadline the two readings leave the same names. Not asked of
+	// `-a`, `-A` or `-N`, which no shell with this reading has.
+	//
+	// unpinned ash: no corpus row times a read out or signals one with text
+	// in it. Pinned by TestAReadThatEndsShortKeepsWhatTheShellsKeep.
+	//
+	// unpinned dash: the same reach. Pinned by
+	// TestAReadThatEndsShortKeepsWhatTheShellsKeep.
+	//
+	// unpinned ksh: the same reach. Pinned by
+	// TestAReadThatEndsShortKeepsWhatTheShellsKeep.
+	//
+	// unpinned bash: never asked. bash reads on through a trapped signal
+	// and keeps what arrived at a deadline, and its answer is POSIX's.
+	//
+	// unpinned zsh: never asked. zsh reads on through a trapped signal, and
+	// its deadline bounds only the wait for the first byte
+	// (ReadTimeoutBoundsReadability), so nothing has arrived when it passes.
+	ReadEndedShortKeepsOnlyCompleteFields Answer
 
 	// ReadTimeoutBoundsReadability makes `read -t` bound the wait for the
 	// stream to become *readable* rather than the whole read: once a byte has
@@ -36989,6 +37055,11 @@ func PosixSemantics() Semantics {
 		// columns with the letter whose reads go on through a trapped signal,
 		// bash 5.3 and 3.2 answer this and zsh does not. See the field.
 		ReadTimeoutWaitEndedByATrappedSignal: No,
+		// And a read given up keeps what arrived, as at the end of the
+		// input, its names past what arrived cleared: dash and ksh93, two of
+		// the three columns that give one up. BusyBox ash keeps only the
+		// fields whose separator arrived. See the field.
+		ReadEndedShortKeepsOnlyCompleteFields: No,
 		// And a named one, and a listing marks the table as it stood. See
 		// the fields.
 		WaitLeavesTheJobForTheListing:     No,

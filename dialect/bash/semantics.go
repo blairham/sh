@@ -924,6 +924,10 @@ func Semantics() interp.Semantics {
 	// `PRE` here and in bash 3.2, where ksh93 and zsh write `PRE` first
 	// (#3814).
 	s.PrefixExpandedBeforeADeclarationsOperand = interp.No
+	// And the entries are put back before a failure ends the shell, under
+	// `-o posix` too: measured 2026-10-30, `trap 'echo $v' EXIT; v=old;
+	// v=new w=${q?boom} :` writes `old` (#7004).
+	s.PrefixEntriesStayWhenAFailureEndsTheShell = interp.No
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinOn
 	// And a listing with **no operand** does not see that prefix at all: it
 	// answers from the shell's own variables, so `export k=1; k=9 export -p`

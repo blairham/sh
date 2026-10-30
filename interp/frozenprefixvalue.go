@@ -83,10 +83,17 @@ import "github.com/blairham/sh/syntax"
 // where this refused ahead of every line in that column (#6987). bash 5.3.20
 // writes its entries the same way, which is where the per-entry lines here
 // were first measured (#5546).
+//
+// held is the caller's, and the caller releases it once the refusal is made:
+// a refusal that ends the shell leaves the entries in front of it where the
+// dialect leaves a failed prefix's — see interp/prefixentriesstay.go.
+// Measured 2026-10-30 from `-c`, `trap 'echo $v' EXIT; v=old; readonly r=0;
+// v=new r=1 :` writes `new` in ksh93u+ and dash 0.5.12 (#7004).
 func (r *Runner) expandThePrefixUpToTheFrozenName(
 	assigns []*syntax.Assign,
 	refuseEach func(name string),
 	traceEach bool,
+	held *heldPrefix,
 ) bool {
 	if len(r.frozenPrefixNames(assigns)) == 0 {
 		return false
@@ -102,8 +109,6 @@ func (r *Runner) expandThePrefixUpToTheFrozenName(
 	// and put back before any route stores one for real. The same helper the
 	// ordered walk and the trace walk use, for the same reason — see
 	// interp/prefixsees.go.
-	var held heldPrefix
-	defer held.release(r)
 	for _, a := range assigns {
 		if a.Operand {
 			continue
@@ -156,7 +161,7 @@ func (r *Runner) expandThePrefixUpToTheFrozenName(
 		if inTurn && !r.placePrefixSubscript(a, false) {
 			return true
 		}
-		r.holdPrefixEntry(&held, a, joined)
+		r.holdPrefixEntry(held, a, joined)
 		if !frozen && traceEach {
 			// Written as it is expanded, ahead of the refusal still to come,
 			// in the column that writes a line per entry in front of the

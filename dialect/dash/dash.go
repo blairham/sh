@@ -303,6 +303,10 @@ func Semantics() interp.Semantics {
 	// measured 2026-09-19, `PRE=$(echo PRE >&2) export s=$(echo OP >&2)`
 	// writes `OP` and then `PRE` (#3814).
 	s.PrefixExpandedBeforeADeclarationsOperand = interp.No
+	// And a failure that ends the shell leaves the entries already assigned,
+	// in front of a program too: measured 2026-10-30, `trap 'echo $v' EXIT;
+	// v=old; v=new w=${q?boom} /usr/bin/true` writes `new` (#7004).
+	s.PrefixEntriesStayWhenAFailureEndsTheShell = interp.Yes
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
 	// This shell has no declaration word but `readonly` and `export`, both
 	// special builtins whose prefix persists here by the axis above — so the

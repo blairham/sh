@@ -325,7 +325,9 @@ func (r *Runner) refusePrefixesEarly(assigns []*syntax.Assign, argv []string) bo
 	walk := r.beginPrefixWalk(assigns)
 	traceEach := r.tracesItsPrefix(assigns, argv) && r.tracesEachPrefixEntryOnItsOwnLine() &&
 		!r.tracePrefixFollowsTheCommand(assigns, argv)
-	if r.expandThePrefixUpToTheFrozenName(assigns, refuseEach, traceEach) {
+	held := heldPrefix{route: r.heldExportRouteOf(argv)}
+	defer held.release(r)
+	if r.expandThePrefixUpToTheFrozenName(assigns, refuseEach, traceEach, &held) {
 		// The expansion's sentence is the whole of what the script is told,
 		// and the command is over: the refusal is never written.
 		r.givesUpForAFailedPrefix(walk, p)

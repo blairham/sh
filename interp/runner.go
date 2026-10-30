@@ -10463,16 +10463,22 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// part of this walk — a marker taken after it would read a value
 		// that would not expand as something that had already failed.
 		walk = r.beginPrefixWalk(c.Assigns)
-		if !r.prefixCheckedFirst && r.expandThePrefixUpToTheFrozenName(c.Assigns, nil, false) {
+		// Put back once the refusal is made, which is what lets a refusal
+		// that ends the shell leave the entries in front of it. See
+		// interp/prefixentriesstay.go.
+		frozenHeld := heldPrefix{route: heldExportRoute{set: true, kind: prefixCommand{kind: prefixBeforeFunction}}}
+		if !r.prefixCheckedFirst && r.expandThePrefixUpToTheFrozenName(c.Assigns, nil, false, &frozenHeld) {
 			// A frozen name's own value is what failed, in one of the four
 			// columns that evaluate it first: the expansion's sentence is
 			// the whole of what the script is told, the refusal is never
 			// written, and the command is over. See
 			// interp/frozenprefixvalue.go.
 			r.givesUpForAFailedPrefix(walk, prefixCommand{kind: prefixBeforeFunction})
+			frozenHeld.release(r)
 			return nil
 		}
 		refused, stop := r.refusePrefixes(c.Assigns, prefixCommand{kind: prefixBeforeFunction}, !r.expandErr)
+		frozenHeld.release(r)
 		if stop {
 			return nil
 		}
@@ -10684,6 +10690,9 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// command was. A refusal of the axis there is about this command and
 		// has to say so.
 		callLine := r.line
+		// Whether a failed value is ending the shell where the entries the
+		// walk did apply stay as they are. See interp/prefixentriesstay.go.
+		stays := false
 		defer func() {
 			bodyLine := r.line
 			r.line = callLine
@@ -10694,7 +10703,9 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			if frame < len(r.callPrefixes) {
 				left = r.callPrefixes[frame].undo
 			}
-			r.takeBackFunctionPrefix(left, scoped)
+			if !stays {
+				r.takeBackFunctionPrefix(left, scoped)
+			}
 			if scoped && slices.Contains(callHeld, "OPTIND") {
 				// A prefixed OPTIND was the call's own cursor (see
 				// localizeGetoptsCursor), so the caller gets back the
@@ -10710,7 +10721,11 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// A value that would not expand gives the call up. Behind the
 		// take-back above for the reason the builtin route's is: the entries
 		// the walk did apply before it failed are still the command's and
-		// still transient. See interp/prefixexpansionfailed.go.
+		// still transient, unless the failure ends the shell where the
+		// dialect leaves them. See interp/prefixentriesstay.go.
+		if r.prefixWalkFailed(walk) {
+			stays = r.prefixEntriesStay(prefixCommand{kind: prefixBeforeFunction})
+		}
 		if r.givesUpForAFailedPrefix(walk, prefixCommand{kind: prefixBeforeFunction}) {
 			return nil
 		}
@@ -10763,15 +10778,21 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// on the record. The redirections have been opened since the marker
 		// runSimple took, and what they may have left is not this prefix's.
 		walk = r.beginPrefixWalk(c.Assigns)
-		if !r.prefixCheckedFirst && r.expandThePrefixUpToTheFrozenName(c.Assigns, nil, false) {
+		// Put back once the refusal is made, which is what lets a refusal
+		// that ends the shell leave the entries in front of it. See
+		// interp/prefixentriesstay.go.
+		frozenHeld := heldPrefix{route: heldExportRoute{set: true, kind: kind}}
+		if !r.prefixCheckedFirst && r.expandThePrefixUpToTheFrozenName(c.Assigns, nil, false, &frozenHeld) {
 			// What the frozen name was being given is what failed, in one of
 			// the four columns that evaluate it ahead of the refusal: its
 			// sentence is the whole of what the script is told, and the
 			// command is over. See interp/frozenprefixvalue.go.
 			r.givesUpForAFailedPrefix(walk, kind)
+			frozenHeld.release(r)
 			return nil
 		}
 		refused, stop := r.refusePrefixes(c.Assigns, kind, true)
+		frozenHeld.release(r)
 		if stop {
 			return nil
 		}
@@ -10906,17 +10927,26 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		outerUndo := r.prefixHeldUndo
 		r.prefixHeldNames, r.prefixKeptNames, r.prefixShadowed = held, nil, nil
 		r.prefixHeldUndo = undo
+		// Whether a failed value is ending the shell where the entries the
+		// walk did apply stay as they are. See interp/prefixentriesstay.go.
+		stays := false
 		defer func() {
 			kept, shadowed := r.prefixKeptNames, r.prefixShadowed
 			r.prefixHeldNames, r.prefixKeptNames, r.prefixShadowed = outerHeld, outerKept, outerShadowed
 			r.prefixHeldUndo = outerUndo
-			r.restoreVarsExcept(undo, kept, shadowed)
+			if !stays {
+				r.restoreVarsExcept(undo, kept, shadowed)
+			}
 		}()
 		// A value that would not expand gives the builtin up. Behind the
 		// take-back above rather than in front of it, so that the entries
 		// the walk did apply before it failed are still put back — a prefix
 		// is transient whether or not the command it stood in front of ever
-		// ran. See interp/prefixexpansionfailed.go.
+		// ran — unless the failure ends the shell where the dialect leaves
+		// them. See interp/prefixexpansionfailed.go.
+		if r.prefixWalkFailed(walk) {
+			stays = r.prefixEntriesStay(kind)
+		}
 		if r.givesUpForAFailedPrefix(walk, kind) {
 			return nil
 		}
@@ -11417,6 +11447,17 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	}
 	env = append(withoutPrefixArrayNames(env, prefixArrays), prefixEnv...)
 	if _, stop := r.refusePrefixes(c.Assigns, external, !r.expandErr); stop {
+		// The entries in front of the refused one were released before the
+		// environment was read, and a refusal that ends the shell leaves
+		// them where the dialect leaves a failed prefix's: measured
+		// 2026-10-30, `trap 'echo $v' EXIT; v=old; readonly r=0; v=new r=1
+		// /usr/bin/true` writes `new` in dash 0.5.12 (#7004). The walk ends
+		// at the refused entry in that column, so what it handed the child
+		// is exactly what was in front of it. See
+		// interp/prefixentriesstay.go.
+		if r.prefixEntriesStay(external) {
+			r.leaveThePrefixEntries(prefixEnv)
+		}
 		return nil
 	}
 	if r.prefixValueRefused(prefixEnv, external) {

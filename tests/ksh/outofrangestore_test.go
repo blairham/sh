@@ -22,3 +22,16 @@ func TestAnOutOfRangeStoreThroughReadFailsTheBuiltin(t *testing.T) {
 		}
 	}
 }
+
+// A literal under the indexed letter whose element comes to a position before
+// the first keeps the elements it placed in front of it, the way one whose
+// subscript would not evaluate already did. It kept the name's old value
+// (#6852). Measured 2026-10-30 on ksh93u+ 2012-08-01 from a file, read by an
+// exit trap: `subscript out of range`, then `typeset -a b=(z)`.
+func TestAnOutOfRangeElementKeepsWhatTheLiteralPlaced(t *testing.T) {
+	src := "b=(7)\ntrap 'typeset -p b' EXIT\ntypeset -a b=([0]=z [-5]=x [2]=q)\n"
+	want := "sh: line 3: b: subscript out of range\ntypeset -a b=(z)\n"
+	if out, _ := answersRun(t, src); out != want {
+		t.Errorf("got %q\nwant %q", out, want)
+	}
+}

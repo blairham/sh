@@ -3599,6 +3599,11 @@ func Semantics() interp.Semantics {
 	// A literal's own reading of the same empty subscript, measured 2026-10-16
 	// (#6738): see interp.Semantics.EmptySubscriptInAnIndexedLiteralIsBad.
 	s.EmptySubscriptInAnIndexedLiteralIsBad = interp.No
+	// And a literal whose element was refused where it would go places nothing
+	// at all: measured 2026-10-30 on 5.9.2, `b=(7); b=(1 [-5]=x 3)` and `b=(1
+	// [1+]=x 3)` both leave `( 7 )` for an exit trap to read (#6852). See
+	// interp.Semantics.RefusedPlacementKeepsWhatTheLiteralPlaced.
+	s.RefusedPlacementKeepsWhatTheLiteralPlaced = interp.No
 	// Measured 2026-10-16 (#6781): see
 	// interp.Semantics.DeclarationOperandSplitsAfterTheSubscript.
 	s.DeclarationOperandSplitsAfterTheSubscript = interp.No

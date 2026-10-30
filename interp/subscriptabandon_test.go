@@ -156,6 +156,9 @@ func subscriptAbandonRun(t *testing.T, src string, abandons Answer) (string, str
 	// yes-or-no: the core leaves it unanswered and an unanswered axis reports
 	// itself and stops, which is not the refusal this suite measures.
 	sem.SubscriptedArrayLiteral = SubscriptedArrayLiteralRefused
+	// And what a refused literal keeps once its subscript is refused, which
+	// is a question of its own and not the give-up this suite measures.
+	sem.RefusedPlacementKeepsWhatTheLiteralPlaced = Yes
 	var out, errs strings.Builder
 	dir := t.TempDir()
 	r := newTestRunner(t, &Runner{

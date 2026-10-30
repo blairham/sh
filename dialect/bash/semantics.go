@@ -3248,6 +3248,11 @@ func Semantics() interp.Semantics {
 	// A literal's own reading of the same empty subscript, measured 2026-10-16
 	// (#6738): see interp.Semantics.EmptySubscriptInAnIndexedLiteralIsBad.
 	s.EmptySubscriptInAnIndexedLiteralIsBad = interp.Yes
+	// A literal whose element was refused where it would go keeps what it had
+	// placed in front of it: measured 2026-10-30, `b=(7); b=(1 [-5]=x 3)`
+	// leaves `([0]="1")` (#6852). See
+	// interp.Semantics.RefusedPlacementKeepsWhatTheLiteralPlaced.
+	s.RefusedPlacementKeepsWhatTheLiteralPlaced = interp.Yes
 	// The comma inside a subscript is the arithmetic operator here, as it is
 	// everywhere else: measured 2026-09-12, `a=(p q r s); i="2,3";
 	// ${a[$i]}` is the *third* element, which is the operator's right

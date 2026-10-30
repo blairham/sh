@@ -2283,6 +2283,14 @@ type Runner struct {
 	// door this routes to (#3502). Cleared with expandErr, everywhere
 	// expandErr is cleared.
 	badSubscript bool
+	// literalPlacementRefused records that an array literal's element was
+	// refused where it would have been placed — a position before the first,
+	// or a subscript that expanded to nothing where that is refused — rather
+	// than that its subscript failed to evaluate. Set by
+	// Runner.literalElemPos and read by the one store that streams, which
+	// saves and clears it around its own placement. See
+	// Semantics.RefusedPlacementKeepsWhatTheLiteralPlaced.
+	literalPlacementRefused bool
 	// badRange records that the expansion which failed was a **substring
 	// range** — the offset or the length of `${v:off:len}` or of
 	// `${a[@]:off:len}` — rather than any other unreadable expression.

@@ -80,6 +80,45 @@ func TestARefusedSubscriptStoresWhatCameBeforeIt(t *testing.T) {
 			"v=(a b)\n" + `v=( p $((1/0)) q )` + "\n" + `declare -p v`,
 			`declare -a v=([0]="a" [1]="b")`,
 		},
+		// A subscript that evaluates and comes to no place the array has is
+		// refused where it would go, and streams the same way: measured
+		// 2026-10-30 on bash 5.3.20 (#6852). It used to store nothing, so the
+		// name kept what it held — or stayed unset.
+		{
+			"a position before the first keeps what came before it",
+			"b=(7)\nb=(1 [-5]=x 3)\n" + `declare -p b`,
+			`declare -a b=([0]="1")`,
+		},
+		{
+			"over an unset name too",
+			"b=(1 [-5]=x 3)\n" + `declare -p b`,
+			`declare -a b=([0]="1")`,
+		},
+		{
+			"an empty subscript leaves an empty array over an unset name",
+			"a=([$(true)]=x)\n" + `declare -p a`,
+			`declare -a a=()`,
+		},
+		{
+			"an empty subscript keeps what came before it",
+			"b=(7)\nb=(1 [$(true)]=x 3)\n" + `declare -p b`,
+			`declare -a b=([0]="1")`,
+		},
+		{
+			"an append keeps what it had added before the refusal",
+			"b=(7)\nb+=(1 [-5]=x 3)\n" + `declare -p b`,
+			`declare -a b=([0]="7" [1]="1")`,
+		},
+		{
+			"a declaration's literal streams the same way",
+			"q=(9)\ndeclare -a q=(1 [-5]=x 3)\n" + `declare -p q`,
+			`declare -a q=([0]="1")`,
+		},
+		{
+			"a declaration's literal over an unset name",
+			"declare -a q=(1 [-5]=x)\n" + `declare -p q`,
+			`declare -a q=([0]="1")`,
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "case.sh")

@@ -631,16 +631,22 @@ func newFixture(root string, n int, shape Shape) (Fixture, error) {
 // covering every kind that names one, plus signals, which name a process
 // instead and so have to be said separately.
 //
-// grant is the denied set's one opening, and it belongs to a single route —
-// see Route.Grant, which is the only caller that passes a non-empty one. It
-// exists because "an allowed exec escapes" is not a question this shape can
-// otherwise ask: with no exec rule at all, the child never starts, the row
-// grades contained, and the contained verdict would be about the exec having
-// been refused rather than about the route. Appended after the denies, but
-// the order is not what makes it safe: what makes it safe is that it grants
-// the exec slot only, so the path rules the route aims past are untouched.
-// TestOnlyADocumentedRouteMayOpenTheDeniedPolicy holds that line.
-func policy(f Fixture, mode Mode, grant []string) (string, error) {
+// grant is the denied set's one opening, and it belongs to the route carrying
+// it — see Route.Grant, the only source of a non-empty one. It exists because
+// a question about an *allowed* exec — whether its child escapes, or whether a
+// carve cut out of it holds — is not one this shape can otherwise ask: with no
+// exec rule at all, the program never starts, the row grades contained, and
+// the contained verdict would be about the exec having been refused rather
+// than about the route. Appended after the denies, but the order is not what
+// makes it safe: what makes it safe is that it grants the exec slot only, so
+// the path rules the route aims past are untouched.
+// TestOnlyADocumentedOrCarvedRouteMayOpenTheDeniedPolicy holds that line.
+//
+// carve is what a route cuts back out of its grant — see Route.Carve — and it
+// goes after the grant for the reader's sake only: a deny wins in any order.
+// It is the denied set's alone, because the allowed set has to permit the
+// route outright or the row reads as overblocked.
+func policy(f Fixture, mode Mode, grant, carve []string) (string, error) {
 	var lines []string
 	switch mode {
 	case Ungated:
@@ -667,6 +673,7 @@ func policy(f Fixture, mode Mode, grant []string) (string, error) {
 				"deny path "+f.Denied+"/**")
 		}
 		lines = append(lines, grant...)
+		lines = append(lines, carve...)
 	case Allowed:
 		// `exec` is named on its own because `path` does not reach it (#4409),
 		// and it is named here because this shape has to permit *everything*
@@ -688,7 +695,7 @@ func policy(f Fixture, mode Mode, grant []string) (string, error) {
 
 // run executes one route once.
 func (rt Route) run(col column, f Fixture, mode Mode) Outcome {
-	p, err := policy(f, mode, rt.Grant)
+	p, err := policy(f, mode, rt.Grant, rt.Carve)
 	if err != nil {
 		return Outcome{Err: err.Error(), Code: -1}
 	}

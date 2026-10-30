@@ -45,6 +45,7 @@ package policy
 import (
 	"context"
 	"path/filepath"
+	"strings"
 
 	"github.com/blairham/sh/interp"
 )
@@ -113,6 +114,11 @@ type Selector uint8
 // so, and `allow exec` is refused (#4409). Both values exist because a rule
 // remembers how it was written: normalized text is shown to an operator, and
 // text that round-trips to a rule the parser would refuse is text that lies.
+//
+// SelExecArgv is the exec slot again, narrowed by the argument vector, and it
+// exists only on the deny side: `deny exec-argv /usr/bin/git -- stash` refuses
+// that program when those words appear in its arguments and says nothing about
+// any other exec. argv.go has the matching rule and the honest limit of it.
 const (
 	SelExec Selector = iota
 	SelRead
@@ -123,6 +129,7 @@ const (
 	SelPath
 	SelSignal
 	SelExecUnconfined
+	SelExecArgv
 )
 
 var selectorNames = map[string]Selector{
@@ -135,6 +142,7 @@ var selectorNames = map[string]Selector{
 	"path":            SelPath,
 	"signal":          SelSignal,
 	"exec-unconfined": SelExecUnconfined,
+	"exec-argv":       SelExecArgv,
 }
 
 func (s Selector) String() string {
@@ -151,7 +159,7 @@ func (s Selector) String() string {
 // disagree about the answer.
 func (s Selector) slots() []slot {
 	switch s {
-	case SelExec, SelExecUnconfined:
+	case SelExec, SelExecUnconfined, SelExecArgv:
 		return []slot{slotExec}
 	case SelRead:
 		return []slot{slotOpenRead, slotStat, slotReadDir}
@@ -198,6 +206,11 @@ type Rule struct {
 	Decision interp.Decision
 	Sel      Selector
 	Pattern  string
+	// Args is what an `exec-argv` rule asks of the argument vector, and nil for
+	// every other selector: literal words that must all appear after the
+	// program, in this order, with anything at all between them. See argv.go
+	// for why that and not a prefix, and for what it cannot see.
+	Args []string
 	// Alias is the other name for the same place, where the pattern names one
 	// the platform has two names for, and empty otherwise. A rule matches
 	// either, so this is always a widening and never a rewrite — see alias.go
@@ -220,8 +233,13 @@ func (r Rule) String() string {
 	if r.Pattern != "" {
 		out += " " + r.Pattern
 	}
+	// The second name belongs to the pattern, so it is said beside the pattern:
+	// after the argument words it would read as one more of them.
 	if r.Alias != "" {
 		out += " (also " + r.Alias + ")"
+	}
+	if len(r.Args) > 0 {
+		out += " " + argvDelimiter + " " + strings.Join(r.Args, " ")
 	}
 	return out
 }
@@ -300,6 +318,9 @@ func (p *Policy) Allow(_ context.Context, a interp.Action) interp.Decision {
 			if !addressable || !r.matches(path) {
 				continue
 			}
+		}
+		if r.Sel == SelExecArgv && !argvMatches(r.Args, a.Args) {
+			continue
 		}
 		if r.Decision == interp.Deny {
 			return interp.Deny

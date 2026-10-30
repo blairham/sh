@@ -53,6 +53,11 @@ type heldGlob struct {
 	// armed says the fields stand behind the command's name, where a
 	// refusal may be the program's. See Runner.armProgramGlob.
 	armed bool
+	// declared says the fields stand behind a declaration's assignment
+	// operand, where a refusal of the stage leaves `$?` as it was in the
+	// dialect that says a failure there does. See
+	// Semantics.FailedExpansionInADeclarationOrCaseSetsNoStatus.
+	declared bool
 	// matched is how many fields the run came to, written by the stage.
 	matched int
 }
@@ -83,7 +88,15 @@ func (r *Runner) pathnameStage(list []string, held []heldGlob, arm func([]string
 		if g.armed && arm != nil && !stopped {
 			arm(list)
 		}
+		// The stage runs once the words' own rules are put down, so a run
+		// behind a declaration's assignment operand carries its rule here.
+		// A refusal is held under it and raised under it.
+		var keep failedExpansionUndo
+		if g.declared && !stopped {
+			keep = r.failedExpansionStatusIs(failedExpansionKeepsTheStatus)
+		}
 		out := r.globFieldsUnlessSuppressed(list[from:to], g.noglob || stopped)
+		keep.undo()
 		if g.armed && arm != nil && !stopped {
 			r.disarmProgramGlob()
 		}

@@ -68,3 +68,15 @@ func writtenOperandIndex(args []*syntax.Word, argvBefore []int, end int, a *synt
 	}
 	return end
 }
+
+// anArrayOperandIsWrittenBefore reports whether an array-literal operand
+// stands in front of the word w as written, which the word list cannot say:
+// the literal is in the assignments and not among the words.
+func anArrayOperandIsWrittenBefore(assigns []*syntax.Assign, w *syntax.Word) bool {
+	for _, a := range assigns {
+		if a.Operand && w.Pos().After(a.Pos()) {
+			return true
+		}
+	}
+	return false
+}

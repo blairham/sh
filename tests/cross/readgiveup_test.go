@@ -161,10 +161,18 @@ func TestATrappedSignalGivesUpAReadWhereTheShellsDo(t *testing.T) {
 		// A pipe the shell made, read in the current shell: open for reading
 		// alone, so ksh93 reads on. The rest is written only once the signal
 		// has been sent.
+		//
+		// The signal waits for `ab` to be in the pipe — the left side says so
+		// through p — and then for a second more, so the read has taken it.
+		// A clock alone raced: at 0.3 s from the start, a loaded runner under
+		// the race detector had sometimes not yet written `ab`, and a read
+		// still waiting for its first byte is rightly given up (#7042). The
+		// second covers the read's own wake-up, since a byte there is seen
+		// on a goroutine where ksh93 is handed it by the kernel.
 		{
 			"a pipe", "ksh",
-			`mkfifo q; trap "echo T" INT; (sleep 0.3; kill -INT $$; echo go >q) & ` +
-				`{ printf ab; read x <q; echo cd; } | read -r l; echo "st=$? l=[$l]"; wait`,
+			`mkfifo p q; trap "echo T" INT; (read y <p; sleep 1; kill -INT $$; echo go >q) & ` +
+				`{ printf ab; echo >p; read x <q; echo cd; } | read -r l; echo "st=$? l=[$l]"; wait`,
 			"T\nst=0 l=[abcd]\n", 0,
 		},
 	}

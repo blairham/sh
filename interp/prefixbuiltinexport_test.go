@@ -218,3 +218,21 @@ echo "gone [${c-UNSET}]"`, sem)
 		t.Errorf("a fresh declaration over a prefix = %q, want %q\nerr %q", out, want, errs)
 	}
 }
+
+// The fourth position is the third at every builtin but `export`, which gives
+// its own prefix the attribute — and the attribute is on while the prefix is
+// held for the entry behind it, which is what a substitution there hands a
+// child (#7003).
+func TestTheFourthPrefixExportPositionExportsAtExportAlone(t *testing.T) {
+	sem := builtinPrefixSem()
+	sem.PrefixExportAtABuiltin = PrefixExportAtABuiltinOffExceptAtExport
+	sem.DeclarationPromotesThePrefixEntry = No
+	out, errs := builtinPrefixRun(t, "c=1\nc=2 export -p", sem)
+	if !strings.Contains(out, `export c="2"`) {
+		t.Errorf("at export: an unexported name was not listed\nout %q err %q", out, errs)
+	}
+	out, errs = builtinPrefixRun(t, "export z=1\nz=2 eval 'export -p'", sem)
+	if strings.Contains(out, `export z=`) {
+		t.Errorf("at eval: an exported name was listed\nout %q err %q", out, errs)
+	}
+}

@@ -62,7 +62,8 @@ func (t TrapBodyLineStyle) String() string {
 // an `exit` inside a function, and the same by `-c`; where a readonly
 // reassignment, a division by zero or an unset name under `set -u` ending
 // the script leave it at 7, past the end, as the script running out does
-// (#6899).
+// (#6899). A `-c` string that ran out is the exception to "past the end": it
+// is counted from line 1 (#6953).
 func (r *Runner) firedAt() int {
 	if !r.inExitTrap {
 		return r.line
@@ -88,6 +89,12 @@ func (r *Runner) firedAt() int {
 		if r.stoppedByAnExitRequest {
 			// The shell did not run out; the request left it on a line.
 			return r.line
+		}
+		if r.Route == RouteCommandString {
+			// A command string that ran out is counted from its first line,
+			// as though its lines had gone with it. See
+			// Semantics.ExitTrapFiresPastTheEnd for the rows (#6953).
+			return 1
 		}
 		return r.programEnd
 	}

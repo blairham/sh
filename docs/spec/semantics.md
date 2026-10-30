@@ -3142,8 +3142,56 @@ another process, each shell in a process group of its own, parked in a builtin
 Unanimous but for zsh's HUP, which is `HangupIsAnOrderlyExit` reached from
 outside. The front end now subscribes to the first two rows and to HUP and
 answers them as it answers the throwing class: a trap or an ignore first, then
-the death, or zsh's `exit 1`. The EXIT trap does not run on that route; nor did
-it for TERM before, where bash and ksh93 run it.
+the death, or zsh's `exit 1`. The EXIT trap did not run on that route until
+#7054, below; nor did it for TERM, where bash and ksh93 run it.
+
+**An EXIT trap runs first, where the dialect runs one on a death** (#7054).
+Measured 2026-10-29, each shell in a process group of its own under
+`trap 'echo "bye $?"' EXIT`, `/bin/kill -SIG` from another process.
+References: GNU bash 5.3.20, `/bin/bash` 3.2.57, `/bin/ksh` 93u+ 2012-08-01,
+zsh 5.9.2, `/bin/dash`, and BusyBox ash in the pinned alpine image
+(`setsid ash` under `docker run --init`, so it is not PID 1):
+
+| where the shell stands | bash 5.3 · bash 3.2 · ksh93 | zsh | dash · ash |
+| --- | --- | --- | --- |
+| external `sleep`, `read` on a pipe, busy loop | `bye`, then killed by it | killed, nothing | killed, nothing |
+| the same, HUP | `bye`, then killed by it | `bye 1`, exit 1 | killed, nothing |
+| a function, `( … )`, a pipeline, `$( … )`, `wait`, a `&&` list | `bye`, then killed by it | killed, nothing | dash: killed, nothing |
+
+for TERM, INT, HUP, QUIT where it is not ignored, USR1, USR2, ALRM, VTALRM,
+XCPU, EMT, ABRT, BUS, FPE, ILL, TRAP and SYS — the one exception being ksh93,
+which runs nothing for SEGV. That is `ExitTrapRunsOnSignalDeath` reached from
+outside: every column answers as it does for `kill -SIG $$`. INT is held while
+a program runs in bash and ksh93 (`InterruptWaitsForTheProgram`), so a `sleep`
+the INT did not reach finishes and the shell exits 0 there, trap and all.
+
+Four things about *how* are measured and kept:
+
+- **At once.** Every reference ran the trap while its `sleep` was still
+  running and its `read` still waiting, and left the `sleep` running when it
+  died — except that ksh93 lets a `( … )` or a `$( … )` run to its end first,
+  and bash 3.2 a `$( … )`, which is not modeled. ash was measured in the first
+  two rows (TERM, HUP and USR1). So the waits this shell spends its time in are
+  given up for the death:
+  a program in the foreground (left running), a `read`, `wait`, and a copy of
+  the shell it waits for — `( … )`, a pipeline element, a substitution's body —
+  which stops at its next command and runs no EXIT trap of its own.
+- **`$?` is what the shell held when the signal landed.** `(exit 7); sleep 3`
+  shows 7 in all three columns, in a function as at the top, and so does a
+  `read`, which would otherwise show its own 1. ksh93 inside a function shows
+  256 plus the number instead; a pipeline shows 7 in bash 5.3 and 0 in bash 3.2
+  and ksh93. Neither is modeled.
+- **The trap runs to its end, then the shell dies of the signal.** A `sleep`
+  in the trap is waited for. `exit 5` in it leaves bash killed by the signal
+  and ksh93 exiting 5 (the self-sent route has the same split, unmodeled).
+- **A second signal during the trap ends the shell at once**: a TERM, USR1 or
+  HUP 0.3s into a trap's `sleep 1` leaves `bye` without `bye2`. bash dies of
+  the second signal and ksh93 of the first; this shell dies of the second.
+
+Where the shell is blocked somewhere nothing gives up — a write into a full
+pipe — the front end takes the death back after two seconds and ends the
+process without the trap, as before: a shell a signal cannot end is worse than
+one that skips its cleanup.
 
 **The last row is left alone on purpose.** PIPE and XFSZ are what the kernel
 raises at a write of the shell's *own* — into a pipe nobody reads, or past

@@ -1437,9 +1437,9 @@ func (r *Runner) IgnoresUntrapped() func(sig syscall.Signal) bool {
 // as no, which leaves the shell to die of the signal as the runtime's default
 // already had it do.
 //
-// Only the status: the EXIT trap that runs on the self-signaled route does not
-// run here, because the front end ends the process from its own goroutine
-// rather than waiting for the script to reach a command boundary.
+// Only the status, for a shell with nothing to run on its way out: one with an
+// EXIT trap is handed the HUP instead, through TakesAFatalSignal, and exits
+// the way the self-signaled route does, trap and all (#7054).
 func (r *Runner) UntrappedHangupExit() func() (status int, exits bool) {
 	sem := r.sem()
 	return func() (int, bool) {

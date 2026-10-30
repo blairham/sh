@@ -6219,6 +6219,14 @@ type Semantics struct {
 	// shell a child, the same case is 130 with nothing printed. internal/
 	// oracle is not exposed to this because its runner is the container's
 	// PID 1 and every shell it starts is a child of that; a hand probe is.
+	//
+	// **The same answer reaches a signal from another process**, which a
+	// front end that owns the process hands the shell to die of where this
+	// says yes and there is a trap to run — see Runner.TakesAFatalSignal.
+	// Measured 2026-10-29, `/bin/kill -TERM` (and HUP, INT, USR1, ALRM, QUIT
+	// and the rest) from another process at a shell in a `sleep`, a `read`
+	// or a busy loop: bash 5.3, bash 3.2 and ksh93 print `bye` at once and
+	// die of it; zsh, dash and BusyBox ash die and print nothing (#7054).
 	ExitTrapRunsOnSignalDeath Answer
 
 	// ExitTrapRunsInsideTheExitingCall runs the EXIT trap at the point `exit`

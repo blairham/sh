@@ -252,6 +252,16 @@ type outsideSignal struct {
 	// stdinClosed gives the shell an empty standard input rather than a pipe
 	// nobody writes, for a hold that must end on its own.
 	stdinClosed bool
+	// ownReady leaves saying it is ready to the script, which writes the
+	// file `$READY` names itself — from inside a hold, where the moment the
+	// shell is ready is the hold's to know.
+	ownReady bool
+	// again is sent once the file `$AGAIN` names exists, for a script that
+	// has something to be doing when a second signal lands; 0 sends none.
+	again syscall.Signal
+	// readyWhen, where set, says the shell is ready in place of the file,
+	// for a hold whose readiness only the test can see.
+	readyWhen func() bool
 }
 
 // signaledInAGroupOfItsOwn re-executes this test binary as a shell in a
@@ -271,9 +281,14 @@ func signaledInAGroupOfItsOwn(t *testing.T, name string, o outsideSignal) (sysca
 	t.Helper()
 	dir := t.TempDir()
 	ready := filepath.Join(dir, "ready")
+	again := filepath.Join(dir, "again")
 	argv := append(append([]string{}, o.wrap...), os.Args[0], "-test.run="+name)
 	cmd := exec.Command(argv[0], argv[1:]...)
-	cmd.Env = append(os.Environ(), dyingScript+"="+o.setup+"printf r >"+ready+"; "+o.hold, "SCRATCH="+dir)
+	script := o.setup + "printf r >" + ready + "; " + o.hold
+	if o.ownReady {
+		script = o.setup + o.hold
+	}
+	cmd.Env = append(os.Environ(), dyingScript+"="+script, "SCRATCH="+dir, "READY="+ready, "AGAIN="+again)
 	cmd.Env = append(cmd.Env, o.env...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	logPath := filepath.Join(dir, "out")
@@ -304,8 +319,15 @@ func signaledInAGroupOfItsOwn(t *testing.T, name string, o outsideSignal) (sysca
 		close(reaped)
 	}()
 	deadline := time.Now().Add(deathDeadline)
+	isReady := func() bool {
+		b, err := os.ReadFile(ready)
+		return err == nil && len(b) > 0
+	}
+	if o.readyWhen != nil {
+		isReady = o.readyWhen
+	}
 	for {
-		if b, err := os.ReadFile(ready); err == nil && len(b) > 0 {
+		if isReady() {
 			break
 		}
 		select {
@@ -321,6 +343,25 @@ func signaledInAGroupOfItsOwn(t *testing.T, name string, o outsideSignal) (sysca
 	if o.sig != 0 {
 		if err := cmd.Process.Signal(o.sig); err != nil {
 			t.Fatalf("signaling the shell half: %v", err)
+		}
+	}
+	if o.again != 0 {
+		for {
+			if _, err := os.Stat(again); err == nil {
+				break
+			}
+			select {
+			case <-reaped:
+				t.Fatalf("the shell ended before it was ready for a second signal: %q", readLog(t, logPath))
+			default:
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("the shell was never ready for a second signal: %q", readLog(t, logPath))
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		if err := cmd.Process.Signal(o.again); err != nil {
+			t.Fatalf("signaling the shell half again: %v", err)
 		}
 	}
 	select {

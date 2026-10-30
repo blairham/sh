@@ -468,6 +468,16 @@ type Runner struct {
 	// interp/foregroundinterrupt.go.
 	HoldInterrupts func()
 
+	// ListenForFatalSignals arranges for the untrapped fatal signals the
+	// process would otherwise end on where they land — TERM and INT — to be
+	// asked about first, through TakesAFatalSignal, so that a shell with an
+	// EXIT trap runs it before it dies of one. Called the first time the
+	// shell at the top has such a trap, in a dialect that runs one on a
+	// death. Nil — the default — means this Runner may not touch the
+	// process's dispositions, and a signal from outside is the embedder's
+	// business. See interp/outsidedeath.go.
+	ListenForFatalSignals func()
+
 	// StopThisProcess stops this process with sig, one of SIGSTOP, SIGTSTP,
 	// SIGTTIN and SIGTTOU: it does not return until something sends
 	// SIGCONT. Nil — the default — means this shell is not the process and
@@ -4947,6 +4957,11 @@ type Runner struct {
 	// background job, which the job's own notice reports rather than the
 	// parentheses that hold it. See bodyinbox.go.
 	diedAsAJob bool
+	// exitTrapShownStatus is the status the EXIT trap is shown for a death
+	// from outside, and exitTrapPublished what the shell at the top last
+	// told the front end about its EXIT trap. See outsidedeath.go.
+	exitTrapShownStatus *int
+	exitTrapPublished   bool
 	// reservedOff is the declaration reserved words switched off, and
 	// reservedCommand the one the running simple command is, if any. See
 	// reservedoff.go.
@@ -7753,6 +7768,13 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 		// Semantics.ExitTrapAfterAGiveUpSeesEarlierStatus.
 		r.status = r.statusWhenTheCommandBegan
 	}
+	if shown := r.exitTrapShownStatus; shown != nil {
+		// A death from outside shows the body what the shell held when the
+		// signal landed rather than 128 plus its number, and to the body
+		// alone, as above. See Runner.takeOutsideDeath.
+		r.exitTrapShownStatus = nil
+		r.status = *shown
+	}
 	// Whether an exit request is what stopped the shell, read before the
 	// flag goes: one dialect locates the trap by it. See
 	// Runner.stoppedByAnExitRequest.
@@ -8695,6 +8717,15 @@ func (r *Runner) commandAt(ctx context.Context, c syntax.Command) error {
 			}
 			r.readWordsWithoutRunning(x)
 		}
+		return nil
+	}
+	// A fatal signal from another process that the shell has been handed to
+	// die of stops it at this door, the way an interrupt does below: a
+	// statement boundary is not soon enough for the second command of a
+	// `&&` list. Before the status the next command begins with is recorded,
+	// because the EXIT trap is shown the one the interrupted command began
+	// with. See outsidedeath.go.
+	if r.takeOutsideDeath() {
 		return nil
 	}
 	// Where this command begins, not where the statement holding it did.
@@ -11953,6 +11984,7 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 		}
 	}
 	defer settleHeld(false)
+	detach := r.outputsDetachedOnADeath(cmd)
 	if err := r.startMasked(cmd); err != nil {
 		// action.Path, the file, and not cmd.Path, which is the spelling it
 		// was started by and may be relative to cmd.Dir rather than to this
@@ -11994,6 +12026,15 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 	for {
 		var err error
 		w, err = r.awaitForegroundCommand(pid)
+		if errors.Is(err, errAbandonedForADeath) {
+			// Given up for a fatal signal from outside, with the program
+			// still running: nothing is reported and nothing set, and the
+			// shell takes the death at its next command, showing its EXIT
+			// trap the status this command began with. What the program
+			// writes from here is nobody's. See outsidedeath.go.
+			detach()
+			return nil
+		}
 		if err != nil {
 			r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 			r.diagf("%s: %v\n", argv[0], err)
@@ -16699,12 +16740,17 @@ func (r *Runner) frozenScalarRetyped(a *syntax.Assign) bool {
 //     outlives the call.
 //
 // And it is reached at all only where the axis says the notice arrives at
-// once, which is one dialect of five with an option turned on in a session.
+// once, which is one dialect of five with an option turned on in a session —
+// or where the shell has an EXIT trap a fatal signal from outside would be
+// handed over for, which gives the wait up and leaves the program running, as
+// every reference leaves it (see outsidedeath.go). That is the one ending
+// where the goroutine outlives the call, and the process is about to as well.
 // Every other route takes the same single call it always took.
 func (r *Runner) awaitForegroundCommand(pid int) (Wait, error) {
 	note := r.jobNoticeWake()
+	dying := r.abandonsForADeath()
 	wait := r.WaitForCommand
-	if note == nil {
+	if note == nil && dying == nil {
 		return wait(pid)
 	}
 	type answer struct {
@@ -16722,6 +16768,9 @@ func (r *Runner) awaitForegroundCommand(pid int) (Wait, error) {
 			return a.w, a.err
 		case <-note:
 			r.writeFinishedJobNotices()
+		case <-dying:
+			r.waitAbandonedForADeath()
+			return Wait{}, errAbandonedForADeath
 		}
 	}
 }

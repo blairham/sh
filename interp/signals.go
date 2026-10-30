@@ -164,6 +164,9 @@ type signalState struct {
 	// is what restoreDispositions puts back; see trapSignal for why the
 	// snapshot is taken at the first change and never overwritten.
 	borrowed map[syscall.Signal]bool
+	// outside is a fatal signal from another process that a front end
+	// handed the shell to die of. See outsidedeath.go.
+	outside outsideDeath
 }
 
 // sigs returns the shared state, creating it on first use.
@@ -174,6 +177,8 @@ func (r *Runner) sigs() *signalState {
 			ch:    make(chan os.Signal, 32),
 			wake:  make(chan struct{}, 1),
 		}
+		r.signals.outside.dying = make(chan struct{})
+		r.signals.outside.claimed = make(chan struct{})
 	}
 	return r.signals
 }
@@ -1183,6 +1188,11 @@ func (r *Runner) awaitOrArrival(
 	arrived func() (syscall.Signal, bool),
 ) (sig syscall.Signal, trapped, gaveUp bool) {
 	s := r.signals
+	// Closed once the shell has been handed a fatal signal from outside to
+	// die of, and nil where nothing could be: a wait given up for it ends as
+	// a trapped arrival would, and the shell takes the death at its next
+	// command. See outsidedeath.go.
+	dying := r.abandonsForADeath()
 	if s == nil || r.inSubshell {
 		for {
 			select {
@@ -1190,6 +1200,8 @@ func (r *Runner) awaitOrArrival(
 				return 0, false, false
 			case <-giveUp:
 				return 0, false, true
+			case <-dying:
+				return r.waitAbandonedForADeath(), true, false
 			case <-r.jobNoticeWake():
 				// A *different* background job finished while this wait was
 				// blocked, in the dialect that says so the moment it
@@ -1230,6 +1242,8 @@ func (r *Runner) awaitOrArrival(
 			// The same seam as in the plain wait above, and asked each time
 			// round so that the option can move under a running session.
 			r.writeFinishedJobNotices()
+		case <-dying:
+			return r.waitAbandonedForADeath(), true, false
 		case <-s.wake:
 		case sig := <-s.ch:
 			s.mu.Lock()
@@ -1282,6 +1296,17 @@ func signalName(s os.Signal) (string, bool) {
 // the *handler* sees is an axis — zsh shows the one from before the command
 // that triggered it, the other three the one that command produced.
 func (r *Runner) runPendingTraps(ctx context.Context) {
+	if !r.inSubshell {
+		// Between statements is where a `trap` has taken effect, so it is
+		// where the front end hears whether there is an EXIT trap to hand a
+		// death from outside over for. See outsidedeath.go.
+		r.publishExitTrap()
+	}
+	if r.takeOutsideDeath() {
+		// A fatal signal from another process, before any handler: a shell
+		// that is dying runs nothing more but its EXIT trap.
+		return
+	}
 	if r.inSubshell {
 		// A subshell is a pretend child process: a signal aimed at `$$` is
 		// aimed at the shell at the top, so what has *arrived* is the

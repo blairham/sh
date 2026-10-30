@@ -107,22 +107,52 @@ type readWatch struct {
 	// than Semantics.ReadAbandonedWhen, and ends the read as its deadline
 	// would. ends is that answer, and asked says it has been asked.
 	firstWaitOnly, ends bool
+	// deathOnly is the watch of a read nothing trapped can give up, kept for
+	// a fatal signal from outside that the shell has been handed to die of:
+	// every wait for a byte is given up for that, and for nothing else. See
+	// outsidedeath.go.
+	deathOnly bool
 }
 
 // readWatchFor is the watch for a read of in, and false where nothing can give
-// that read up: the dialect reads on through a trapped signal, no signal is
-// trapped, or the stream is a regular file, whose reads do not wait for
-// anybody.
+// that read up: the dialect reads on through a trapped signal or no signal is
+// trapped, and no fatal signal from outside could be handed over either — or
+// the stream is a regular file, whose reads do not wait for anybody.
 func (r *Runner) readWatchFor(in io.Reader, byNumber, counted bool) (*readWatch, bool) {
-	if r.sem().ReadIsAbandonedByATrappedSignal != Yes || !r.anySignalTrapped() {
+	if w, ok := r.trapWatchFor(in, byNumber, counted); ok {
+		return w, true
+	}
+	return r.deathWatchFor(in)
+}
+
+// trapWatchFor is readWatchFor for the trapped signals alone.
+func (r *Runner) trapWatchFor(in io.Reader, byNumber, counted bool) (*readWatch, bool) {
+	if r.sem().ReadIsAbandonedByATrappedSignal != Yes || !r.anySignalTrapped() || neverWaits(in) {
 		return nil, false
 	}
+	return &readWatch{r: r, in: in, byNumber: byNumber, counted: counted, began: r.arrivalMark()}, true
+}
+
+// deathWatchFor is the watch of a read that only a fatal signal from outside
+// can give up, where the shell has an EXIT trap one would be handed over for.
+// A read in a shell with no such trap is not watched for it, and keeps the
+// plainer source. See outsidedeath.go.
+func (r *Runner) deathWatchFor(in io.Reader) (*readWatch, bool) {
+	if r.abandonsForADeath() == nil || neverWaits(in) {
+		return nil, false
+	}
+	return &readWatch{r: r, in: in, deathOnly: true}, true
+}
+
+// neverWaits reports whether in is a regular file, which never makes a
+// reader wait.
+func neverWaits(in io.Reader) bool {
 	if f, isFile := in.(*os.File); isFile {
 		if st, err := f.Stat(); err == nil && st.Mode().IsRegular() {
-			return nil, false
+			return true
 		}
 	}
-	return &readWatch{r: r, in: in, byNumber: byNumber, counted: counted, began: r.arrivalMark()}, true
+	return false
 }
 
 // timedReadWatchFor is the watch for a `read -t` of in, nil where nothing can
@@ -134,11 +164,14 @@ func (r *Runner) readWatchFor(in io.Reader, byNumber, counted bool) (*readWatch,
 // lands in that wait — so a timed read whose byte arrives in time, which is
 // every timed read of an ordinary script, puts no question at all.
 func (r *Runner) timedReadWatchFor(in io.Reader, byNumber, counted bool) *readWatch {
-	if w, ok := r.readWatchFor(in, byNumber, counted); ok {
+	if w, ok := r.trapWatchFor(in, byNumber, counted); ok {
 		return w
 	}
 	if r.sem().ReadIsAbandonedByATrappedSignal == Yes || !r.anySignalTrapped() {
-		return nil
+		// Nothing trapped ends it early, and a fatal signal from outside
+		// still may. See deathWatchFor.
+		w, _ := r.deathWatchFor(in)
+		return w
 	}
 	return &readWatch{r: r, in: in, firstWaitOnly: true}
 }
@@ -204,8 +237,9 @@ func (w *readWatch) trapWaiting() (syscall.Signal, bool) {
 // that is already there to be read. Only a reading that does not wait for a
 // wait to be interrupted does.
 func (w *readWatch) givesUpWithAByteThere() (syscall.Signal, bool) {
-	if w.firstWaitOnly {
-		// A byte there is a wait that never began.
+	if w.firstWaitOnly || w.deathOnly {
+		// A byte there is a wait that never began, and a death from
+		// outside is taken at the next command either way.
 		return 0, false
 	}
 	sig, ok := w.trapWaiting()
@@ -232,6 +266,11 @@ func (w *readWatch) givesUpWithAByteThere() (syscall.Signal, bool) {
 func (w *readWatch) arrivedDuring(mark int) func() (syscall.Signal, bool) {
 	if w.firstWaitOnly {
 		return w.endsTheFirstWait(mark)
+	}
+	if w.deathOnly {
+		// No trapped arrival gives this read up; the wait itself is given
+		// up for a death from outside. See Runner.awaitOrArrival.
+		return func() (syscall.Signal, bool) { return 0, false }
 	}
 	return func() (syscall.Signal, bool) {
 		sig, ok := w.r.pendingTrap()

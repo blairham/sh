@@ -29,8 +29,17 @@ const dyingScript = "SH_TEST_DYING_SCRIPT"
 const dyingInteractive = "SH_TEST_DYING_INTERACTIVE"
 
 // dyingHangupExits answers Semantics.HangupIsAnOrderlyExit yes in the shell
-// half, which is the one dialect answer a death from outside asks about.
+// half, which is one of the two dialect answers a death from outside asks
+// about.
 const dyingHangupExits = "SH_TEST_DYING_HANGUP_EXITS"
+
+// dyingExitTrapRuns answers Semantics.ExitTrapRunsOnSignalDeath in the shell
+// half, `yes` or `no`, which is the other; unset leaves it unanswered.
+const dyingExitTrapRuns = "SH_TEST_DYING_EXIT_TRAP_RUNS"
+
+// dyingExitHook names Semantics.ExitHook in the shell half: the function a
+// shell runs as it ends, beside its EXIT trap.
+const dyingExitHook = "SH_TEST_DYING_EXIT_HOOK"
 
 // deathDeadline is how long a shell that has been asked to die is given
 // before this test gives up on it and says so.
@@ -91,8 +100,29 @@ func dieRunningAsAShell() {
 	// subshell write past it; the number is 1024 bytes either way it is
 	// read, which is all that case needs.
 	sh.Semantics.UlimitBlockIsKilobyte = interp.Yes
-	if os.Getenv(dyingHangupExits) != "" {
+	switch os.Getenv(dyingHangupExits) {
+	case "":
+	case "no":
+		sh.Semantics.HangupIsAnOrderlyExit = interp.No
+	default:
 		sh.Semantics.HangupIsAnOrderlyExit = interp.Yes
+	}
+	switch os.Getenv(dyingExitTrapRuns) {
+	case "yes":
+		sh.Semantics.ExitTrapRunsOnSignalDeath = interp.Yes
+	case "no":
+		sh.Semantics.ExitTrapRunsOnSignalDeath = interp.No
+	}
+	if hook := os.Getenv(dyingExitHook); hook != "" {
+		sh.Semantics.ExitHook = hook
+	}
+	if os.Getenv(dyingExitTrapRuns) != "" {
+		// And what a `wait` the signal gave up reports, which no EXIT trap
+		// is shown but the builtin still works out on its way back, and
+		// where a pipeline's last element runs, which a background job that
+		// reads through one asks.
+		sh.Semantics.SignalDeathStatusIsTwoFiftySix = interp.No
+		sh.Semantics.LastPipelineElementInCurrentShell = interp.No
 	}
 	args := []string{"testsh", "-c", src}
 	if os.Getenv(dyingInteractive) != "" {

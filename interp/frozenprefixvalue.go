@@ -65,7 +65,29 @@ import "github.com/blairham/sh/syntax"
 // it reaches it and carries on expanding what is behind it, which is the walk
 // of a shell that names every frozen entry and still runs the command. See
 // Runner.refusePrefixesEarly for the measurement (#6546).
-func (r *Runner) expandThePrefixUpToTheFrozenName(assigns []*syntax.Assign, refuseEach func(name string)) bool {
+//
+// traceEach says this command's prefix is written a line per entry ahead of
+// the command, so each entry in front of the frozen one is written as it
+// expands, with its subscript read in turn the way the ordered walk reads it,
+// and the refusal lands behind those lines. Measured 2026-10-30 on ksh93u+
+// 2012-08-01 from `-c` and script files under `env -i PATH=/usr/bin:/bin`,
+// `readonly r=1` first:
+//
+//	set -x; x=1 r=2 y=3 :            `+ x=1`, then the refusal
+//	set -x; x=1 r=2 y=3 f            the same, `f` a POSIX-form function
+//	set -x; x=1 r=$(echo s >&2) y=3 :
+//	        `+ x=1`, the substitution's lines, then the refusal
+//	typeset -A a; set -x; a[""]=1 r=2 a[q]=3 :
+//	        the empty-key warning, `+ a['']=1`, then the refusal
+//
+// where this refused ahead of every line in that column (#6987). bash 5.3.20
+// writes its entries the same way, which is where the per-entry lines here
+// were first measured (#5546).
+func (r *Runner) expandThePrefixUpToTheFrozenName(
+	assigns []*syntax.Assign,
+	refuseEach func(name string),
+	traceEach bool,
+) bool {
 	if len(r.frozenPrefixNames(assigns)) == 0 {
 		return false
 	}
@@ -108,6 +130,19 @@ func (r *Runner) expandThePrefixUpToTheFrozenName(assigns []*syntax.Assign, refu
 			// the splice form, which has no one value.
 			continue
 		}
+		// An element write's subscript, read where the entry stands, in the
+		// walk that writes the entry's line: its words ahead of the value
+		// where the dialect reads them first, and its arithmetic and any
+		// warning the store owes once the value is in. See
+		// interp/prefixsubscriptinturn.go. Not stored here, because the
+		// command is about to be refused, so no warning is owed to a store.
+		inTurn := false
+		if !frozen && traceEach {
+			var expanded bool
+			if inTurn, expanded = r.readPrefixSubscriptBeforeTheValue(a); !expanded {
+				return true
+			}
+		}
 		// Located the way any other prefix value's failure is, which is a
 		// question one column answers by the command — see
 		// interp/prefixfailurelocation.go. Armed here as well as in
@@ -118,8 +153,11 @@ func (r *Runner) expandThePrefixUpToTheFrozenName(assigns []*syntax.Assign, refu
 		if r.expandErr || r.ctl != controlNone {
 			return true
 		}
+		if inTurn && !r.placePrefixSubscript(a, false) {
+			return true
+		}
 		r.holdPrefixEntry(&held, a, joined)
-		if !frozen && r.tracing() && r.diag().TracePrefixAssignment == TracePrefixOwnLineBefore {
+		if !frozen && traceEach {
 			// Written as it is expanded, ahead of the refusal still to come,
 			// in the column that writes a line per entry in front of the
 			// command: measured 2026-10-02, `readonly r; set -x; a=1 r=2

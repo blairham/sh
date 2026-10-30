@@ -2264,6 +2264,11 @@ func Semantics() interp.Semantics {
 	// See interp.Semantics.DeclarationOperandsAreStoredInTurn (#6770):
 	// `x=0; declare x=1 y=$x` leaves `y` holding 0.
 	s.DeclarationOperandsAreStoredInTurn = interp.No
+	// But an array-literal operand is placed before the word behind it
+	// expands: `a=(0); declare -a a=(1) b=("${a[0]}")` leaves `b` holding 1,
+	// and `declare -a a=(5) b=(6 $((1/0)))` keeps `a=(5)` (#6798). See
+	// interp.Semantics.DeclarationArrayOperandsAreStoredInTurn.
+	s.DeclarationArrayOperandsAreStoredInTurn = interp.Yes
 	// A bare append onto a table that fails partway keeps the pairs it
 	// had added, plain pairs too: `m+=(j new i $((1/0)))` keeps `j`. A
 	// declaration's letter does not re-create a name whose literal failed.

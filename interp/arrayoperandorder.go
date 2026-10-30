@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"context"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -72,7 +73,16 @@ import (
 // Runner.tableLetterHere is written by the utility. See
 // Runner.bareLiteralElementIsOneValue, which is the one question that needs
 // it.
-func (r *Runner) expandArrayOperands(tableLetterAhead, indexedLetter bool) bool {
+func (r *Runner) expandArrayOperands(
+	ctx context.Context,
+	c *syntax.SimpleCmd,
+	argv []string,
+	turn **operandsInTurn,
+	tableLetterAhead, indexedLetter bool,
+) bool {
+	if walked, goesOn := r.walkTheLiteralOperandsLeft(ctx, c, argv, turn); walked {
+		return goesOn
+	}
 	for i := range r.arrayOperands {
 		op := &r.arrayOperands[i]
 		a := op.assign
@@ -163,6 +173,60 @@ func (r *Runner) traceArrayOperandAsItIsExpanded(op *arrayOperand, tableLetterAh
 	}
 	op.traced = true
 	r.writeArrayOperandLines(*op, tableLetterAhead, d)
+}
+
+// walkTheLiteralOperandsLeft is the operand walk reaching the literals written
+// behind the command's last word, in the columns that place a literal before
+// the operand behind it expands: each is expanded, traced and held in turn,
+// so `typeset -a a=(1) b=("${a[0]}")` gives `b` the 1, and a literal that
+// fails leaves the ones in front of it in place — `typeset -a a=(5) b=(6
+// $((1/0)))` keeps `a=(5)` (#6798). Reports whether it walked them, and if so
+// whether the command goes on.
+//
+// The walk that stores every operand leaves a literal over a frozen name to
+// the refusal ahead of the command, which words it under the element where
+// the column does — see Runner.refuseFrozenOperandValuesEarly — so it walks
+// none of them there, as before.
+func (r *Runner) walkTheLiteralOperandsLeft(
+	ctx context.Context,
+	c *syntax.SimpleCmd,
+	argv []string,
+	turn **operandsInTurn,
+) (walked, goesOn bool) {
+	if len(r.arrayOperands) == 0 || r.sem().DeclarationArrayOperandsAreStoredInTurn != Yes {
+		// Every command passes through here, and one with no literal operand
+		// has nothing to walk and asks nothing. Nor does the column that
+		// expands a literal after the words: a literal in front of a scalar
+		// operand is the walk's in the column that stores every operand in
+		// turn, and the literals behind the last word are this axis's.
+		return false, true
+	}
+	t := *turn
+	if t == nil {
+		if t = r.startOperandsInTurn(argv); t == nil {
+			return false, true
+		}
+		*turn = t
+	}
+	if t.stopped {
+		return true, false
+	}
+	if !t.literalsOnly {
+		for i := range r.arrayOperands {
+			if r.attrHas(r.arrayOperands[i].assign.Name, attrReadonly) {
+				return false, true
+			}
+		}
+	}
+	goesOn = r.settleLiteralOperandsBefore(ctx, c, nil, argv, t)
+	for i := range r.arrayOperands {
+		op := &r.arrayOperands[i]
+		if e := t.literal(op.assign); e != nil {
+			op.expanded = e
+		}
+		op.traced = op.traced || t.wasTraced(op.assign)
+	}
+	return true, goesOn
 }
 
 // indexedLetterAmongTheOptions reports whether a declaration utility's option

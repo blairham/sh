@@ -10348,6 +10348,50 @@ type Semantics struct {
 	// interp/declarationinturn.go (#6770).
 	DeclarationOperandsAreStoredInTurn Answer
 
+	// DeclarationArrayOperandsAreStoredInTurn expands and places a
+	// declaration's **array-literal** operands one at a time: each literal is
+	// expanded, traced and placed before the word behind it is expanded, so a
+	// later operand sees it, and an operand that fails ends the command with
+	// the literals before it in place. A scalar operand is not this axis's —
+	// whether it is stored in turn too is DeclarationOperandsAreStoredInTurn,
+	// whose walk also places a literal written in front of a scalar; this one
+	// is what reaches a literal written behind another literal, past the last
+	// word. The other answer expands every literal after the command's words
+	// and places none of them until the utility has run.
+	// Measured 2026-10-30 from a script file under `env -i
+	// PATH=/usr/bin:/bin`, `a=(1 2); b=(3 4)` first where it matters and the
+	// state read by an exit trap:
+	//
+	//	                                           bash 5.3.20  ksh93u+       zsh 5.9.2
+	//	typeset -a a=(5) b=(6 $((1/0)))            a=(5)        a=(5)         a=(1 2)
+	//	typeset -a b=(6 $((1/0))) a=(5)            a=(1 2)      a=(1 2)       a=(1 2)
+	//	a=(0); typeset -a a=(1) b=("${a[0]}")      b=(1)        b=(1)         b=(0) [1]
+	//	a=(0); typeset a=(1) c=${a[0]}             c=1          c=1           c=0 [1]
+	//	x=0; typeset x=1 c=($x)                    c=(0)        c=(1)
+	//	a=(0); declare -a a=(5) s=$((1/0))         a=(5)
+	//	set -x; typeset a=($(echo x)) b=($(echo y))
+	//	        the `x` line, `a`'s line, the `y` line, `b`'s line, then the
+	//	        utility's — in both columns that have the construct
+	//
+	// where [1] is zsh read with `$a`, its arrays counting from one. The fifth
+	// row is the line between the two axes: bash places a literal in turn and
+	// not a scalar. So bash places the literal ahead of the utility's own
+	// trace line, and a literal it then refuses — an element before the
+	// first, a frozen name — costs that line: `set -x; declare -a
+	// q=([$(true)]=x)` writes `+ q=(['']='x')` and the complaint, and no `+
+	// declare -a q` (#6852).
+	//
+	// Inside a function the literal is placed where the utility will put it,
+	// so a declaration that makes locals takes them with the call when the
+	// failure ends it: `f(){ declare -a a=(5) b=(6 $((1/0))); }; f` leaves the
+	// global `a` alone in bash, and `function f { typeset -a a=(5) b=(6
+	// $((1/0))); }` in ksh93u+, while `declare -ga` and `export` keep it.
+	//
+	// **Read rather than asked**, since the question is put to every
+	// declaration with an array literal. dash and BusyBox ash have no array
+	// literal (#6798).
+	DeclarationArrayOperandsAreStoredInTurn Answer
+
 	// ArithSubscriptDollarSingleIsDecoded decodes the escapes of a `$'…'`
 	// quotation written in an arithmetic expression's subscript, where the
 	// other reading only takes the quotes off. Measured 2026-10-16, `-c`, a

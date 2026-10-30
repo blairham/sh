@@ -2757,6 +2757,10 @@ func Semantics() interp.Semantics {
 	// next is expanded: `typeset x=1 y=$x` leaves `y` holding 1. The only
 	// column. See interp.Semantics.DeclarationOperandsAreStoredInTurn (#6770).
 	s.DeclarationOperandsAreStoredInTurn = interp.Yes
+	// Which takes in a literal operand written behind another literal: `a=(0);
+	// typeset -a a=(1) b=("${a[0]}")` leaves `b` holding 1 (#6798). See
+	// interp.Semantics.DeclarationArrayOperandsAreStoredInTurn.
+	s.DeclarationArrayOperandsAreStoredInTurn = interp.Yes
 	// A plain table append that fails keeps nothing; but a declaration's
 	// container letter re-creates the name before its literal fails, so
 	// `typeset -a a=(5 $((1/0)))` leaves `typeset -a a`. The only column.

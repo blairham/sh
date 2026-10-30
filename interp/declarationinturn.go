@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"context"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -61,8 +62,19 @@ import (
 // was held stays, because that column has stored it: at the top level that is
 // the measured answer. Inside a `function`-form body the reference's operands
 // were locals, and the call ends there and takes them with it, while the shell
-// carries on. Here they are held in the global cell and stay, which the line
-// after the call can see as well as an EXIT trap (#7011).
+// carries on. They are held in the cell the name reached, which is the global
+// one, so a stop there puts them back rather than keeping them — see
+// operandsInTurn.stop (#7011).
+//
+// A second column walks a declaration's **array literals** and not its scalar
+// operands: each literal is expanded, traced and placed in turn, the scalar
+// words between them only expanded, and the utility then stores everything
+// for real. Its placement is the operand's own store over a saved cell, so a
+// refusal there — an element before the first, an empty key — is reported at
+// the literal's turn, ahead of the utility's own line, and ends the walk with
+// what was placed before it (#6798, #6852). See
+// Semantics.DeclarationArrayOperandsAreStoredInTurn and
+// Runner.placeLiteralOperandInTurn.
 //
 // See Semantics.DeclarationOperandsAreStoredInTurn (#6770).
 
@@ -83,6 +95,11 @@ type operandsInTurn struct {
 	literals map[*syntax.Assign]*expandedAssign
 	// traced is the literal operands whose lines were written here.
 	traced map[*syntax.Assign]bool
+	// literalsOnly is the column that walks a declaration's array-literal
+	// operands and leaves its scalar ones to the utility: a scalar operand is
+	// expanded in turn and neither held nor traced. See
+	// Semantics.DeclarationArrayOperandsAreStoredInTurn.
+	literalsOnly bool
 }
 
 // commit keeps what the walk held: the undo list is dropped and release has
@@ -90,6 +107,50 @@ type operandsInTurn struct {
 func (t *operandsInTurn) commit() {
 	t.held.undo = nil
 	t.stopped = true
+}
+
+// stop ends the walk at a refusal or a failed value. What it held stays,
+// because the column measured has stored it — except where the utility would
+// have made the operands locals of the running function. The failure ends
+// that call and the reference's locals go with it, so what was held in the
+// cell the name reached is put back rather than left as a global: measured
+// 2026-10-29 on ksh93u+, `function f { typeset x=1 y=${q?boom}; }; f; echo
+// "out x=${x-unset}"` is `out x=unset` (#7011), and 2026-10-30 on bash 5.3.20,
+// `a=(0); f(){ declare -a a=(5) b=(6 $((1/0))); }; f` leaves the global `a`
+// holding 0 where `declare -ga` and `export` leave it 5 (#6798).
+func (t *operandsInTurn) stop(r *Runner, argv []string) {
+	if r.operandsAreLocalsOfTheCall(argv) {
+		t.held.release(r)
+	}
+	t.commit()
+}
+
+// operandsAreLocalsOfTheCall reports whether the declaration utility argv
+// names is about to make its operands locals of the running function: a
+// `typeset`, `declare` or `local` where that declares a local, without the
+// global letter. `export` and `readonly` write the name the call can see.
+func (r *Runner) operandsAreLocalsOfTheCall(argv []string) bool {
+	if len(r.scopes) == 0 {
+		return false
+	}
+	k := traceDeclarationUtilityWord(argv)
+	if k >= len(argv) {
+		return false
+	}
+	switch argv[k] {
+	case "typeset", "declare", "local":
+	default:
+		return false
+	}
+	for _, w := range argv[k+1:] {
+		if w == "--" || len(w) < 2 || (w[0] != '-' && w[0] != '+') {
+			break
+		}
+		if w[0] == '-' && strings.ContainsRune(w[1:], 'g') {
+			return false
+		}
+	}
+	return r.typesetDeclaresALocalHere()
 }
 
 // declarationOperandsStoredInTurn reads the axis. Read and not asked, because
@@ -111,27 +172,39 @@ func (r *Runner) declarationOperandsStoredInTurn() bool {
 // a declaration allocates nothing for it. Hands the state back, and reports
 // whether the walk is on and goes on.
 func (r *Runner) reachOperandInTurn(
+	ctx context.Context,
 	c *syntax.SimpleCmd,
 	w *syntax.Word,
 	argv []string,
 	turn *operandsInTurn,
 ) (*operandsInTurn, bool) {
 	if turn == nil {
-		if !r.declarationOperandsStoredInTurn() || !r.declarationUtilityIsHere(argv) {
-			// Not the column, or `local`: it is in the substrate's list of
-			// declaration utilities and this column has no such command,
-			// so nothing is about to store the operands and nothing is
-			// held — the same gate the trace's split uses, see
-			// Runner.traceOperandSplitsBefore.
+		if turn = r.startOperandsInTurn(argv); turn == nil {
 			return nil, false
 		}
-		turn = &operandsInTurn{}
-		turn.held.undo = turn.undoBuf[:0]
 	}
 	if turn.stopped {
 		return turn, false
 	}
-	return turn, r.settleLiteralOperandsBefore(c, w, argv, turn)
+	return turn, r.settleLiteralOperandsBefore(ctx, c, w, argv, turn)
+}
+
+// startOperandsInTurn is the walk's state for one command, or nil where
+// nothing is walked: not the column, or `local` — it is in the substrate's
+// list of declaration utilities and one column has no such command, so
+// nothing is about to store the operands and nothing is held. The same gate
+// the trace's split uses, see Runner.traceOperandSplitsBefore.
+func (r *Runner) startOperandsInTurn(argv []string) *operandsInTurn {
+	all := r.declarationOperandsStoredInTurn()
+	if !all && r.sem().DeclarationArrayOperandsAreStoredInTurn != Yes {
+		return nil
+	}
+	if !r.declarationUtilityIsHere(argv) {
+		return nil
+	}
+	turn := &operandsInTurn{literalsOnly: !all}
+	turn.held.undo = turn.undoBuf[:0]
+	return turn
 }
 
 // literal is the element list expanded ahead for this operand, or nil.
@@ -161,8 +234,8 @@ func (t *operandsInTurn) wasTraced(a *syntax.Assign) bool {
 // (#6999). Inside a `function`-form body the prefix was held in the body's own
 // local, so what is kept goes with the call: `function f { v=new typeset
 // y=${q?boom}; }; v=old; f` leaves `old`, as ksh93u+ does. See
-// interp/prefixdeclarationlocal.go (#7002). The operands are still held in the
-// global cell, which is the caveat at the top of this file (#7011).
+// interp/prefixdeclarationlocal.go (#7002). The operands were held in the
+// global cell, and a stop there has already put them back (#7011).
 func (t *operandsInTurn) release(r *Runner, prefix *heldPrefix) {
 	if t != nil {
 		if t.stopped {
@@ -205,7 +278,12 @@ func (r *Runner) storeOperandInTurn(argv []string, turn *operandsInTurn) []strin
 	if r.expandErr || r.givingUpAlready() {
 		// The value would not expand. The operands before it are stored, in
 		// the column measured, and the command is over.
-		turn.commit()
+		turn.stop(r, argv)
+		return argv
+	}
+	if turn.literalsOnly {
+		// A scalar operand is the utility's to store, in the column that
+		// walks only its literals.
 		return argv
 	}
 	word := argv[len(argv)-1]
@@ -222,7 +300,7 @@ func (r *Runner) storeOperandInTurn(argv []string, turn *operandsInTurn) []strin
 		// ends: measured, `+ x=1` and then `r: is read only`, with no line
 		// for the utility and nothing after it run.
 		r.refuseReadonly(base, assignedByDeclaration)
-		turn.commit()
+		turn.stop(r, argv)
 		return argv
 	}
 	d := r.diag()
@@ -266,7 +344,7 @@ func (r *Runner) storeOperandInTurn(argv []string, turn *operandsInTurn) []strin
 			// undeclared `a` is `p q: arithmetic syntax error` and nothing
 			// more.
 			r.fatal("%s\n", r.subscriptFailure(sub, err))
-			turn.commit()
+			turn.stop(r, argv)
 			return argv
 		}
 		held := value
@@ -319,15 +397,18 @@ func (r *Runner) traceOperandInTurn(target, value string, d *Diagnostics) {
 
 // settleLiteralOperandsBefore expands, holds and traces every array-literal
 // operand written in front of the word just expanded, so a scalar operand
-// behind a literal sees it stored. Reports whether the walk goes on.
+// behind a literal sees it stored — and with w nil, every one still waiting,
+// which is the walk reaching the literals written after the command's last
+// word. Reports whether the walk goes on.
 func (r *Runner) settleLiteralOperandsBefore(
+	ctx context.Context,
 	c *syntax.SimpleCmd,
 	w *syntax.Word,
 	argv []string,
 	turn *operandsInTurn,
 ) bool {
 	for _, a := range c.Assigns {
-		if !a.Operand || !w.Pos().After(a.Pos()) {
+		if !a.Operand || (w != nil && !w.Pos().After(a.Pos())) {
 			continue
 		}
 		if _, done := turn.literals[a]; done {
@@ -338,40 +419,45 @@ func (r *Runner) settleLiteralOperandsBefore(
 			turn.traced = map[*syntax.Assign]bool{}
 		}
 		turn.literals[a] = nil
-		if a.Members != nil || len(a.Elems) == 0 {
+		if a.Members != nil {
 			// A compound body performs its members after the utility and
 			// the command's line waits for them (see
-			// interp/compoundoperandorder.go); an empty literal has nothing
-			// to expand and nothing to write.
+			// interp/compoundoperandorder.go).
+			continue
+		}
+		if turn.literalsOnly {
+			if !r.settleALiteralOperand(ctx, a, argv, turn) {
+				return false
+			}
 			continue
 		}
 		if r.nameIsFrozen(a.Name) && !r.declarationWouldShadow(a.Name) {
 			r.refuseReadonly(a.Name, assignedByDeclaration)
-			turn.commit()
+			turn.stop(r, argv)
 			return false
 		}
 		tableAhead := tableLetterAmongTheOptions(argv)
 		e := &expandedAssign{assign: a, elemsAreOperands: true}
-		// The subscript's side first, words and arithmetic, as the column
-		// that nests an element literal does — see elementLiteralBuilt.
-		r.resolveLiteralOperandSubscript(a, e)
-		if r.unspecified || r.givingUpAlready() {
-			turn.commit()
-			return false
-		}
-		parsed, ok := r.literalElems(a.Elems,
-			r.literalReadsSubscripts(a.Name, a.Elems, a.Append),
-			r.bareLiteralElementIsOneValue(a.Name, a.Elems, tableAhead))
-		if !ok {
-			how := failedLiteral{appendTo: a.Append, operand: true}
-			switch {
-			case tableAhead:
-				how.letter = 'A'
-			case indexedLetterAmongTheOptions(argv):
-				how.letter = 'a'
+		// An empty literal has nothing to expand, and is held and written
+		// where a populated one is: `a=(1); typeset -a a=() b=(${#a[@]})`
+		// gives `b` the 0 in ksh93u+.
+		parsed, ok := []literalElem(nil), true
+		if len(a.Elems) > 0 {
+			// The subscript's side first, words and arithmetic, as the
+			// column that nests an element literal does — see
+			// elementLiteralBuilt.
+			r.resolveLiteralOperandSubscript(a, e)
+			if r.unspecified || r.givingUpAlready() {
+				turn.stop(r, argv)
+				return false
 			}
-			r.keepWhatAFailedLiteralStored(a.Name, a.Elems, parsed, how)
-			turn.commit()
+			parsed, ok = r.literalElems(a.Elems,
+				r.literalReadsSubscripts(a.Name, a.Elems, a.Append),
+				r.bareLiteralElementIsOneValue(a.Name, a.Elems, tableAhead))
+		}
+		if !ok {
+			r.keepWhatAFailedLiteralOperandStored(a, argv, parsed, tableAhead)
+			turn.stop(r, argv)
 			return false
 		}
 		e.elems, e.elemsSet = parsed, true
@@ -384,6 +470,168 @@ func (r *Runner) settleLiteralOperandsBefore(
 		}
 	}
 	return true
+}
+
+// keepWhatAFailedLiteralOperandStored is Runner.keepWhatAFailedLiteralStored
+// for a declaration's operand, with the container letter read off the
+// utility's words.
+func (r *Runner) keepWhatAFailedLiteralOperandStored(
+	a *syntax.Assign,
+	argv []string,
+	parsed []literalElem,
+	tableAhead bool,
+) {
+	how := failedLiteral{appendTo: a.Append, operand: true}
+	switch {
+	case tableAhead:
+		how.letter = 'A'
+	case indexedLetterAmongTheOptions(argv):
+		how.letter = 'a'
+	}
+	r.keepWhatAFailedLiteralStored(a.Name, a.Elems, parsed, how)
+}
+
+// settleALiteralOperand is one literal operand reached by the walk in the
+// column that walks only its literals: refused there if the line refuses it,
+// then expanded, traced, and placed — in that order, which is the order the
+// reference writes them: `set -x; declare -a q=([$(true)]=x)` is the
+// substitution's line, the literal's own, and then the refusal (#6852).
+// Reports whether the walk goes on.
+func (r *Runner) settleALiteralOperand(
+	ctx context.Context,
+	a *syntax.Assign,
+	argv []string,
+	turn *operandsInTurn,
+) bool {
+	indexed, table := declarationLettersAhead(argv)
+	placed := true
+	if r.inFunc == "" {
+		// A frozen name, or one of the other kind of array, refused as a
+		// bare assignment is, with the literals in front of it in place:
+		// `readonly q=1; a=(0); declare -a a=(5) q=(b)` leaves `a` holding 5.
+		// See interp/operandrefusedearly.go.
+		if r.refuseArrayOperandEarly(a, indexed, table) || r.unspecified {
+			turn.stop(r, argv)
+			return false
+		}
+	} else if r.attrHas(a.Name, attrReadonly) {
+		// Inside a function the store answers, and the walk goes on past it:
+		// a function's `local q=(b)` over a frozen global is the store's
+		// complaint with the call carrying on.
+		placed = false
+	}
+	tableAhead := tableLetterAmongTheOptions(argv)
+	parsed, ok := []literalElem(nil), true
+	if len(a.Elems) > 0 {
+		// An empty literal has nothing to expand and is written and placed
+		// all the same: `a=(1); declare -a a=() b=(${#a[@]})` gives `b` the 0.
+		parsed, ok = r.literalElems(a.Elems,
+			r.literalReadsSubscripts(a.Name, a.Elems, a.Append),
+			r.bareLiteralElementIsOneValue(a.Name, a.Elems, tableAhead))
+	}
+	if !ok {
+		r.keepWhatAFailedLiteralOperandStored(a, argv, parsed, tableAhead)
+		turn.stop(r, argv)
+		return false
+	}
+	e := &expandedAssign{assign: a, elemsAreOperands: true, elems: parsed, elemsSet: true}
+	turn.literals[a] = e
+	if r.tracing() {
+		turn.traced[a] = true
+		r.writeArrayOperandLines(arrayOperand{assign: a, expanded: e}, tableAhead, r.diag())
+	}
+	if placed && !r.placeLiteralOperandInTurn(ctx, &turn.held, a, e, table || r.assocDeclared(a.Name), indexed) {
+		turn.stop(r, argv)
+		return false
+	}
+	return true
+}
+
+// placeLiteralOperandInTurn stores a literal operand where its name stands
+// now, for the operands behind it to see, having saved the cell so that the
+// walk's release puts it back and the utility makes the store that stays. The
+// store is the operand's own, so what it refuses and what a refusal keeps are
+// the same here as there. Reports whether the placement went through; a
+// refusal has been reported.
+//
+// Placed only where the cell the walk would save is the one the store writes
+// and the kind the letters are about to give it: a name that is not a tie or a
+// produced parameter, and, under a letter for the other kind of array, one
+// holding nothing yet. Anything else is left to the store alone, as it was
+// before the walk.
+func (r *Runner) placeLiteralOperandInTurn(
+	ctx context.Context,
+	h *heldPrefix,
+	a *syntax.Assign,
+	e *expandedAssign,
+	table, indexed bool,
+) bool {
+	if a.Index != nil || len(a.Leading) > 0 {
+		return true
+	}
+	// Through a reference the store lands on what it names, so that is the
+	// cell saved — `declare -n ref=tgt; declare -a ref=(1 2) z=(${tgt[1]})`
+	// gives `z` the 2 — and a reference aimed at nothing, round a loop or at
+	// an element is left to the store.
+	name := a.Name
+	if r.isNameref(name) {
+		target, cycle, aimed := r.namerefWalk(name)
+		if !aimed || cycle || strings.ContainsRune(target, '[') {
+			return true
+		}
+		name = target
+	}
+	if _, tied := r.tieOf(name); tied {
+		return true
+	}
+	if _, produced := r.producersLookup(name); produced {
+		return true
+	}
+	if _, produced := r.arrayProducersLookup(name); produced {
+		return true
+	}
+	_, holds := r.getVar(name)
+	holds = holds || r.nameIsAnArray(name)
+	switch {
+	case table && !r.assocDeclared(name) && holds:
+		return true
+	case indexed && !table && r.assocDeclared(name):
+		return true
+	}
+	if !table {
+		// Each subscript read once, here, so the placement and the store that
+		// stays put an element where the same evaluation said: `i=0; declare
+		// m=([i++]=x [i++]=y) w=$i` leaves `w` at 2 and `m` at 0 and 1.
+		r.placeLiteralSubscriptsOnce(e.elems)
+	}
+	h.undo = append(h.undo, r.saveVar(name))
+	if table && !r.assocDeclared(name) {
+		r.markAssoc(name)
+	}
+	place := *e
+	r.withPreparedValue(ctx, &place)
+	return !r.expandErr && !r.givingUpAlready() && !r.unspecified
+}
+
+// placeLiteralSubscriptsOnce evaluates a literal's subscripts in order and
+// records each position on its element, stopping at the first that does not
+// come to a number: that one, and the rest, are left to the store, which owns
+// the refusal.
+func (r *Runner) placeLiteralSubscriptsOnce(elems []literalElem) {
+	for i := range elems {
+		el := &elems[i]
+		if !el.subscripted || el.subPlaced {
+			continue
+		}
+		if strings.TrimSpace(el.sub) == "" {
+			return
+		}
+		idx, err := r.subscriptValue(el.sub)
+		if err != nil {
+			return
+		}
+		el.subPlaced, el.subAt = true, idx
+	}
 }
 
 // resolveLiteralOperandSubscript reads an element literal's subscript once,

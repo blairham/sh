@@ -685,6 +685,10 @@ func Semantics() interp.Semantics {
 	// See interp.Semantics.DeclarationOperandsAreStoredInTurn (#6770):
 	// `x=0; typeset x=1 y=$x` leaves `y` holding 0.
 	s.DeclarationOperandsAreStoredInTurn = interp.No
+	// Nor an array-literal operand: `a=(0); typeset -a a=(1) b=($a)` leaves
+	// `b` holding 0 (#6798). See
+	// interp.Semantics.DeclarationArrayOperandsAreStoredInTurn.
+	s.DeclarationArrayOperandsAreStoredInTurn = interp.No
 	// A table append that fails keeps nothing, and a declaration's letter
 	// does not re-create a name whose literal failed.
 	s.FailedTableAppendKeepsThePairsItAdded = interp.No

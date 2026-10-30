@@ -26,7 +26,12 @@ func TestAPrecommandModifierIsLeftOutOfTheTrace(t *testing.T) {
 		{"builtin", `builtin true`, "+zsh:1> true\n"},
 		{"exec", `exec /usr/bin/true`, "+zsh:1> /usr/bin/true\n"},
 		{"builtin builtin", `builtin builtin true`, "+zsh:1> true\n"},
-		{"command command", `command command true`, "+zsh:1> command true\n"},
+		// With no PATH to look in: macOS has a /usr/bin/command and Linux
+		// does not, so the outcome after the line would be the platform's.
+		{
+			"command command", `PATH=/nonexistent; command command true`,
+			"+zsh:1> PATH=/nonexistent \n+zsh:1> command true\nzsh:1: command not found: command\n",
+		},
 		{"builtin command", `builtin command true`, "+zsh:1> true\n"},
 		{"command builtin", `command builtin true`, "+zsh:1> builtin true\nzsh:1: command not found: builtin\n"},
 		{"command exec", `command exec /bin/echo hi`, "+zsh:1> exec /bin/echo hi\nzsh:1: command not found: exec\n"},

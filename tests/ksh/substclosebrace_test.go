@@ -28,6 +28,9 @@ func TestACloseBraceBeginningAWordInACommandSubstitutionIsRefused(t *testing.T) 
 		{"echo $( [[ } == } ]] && echo y )", "", refused, 3},
 		{"echo $( { echo a; }; echo } )", "", refused, 3},
 		{"echo $( ( echo } ) )", "", refused, 3},
+		// The brace ends the command it stands in, so a `case` written with
+		// braces takes it as its own closer, and what follows is refused.
+		{"echo $( case x { x) echo };; } )", "", "syntax error at line 1: `;;' unexpected", 3},
 		{`echo "$(echo })"`, "", refused, 3},
 		{"x=$(echo }); echo after", "", refused, 3},
 		// When it runs: what stood before it has run, and a branch nothing

@@ -1040,6 +1040,12 @@ func Semantics() interp.Semantics {
 	// same text. So the axis is a constant here where CommandReachesABuiltin
 	// is not.
 	s.FatalErrorEndsAtTheCommandWord = interp.No
+	// Under `posixbuiltins`, the one route where the word reaches a
+	// builtin, `command readonly x=5` over a frozen name reports and runs
+	// the next line, at the top level and in either kind of function
+	// (#6962). See
+	// interp.Semantics.FrozenOperandRefusalOutlivesTheCommandWord.
+	s.FrozenOperandRefusalOutlivesTheCommandWord = interp.No
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.ShiftCountIsArithmetic = interp.Yes
 	// No by construction rather than by measurement: zsh has already parsed

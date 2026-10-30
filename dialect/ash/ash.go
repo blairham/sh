@@ -1726,6 +1726,11 @@ func Semantics() interp.Semantics {
 	// an unset name under `set -u` — alive on all three with the word, gone
 	// on all three without it.
 	s.FatalErrorEndsAtTheCommandWord = interp.Yes
+	// And the word takes a declaration's value refused by a freeze as it
+	// takes the rest: `after` at 2 behind `command readonly x=5`, recorded
+	// with #6962 and not re-measured here. See
+	// interp.Semantics.FrozenOperandRefusalOutlivesTheCommandWord.
+	s.FrozenOperandRefusalOutlivesTheCommandWord = interp.No
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	// A cursor past the word after the last is a fresh one, as in dash:

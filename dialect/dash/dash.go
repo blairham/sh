@@ -1949,6 +1949,11 @@ func Semantics() interp.Semantics {
 	// stop elsewhere — ParamErrorIsAnExitRequest is yes and the subshell
 	// still prints `alive` behind the word.
 	s.FatalErrorEndsAtTheCommandWord = interp.Yes
+	// And the word takes a declaration's value refused by a freeze as it
+	// takes the rest: `readonly x=0; command readonly x=5; echo after` is
+	// `after` at 2, and from a function `in` and 0 (#6962). See
+	// interp.Semantics.FrozenOperandRefusalOutlivesTheCommandWord.
+	s.FrozenOperandRefusalOutlivesTheCommandWord = interp.No
 	// Both string-ordering operators, which this shell has and the three
 	// unary additions past the three-word rules it does not: `test -a f`,
 	// `test -o errexit` and `test -N f` are all `unexpected operator` here.

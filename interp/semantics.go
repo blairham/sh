@@ -20910,6 +20910,63 @@ type Semantics struct {
 	// `cmd/command-does-not-bound-a-request-to-stop` (#2755).
 	FatalErrorEndsAtTheCommandWord Answer
 
+	// FrozenOperandRefusalOutlivesTheCommandWord keeps a declaration's
+	// **value** refused by a freeze fatal through a `command` in front of the
+	// declaration: `readonly x=0; function f { command readonly x=5; echo
+	// in; }` ends `f` at the refusal, exactly as it would without the word.
+	//
+	// `command` reaches two kinds of refusal in a declaration, and the
+	// column that parts from the others parts them by kind. The **name** is
+	// the builtin's to judge, and its refusal is softened like every other
+	// special builtin failure — `command readonly 1y` reports and carries
+	// on. The **store** is the assignment's, and that refusal is the one a
+	// bare `x=5` would make, so the word does not reach it.
+	//
+	// Measured 2026-10-30 on ksh93u+ 2012-08-01 under `env -i
+	// PATH=/usr/bin:/bin`, `-c`, each row closed by `echo "st=$? after"`:
+	//
+	//	readonly x=0; function f { command readonly x=5; echo in; }; f
+	//	    `f: line 1: x: is read only`, then `st=1 after` — no `in`
+	//	readonly x=0; function f { command export x=5; echo in; }; f
+	//	    the same
+	//	readonly x=0; function f { command readonly x+=5; echo in; }; f
+	//	    the same
+	//	readonly x=0; function f { command readonly z=1 x=5; echo in; }; f
+	//	    the same, and `z=1` was landed in front of it
+	//	readonly x=0; function f { command command readonly x=5; …; }; f
+	//	    the same — a second word does not reach it either
+	//	readonly x=0; function f { command readonly x=5 || echo or; …; }; f
+	//	    the same, and no `or`: the function is over, not the command
+	//	readonly x=0; function f { command readonly 1y; echo in; }; f
+	//	    `readonly: 1y: invalid variable name`, `in`, `st=0 after` —
+	//	    the name's refusal, which the word does soften
+	//	readonly x=0; command typeset +r x
+	//	    `typeset: x: is read only`, `st=1 after` — a letter refused over
+	//	    the freeze is the builtin's too, and is softened
+	//
+	// At the top level and in a POSIX-style function the store is made
+	// before the builtin runs at all, so `command` is never around it and
+	// the script ends there whatever this says; it is a `function`-form
+	// call, where `readonly` and `export` land the value on the caller's
+	// name from inside the builtin, that puts the store under the word.
+	//
+	// The other columns soften it, measured the same day: dash 0.5.12
+	// prints `in` and `st=0 after` from the function and `st=2 after` at
+	// the top level, zsh 5.9.2 under `posixbuiltins` prints `in` and
+	// carries on, and bash — 5.3.20, under argv[0] `sh`, and 3.2.57 — never
+	// calls the refusal fatal in front of the word. POSIX's No is theirs:
+	// `command` takes away the special builtin's power to end the shell, and
+	// a declaration's operand is that builtin's.
+	//
+	// unpinned ash: BusyBox ash was not measured here; the issue that
+	// raised this recorded `after` at 2 under the word, which is dash's
+	// answer, and No is what this engine did before.
+	//
+	// Asked only where the refusal is fatal, of a value a declaration
+	// stores, while the builtin `command` named is the one storing it —
+	// see Runner.frozenOperandOutlivesTheWord (#6962).
+	FrozenOperandRefusalOutlivesTheCommandWord Answer
+
 	// GetoptsRejectsUnknownOption is the same question for `getopts`, which
 	// has no options at all here — so any leading `-` word is the one being
 	// asked about, and it would otherwise be the optstring.
@@ -36663,6 +36720,10 @@ func PosixSemantics() Semantics {
 		// reading, and the three shells that put a boundary at the word
 		// override it.
 		FatalErrorEndsAtTheCommandWord: No,
+		// And a declaration's operand is the special builtin's own, so a
+		// value refused by a freeze is a failure the word takes away like any
+		// other. See Semantics.FrozenOperandRefusalOutlivesTheCommandWord.
+		FrozenOperandRefusalOutlivesTheCommandWord: No,
 		// POSIX gives `umask` `-S` and no more, and `set` no `-p`.
 		UmaskHasTheReusableLetter: No,
 		SetHasThePrivilegedLetter: No,

@@ -28,7 +28,8 @@ import (
 // signal is what exec resets to its default; the ignore goes back on after,
 // and an ignored signal has no subscriptions to lose.
 func startWithDispositions(ignore, reset []syscall.Signal, start func() error) error {
-	var ignored, defaulted []os.Signal
+	var ignored []syscall.Signal
+	var defaulted []os.Signal
 	for _, sig := range ignore {
 		if passedToAChild(sig) && !signal.Ignored(sig) {
 			ignored = append(ignored, sig)
@@ -39,8 +40,8 @@ func startWithDispositions(ignore, reset []syscall.Signal, start func() error) e
 			defaulted = append(defaulted, sig)
 		}
 	}
-	if len(ignored) > 0 {
-		signal.Ignore(ignored...)
+	for _, sig := range ignored {
+		signal.Ignore(sig)
 	}
 	if len(defaulted) > 0 {
 		signal.Notify(make(chan os.Signal, 1), defaulted...)
@@ -50,7 +51,7 @@ func startWithDispositions(ignore, reset []syscall.Signal, start func() error) e
 		signal.Ignore(defaulted...)
 	}
 	for _, sig := range ignored {
-		handBack(sig.(syscall.Signal))
+		handBack(sig)
 	}
 	return err
 }

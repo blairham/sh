@@ -10331,7 +10331,16 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		for i := range c.Assigns {
 			one := c.Assigns[i : i+1]
 			a := one[0]
-			if r.attrHas(a.Name, attrReadonly) && !a.Operand && !r.prefixRefusalApplies(kind) {
+			if r.attrHas(a.Name, attrReadonly) && !a.Operand {
+				if r.prefixRefusalApplies(kind) {
+					// A frozen name the dialect refuses here ends the
+					// lines, and nothing behind it is expanded: the
+					// refusal comes next. Measured 2026-10-30 on ksh93u+,
+					// `readonly r=1; set -x; x=1 r=2 y=$(echo s >&2)
+					// /usr/bin/true` writes `+ /usr/bin/true`, `+ x=1` and
+					// the refusal, and never runs the substitution (#6987).
+					break
+				}
 				// A frozen name the dialect does not refuse here is a
 				// prefix like any other, and is written: measured
 				// 2026-10-02, `readonly r; set -x; a=1 r=2 true` writes
@@ -10428,7 +10437,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// part of this walk — a marker taken after it would read a value
 		// that would not expand as something that had already failed.
 		walk = r.beginPrefixWalk(c.Assigns)
-		if !r.prefixCheckedFirst && r.expandThePrefixUpToTheFrozenName(c.Assigns, nil) {
+		if !r.prefixCheckedFirst && r.expandThePrefixUpToTheFrozenName(c.Assigns, nil, false) {
 			// A frozen name's own value is what failed, in one of the four
 			// columns that evaluate it first: the expansion's sentence is
 			// the whole of what the script is told, the refusal is never
@@ -10728,7 +10737,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// on the record. The redirections have been opened since the marker
 		// runSimple took, and what they may have left is not this prefix's.
 		walk = r.beginPrefixWalk(c.Assigns)
-		if !r.prefixCheckedFirst && r.expandThePrefixUpToTheFrozenName(c.Assigns, nil) {
+		if !r.prefixCheckedFirst && r.expandThePrefixUpToTheFrozenName(c.Assigns, nil, false) {
 			// What the frozen name was being given is what failed, in one of
 			// the four columns that evaluate it ahead of the refusal: its
 			// sentence is the whole of what the script is told, and the

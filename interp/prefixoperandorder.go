@@ -163,7 +163,7 @@ func (r *Runner) prefixBeforeADeclarationsOperand(assigns []*syntax.Assign, argv
 // writes in place of every line after it.
 func (r *Runner) writeThePrefixAheadOfTheOperand(assigns []*syntax.Assign, argv []string) {
 	if !r.tracesEachPrefixEntryOnItsOwnLine() || !r.tracesItsPrefix(assigns, argv) ||
-		r.tracePrefixFollowsTheCommand(argv) {
+		r.tracePrefixFollowsTheCommand(assigns, argv) {
 		return
 	}
 	d := r.diag()

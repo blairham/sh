@@ -65,8 +65,17 @@ func (r *Runner) prefixExpandedBeforeTheRedirections(assigns []*syntax.Assign, a
 		// the persistence itself is decided by — so the two cannot come to
 		// disagree about which commands they are talking about.
 		kind := r.prefixCommandOf(argv)
-		return kind.kind == prefixBeforeFunction ||
-			kind.kind == prefixBeforeSpecialBuiltin, true
+		if kind.kind == prefixBeforeFunction {
+			// Except a `function`-form call, whose prefix is the call's own
+			// cell and not a store this shell keeps, and is expanded once the
+			// redirections are open, as a regular builtin's is. Measured
+			// 2026-10-30 on ksh93u+ from a script file, `function g { :; };
+			// x=$(echo s >&2) g >/nope/f` writes the file's complaint alone,
+			// and `x=$(echo s >&2) g 2>/dev/null` writes nothing — where the
+			// POSIX-form `f` writes `s` both times (#6983).
+			return !r.prefixIsTheCallsOwn(assigns, argv), true
+		}
+		return kind.kind == prefixBeforeSpecialBuiltin, true
 	}
 	r.errf("%s\n", r.diag().Report(r.name(), r.line,
 		r.unanswered("a command's assignment prefix against its redirections")))
@@ -139,7 +148,9 @@ const (
 	// external: ksh93. Measured 2026-09-18, `w=$(echo S >&2) f > /nope/x` and
 	// `w=$(echo E >&2) eval : > /nope/x` write their letter there and
 	// `/usr/bin/true`, `true` and `print` write none, which is exactly the
-	// set that shell keeps a prefix for.
+	// set that shell keeps a prefix for. A `function`-form call is not in
+	// that set where its prefix is the call's own, and opens first too
+	// (#6983) — see Semantics.PrefixToAKeywordFunctionIsScopedToTheCall.
 	PrefixExpandedBeforeRedirectionsWhereItPersists
 	// PrefixExpandedBeforeRedirectionsNever opens the redirections first, so
 	// a substitution in a value never runs when one fails: zsh, dash and

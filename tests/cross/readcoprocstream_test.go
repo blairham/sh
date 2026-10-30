@@ -47,8 +47,8 @@ import (
 // The coprocess writes only once the script has said so through the fifo `p`,
 // so a byte that must arrive late cannot arrive early, and `q` tells the
 // script `ab` is in the pipe before the read asks. A shell that still blocks is
-// released after ten seconds by a writer opened on each fifo, and fails rather
-// than hanging the test binary.
+// released by a writer opened on each fifo (runReleasingFifos), and fails
+// rather than hanging the test binary.
 func TestAReadFromACoprocessLeavesItAsTheShellsDo(t *testing.T) {
 	// The coprocess's body, the read, and the label its status is printed
 	// under; then the late half, which is the same in every row.
@@ -88,9 +88,9 @@ func TestAReadFromACoprocessLeavesItAsTheShellsDo(t *testing.T) {
 }
 
 // runReleasingFifos runs src in a directory of its own and returns what it
-// wrote. A run still going after ten seconds is waiting on one of its fifos
-// for something a correct shell would already have done; each is opened for
-// writing and handed a line, and held open so a later `>p` finds a reader,
+// wrote. A run still going after releaseFifosAfter is waiting on one of its
+// fifos for something a correct shell would already have done; each is opened
+// for writing and handed a line, and held open so a later `>p` finds a reader,
 // which lets the run end, and the test fails with what it wrote.
 func runReleasingFifos(t *testing.T, p dialecttest.Preset, src string) string {
 	t.Helper()
@@ -111,7 +111,7 @@ func runReleasingFifos(t *testing.T, p dialecttest.Preset, src string) string {
 			t.Fatalf("err %v: %s", err, buf.String())
 		}
 		return buf.String()
-	case <-time.After(10 * time.Second):
+	case <-time.After(releaseFifosAfter):
 	}
 	var held []*os.File
 	for _, name := range []string{"p", "q"} {
@@ -127,6 +127,15 @@ func runReleasingFifos(t *testing.T, p dialecttest.Preset, src string) string {
 	for _, w := range held {
 		_ = w.Close()
 	}
-	t.Fatalf("still running after ten seconds, waiting on a coprocess that was waiting on it. Output: %q", buf.String())
+	t.Fatalf("still running after %v, waiting on a fifo nothing wrote to. Output: %q", releaseFifosAfter, buf.String())
 	return ""
 }
+
+// releaseFifosAfter is how long runReleasingFifos lets a run go before it
+// takes it for one waiting on a fifo. It bounds a hang and asserts nothing
+// about the shell, so it is set by the slowest correct run rather than by the
+// rows' own margins. That is a ksh93 row of TestATrappedSignalGivesUpAReadWhereTheShellsDo
+// reading a 262144-byte line a byte at a time while thirty rows run beside it:
+// 1.6 s on an idle machine, and past ten seconds once in fifteen under the race
+// detector with GOMAXPROCS=2, background QoS and every core busy (#7042).
+const releaseFifosAfter = 60 * time.Second

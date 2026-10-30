@@ -5241,6 +5241,17 @@ func Diagnostics() interp.Diagnostics {
 		// 2026-09-13; interp/arithforpart.go holds it (#2420).
 		ArithForPartText: interp.ArithForPartTextLosesOneEnd,
 		ScriptLocation:   interp.LocationLineWord,
+		// And a program read from standard input names its line 1 the way a
+		// file does, where `-c` leaves it out — `ksh: line 1: x: boom` for
+		// `echo ${x?boom}` against `ksh: x: boom`. A builtin's own complaint
+		// had the file's bracket here already (StdinBuiltinLocation), and
+		// this route took the `-c` shape for everything else. Measured
+		// 2026-10-30 on ksh93u+ 2012-08-01, the program on a pipe and as a
+		// regular file alike, over a not-found command, a `?` expansion, an
+		// arithmetic refusal, a `${ }` body refused as it is expanded, `eval`
+		// and `.` on line 1 (#6871). A parse failure met while reading is
+		// unmoved: its sentence names the line, so the location stays empty.
+		StdinLocation: interp.LocationLineWord,
 		// At a prompt a run-time failure is located the way `-c` locates
 		// one — `line N:` past the first line and nothing on it — with N
 		// counted from the first line of the input typed, since

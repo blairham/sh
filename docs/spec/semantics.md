@@ -1355,6 +1355,25 @@ corpus carries all three as
 being the only row in the corpus where a borrow sits below line 1 of a `-c`
 program, which is the one arrangement that can see the bracket come back.
 
+**"What the shell was given" means a `-c` string, and not a program on
+standard input.** That route names line 1 as a script file does, for the
+shell's own complaints as well as a builtin's. Measured 2026-10-30 on ksh93u+
+2012-08-01, the same one-line program both ways, on a pipe and as a regular
+file alike:
+
+| program | `ksh < f` | `ksh -c` |
+| --- | --- | --- |
+| `nosuchcmd_q` | `<shell>: line 1: nosuchcmd_q: not found` | `<shell>: nosuchcmd_q: not found` |
+| `echo b; echo ${x?boom}` | `<shell>: line 1: x: boom` | `<shell>: x: boom` |
+| `eval nosuchcmd_e` | `<shell>[1]: eval: line 1: …` | `<shell>: eval: line 1: …` |
+| `cd /nonexistent` | `<shell>[1]: cd: …` | `<shell>: cd: …` |
+| `echo )` | `<shell>: syntax error at line 1: …` | the same |
+
+The builtin's row was already modeled (`StdinBuiltinLocation`) and the others
+took the `-c` shape until #6871 gave the route its own `StdinLocation`. The
+last row is a parse failure met while reading, which names its line in the
+sentence and no line in the location on every route.
+
 #### A builtin's complaint is located the builtin's way at the end of a chain
 
 The last component is located the way an ordinary diagnostic in this dialect

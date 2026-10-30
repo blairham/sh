@@ -134,8 +134,10 @@ func runReleasingFifos(t *testing.T, p dialecttest.Preset, src string) string {
 // releaseFifosAfter is how long runReleasingFifos lets a run go before it
 // takes it for one waiting on a fifo. It bounds a hang and asserts nothing
 // about the shell, so it is set by the slowest correct run rather than by the
-// rows' own margins. That is a ksh93 row of TestATrappedSignalGivesUpAReadWhereTheShellsDo
-// reading a 262144-byte line a byte at a time while thirty rows run beside it:
-// 1.6 s on an idle machine, and past ten seconds once in fifteen under the race
-// detector with GOMAXPROCS=2, background QoS and every core busy (#7042).
-const releaseFifosAfter = 60 * time.Second
+// rows' own margins, and kept well inside go test's own ten minutes. The
+// slowest is a ksh93 row of TestATrappedSignalGivesUpAReadWhereTheShellsDo,
+// reading a 262144-byte line a byte at a time with thirty rows beside it:
+// 1.6 s on an idle machine, and up to 35 s under the race detector with
+// GOMAXPROCS=2, background QoS and a load average of sixty, where ten seconds
+// failed two runs of nine (#7042).
+const releaseFifosAfter = 2 * time.Minute

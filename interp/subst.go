@@ -172,6 +172,12 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// Runner.runAsItsOwnJob.
 	sub.runAsItsOwnJob(r)
 	sub.inCommandSubst = true
+	if sub.openTrace != nil {
+		// A substitution's body starts outside any compound command of its
+		// own, whatever its parent was inside. See
+		// Runner.inheritedTextIsTakenByACopy.
+		sub.openTrace.consumes = false
+	}
 	// And the numbers the body holds in the dialect that holds them there.
 	// See enterSubstBody.
 	r.enterSubstBody(sub)

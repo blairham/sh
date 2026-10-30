@@ -77,6 +77,27 @@ type openTraceLine struct {
 	// prefixOf is the command whose assignment prefix this line is, where
 	// it is one; a bare list's line names none.
 	prefixOf *syntax.SimpleCmd
+	// lead is the part of a parent's line a child was handed and this line
+	// starts with, where nothing has written it yet. A child of this line
+	// copies it and takes it, so this line is written without it; a
+	// complaint writes it ahead of itself where this line is not written;
+	// and otherwise this line's own text is written behind it. Measured
+	// 2026-10-30 on zsh 5.9.2 under -f -c (#6711):
+	//
+	//	x=$( a=1 true )               `+zsh:1> x=+zsh:1> a=1 +zsh:1> true`
+	//	x=$( a=$(echo s >&2) true )   `+zsh:1> x=+zsh:1> a=+zsh:1> echo s`, `s`,
+	//	                              then `+zsh:1> a='' +zsh:1> true`
+	//	x=$( a=1 b=${q?b} true )      `+zsh:1> x=`, then the complaint, and the
+	//	                              prefix's line is gone with the child
+	//
+	// where the prefix's line was opened without it, and the next line the
+	// child wrote took it instead.
+	lead string
+	// consumes says a child copied from this line takes the text it was
+	// handed, so this line no longer has it to write. A child's line does
+	// that once the child is inside a compound command or a redirection,
+	// and not before. See Runner.inheritedTextIsTakenByACopy.
+	consumes bool
 }
 
 // writeOpenTraceLineAhead is the text of the open line to write ahead of a
@@ -115,7 +136,8 @@ func (r *Runner) writeOpenTraceLineAhead() (string, bool) {
 		line.keptForAChild = true
 		return text, true
 	}
-	line.pending, line.flushed, line.keptForAChild = "", line.flushed+text, false
+	line.pending, line.flushed, line.keptForAChild = "", line.flushed+strings.TrimPrefix(text, line.lead), false
+	line.lead = ""
 	if line.carries != nil {
 		line.carries.pending = ""
 	}
@@ -301,6 +323,21 @@ func (r *Runner) traceAssignRest(
 // echo ${q?b} ) true` writes only the complaint (#6623).
 func (r *Runner) flushOpenTraceLine() {
 	line := r.openTrace
+	if line != nil && line.owner == r && line.unflushed && line.lead != "" {
+		// A prefix's line is written after its complaint, if at all, and
+		// what it was handed is written ahead of the complaint all the same:
+		// measured 2026-10-30 on zsh 5.9.2, `set -x; x=$( a=1 b=$((1/0))
+		// true )` writes `+zsh:1> x=`, the complaint, and then `+zsh:1> a=1
+		// b=` (#6711).
+		lead := line.lead
+		line.pending, line.lead = strings.TrimPrefix(line.pending, lead), ""
+		// Written alone: the line itself is not, so it must not be the
+		// open line a trace line is written behind.
+		r.openTrace = nil
+		r.tracef("%s", lead)
+		r.openTrace = line
+		return
+	}
 	if line == nil || line.owner != r || line.pending == "" || line.unflushed || line.keptForAChild {
 		return
 	}
@@ -334,4 +371,59 @@ func (r *Runner) openTraceTakesTheLiteral(a *syntax.Assign, words []string) {
 		quoted[i] = r.traceQuote(w, d.TraceQuoting, d.TraceMetacharacters)
 	}
 	r.openTrace.pending += wrapArrayLiteral(strings.Join(quoted, " "), d.TraceArrayLiteral) + " "
+}
+
+// enteringACompound marks the text a child was handed as taken by the next
+// copy of it, once the child is running a compound command or opening a
+// redirection. See Runner.inheritedTextIsTakenByACopy.
+func (r *Runner) enteringACompound() {
+	if line := r.openTrace; line != nil && line.inherited && line.owner == r && line.pending != "" {
+		line.consumes = true
+	}
+}
+
+// compoundForTheTrace reports whether c is one of the compound commands a
+// copy of a child's handed text is taken from inside. A `case` and a
+// `[[ … ]]` are not among them: each writes a line of its own that carries
+// the text. See Runner.inheritedTextIsTakenByACopy.
+func compoundForTheTrace(c syntax.Command) bool {
+	switch c.(type) {
+	case *syntax.Group, *syntax.Subshell, *syntax.IfClause, *syntax.LoopClause,
+		*syntax.ForClause, *syntax.ForArithClause, *syntax.SelectClause, *syntax.RepeatClause,
+		*syntax.TryClause:
+		return true
+	}
+	return false
+}
+
+// inheritedTextIsTakenByACopy empties the text a child was handed, out of
+// line and out of the line it carries, where a copy of line has just been made
+// and the child is inside a compound command or a redirection: the copy's
+// child writes it, and this child does not write it again. Measured
+// 2026-10-30 on zsh 5.9.2 under -f -c (#6711):
+//
+//	x=$( for i in $(echo a); do :; done )
+//	                 `+zsh:1> x=+zsh:1> echo a`, then `+zsh:1> i=a`
+//	x=$( { : $(echo a); } )          `… echo a`, then `+zsh:1> : a`
+//	x=$( : >$(echo /dev/null) )      `… echo /dev/null`, then `+zsh:1> :`
+//	x=$( if [[ $(echo a) == a ]]; then :; fi )
+//	                 `+zsh:1> x=+zsh:1> [[+zsh:1> echo a`, then `+zsh:1> [[ a == a ]]`
+//
+// where a copy made from a plain command's word leaves it for that command's
+// own line — `x=$( : $(echo a); : )` is `… echo a`, then `+zsh:1> x=+zsh:1> :
+// a` — and so does one made from a `[[ … ]]` or a `case` at the top of the
+// body, which writes it on every line it opens.
+func (r *Runner) inheritedTextIsTakenByACopy(line *openTraceLine) {
+	in := line
+	if line.carries != nil {
+		in = line.carries
+	}
+	if !in.inherited || !in.consumes || in.pending == "" {
+		return
+	}
+	if line != in {
+		line.pending = strings.TrimPrefix(line.pending, in.pending)
+		line.carries = nil
+	}
+	in.pending = ""
 }

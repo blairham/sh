@@ -8501,6 +8501,9 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 		if hold, ok := r.holdACommandsJobSlot(true); ok {
 			defer hold.release()
 		}
+		if r.openTrace != nil {
+			r.enteringACompound()
+		}
 		return r.timeClause(ctx, x)
 	}
 	return r.unsupported(fmt.Sprintf("%T", e))
@@ -8897,6 +8900,11 @@ func (r *Runner) dispatchHoldingAJobSlot(ctx context.Context, c syntax.Command, 
 
 // dispatch runs a command once Runner.command has recorded it.
 func (r *Runner) dispatch(ctx context.Context, c syntax.Command, fired bool) error {
+	if r.openTrace != nil && compoundForTheTrace(c) {
+		// Inside a compound command, a substitution's child takes the text
+		// its parent handed this one. See Runner.inheritedTextIsTakenByACopy.
+		r.enteringACompound()
+	}
 	switch x := c.(type) {
 	case *syntax.SimpleCmd:
 		// A simple command is the one kind that can *run* the failure it

@@ -5169,6 +5169,22 @@ type Semantics struct {
 	//
 	// See interp/xtraceprefixasitgoes.go.
 	TraceAssignmentListIsWrittenAsItGoes Answer
+	// TracedConditionPatternIsExpandedTwice expands a `[[ … ]]` pattern
+	// operand once for the trace line and then again for the match, where
+	// `set -x` is on. zsh 5.9.2 alone, measured 2026-10-30 under `-f -c`
+	// against GNU bash 5.3.20, bash 3.2.57 and ksh93u+ 2012-08-01:
+	//
+	//	n=0; set -x; [[ a == $((n++)) ]]; echo $n     zsh: `[[ a == 0 ]]`, 2
+	//	                                              the rest: 1
+	//	n=0; set -x; [[ 2 == $((++n)) ]]; echo $?     zsh: `[[ 2 == 1 ]]`, 0
+	//	n=0; [[ a == $((n++)) ]]; echo $n             1 everywhere
+	//
+	// So the line holds the first expansion and the match is made on the
+	// second, and a substitution in the operand runs twice and writes its
+	// own lines twice. Only a pattern: `[[ -n $((n++)) ]]` and the left
+	// operand of `==` expand once. The other columns expand once traced or
+	// not, and dash has no `[[`. See Runner.holdConditionLine (#6711).
+	TracedConditionPatternIsExpandedTwice Answer
 	// TraceArrayLiteralShowsTheExpandedElements prints what an array
 	// literal's elements came to rather than the words the script wrote.
 	//
@@ -36022,8 +36038,11 @@ func PosixSemantics() Semantics {
 		// The line is written once the list is done: dash and BusyBox ash,
 		// measured 2026-10-02. zsh writes it a word at a time and says so.
 		TraceAssignmentListIsWrittenAsItGoes: No,
-		StatusArgument:                       StatusArgStrict,
-		EqualsExpansion:                      No,
+		// A traced pattern operand is expanded once, as an untraced one is.
+		// zsh expands it a second time and says so.
+		TracedConditionPatternIsExpandedTwice: No,
+		StatusArgument:                        StatusArgStrict,
+		EqualsExpansion:                       No,
 		// POSIX gives `test` one spelling of string equality, so `==` is not
 		// an operator; the three shells that accept it added it.
 		TestAcceptsDoubleEqual: No,

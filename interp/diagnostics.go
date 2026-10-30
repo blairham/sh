@@ -10443,7 +10443,8 @@ type Diagnostics struct {
 	BuiltinLocation LocationStyle
 	// StdinLocation is Location for a script arriving on standard input,
 	// where there is no $0 to name — zsh drops the line and keeps only its
-	// name there. Zero means "the same as Location".
+	// name there, and ksh93 names line 1 as a file does where `-c` leaves it
+	// out (#6871). Zero means "the same as Location".
 	StdinLocation LocationStyle
 	// CommandStringLinesFromZero numbers the `-c` route's lines from 0
 	// rather than from 1, so the program's first line is line 0.
@@ -10715,8 +10716,9 @@ const (
 	// LocationLineWordAfterFirst is `ksh: line 2: msg`, and `ksh: msg` on
 	// line 1 — the line is named only once there is a line worth naming.
 	//
-	// ksh93's answer for `-c`, and only for `-c`: a script file names line 1
-	// like any other, which ScriptLocation already carries. Measuring only
+	// ksh93's answer for `-c`, and only for `-c`: a script file and a
+	// program on standard input name line 1 like any other, which
+	// ScriptLocation and StdinLocation carry. Measuring only
 	// `sh -c 'one-liner'` cannot tell this from LocationNone, and that is how
 	// LocationNone got here.
 	LocationLineWordAfterFirst

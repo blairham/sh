@@ -407,7 +407,7 @@ func (r *Runner) openTraceTakesTheLiteral(a *syntax.Assign, words []string) {
 // does a function definition unless it carries a redirection: `x=$( f() { :; }
 // 2>/dev/null )` writes `+zsh:1> x=`. A `case`, a `[[ … ]]` and an assignment list
 // write a line of their own that carries it, in a group as well. See
-// handedTextOnEntry.
+// writeHandedTextOnEntry and handedTextWrittenBeforeACopy.
 
 // writeHandedText writes the text this child was handed and nothing has
 // written, now, on its own.
@@ -463,12 +463,10 @@ func (r *Runner) writeHandedTextBeforeACopy(line *openTraceLine) {
 	}
 }
 
-// handedTextOnEntry is what entering c does to the text a child was handed,
-// and hands back what undoes it when c is done: it writes it, for a loop, an
-// `if`, a subshell, `repeat` and a definition carrying a redirection, and has
-// a substitution in a command's words write it first while c runs, for a
-// group and a `try`. See the measurements above writeHandedText.
-func (r *Runner) handedTextOnEntry(c syntax.Command) func() {
+// writeHandedTextOnEntry writes the text a child was handed on entering c,
+// for a loop, an `if`, a subshell, `repeat` and a definition carrying a
+// redirection. See the measurements above writeHandedText.
+func (r *Runner) writeHandedTextOnEntry(c syntax.Command) {
 	switch c.(type) {
 	case *syntax.IfClause, *syntax.LoopClause, *syntax.ForClause, *syntax.ForArithClause,
 		*syntax.SelectClause, *syntax.RepeatClause, *syntax.Subshell:
@@ -479,13 +477,18 @@ func (r *Runner) handedTextOnEntry(c syntax.Command) func() {
 		if len(syntax.Redirections(c)) > 0 {
 			r.writeHandedText()
 		}
-	case *syntax.Group, *syntax.TryClause:
-		line := r.openTrace
-		if line == nil || !line.inherited || line.owner != r || line.pending == "" || line.writtenBeforeACopy {
-			break
-		}
-		line.writtenBeforeACopy = true
-		return func() { line.writtenBeforeACopy = false }
 	}
-	return func() {}
+}
+
+// handedTextWrittenBeforeACopy has a substitution in a command's words write
+// the text a child was handed before it starts, while a group or a `try`
+// runs, and hands back what ends that. See the measurements above
+// writeHandedText.
+func (r *Runner) handedTextWrittenBeforeACopy() func() {
+	line := r.openTrace
+	if line == nil || !line.inherited || line.owner != r || line.pending == "" || line.writtenBeforeACopy {
+		return func() {}
+	}
+	line.writtenBeforeACopy = true
+	return func() { line.writtenBeforeACopy = false }
 }

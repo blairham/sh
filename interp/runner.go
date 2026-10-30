@@ -8502,7 +8502,7 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 			defer hold.release()
 		}
 		if r.openTrace != nil {
-			// As a loop does. See Runner.handedTextOnEntry.
+			// As a loop does. See Runner.writeHandedTextOnEntry.
 			r.writeHandedText()
 		}
 		return r.timeClause(ctx, x)
@@ -8902,10 +8902,9 @@ func (r *Runner) dispatchHoldingAJobSlot(ctx context.Context, c syntax.Command, 
 // dispatch runs a command once Runner.command has recorded it.
 func (r *Runner) dispatch(ctx context.Context, c syntax.Command, fired bool) error {
 	if r.openTrace != nil {
-		// A compound command writes the text a substitution's child was
-		// handed, or has a substitution inside it write it. See
-		// Runner.handedTextOnEntry.
-		defer r.handedTextOnEntry(c)()
+		// A loop, an `if` and a subshell write the text a substitution's
+		// child was handed. See Runner.writeHandedTextOnEntry.
+		r.writeHandedTextOnEntry(c)
 	}
 	switch x := c.(type) {
 	case *syntax.SimpleCmd:

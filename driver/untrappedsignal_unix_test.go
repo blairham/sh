@@ -326,10 +326,7 @@ func signaledInAGroupOfItsOwn(t *testing.T, name string, o outsideSignal) (sysca
 	if o.readyWhen != nil {
 		isReady = o.readyWhen
 	}
-	for {
-		if isReady() {
-			break
-		}
+	for !isReady() {
 		select {
 		case <-reaped:
 			t.Fatalf("the shell half ended before it was ready: %q", readLog(t, logPath))

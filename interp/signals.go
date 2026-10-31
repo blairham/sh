@@ -168,9 +168,11 @@ type signalState struct {
 	// ignoring — see Semantics.QuitResetRestoresTheDefault.
 	defaultRestored map[string]bool
 	// borrowed records, for each signal whose *process* disposition this
-	// shell has changed, whether the process was ignoring it beforehand. It
-	// is what restoreDispositions puts back; see trapSignal for why the
-	// snapshot is taken at the first change and never overwritten.
+	// shell has changed, whether the process was ignoring it beforehand —
+	// before the first shell in the program still holding it, which is not
+	// always this one (see heldSignals). It is what restoreDispositions puts
+	// back; see trapSignal for why the snapshot is taken at the first change
+	// and never overwritten.
 	borrowed map[syscall.Signal]bool
 	// outside is a fatal signal from another process that a front end
 	// handed the shell to die of. See outsidedeath.go.
@@ -786,12 +788,95 @@ func (s *signalState) dropOwnIgnore(sig syscall.Signal) {
 // Called with the lock held, once per signal: a script that ignores SIGINT,
 // traps it and resets it again has borrowed one thing, and what it owes back
 // is what the process had before the first of those.
+//
+// What the process had is asked of heldSignals rather than of the process,
+// because another Runner in the program may be holding the signal already,
+// and then what the process is doing now is that Runner's subscription and not
+// what either of them was handed. See heldSignals.
 func (s *signalState) borrow(sig syscall.Signal) {
 	if s.borrowed == nil {
 		s.borrowed = map[syscall.Signal]bool{}
 	}
 	if _, ok := s.borrowed[sig]; !ok {
-		s.borrowed[sig] = signal.Ignored(sig)
+		s.borrowed[sig] = holdSignal(sig)
+	}
+}
+
+// heldSignals is the program's half of every Runner's borrow ledger: for each
+// signal some shell in this process has changed the disposition of, how many
+// of them are holding it now, and whether the process was ignoring it before
+// the first of them did.
+//
+// One ledger per Runner was not enough, because the two halves of a borrow do
+// not belong to one Runner when two hold the same signal. Measured 2026-10-29
+// in interp's test binary, with two Runners neither of which was handed
+// SetSignalDisposition, in a process ignoring SIGUSR2: one traps it and
+// parks, the other traps it and waits on a job, and a USR2 comes from another
+// process. If the first finishes before the arrival, the second writes `done`
+// and never `heard`; if it finishes after, the second hears it. The first had
+// found the ignore and the second had found the first's subscription, so the
+// first's end put the ignore back with signal.Ignore — which took the
+// second's subscription with it — and the second, finishing last, would have
+// had nothing to put back at all (#7052). It is #7044's shape on the one path
+// that fix left alone, since the ignore here is the process's own.
+//
+// So the snapshot is the first holder's and the put-back is the last
+// holder's, and the order the Runners finish in decides nothing. Only the
+// put-back of an ignore waits for the last: it is the one call a borrow ends
+// with that takes subscriptions away, and every Runner's at once. Taking an
+// ignore *off* subscribes a drain, which deafens nobody, and stays the
+// business of the shell that installed it — see restoreDispositions.
+//
+// A subshell is not a holder: it shares its parent's signalState and never
+// reaches borrow.
+var heldSignals struct {
+	mu sync.Mutex
+	by map[syscall.Signal]*signalHolding
+}
+
+// signalHolding is one signal's entry in heldSignals.
+type signalHolding struct {
+	holders    int
+	wasIgnored bool
+}
+
+// holdSignal counts one more shell holding sig, and answers whether the
+// process was ignoring it before the first shell still holding it changed it.
+func holdSignal(sig syscall.Signal) bool {
+	heldSignals.mu.Lock()
+	defer heldSignals.mu.Unlock()
+	if heldSignals.by == nil {
+		heldSignals.by = map[syscall.Signal]*signalHolding{}
+	}
+	h := heldSignals.by[sig]
+	if h == nil {
+		h = &signalHolding{wasIgnored: signal.Ignored(sig)}
+		heldSignals.by[sig] = h
+	}
+	h.holders++
+	return h.wasIgnored
+}
+
+// letGoOfSignal counts one shell done with sig. The last one to let go puts
+// back the ignore the process had before the first took hold, unless putBack
+// is false.
+//
+// The put-back is made under the same lock a borrow takes, so no shell can
+// start holding the signal between the decision that nobody else is and the
+// signal.Ignore that would take its subscription away.
+func letGoOfSignal(sig syscall.Signal, putBack bool) {
+	heldSignals.mu.Lock()
+	defer heldSignals.mu.Unlock()
+	h := heldSignals.by[sig]
+	if h == nil {
+		return
+	}
+	if h.holders--; h.holders > 0 {
+		return
+	}
+	delete(heldSignals.by, sig)
+	if putBack && h.wasIgnored && !signal.Ignored(sig) {
+		signal.Ignore(sig)
 	}
 }
 
@@ -1613,19 +1698,17 @@ func (r *Runner) restoreDispositions() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for sig, wasIgnored := range s.borrowed {
-		if sig == r.killedBySig {
-			// The shell is about to die of this one and DieBySignal has not
-			// run yet. Putting an inherited ignore back would mean the raise
-			// does nothing and a shell that reported a signal death does not
-			// take one — so the signal the script asked to be killed by keeps
-			// the disposition the script gave it.
-			continue
-		}
-		if signal.Ignored(sig) == wasIgnored {
-			continue
-		}
-		if wasIgnored {
-			signal.Ignore(sig)
+		// The shell is about to die of killedBySig and DieBySignal has not
+		// run yet. Putting an inherited ignore back would mean the raise does
+		// nothing and a shell that reported a signal death does not take one —
+		// so the signal the script asked to be killed by keeps the disposition
+		// the script gave it.
+		dying := sig == r.killedBySig
+		// An ignore the process had goes back when the last shell holding the
+		// signal lets go, and not before: putting it back takes every other
+		// holder's subscription with it (#7052). See heldSignals.
+		letGoOfSignal(sig, !dying)
+		if dying || wasIgnored || !signal.Ignored(sig) {
 			continue
 		}
 		if r.SetSignalDisposition == nil {

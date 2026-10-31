@@ -49,7 +49,7 @@ import "syscall"
 // # Where it is raised, and to whom
 //
 // A subshell keeps its own arrivals, exactly as a broken pipe does — see
-// Runner.brokenPipeAbsorbed, whose two lists this follows. An external
+// Runner.writeSignalAbsorbed, whose two lists this follows. An external
 // command inside `( … )` raises on the subshell's list, so the subshell's own
 // handler runs and the shell at the top never sees it; the subshell *ending*
 // then raises one on the shell, which is the one child bash's parent reaped.

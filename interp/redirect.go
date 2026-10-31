@@ -2761,7 +2761,12 @@ func (r *Runner) builtinWriteStatus(name string, st int) int {
 		// element. The *outer* shell's handler is nobody's here, and stays
 		// so: signalArranged read the element's own table, so an inherited
 		// handler was never one of these.
-		r.brokenPipeAbsorbed(arranged == signalHandledBy)
+		r.writeSignalAbsorbed("PIPE", arranged == signalHandledBy)
+	}
+	// A write past `ulimit -f` is the same shape with another signal. See
+	// filesizedeath.go.
+	if errors.Is(err, syscall.EFBIG) && r.diedOfAWritePastTheFileSizeLimit() {
+		return r.status
 	}
 	// Which axis decides is the errno's, not one axis for every failed write:
 	// a closed descriptor and a pipe nobody is reading are the same event to

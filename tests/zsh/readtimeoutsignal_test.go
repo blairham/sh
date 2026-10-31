@@ -43,7 +43,6 @@ func TestATrappedSignalEndsATimedReadStillWaitingForItsFirstByte(t *testing.T) {
 		ended  = "T\nst=1 l=[old]\nnext [late]\n"
 		readOn = "T\nst=0 l=[late]\nnext [end]\n"
 		inLine = "T\nst=0 l=[ablate]\nnext [end]\n"
-		status = `echo "st=$?"`
 		named  = `echo "st=$? l=[$l]"`
 		fromFd = `read -r m <&3`
 	)
@@ -64,12 +63,12 @@ func TestATrappedSignalEndsATimedReadStillWaitingForItsFirstByte(t *testing.T) {
 		{"both ways", late(bothWays, trapINT, "INT", `read -r -t 10 l <&3`, named, fromFd), ended},
 		{"a fraction", late(readingOnly, trapINT, "INT", `read -r -t 9.5 l <&3`, named, fromFd), ended},
 		{"-d", late(readingOnly, trapINT, "INT", `read -r -t 10 -d e l <&3`, named, fromFd), ended},
-		// `-k` and `-q` print the status alone: what an expired one leaves in
-		// the name is another matter (#7038). A read the signal did not end
-		// takes `l` and leaves `ate`.
-		{"-k", late(readingOnly, trapINT, "INT", `read -t 10 -k -u 3 l`, status, fromFd), "T\nst=1\nnext [late]\n"},
-		{"-k 3", late(readingOnly, trapINT, "INT", `read -t 10 -k 3 -u 3 l`, status, fromFd), "T\nst=1\nnext [late]\n"},
-		{"-q", late(readingOnly, trapINT, "INT", `read -t 10 -q -u 3 l`, status, fromFd), "T\nst=2\nnext [late]\n"},
+		// `-k` and `-q` leave the name as an expired one does (#7038), and
+		// `-q` reports its short read's 2. A read the signal did not end takes
+		// `l` and leaves `ate`.
+		{"-k", late(readingOnly, trapINT, "INT", `read -t 10 -k -u 3 l`, named, fromFd), ended},
+		{"-k 3", late(readingOnly, trapINT, "INT", `read -t 10 -k 3 -u 3 l`, named, fromFd), ended},
+		{"-q", late(readingOnly, trapINT, "INT", `read -t 10 -q -u 3 l`, named, fromFd), "T\nst=2 l=[old]\nnext [late]\n"},
 		{"USR1", late(readingOnly, `trap "echo T" USR1`, "USR1", `read -r -t 10 l <&3`, named, fromFd), ended},
 		// An ignored signal ends nothing, so the read takes the late line.
 		{

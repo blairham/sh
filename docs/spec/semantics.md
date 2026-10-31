@@ -11839,6 +11839,39 @@ hold. It is pinned by Go tests instead, against a pipe that holds a fixed
 prefix before the read begins and is given the rest only once the read has
 returned — the same situation with no clock in it.
 
+### An expired `read -k` or `read -q`
+
+zsh's two terminal letters leave the name at their deadline as its line read
+does, and assign at the end of their input as its line read does. Measured
+2026-10-31 against zsh 5.9.2 under `-f`, with `l=old REPLY=seed` and a fifo
+on descriptor 3 opened for reading alone, nothing in it until `late` is
+written a second after the read begins:
+
+    read -t 0.5 -k -u 3 l          st=1 l=[old]
+    read -t 0.5 -k 3 -u 3 l        st=1 l=[old]
+    read -t 0.5 -q -u 3 l          st=2 l=[old]
+    read -t 0.5 -q -k 2 -u 3 l     st=2 l=[old]
+    read -t 0.5 -k -u 3            st=1 REPLY=[seed]
+    read -t 0.5 -q -u 3            st=2 REPLY=[seed]
+    read -t 5 -k -u 3 l 3</dev/null   st=1 l=[]
+    read -t 5 -q -u 3 l 3</dev/null   st=2 l=[n]
+
+The next read takes `late` whole after each of the first six. A name that was
+unset stays unset, and a first operand that is no name at all — `1x` — draws
+no complaint, because an expired read never reaches it. Without `-u` the two
+letters read the terminal, and driven through a pseudo-terminal with nothing
+typed they answer the first and third rows, with standard input redirected
+from `/dev/null` or not; `-u0` over that redirection reads it instead and
+answers the last two. The status is the short read's at either ending: 1 for
+`-k`, 2 for `-q`.
+
+So these letters ask `ReadTimeoutKeepsWhatArrived` at their deadline, and
+only there. A trapped signal that ends the wait for the first byte
+(`ReadTimeoutWaitEndedByATrappedSignal`) ends the read as the deadline would
+and leaves the name the same way. zsh's deadline only ever finds nothing to
+assign here, for the reason the line read's does: with `ab` waiting, `read -t
+0.5 -k 3 -u 3 l` waits on for its third character and takes `abc` at 0.
+
 ### What an expired `read -t` leaves in the stream
 
 Measured 2026-10-29 against bash 5.3.20, bash 3.2.57, ksh93u+ 2012-08-01,

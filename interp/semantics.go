@@ -3184,6 +3184,12 @@ type Semantics struct {
 	// value. Asked only on the timeout, never at end of input, where all
 	// three assign.
 	//
+	// zsh's `read -k` and `read -q` ask it too, at their own deadline, and
+	// leave the name as the line read does: `l=old; read -t 0.5 -k -u 3 l`
+	// with nothing arriving is 1 with `l=[old]`, and `-q` is 2 with the same
+	// `l`, where both store at end of input — empty, and `n` (#7038). See
+	// Runner.keysExpiredLeaveTheName.
+	//
 	// The distinction the wording is careful about is that bash does not
 	// *clear* the variable — it assigns a short read, and clearing is only
 	// what that looks like when nothing had arrived. Measured with a stream

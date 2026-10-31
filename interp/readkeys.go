@@ -37,7 +37,9 @@ import (
 // A short read assigns what arrived and reports 1 — `read -k 5 -u 3 v` over
 // `ab` leaves `v=ab` at status 1 — which is the same shape `read`'s ordinary
 // end-of-input has and is why the count and the status are answered
-// separately below. `read -k 0` is status 1 with nothing read.
+// separately below. `read -k 0` is status 1 with nothing read. A read that
+// reaches its `-t` deadline is short too, also at 1, and what it leaves in the
+// name is the dialect's — see Runner.keysExpiredLeaveTheName.
 //
 // The line discipline is put into cbreak and **echo is left alone**, which is
 // measured rather than assumed: a character read this way still appears on the
@@ -77,21 +79,24 @@ func readKeyCount(opts string, optArg map[byte]string) (count int, asked bool) {
 // corpus from putting a locale question to a core whose answer is
 // "unanswered".
 //
-// ok is false for a read that ended early, which the caller reports as status
-// 1 with what arrived still assigned.
-func readKeysFrom(next func() (byte, int), count int, chars func() bool) (text string, ok bool) {
+// end is evByte for a read that took all it was asked for and otherwise says
+// what ended it early: evEOF at the end of the input, which the caller reports
+// as status 1 with what arrived still assigned, or evTimeout at the deadline,
+// where whether anything is assigned is the dialect's — see
+// Runner.keysExpiredLeaveTheName. A count of nought reports evEOF.
+func readKeysFrom(next func() (byte, int), count int, chars func() bool) (text string, end int) {
 	var buf []byte
 	var out []byte
 	// A count of nought reads nothing and is still a failure: measured,
 	// `read -k 0 -u 3 v` is status 1 with `v` empty, which the loop below
 	// would have called a satisfied read of nothing.
 	if count <= 0 {
-		return "", false
+		return "", evEOF
 	}
 	for read := 0; read < count; {
 		c, ev := next()
 		if ev != evByte {
-			return string(out), false
+			return string(out), ev
 		}
 		buf = append(buf, c)
 		if !utf8.FullRune(buf) && len(buf) < utf8.UTFMax && chars() {
@@ -106,7 +111,48 @@ func readKeysFrom(next func() (byte, int), count int, chars func() bool) (text s
 		buf = buf[:0]
 		read++
 	}
-	return string(out), true
+	return string(out), evByte
+}
+
+// keysExpiredLeaveTheName reports whether a `read -k` or `read -q` that ended
+// as end says returns without touching its name, which it does only at its
+// deadline and only where the dialect's expired `read -t` leaves the names
+// alone: Semantics.ReadTimeoutKeepsWhatArrived, the question the line read
+// asks at the same moment, and asked only there.
+//
+// Measured 2026-10-31 against zsh 5.9.2 under `-f`, with `l=old REPLY=seed`
+// and a fifo on descriptor 3 opened for reading alone, nothing in it until
+// `late` is written a second after the read begins:
+//
+//	read -t 0.5 -k -u 3 l        st=1 l=[old]
+//	read -t 0.5 -k 3 -u 3 l      st=1 l=[old]
+//	read -t 0.5 -q -u 3 l        st=2 l=[old]
+//	read -t 0.5 -q -k 2 -u 3 l   st=2 l=[old]
+//	read -t 0.5 -k -u 3          st=1 REPLY=[seed]
+//	read -t 0.5 -q -u 3          st=2 REPLY=[seed]
+//
+// and the next read takes `late` whole. A name that was unset stays unset,
+// and a name that is no name at all — `read -t 0.5 -k -u 3 1x` — draws no
+// complaint, because the read never reaches it. The same holds of the terminal
+// these letters read without `-u`, driven through a pseudo-terminal with
+// nothing typed, and with standard input redirected from /dev/null, which
+// they do not read. That one is the line between the two endings: `read -t
+// 0.5 -k -u0 l </dev/null` reads the redirection and ends at its end, so it
+// assigns `l=[]` at 1, and `-q -u0` assigns `n` at 2, as an untimed read at
+// end of input does.
+//
+// Nothing having arrived is the only way zsh reaches its deadline here, since
+// its `-t` bounds the wait for the first byte alone: with `ab` waiting `read
+// -t 0.5 -k 3 -u 3 l` waits on for the third character and takes `abc` at 0.
+// A trapped signal that ends that wait ends the read as the deadline would
+// (Semantics.ReadTimeoutWaitEndedByATrappedSignal), and so leaves the name
+// the same way.
+func (r *Runner) keysExpiredLeaveTheName(end int) bool {
+	if end != evTimeout {
+		return false
+	}
+	return !r.ask(r.sem().ReadTimeoutKeepsWhatArrived,
+		"an expired `read -t` assigning what did arrive")
 }
 
 // readKeySource is the stream `read -k` reads: the terminal this shell holds,
@@ -184,7 +230,7 @@ func (r *Runner) readKeysInto(next func() (byte, int), count int, name string) i
 	// Memoized: a read of many characters must not put the same locale
 	// question to the axis machinery once per character.
 	locale, asked := false, false
-	text, whole := readKeysFrom(next, count, func() bool {
+	text, end := readKeysFrom(next, count, func() bool {
 		if !asked {
 			locale, asked = r.countsTheLocalesCharacters(), true
 		}
@@ -192,6 +238,14 @@ func (r *Runner) readKeysInto(next func() (byte, int), count int, name string) i
 	})
 	if r.unspecified {
 		return 2
+	}
+	// Asked ahead of the name, which an expired read that leaves it alone
+	// never reaches.
+	if r.keysExpiredLeaveTheName(end) {
+		if r.unspecified {
+			return 2
+		}
+		return 1
 	}
 	if !r.isReadName(name) {
 		if r.unspecified {
@@ -209,7 +263,7 @@ func (r *Runner) readKeysInto(next func() (byte, int), count int, name string) i
 		// report about — the store's own answer is the builtin's.
 		return st
 	}
-	if !whole {
+	if end != evByte {
 		return 1
 	}
 	return 0
@@ -250,7 +304,9 @@ func (r *Runner) readKeysInto(next func() (byte, int), count int, name string) i
 //     a newline and three were asked for. `read -q -k0 -u0 <<<y` is 2 as
 //     well, nothing having been read. 2 is otherwise this builtin's status
 //     for an option it will not take, so it is a number worth asserting on
-//     rather than assuming: the ordinary no is 1.
+//     rather than assuming: the ordinary no is 1. That is a read short at the
+//     end of its input. One short at its deadline is 2 as well, and whether
+//     it sets the name is the dialect's — see Runner.keysExpiredLeaveTheName.
 //
 // A character is whatever the locale calls one, as `-k`'s count is: over
 // `éZ` the read takes both bytes of the accented letter and the next read
@@ -279,7 +335,7 @@ func readQueryAnswer(text string, whole bool) (reply string, status int) {
 // `read -k`'s is — see Runner.readKeyTarget.
 func (r *Runner) readQueryInto(next func() (byte, int), count int, name string) int {
 	locale, asked := false, false
-	text, whole := readKeysFrom(next, count, func() bool {
+	text, end := readKeysFrom(next, count, func() bool {
 		if !asked {
 			locale, asked = r.countsTheLocalesCharacters(), true
 		}
@@ -288,17 +344,24 @@ func (r *Runner) readQueryInto(next func() (byte, int), count int, name string) 
 	if r.unspecified {
 		return 2
 	}
+	reply, status := readQueryAnswer(text, end == evByte)
+	// A short read's status, with the name left as it was.
+	if r.keysExpiredLeaveTheName(end) {
+		if r.unspecified {
+			return 2
+		}
+		return status
+	}
 	if !r.isReadName(name) {
 		if r.unspecified {
 			return 2
 		}
 		return r.badReadName(name)
 	}
-	reply, status := readQueryAnswer(text, whole)
 	// Assigned before the status is decided, as every other spelling of this
-	// builtin assigns: the name holds `n` even where the read failed, which
-	// is measured — `REPLY=seed; read -q -u0 </dev/null` leaves `n`, not the
-	// seed.
+	// builtin assigns: the name holds `n` even where the read failed at the end
+	// of the input, which is measured — `REPLY=seed; read -q -u0 </dev/null`
+	// leaves `n`, not the seed. At a deadline that is the dialect's, above.
 	if st, refused := r.storeThroughOperand(name, reply); refused {
 		return st
 	}

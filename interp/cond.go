@@ -760,12 +760,6 @@ func (r *Runner) condOperand(w *syntax.Word) string {
 	return r.markedSubscriptWord(w, func(syntax.Span) bool { return true })
 }
 
-// condOperandText is condOperand with the marks off: the text every reader
-// but the arithmetic one wants. See syntax.ArithValueMark.
-func (r *Runner) condOperandText(w *syntax.Word) string {
-	return syntax.UnmarkArithValue(r.condOperand(w))
-}
-
 // condRegexOperand expands a `=~` right operand once and gives back both
 // readings of it: the text the word came to, and the same text with the
 // **quoted spans** escaped so that a matcher reads them as letters.

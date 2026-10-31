@@ -1831,11 +1831,11 @@ func (r *Runner) testIsSetSubscriptFailed(sentence string) (bool, error) {
 	defer func() { r.inBuiltin = outer }()
 	p := r.sem().BadSubscriptToTestIsSet
 	if p == BadSubscriptEndsTheScript && r.sem().ConditionArithmeticErrorIsFatal == Yes &&
-		r.ask(r.sem().ConditionFinishesAfterAnArithmeticError,
+		r.ask(r.sem().ConditionFinishesAfterAFailure,
 			"a test running to its end after its arithmetic failed") {
 		// The failed lookup is unset and the test runs on, ending the line
 		// once it has an answer. See
-		// Semantics.ConditionFinishesAfterAnArithmeticError.
+		// Semantics.ConditionFinishesAfterAFailure.
 		r.diagf("%s\n", sentence)
 		r.condFinishing = true
 		return false, nil

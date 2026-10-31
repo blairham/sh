@@ -252,15 +252,23 @@ func (r *Runner) namedCondition(x *syntax.CondUnknown) (ok, answered bool, err e
 			return false, true, e
 		}
 	}
-	left := r.condOperandText(x.Left)
-	if r.condOperandDidNotExpand() {
-		return false, true, errCondOperandFailed
+	leftMarked, err := r.condRead(x.Left)
+	if err != nil {
+		return false, true, err
+	}
+	left := syntax.UnmarkArithValue(leftMarked)
+	if r.condFinishing {
+		// An expression read after a failure matches nothing, as `=~` does.
+		return false, true, nil
 	}
 	// The same pair `=~` reads: the operand as it expanded, and the same
 	// operand with everything the script quoted turned into letters. Which
 	// of the two the matcher gets is the dialect's answer about quoting, and
 	// it is the same answer, because this is the same operator.
 	text, literal, digitClass, _ := r.condRegexOperand(x.Words[0])
+	if r.condOperandFinishes() {
+		return false, true, nil
+	}
 	if r.condOperandDidNotExpand() {
 		return false, true, errCondOperandFailed
 	}
@@ -338,11 +346,12 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 	// one operand however it was written — which is why `[[ -z $u ]]` needs
 	// no quoting where the `[` builtin does.
 	held := r.holdConditionLine("")
-	s := r.condOperandText(x.X)
+	marked, err := r.condRead(x.X)
 	held()
-	if r.condOperandDidNotExpand() {
-		return false, errCondOperandFailed
+	if err != nil {
+		return false, err
 	}
+	s := syntax.UnmarkArithValue(marked)
 	if r.condTrace != nil {
 		r.traceConditionPrimary(x.Op, r.traceCondOperand(s))
 	}
@@ -381,7 +390,7 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 		if err == nil && r.expandErr && r.ctl == controlNone && !r.unspecified &&
 			r.conditionFinishesAfterAFailure() {
 			// The failed lookup is a name that is not set, and the
-			// condition runs on. See Semantics.ConditionFinishesAfterAnArithmeticError.
+			// condition runs on. See Semantics.ConditionFinishesAfterAFailure.
 			r.expandErr, r.badSubscript = false, false
 			r.condFinishing = true
 			return false, nil
@@ -491,13 +500,24 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 	// substitution in one to write ahead of its own. See
 	// Runner.holdConditionLine.
 	held := r.holdConditionLine("")
-	leftMarked := r.condOperand(x.X)
+	leftMarked, err := r.condRead(x.X)
 	held()
-	if r.condOperandDidNotExpand() {
-		return false, errCondOperandFailed
+	if err != nil {
+		return false, err
 	}
 	left := syntax.UnmarkArithValue(leftMarked)
 
+	if x.Op == "=~" && r.condFinishing {
+		// An expression read after a failure matches nothing, whichever
+		// side failed: `[[ ${(P)'a b'} =~ '' ]]` is 1 in the reference. See
+		// Semantics.ConditionFinishesAfterAFailure.
+		if spelled := r.diag().TraceRegexMatch; spelled != "" {
+			r.traceConditionPrimary(r.wordAsWritten(x.X), spelled, r.wordAsWritten(x.Y))
+		} else {
+			r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.wordAsWritten(x.Y))
+		}
+		return false, nil
+	}
 	if x.Op == "=~" {
 		// The one place the pattern language is regular expressions rather
 		// than globs, and — like the glob operators below — a place where
@@ -532,6 +552,9 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		}
 		text, literal, digitClass, traced := r.condRegexOperand(x.Y)
 		held()
+		if r.condOperandFinishes() {
+			return false, nil
+		}
 		if r.condOperandDidNotExpand() {
 			return false, errCondOperandFailed
 		}
@@ -563,6 +586,12 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 	}
 
 	if pattern {
+		if r.condFinishing {
+			// Read after the failure, and so never expanded — and traced as
+			// written: `[[ ${(P)'a b'} = y ]]` traces `'' = y`.
+			r.traceConditionPrimary(r.traceCondOperand(left), x.Op, r.wordAsWritten(x.Y))
+			return matchAfterAFailure(x.Op, left, x.Y.Spans), nil
+		}
 		// Unquoted, the right operand is a pattern; quoted, a literal. Only
 		// the spans still know which, which is why the tree keeps a word.
 		reached := ""
@@ -572,6 +601,11 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		held = r.holdConditionLine(reached)
 		pat := r.patternOf(x.Y)
 		held()
+		if r.condOperandFinishes() {
+			// The pattern is the word that failed, and is what was written
+			// ahead of its first substitution.
+			return matchAfterAFailure(x.Op, left, spansAheadOfItsSubstitutions(x.Y)), nil
+		}
 		// A pattern that did not expand is a failed operand like any other,
 		// and ends what the dialect says a failed expansion ends: bash stops
 		// a `-c` script at `[[ x == ${~p} ]]` with `bad substitution` at 1,
@@ -621,10 +655,10 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 	// where every shell that has the construct puts it — and because the
 	// expansion must happen exactly once however many readers it has.
 	held = r.holdConditionLine("")
-	rightMarked := r.condOperand(x.Y)
+	rightMarked, err := r.condRead(x.Y)
 	held()
-	if r.condOperandDidNotExpand() {
-		return false, errCondOperandFailed
+	if err != nil {
+		return false, err
 	}
 	right := syntax.UnmarkArithValue(rightMarked)
 	if r.condTrace != nil {
@@ -1075,10 +1109,10 @@ func (r *Runner) condArith(text string) (int, error) {
 // conditionFinishesAfterAFailure reports whether a `[[ ]]` that met an
 // arithmetic failure runs to its end before the line is abandoned. Asked on
 // the failure path only, behind the fatal answer it refines. See
-// Semantics.ConditionFinishesAfterAnArithmeticError.
+// Semantics.ConditionFinishesAfterAFailure.
 func (r *Runner) conditionFinishesAfterAFailure() bool {
 	return r.sem().ConditionArithmeticErrorIsFatal == Yes &&
-		r.ask(r.sem().ConditionFinishesAfterAnArithmeticError,
+		r.ask(r.sem().ConditionFinishesAfterAFailure,
 			"a `[[ ]]` running to its end after its arithmetic failed")
 }
 
@@ -1466,6 +1500,133 @@ var errCondOperandFailed = errors.New("condition operand did not expand")
 // and made the comparison hold (#3556).
 func (r *Runner) condOperandDidNotExpand() bool {
 	return r.failedHeading()
+}
+
+// condRead is one operand of a condition, marked as condOperand marks it:
+// the word expanded, or — where the condition is finishing over a failure —
+// the word as the script wrote it, unexpanded. The error is
+// errCondOperandFailed where the expansion failed and the failure ended what
+// the dialect ends.
+//
+// One door for the operands that are strings, because the rule has three
+// arms and every site would otherwise carry all three. See
+// Semantics.ConditionFinishesAfterAFailure.
+func (r *Runner) condRead(w *syntax.Word) (string, error) {
+	if r.condFinishing {
+		return r.wordAsWritten(w), nil
+	}
+	s := r.condOperand(w)
+	if r.condOperandFinishes() {
+		return r.writtenAheadOfItsSubstitutions(w), nil
+	}
+	if r.condOperandDidNotExpand() {
+		return "", errCondOperandFailed
+	}
+	return s, nil
+}
+
+// condOperandFinishes reports whether the operand just expanded failed in the
+// dialect whose condition runs to its end over that, and starts the finish
+// where it did: the complaint is already written, and the rest of the
+// condition is read without being worked out. See
+// Semantics.ConditionFinishesAfterAFailure.
+//
+// Only a failure that set the expansion's flag and nothing more. `${x?}` and
+// `${x:?}` have already ended the shell at a status of their own, which is
+// what the reference does with them inside the brackets too: `[[ -z ${x?} ]]`
+// ends a command string at 1 where `[[ -z ${(P)'a b'} ]]` ends it at 0.
+func (r *Runner) condOperandFinishes() bool {
+	if !r.expandErr || r.unspecified || r.ctl != controlNone {
+		return false
+	}
+	if !r.ask(r.sem().ConditionFinishesAfterAFailure,
+		"a `[[ ]]` running to its end after an operand would not expand") {
+		return false
+	}
+	r.expandErr, r.badSubscript, r.badRange = false, false, false
+	r.condFinishing = true
+	return true
+}
+
+// writtenAheadOfItsSubstitutions is what a word whose expansion failed reads
+// as, in the condition that finishes over the failure: the text the script
+// wrote ahead of its first substitution, quotes and all, and nothing of the
+// substitutions — not even one that had already expanded. Measured 2026-10-30
+// on zsh 5.9.2 under `-c`: `[[ a$PATH${(P)'a b'} = a ]]` and `[[
+// a${(P)'a b'}b = a ]]` hold, and `[[ 'a'${(P)'a b'} = "'a'" ]]` holds where
+// `= a` does not.
+func (r *Runner) writtenAheadOfItsSubstitutions(w *syntax.Word) string {
+	ahead := spansAheadOfItsSubstitutions(w)
+	if len(ahead) == len(w.Spans) {
+		return r.wordAsWritten(w)
+	}
+	// From the source where it is in hand, because an opening double quote
+	// belongs to no literal span and is still written ahead of the
+	// substitution: `[[ -z "${(P)'a b'}" ]]` is 1 in the reference.
+	text, _ := r.textInForce()
+	if from, to := int(w.Start.Offset), int(w.Spans[len(ahead)].Pos.Offset); from >= 0 && from <= to && to <= len(text) {
+		return text[from:to]
+	}
+	if len(ahead) == 0 {
+		// Not the printer, which renders an empty word as the `''` it needs
+		// to survive being read back.
+		return ""
+	}
+	return syntax.PrintWord(&syntax.Word{Spans: ahead})
+}
+
+// spansAheadOfItsSubstitutions is the run of literal spans a word opens with.
+func spansAheadOfItsSubstitutions(w *syntax.Word) []syntax.Span {
+	for i, s := range w.Spans {
+		if s.Kind != syntax.Literal {
+			return w.Spans[:i]
+		}
+	}
+	return w.Spans
+}
+
+// matchAfterAFailure answers `=`, `==` or `!=` over a pattern read in a
+// condition finishing over a failure. See patternAfterAFailure.
+func matchAfterAFailure(op, left string, spans []syntax.Span) bool {
+	text, live := patternAfterAFailure(spans)
+	got := !live && left == text
+	if op == "!=" {
+		return !got
+	}
+	return got
+}
+
+// patternAfterAFailure is a pattern operand in a condition finishing over a
+// failure, read from spans that are not expanded: the text they hold with the
+// quotes taken off, and live where an unquoted span of it, or any
+// substitution's written text, holds a pattern character. A live one
+// matches nothing at all — `[[ ${(P)'a b'} = * ]]` is 1 and `!=` the
+// opposite — and anything else compares as the literal it is, so
+// `[[ -z ${(P)'a b'} && $nosuch = $nosuch ]]` holds. Measured 2026-10-30 on
+// zsh 5.9.2 under `-c`; see Semantics.ConditionFinishesAfterAFailure.
+func patternAfterAFailure(spans []syntax.Span) (text string, live bool) {
+	var b strings.Builder
+	for _, s := range spans {
+		part := s.Value
+		if s.Quoting == syntax.DollarSingleQuoted {
+			// Its `$` is not a quote character and stays: `[[ -z
+			// ${(P)'a b'} && $x = $'x' ]]` holds in the reference.
+			part = "$" + part
+		}
+		if s.Kind != syntax.Literal {
+			// What the script wrote for it, which is what stands in the
+			// pattern when nothing was expanded. Printed unquoted, because
+			// the quoting is the span's and not part of the text.
+			bare := s
+			bare.Quoting = syntax.Unquoted
+			part = syntax.PrintWord(&syntax.Word{Spans: []syntax.Span{bare}})
+		}
+		if (s.Quoting == syntax.Unquoted || s.Kind != syntax.Literal) && strings.ContainsAny(part, "*?[(") {
+			return "", true
+		}
+		b.WriteString(part)
+	}
+	return b.String(), false
 }
 
 // wordAsWritten is a word's text as the program spelled it: the slice of the

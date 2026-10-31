@@ -3745,10 +3745,19 @@ file, which is the split an abandoned line already has. `(( 3abc ))` and
 `ReturnOperandArithmeticErrorIsFatal`.
 
 **And a `[[ ]]` that ran to its end leaves an `&&` behind it at 1.** `[[ 1/0
--eq 1 ]]` exits a `-c` string at 0 (ConditionFinishesAfterAnArithmeticError),
+-eq 1 ]]` exits a `-c` string at 0 (ConditionFinishesAfterAFailure),
 and `[[ 1/0 -eq 1 ]] && :` at 1, while `|| :`, `; :` and `if … then` leave
 the 0. Measured 2026-10-03 on zsh 5.9.2; `AndAfterAFinishedConditionFails`.
 A loop around the condition is 1 too, measured and not modeled.
+
+**zsh finishes a `[[ ]]` whose operand would not expand the same way.** `[[
+-z ${(P)'a b'} ]]` writes `bad substitution` and exits a `-c` string at 0,
+`[[ -n ${(P)'a b'} ]]` at 1: the failed word reads as what was written ahead
+of its first substitution, every later word as the script wrote it — so a
+command substitution in one never runs — and a live pattern or an expression
+read after the failure matches nothing. From a script file both are 1, as the
+arithmetic rows are. `${x?}` is not this; it ends the shell at 1 itself.
+Measured 2026-10-30 on zsh 5.9.2 (#6722); `ConditionFinishesAfterAFailure`.
 
 **zsh's `cd -` goes where the shell last was, not where OLDPWD says.** `cd
 /; OLDPWD=/usr; cd -` goes back to the starting directory, `cd /; OLDPWD=/x;

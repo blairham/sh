@@ -5718,8 +5718,9 @@ type Runner struct {
 	// again, so a subshell shares it.
 	shellOwnWhileSet map[string]bool
 	// condFinishing says the `[[ ]]` being evaluated has met an arithmetic
-	// failure and is running to its end before the line is abandoned. See
-	// Semantics.ConditionFinishesAfterAnArithmeticError.
+	// failure, or an operand that would not expand, and is running to its
+	// end before the line is abandoned. See
+	// Semantics.ConditionFinishesAfterAFailure.
 	condFinishing bool
 
 	// finishedConditionAbandoned says the line being abandoned was ended by

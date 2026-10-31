@@ -6544,6 +6544,29 @@ type Semantics struct {
 	// so zsh, dash and BusyBox ash never ask (#7062).
 	DeathInAFunctionEndsTheCallAsKilled Answer
 
+	// SignalDeathEndsAtAKeywordFunctionCall puts a **boundary** at the call
+	// of a `function name { … }` body for a fatal signal the shell has
+	// caught: the signal ends the call rather than the shell, the call
+	// answers the status of a command killed by it, and the caller goes on.
+	//
+	//	trap 'echo "bye $?"' EXIT; function f { /bin/sleep 3; echo inf; }
+	//	f; echo "after $?"
+	//
+	// with TERM from another process during the `sleep` writes `after 271`
+	// and `bye 0` and exits 0 in ksh93, and `bye 0` and dies of TERM in bash
+	// 5.3 and 3.2; `kill -TERM $$` in the body is the same in both. The
+	// POSIX-form call dies in both. Measured 2026-10-31, each shell in a
+	// session of its own: ksh93u+ yes; bash 5.3.20 and 3.2.57 no (#7067,
+	// #7145).
+	//
+	// Caught means an EXIT trap has been set in the shell at some point,
+	// wherever it was set and whether or not it still stands. See
+	// keywordcalldeath.go for the rows. Reached only where
+	// ExitTrapRunsOnSignalDeath says yes, because a shell that runs no EXIT
+	// trap on a death has caught nothing: zsh, dash and BusyBox ash never
+	// ask.
+	SignalDeathEndsAtAKeywordFunctionCall Answer
+
 	// ExitTrapRunsInsideTheExitingCall runs the EXIT trap at the point `exit`
 	// was written, with the call that ran it still standing, rather than
 	// after the stack has unwound.

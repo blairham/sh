@@ -139,6 +139,73 @@ func TestAHangupFromOutsideRunsTheHookAndOnlyTheCallsOwnTrap(t *testing.T) {
 	}
 }
 
+// What each dialect does with a fatal signal from another process while a
+// `function name { … }` call waits, with an EXIT trap set (#7067).
+//
+// Measured 2026-10-31, each shell in a session of its own, TERM from
+// `/bin/kill` while the call waits on `/bin/sleep 3` or on a `read` of a fifo
+// nobody writes:
+//
+//	trap 'echo "bye $?"' EXIT; function f { WAIT; echo inf; }; f; echo "after $?"
+//	    ksh93u+               after 271, bye 0, exit 0
+//	    bash 5.3.20, 3.2.57   bye 0, killed by TERM
+//	    zsh 5.9.2             nothing, killed by TERM
+//	the same with f() { … }   ksh93u+: bye 271, killed by TERM
+//	trap 'echo x' EXIT && trap - EXIT; function f { WAIT; echo inf; }; f; echo "after $?"
+//	    ksh93u+               after 271, exit 0
+//	function f { trap 'echo "fexit $?"' EXIT; (exit 5); read x <&3; echo inf; }; f; echo "after $?"
+//	    ksh93u+               fexit 5, after 271, exit 0
+//
+// ksh93 ends the call and goes on, which is
+// Semantics.SignalDeathEndsAtAKeywordFunctionCall read through each preset
+// and the front end that owns the process. This shell's ksh ended the process
+// where the signal landed in the first and third, with nothing run: the EXIT
+// trap was set aside for the call, so nothing was handed over. The `read` is
+// the row where the call's own trap reads what the shell held before a wait
+// the signal gave up, rather than what giving it up left.
+func TestAFatalSignalFromOutsideEndsAKeywordCallInOneDialect(t *testing.T) {
+	const wait = `/bin/sh -c 'printf r >"$1"; exec sleep 30' sh "$READY"`
+	const trap = `trap 'echo "bye $?"' EXIT; `
+	for _, c := range []struct {
+		dialect, name, script string
+		sig                   syscall.Signal
+		out                   string
+	}{
+		{"ksh", "a keyword call", trap + `function f { ` + wait + `; echo inf; }; f; echo "after $?"`, 0, "after 271\nbye 0\n"},
+		{"bash", "a keyword call", trap + `function f { ` + wait + `; echo inf; }; f; echo "after $?"`, syscall.SIGTERM, "bye 0\n"},
+		{"zsh", "a keyword call", trap + `function f { ` + wait + `; echo inf; }; f; echo "after $?"`, syscall.SIGTERM, ""},
+		{"ksh", "a POSIX-form call", trap + `f() { ` + wait + `; echo inf; }; f; echo "after $?"`, syscall.SIGTERM, "bye 271\n"},
+		// Set and taken away in one list, so that no EXIT trap ever stood
+		// between two statements for the front end to hear about: what it
+		// hears is the call.
+		{
+			"ksh", "a trap that no longer stands",
+			`trap 'echo x' EXIT && trap - EXIT; function f { ` + wait + `; echo inf; }; f; echo "after $?"`,
+			0, "after 271\n",
+		},
+		{
+			"ksh", "a read in a call with its own trap",
+			`/usr/bin/mkfifo "$READY.fifo"; exec 3<>"$READY.fifo"; ` +
+				`function f { trap 'echo "fexit $?"' EXIT; /bin/sh -c 'sleep 0.3; printf r >"$1"' sh "$READY" & ` +
+				`(exit 5); read x <&3; echo inf; }; f; echo "after $?"`,
+			0, "fexit 5\nafter 271\n",
+		},
+	} {
+		t.Run(c.dialect+"/"+c.name, func(t *testing.T) {
+			ws, out := diesFromOutside(t, c.dialect, syscall.SIGTERM, c.script)
+			switch {
+			case c.sig != 0 && (!ws.Signaled() || ws.Signal() != c.sig):
+				t.Errorf("ended %v, want killed by %v", ws, c.sig)
+			case c.sig == 0 && (ws.Signaled() || ws.ExitStatus() != 0):
+				t.Errorf("ended %v, want an exit at 0", ws)
+			}
+			if out != c.out {
+				t.Errorf("wrote %q, want %q", out, c.out)
+			}
+		})
+	}
+}
+
 // outsideDeathTrapAt7 is the script TestADialectsExitTrapAnswersAFatalSignalFromOutside
 // measures: an EXIT trap, `$?` at 7, and a program the shell waits for.
 const outsideDeathTrapAt7 = `trap 'echo "bye $?"' EXIT; (exit 7); /bin/sh -c 'printf r >"$1"; exec sleep 30' sh "$READY"; echo after`

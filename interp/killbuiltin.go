@@ -1544,6 +1544,9 @@ func (r *Runner) signalDeath(name string, sig syscall.Signal) {
 		// the EXIT trap runs ends the trap. See exittrapdeath.go.
 		return
 	}
+	// Where it was taken, for a `function name { … }` call it may end
+	// instead. See keywordcalldeath.go.
+	r.deathTaken = takenDeath{depth: r.depth, held: r.status}
 	r.killedBy, r.killedBySig = name, sig
 	r.diedOfSig = sig
 	r.status = 128 + int(sig)

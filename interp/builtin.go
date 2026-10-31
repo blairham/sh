@@ -9557,6 +9557,7 @@ func biTrap(r *Runner, _ context.Context, args []string) int {
 			// A second trap replaces the first rather than adding to it.
 			b := body
 			r.exitTrap = &b
+			r.caughtByAnExitTrap = true
 			r.trapDepth = r.depth
 			r.exitTrapLocal = r.sem().ExitTrapIsFunctionLocal
 		case body == "-":

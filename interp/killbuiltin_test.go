@@ -60,6 +60,9 @@ func killSem() Semantics {
 	// in selfaimeddeath_test.go.
 	s.SelfAimedDeathIsTakenAtTheNextCommand = Yes
 	s.DeathInAFunctionEndsTheCallAsKilled = No
+	// And a `function name { … }` call is no boundary for it, as in every
+	// column but one; keywordcalldeath_test.go has the other.
+	s.SignalDeathEndsAtAKeywordFunctionCall = No
 	return s
 }
 

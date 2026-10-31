@@ -141,6 +141,7 @@ func (r *Runner) bindTrapFunction(fname string, displaced *syntax.FuncDecl) bool
 	switch {
 	case cond == "EXIT":
 		r.exitTrap = &action
+		r.caughtByAnExitTrap = true
 		r.trapDepth = r.depth
 		r.exitTrapLocal = r.sem().ExitTrapIsFunctionLocal
 	case r.pseudoTrapSlot(cond) != nil:

@@ -35203,10 +35203,12 @@ So the readings, each one a constant of `ReadAbandonmentReading`:
   standard input, from a descriptor open for reading alone, reading to a
   delimiter, is given up only by a signal that lands while it waits for the
   first byte of a line: once a byte is in, it reads to the line's end, `-t`'s
-  deadline still bounding it, and no signal gives it up. A `-u`, `-p`, `-n` or
-  `-N` read is given up at the next byte by a signal that arrives during it;
-  neither kind by one already waiting as it began. A read from a descriptor
-  open both ways is given up at the next byte by any signal waiting.
+  deadline still bounding it, and no signal gives it up. A `-n` or `-N` read,
+  and a read of a stream the shell opened at the number the read names, are
+  given up at the next byte by a signal that arrives during them; neither kind
+  by one already waiting as it began. A read from a descriptor open both ways
+  is given up at the next byte by any signal waiting. Which streams fall where
+  is the next subsection.
 - `ReadAbandonedAtTheNextByte` is that last reading alone, and the one this
   shell had for all three columns before #7027. No column holds it whole.
 
@@ -35218,19 +35220,70 @@ descriptor is open for writing is `fcntl(F_GETFL)`, asked the first time it
 matters. bash 5.3, bash 3.2 and zsh
 read on through a trapped signal and never ask it.
 
-**Not modeled**, all ksh93's, measured the same day (#7030):
+**Where the stream came from** (#7030). Measured 2026-10-31 against ksh93u+
+2012-08-01, with the *part of a line* shape above — `ab` waiting, INT 0.3 s in,
+`cd` and `end` half a second after — and the *already waiting* shape to tell a
+descriptor open both ways from the rest. "Inherited" is a fifo handed to `ksh
+-c` by the caller (`<p`, `<>p`, `3<p`, `3<>p`, a writer held elsewhere);
+"exec" is one the script opened. `258` is `T`, `st=258 l=[ab]`, next `cd`;
+`0` is `T`, `st=0 l=[abcd]`, next `end`:
 
-- An *inherited* standard input open both ways (`ksh -c … <>p`) reads on as a
-  read-only one does — and so does a descriptor duplicated from it — where
-  this shell gives it up. Opened by the script (`exec 0<>p`) it is given up.
-- `read -u4` on a descriptor made by `exec 4<&3` from a read-only fifo reads on;
-  `read -u3` on the original is given up, as here.
-- `read -N 4` over `ab` is given up at 1 with nothing assigned and leaves `ab`
-  in the stream (`next [abcd]`); this shell answers 258 and the next read has
-  `cd`.
-- `read -n 4` on a pipe with nothing in is given up at 258, and every later
-  read of that pipe answers 0 with an empty line; here the next read has the
-  line written after.
+| read | stream | ksh93 |
+| --- | --- | --- |
+| `read -r l`, `read -r -u0 l` | inherited stdin, `<p` or `<>p` | 0 |
+| `read -r l` | `exec 0<p`, `exec 0<&3`, `exec 0<&3-`, `exec 0<&0` | 0 |
+| `read -r l` | `exec 0<>p`; `exec 0<&3` from a 3 open both ways | 258 |
+| `read -r l <p`, `read -r l 0<p`, `read -r -u0 l <p` | the read's own redirection | 258 |
+| `command read -r l <p`, `eval 'read -r l' <p`, `eval f <p` | a builtin's own redirection | 258 |
+| `f <p`, `{ read -r l; } <p`, `{ eval 'read -r l'; } <p` | a function's or a group's | 0 |
+| `read -r l <&3`, `read -r l 0<&3-` | 3 opened `<p`, by `exec` or inherited | 0 |
+| `read -r l <&3` | 3 opened `<>p`, by `exec` or inherited | 258 |
+| `read -r -u3 l` | 3 opened `<p`: `exec`, inherited, `{ …; } 3<p`, `read … 3<p` | 258 |
+| `read -r -u3 l` | a move: `exec 3<&5-` from an opened 5, `exec 3<&0-` | 258 |
+| `read -r -u4 l` | a copy: `exec 4<&3`, `read … 4<&3`, `{v}<&3` | 0 |
+| `read -r -u3 l` | a copy of itself, `exec 3<&3`; a copy of 0, `exec 3<&0` | 0 |
+| `read -r -u4 l` | a copy whose source was then closed; a moved copy | 0 |
+| `read -r -u4 l` | a copy of a descriptor open both ways | 258 |
+
+With the signal already waiting, every `258` row above whose stream is open
+both ways is `T`, `st=258 l=[]` with `abcd` for the next read, and every other
+row reads on — the handed-over standard input `<>p` and its copies included.
+
+So two facts decide it, and the open mode is only half of one of them:
+
+- **Open both ways** is the kernel's answer (`fcntl(F_GETFL)`), except for the
+  standard input the shell was handed, which counts as open for reading alone
+  however it was opened, and every copy of it. A copy of anything else is open
+  the way its source is, which needs no bookkeeping: a copy here is the same
+  stream under a second number.
+- **Opened at its number.** A `-u` read of a number other than 0 is given up at
+  the next byte when that entry was opened there — by any redirection,
+  inherited there, or moved there from an entry that was — and reads on as
+  standard input does when it is a copy, however the copy was made and whether
+  or not its source is still open. A read of 0 is given up at the next byte
+  only when the redirection of a builtin that is running opened it: the read's
+  own, `command`'s, `eval`'s and so whatever `eval` runs. `exec`'s outlives
+  the command and is the shell's standard input from then on; a function's or
+  a group's is not a builtin's.
+
+Two models of this were wrong before this one, and both fit every row they
+were drawn from. #7027's said the open mode decides and `-u` always gives up
+at the next byte: the handed-over `<>p` and every copy read on. The next said
+the original-or-copy split decides `-u` and 0 never counts as original: `read
+-r l <p`, `eval 'read -r l' <p` and `read -r -u0 l <p` are given up.
+
+The table holds a mark beside each copied entry, kept with the table the way
+`exec`'s marks are — taken off by any other write to the number, put back with
+the table when a command's redirections end, copied into a subshell — and
+`simpleCommand` hands a builtin the standard input its own redirection opened.
+
+**Not modeled**, all ksh93's, measured the same day (#7177): `read -N 4` given
+up keeps what it took for the next `read` of the stream — not in the stream:
+an external `head -c 2` after it reads `cd` — and answers 1 on a pipe, 258 by
+`-u`, and reads on from a fifo handed over as standard input; and after `read
+-n 4` on a pipe with nothing in is given up at 258, every later read of that
+pipe answers 0 with an empty line, where here the next read has the line
+written after.
 
 #### What a read that ends short keeps
 

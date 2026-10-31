@@ -173,9 +173,11 @@ func (c *Runner) ownTables(r *Runner) {
 	// subshell's `exec 7>&1` must not appear in the parent, and its writes
 	// through a descriptor the parent made must still land where the parent
 	// pointed it. execFds is the record of which of them `exec` marked, so
-	// it travels with fds or it describes the wrong table.
+	// it travels with fds or it describes the wrong table, and dupFds of
+	// which of them are copies, on the same terms.
 	c.fds = maps.Clone(r.fds)
 	c.execFds = maps.Clone(r.execFds)
+	c.dupFds = maps.Clone(r.dupFds)
 	// The commands started beside the shell under a name, on the terms the
 	// jobs slice is on and for a measured reason rather than a symmetrical
 	// one: the *table* is the subshell's and the commands in it are shared.

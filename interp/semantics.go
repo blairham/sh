@@ -19341,9 +19341,10 @@ type Semantics struct {
 	// a read-only descriptor, reading to a delimiter, up only when the signal
 	// lands while it waits for the first byte of a line — a newline it has
 	// read starts another, so a continued line is given up after its
-	// `\`-newline. A `-u` or counted read is given up at the next byte by a
-	// signal that arrives during it (`-u3` over a line still arriving is
-	// `st=258`); one from a descriptor open both ways by any signal waiting.
+	// `\`-newline. A counted read, and a read of a stream the shell opened at
+	// the number the read names, is given up at the next byte by a signal that
+	// arrives during it (`-u3` over a line still arriving is `st=258`); one
+	// from a descriptor open both ways by any signal waiting.
 	// `-t` reads follow the same readings: `read -r -t 5 l <&3` with nothing
 	// in is `T, st=258 l=[]` in ksh93 and `T, st=1 l=[]` in ash.
 	//
@@ -19356,11 +19357,17 @@ type Semantics struct {
 	// with a trap set or without one, asks nothing. Not reached at all where
 	// ReadIsAbandonedByATrappedSignal is no.
 	//
-	// What is not modeled, all ksh93's: an inherited standard input open both
-	// ways reads on where this gives it up, and so does a `-u` descriptor made
-	// by `exec 4<&3`; and `read -N` given up keeps nothing and leaves what it
-	// had read in the stream (#7030). See docs/spec/semantics.md. When the
-	// handler of a read that goes on runs is ReadHandlersRun.
+	// Which stream is which was measured over some seventy shapes on
+	// 2026-10-31 (#7030): the standard input the shell was handed counts as
+	// open for reading alone however it was opened, and so does every copy of
+	// it; a `-u` read of a copy — `exec 4<&3`, `exec 3<&3` — reads on as
+	// standard input does, and one of a number opened, handed over or moved
+	// there is given up; `-u0` is standard input, given up at the next byte
+	// only where a running builtin's own redirection opened it (`read l
+	// <fifo`, `eval 'read l' <fifo`). Not modeled: what a given-up `read -N`
+	// keeps for the next read (#7177). See docs/spec/semantics.md, "Where the
+	// stream came from". When the handler of a read that goes on runs is
+	// ReadHandlersRun.
 	//
 	// unexhibited ReadAbandonedAtTheNextByte: no column answers it whole. It is
 	// the reading this shell had for all three, and ksh93's for the reads its

@@ -53,12 +53,19 @@ const (
 	// to the line's end, the deadline of a `-t` still bounding it, and no
 	// signal gives it up. ksh93.
 	//
-	// A read given its stream by `-u` or `-p`, or one that counts with `-n`
-	// or `-N`, is given up at the next byte by a signal that arrives during
-	// it. Neither kind is given up by a signal already waiting when it
-	// began: the read goes on. A read from a descriptor open for writing as
-	// well — `exec 3<>fifo` — is given up as ReadAbandonedAtTheNextByte
-	// gives one up, a signal already waiting included.
+	// A read that counts with `-n` or `-N`, or one of a stream this shell
+	// opened at the number it reads, is given up at the next byte by a
+	// signal that arrives during it: `-u3` after `exec 3<fifo` or with 3
+	// inherited, `-p`, and a `read` of standard input that its own
+	// redirection opened — `read l <fifo`, or a builtin's, `eval 'read l'
+	// <fifo`. A duplicate is read the way standard input is, `exec 4<&3` and
+	// `exec 3<&3` alike, and a move keeps what its source was; `-u0` is
+	// standard input. Neither kind is given up by a signal already waiting
+	// when it began: the read goes on. A read from a descriptor open for
+	// writing as well — `exec 3<>fifo` — is given up as
+	// ReadAbandonedAtTheNextByte gives one up, a signal already waiting
+	// included; the standard input the shell was started with, and every
+	// copy of it, counts as open for reading alone whatever its open mode.
 	ReadAbandonedOnlyAtTheStartOfALine
 )
 
@@ -86,10 +93,12 @@ func (a ReadAbandonmentReading) String() string {
 type readWatch struct {
 	r  *Runner
 	in io.Reader
-	// byNumber is a read handed its stream by `-u` or `-p`, and counted one
-	// that reads to a count rather than to a delimiter. Only
+	// fd is the descriptor the read names — its `-u` number, the
+	// coprocess's for `-p`, and 0 for standard input — and counted is a
+	// read that reads to a count rather than to a delimiter. Only
 	// ReadAbandonedOnlyAtTheStartOfALine looks at either.
-	byNumber, counted bool
+	fd      int
+	counted bool
 	// reading is the dialect's answer, and asked says it has been asked.
 	reading ReadAbandonmentReading
 	asked   bool
@@ -154,8 +163,8 @@ const (
 // that read: no signal is trapped, and no fatal signal from outside could be
 // handed over either — or the stream is a regular file, whose reads do not
 // wait for anybody.
-func (r *Runner) readWatchFor(ctx context.Context, in io.Reader, byNumber, counted bool) (*readWatch, bool) {
-	if w, ok := r.trapWatchFor(ctx, in, byNumber, counted); ok {
+func (r *Runner) readWatchFor(ctx context.Context, in io.Reader, fd int, counted bool) (*readWatch, bool) {
+	if w, ok := r.trapWatchFor(ctx, in, fd, counted); ok {
 		return w, true
 	}
 	if w, ok := r.goesOnWatchFor(ctx, in); ok {
@@ -166,11 +175,11 @@ func (r *Runner) readWatchFor(ctx context.Context, in io.Reader, byNumber, count
 
 // trapWatchFor is readWatchFor for the trapped signals, in the dialect whose
 // reads they give up.
-func (r *Runner) trapWatchFor(ctx context.Context, in io.Reader, byNumber, counted bool) (*readWatch, bool) {
+func (r *Runner) trapWatchFor(ctx context.Context, in io.Reader, fd int, counted bool) (*readWatch, bool) {
 	if r.sem().ReadIsAbandonedByATrappedSignal != Yes || !r.anySignalTrapped() || neverWaits(in) {
 		return nil, false
 	}
-	return &readWatch{r: r, in: in, byNumber: byNumber, counted: counted, began: r.arrivalMark(), ctx: ctx}, true
+	return &readWatch{r: r, in: in, fd: fd, counted: counted, began: r.arrivalMark(), ctx: ctx}, true
 }
 
 // goesOnWatchFor is readWatchFor for the trapped signals, in the dialect whose
@@ -214,8 +223,8 @@ func neverWaits(in io.Reader) bool {
 // stop that read early: readWatchFor's, with the wait for the first byte of a
 // read that goes on also one a trapped signal may end. See
 // Semantics.ReadTimeoutWaitEndedByATrappedSignal.
-func (r *Runner) timedReadWatchFor(ctx context.Context, in io.Reader, byNumber, counted bool) *readWatch {
-	w, ok := r.readWatchFor(ctx, in, byNumber, counted)
+func (r *Runner) timedReadWatchFor(ctx context.Context, in io.Reader, fd int, counted bool) *readWatch {
+	w, ok := r.readWatchFor(ctx, in, fd, counted)
 	if !ok {
 		return nil
 	}
@@ -240,14 +249,42 @@ func (w *readWatch) readingNow() ReadAbandonmentReading {
 
 // openBothWays reports that the stream is a descriptor open for writing as
 // well as reading, asked of the kernel once.
+//
+// **Except the standard input the shell was started with**, which counts as
+// open for reading alone whatever it was opened as, and so does every copy a
+// script makes of it: measured 2026-10-31, ksh93u+ handed a fifo `<>` reads
+// on through a signal with `read l`, `read -u0 l`, `exec 3<&0; read -u3 l`
+// and `exec 0<&0; read l` alike, where `exec 0<>fifo` and a descriptor 3 it
+// was handed `<>` are given up at the next byte (#7030). A copy here is the
+// same stream under another number, so asking whether the stream is the
+// shell's own input answers for the copies too.
 func (w *readWatch) openBothWays() bool {
 	if w.bothWays == 0 {
 		w.bothWays = -1
-		if f, ok := w.in.(interface{ Fd() uintptr }); ok && descriptorOpenForWriting(int(f.Fd())) {
+		if f, ok := w.in.(interface{ Fd() uintptr }); ok && !w.r.ownInput(w.in) && descriptorOpenForWriting(int(f.Fd())) {
 			w.bothWays = 1
 		}
 	}
 	return w.bothWays > 0
+}
+
+// atTheNextByte reports that ReadAbandonedOnlyAtTheStartOfALine gives this
+// read up at the next byte for the stream it names, rather than only at the
+// start of a line: a number other than 0 whose entry this shell opened there
+// rather than copied there, or standard input that a builtin's own
+// redirection opened. See Runner.duplicated and Runner.builtinStdin.
+//
+// Measured 2026-10-31 on ksh93u+, a fifo with `ab` in, INT 0.3 s into the
+// read and `cd` half a second after: `exec 3<fifo; read -u3 l`, 3 handed to
+// the shell, `exec 4<&3-; read -u4 l` and `read l <fifo` are `T, st=258
+// l=[ab]`, and `exec 4<&3; read -u4 l`, `exec 3<&3; read -u3 l`, `exec
+// 0<fifo; read l`, `{ read l; } <fifo` and `f <fifo` with `f` a function
+// that reads are `T, st=0 l=[abcd]` (#7030).
+func (w *readWatch) atTheNextByte() bool {
+	if w.fd != 0 {
+		return !w.r.duplicated(w.fd)
+	}
+	return w.r.builtinStdin != nil && w.in == w.r.builtinStdin
 }
 
 // startOfALine is ReadAbandonedOnlyAtTheStartOfALine's answer for a signal
@@ -258,7 +295,7 @@ func (w *readWatch) startOfALine(mark *int) (sig syscall.Signal, gives, handled 
 	if w.openBothWays() {
 		return 0, false, false
 	}
-	if w.byNumber || w.counted {
+	if w.counted || w.atTheNextByte() {
 		sig, gives = w.r.pendingTrapFrom(w.began)
 		return sig, gives, true
 	}

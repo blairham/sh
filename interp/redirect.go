@@ -191,7 +191,7 @@ func (r *Runner) applyRedirList(
 	// the command takes back, so the table that is put back afterwards must
 	// not have it either. See closeMovedSource.
 	var savedFds map[int]any
-	var savedExecFds map[int]bool
+	var savedExecFds, savedDupFds map[int]bool
 	saveFds := func() {
 		if fdsTouched {
 			return
@@ -201,12 +201,14 @@ func (r *Runner) applyRedirList(
 		// The marks travel with the table, because they are about the table:
 		// a command that redirects a number `exec` had opened is using that
 		// number for itself, and when the command ends the number goes back
-		// to being `exec`'s.
-		savedExecFds = r.execFds
+		// to being `exec`'s. Likewise a copy a command made over a number
+		// is that command's, and the number is what it was again after.
+		savedExecFds, savedDupFds = r.execFds, r.dupFds
 		r.fds = maps.Clone(r.fds)
 		r.execFds = maps.Clone(r.execFds)
+		r.dupFds = maps.Clone(r.dupFds)
 		closers = append(closers, closerFunc(func() error {
-			r.fds, r.execFds = savedFds, savedExecFds
+			r.fds, r.execFds, r.dupFds = savedFds, savedExecFds, savedDupFds
 			return nil
 		}))
 	}
@@ -229,6 +231,7 @@ func (r *Runner) applyRedirList(
 	dropFdVarDescriptor := func(fd int, own io.Closer, persists bool) {
 		delete(r.fds, fd)
 		delete(r.execFds, fd)
+		delete(r.dupFds, fd)
 		if persists && own != nil {
 			_ = own.Close()
 		}
@@ -308,6 +311,7 @@ func (r *Runner) applyRedirList(
 			}
 			delete(r.fds, m)
 			delete(r.execFds, m)
+			delete(r.dupFds, m)
 			if forKeeps && fdsTouched {
 				// Clone before writing: the saved table is the one the
 				// Runner had, and a sibling may be holding it.
@@ -315,6 +319,8 @@ func (r *Runner) applyRedirList(
 				delete(savedFds, m)
 				savedExecFds = maps.Clone(savedExecFds)
 				delete(savedExecFds, m)
+				savedDupFds = maps.Clone(savedDupFds)
+				delete(savedDupFds, m)
 			}
 		}
 	}
@@ -826,6 +832,10 @@ func (r *Runner) applyRedirList(
 			// See FdMoveDuplicatesThenCloses. A `{name}`'s number is a fresh
 			// one, so the question is never asked of it.
 			destOpen := moveFrom >= 0 && fdVar == "" && r.streamOpen(fd)
+			// And whether a move's source was itself a copy, read before the
+			// duplication marks the destination as one: a move takes what
+			// its source was with it. See Runner.duplicated.
+			movesACopy := moveFrom >= 0 && r.duplicated(moveFrom)
 			if err := r.dupFd(
 				fd,
 				name,
@@ -864,6 +874,9 @@ func (r *Runner) applyRedirList(
 			// relocates a descriptor onto itself, which is a descriptor that
 			// is still open, and closing it would be a close the script did
 			// not write.
+			if moveFrom >= 0 {
+				r.markDuplicated(fd, movesACopy)
+			}
 			if moveFrom >= 0 && moveFrom != fd {
 				closeMovedSource(moveFrom, r.moveCloseIsForKeeps(fdVar, destOpen))
 			}
@@ -1345,6 +1358,7 @@ func (r *Runner) applyRedirList(
 				r.Stdout, r.Stderr = w, w
 			case 0:
 				r.Stdin = r.eachSource(0, f, sources)
+				r.noteOpenedStdin()
 			case 1:
 				r.redirectStdout(r.eachTarget(1, f, opened))
 			case 2:
@@ -2537,6 +2551,7 @@ func (r *Runner) dupFd(fd int, target, written string, write bool, opened map[in
 			src = r.eachTarget(fd, w, opened)
 		}
 		r.setFd(fd, src)
+		r.markDuplicated(fd, true)
 	}
 	return nil
 }
@@ -2675,8 +2690,10 @@ func (r *Runner) setFd(fd int, v any) {
 	r.fds[fd] = v
 	// A number written again is a different descriptor, and a close-on-exec
 	// mark is about the one that was there. See
-	// Runner.KeepDescriptorFromChildren, which puts it on after this.
+	// Runner.KeepDescriptorFromChildren, which puts it on after this. So is
+	// the mark of a copy, which dupFd puts on after this.
 	delete(r.cloexecFds, fd)
+	delete(r.dupFds, fd)
 }
 
 // builtinWriteStatus folds a failed output write into a builtin's status.

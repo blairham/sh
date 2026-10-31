@@ -3314,6 +3314,10 @@ func Semantics() interp.Semantics {
 	// over raises ZERR first. Measured 2026-10-02 on 5.9.2 under `-f`, see
 	// interp.HandlerErrorReach and the second axis's own comment (#5360).
 	s.AHandlersErrorEnds = interp.HandlerErrorEndsTheHandler
+	// Several handlers waiting together run in the order their signals came
+	// in. Measured 2026-10-31 on 5.9.2; see interp.WaitingHandlerOrder
+	// (#7039).
+	s.WaitingHandlersRun = interp.WaitingHandlersRunAsTheyArrived
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.Yes
 	// A pipeline whose last element ran here is judged once, by its status,
 	// unless that element is a compound whose body judged itself: `true | {

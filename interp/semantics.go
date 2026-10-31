@@ -5893,6 +5893,15 @@ type Semantics struct {
 	// zsh alone: after `false; kill -INT $$`, zsh's handler reads 1 where
 	// the others read 0, because `kill` succeeded.
 	SignalHandlerSeesEarlierStatus Answer
+	// WaitingHandlersRun is the order the handlers of several signals run
+	// in when they are waiting together — arrived while a foreground command
+	// ran, and run when it is done. See WaitingHandlerOrder for the
+	// measurements, and for the three answers.
+	//
+	// Asked only where it decides something: two different conditions with
+	// a handler each, in one batch. One handler waiting, or one condition
+	// waiting twice, runs as it is whatever the answer.
+	WaitingHandlersRun WaitingHandlerOrder
 	// ArithInfAndNaNAreConstants reads the names `inf` and `nan`, in any
 	// case, as the two floating constants rather than as parameters — before
 	// any parameter of that name. Measured 2026-10-02: with `Inf=4`, zsh
@@ -38517,6 +38526,72 @@ const (
 	// shell from a handler as it does from anywhere: bash.
 	HandlerErrorEndsTheHandlerUnlessAParameterIsUnset
 )
+
+// WaitingHandlerOrder is the order several waiting handlers run in. See
+// Semantics.WaitingHandlersRun.
+//
+// A shell runs a handler between commands, so every signal that arrives while
+// a foreground command runs is still waiting when it ends, and their handlers
+// run one after another. Which one first is not the order they came in, in
+// most of the panel. Measured 2026-10-31 with `trap "echo $s" $s` for HUP,
+// USR1, USR2 and TERM, `/bin/sleep 1.5` in the foreground, and the signals
+// sent by another process a tenth of a second apart — and again with no gap,
+// which changed nothing — in the order on the left (darwin numbers: HUP 1,
+// TERM 15, USR1 30, USR2 31):
+//
+//	sent                 bash 5.3.20 · 3.2.57 · dash   ksh93u+              zsh 5.9.2
+//	USR2 HUP USR1        HUP USR1 USR2                 USR2 USR1 HUP        USR2 HUP USR1
+//	HUP USR2 USR1        HUP USR1 USR2                 USR2 USR1 HUP        HUP USR2 USR1
+//	USR1 TERM HUP USR2   HUP TERM USR1 USR2            USR2 USR1 TERM HUP   USR1 TERM HUP USR2
+//	TERM USR2 USR1 HUP   HUP TERM USR1 USR2            USR2 USR1 TERM HUP   TERM USR2 USR1 HUP
+//
+// The order the traps were set in is HUP USR1 USR2 TERM, which is none of the
+// three columns, so it is not that either. BusyBox ash 1.38.0 in
+// `busybox:latest` is the first column's answer by Linux's numbers (HUP 1,
+// USR1 10, USR2 12, TERM 15): USR1 TERM HUP USR2 runs HUP USR1 USR2 TERM.
+// bash 5.3 under the name `sh` answers as bash does.
+//
+// The same holds where the handlers are a background job's own and the
+// signals are the parent's `kill` aimed at it, and a CHLD trap fired by the
+// foreground command's end takes its place by number among the others: bash
+// 5.3 and dash run HUP CHLD USR1 USR2 for USR2 USR1 HUP sent during a
+// `/bin/sleep`. A handler that replaces a later one's trap hands it the new
+// action, read at its turn: bash 5.3, bash 3.2 and dash run `HUP NEW` for
+// `trap "echo HUP; trap 'echo NEW' USR2" HUP` with USR2 waiting behind it.
+//
+// What this does not answer is how many times a condition that arrived twice
+// runs: the three columns that sort run it once, and zsh once per arrival.
+// That is its own question (#7166); here a repeated condition keeps every
+// arrival, side by side in the order they came.
+type WaitingHandlerOrder uint8
+
+const (
+	// WaitingHandlerOrderUnspecified is no answer, refused by name, and only
+	// where two different handlers are waiting together.
+	WaitingHandlerOrderUnspecified WaitingHandlerOrder = iota
+	// WaitingHandlersRunAsTheyArrived runs them in the order the signals
+	// came in: zsh.
+	WaitingHandlersRunAsTheyArrived
+	// WaitingHandlersRunUpTheSignalNumbers runs the lowest-numbered signal's
+	// handler first, by the host's numbers: bash 5.3, bash 3.2, dash and
+	// BusyBox ash.
+	WaitingHandlersRunUpTheSignalNumbers
+	// WaitingHandlersRunDownTheSignalNumbers runs the highest-numbered
+	// signal's handler first: ksh93.
+	WaitingHandlersRunDownTheSignalNumbers
+)
+
+func (o WaitingHandlerOrder) String() string {
+	switch o {
+	case WaitingHandlersRunAsTheyArrived:
+		return "waiting handlers run as their signals arrived"
+	case WaitingHandlersRunUpTheSignalNumbers:
+		return "waiting handlers run up the signal numbers"
+	case WaitingHandlersRunDownTheSignalNumbers:
+		return "waiting handlers run down the signal numbers"
+	}
+	return "unspecified"
+}
 
 // ErrTrapRefiring is what a command owes the ERR trap when the failure it
 // reports has already fired it. See

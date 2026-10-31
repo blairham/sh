@@ -27598,6 +27598,42 @@ it rather than that command's own. zsh alone: after `false; kill -INT
 $$`, zsh's handler reads 1 where the others read 0, because `kill`
 succeeded.
 
+**`WaitingHandlersRun`** — bash, dash, ash up the signal numbers · ksh93
+down them · zsh as they arrived
+
+The order the handlers of several signals run in when all of them arrived
+while one command ran. A handler runs between commands, so a signal that
+lands during a foreground command waits for it to end, and so does every
+other that lands then. Measured 2026-10-31 with traps on HUP, USR1, USR2 and
+TERM, `/bin/sleep 1.5` in the foreground, and the signals sent by another
+process a tenth of a second apart (darwin numbers: HUP 1, TERM 15, USR1 30,
+USR2 31):
+
+| sent | bash 5.3.20 · 3.2.57 · dash | ksh93u+ | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| USR2 HUP USR1 | HUP USR1 USR2 | USR2 USR1 HUP | USR2 HUP USR1 |
+| HUP USR2 USR1 | HUP USR1 USR2 | USR2 USR1 HUP | HUP USR2 USR1 |
+| USR1 TERM HUP USR2 | HUP TERM USR1 USR2 | USR2 USR1 TERM HUP | USR1 TERM HUP USR2 |
+| TERM USR2 USR1 HUP | HUP TERM USR1 USR2 | USR2 USR1 TERM HUP | TERM USR2 USR1 HUP |
+
+Sent with no gap the table is the same. Sent back to back by a subshell's or
+a pipeline element's `kill $$`, zsh's order is not stable from run to run —
+`USR2 USR1 HUP` once in three for USR2 HUP USR1 — which is the shape the issue
+first saw (#7039); spaced, it is the order they came in every time. The
+traps were set HUP USR1 USR2 TERM, which is none of the columns. BusyBox ash
+1.38.0 is the first column by Linux's numbers (USR1 10, USR2 12): USR1 TERM
+HUP USR2 runs HUP USR1 USR2 TERM. The same orders hold where the signals come
+from a pipeline element's `kill $$`, where they are a background job's own
+and its parent sent them, and with a CHLD trap fired by the foreground
+command's end, which bash 5.3 and dash place by its number: HUP CHLD USR1
+USR2 for USR2 USR1 HUP sent during a `/bin/sleep`. A handler that replaces a
+later one's trap hands it the new action at its turn, in bash and dash.
+
+Asked only where two different conditions with a handler are in the batch.
+Not answered here: the three sorting columns run a condition that arrived
+twice once, and zsh once per arrival (#7166); this axis keeps both arrivals,
+side by side.
+
 
 ### descriptor variables and redirection targets
 
@@ -35294,9 +35330,10 @@ ordinary timed read asks nothing. ksh93 and ash never reach it, because
 `-t`. A timed read of a stream that is not a descriptor keeps its reader
 goroutine, and nothing ends that wait.
 
-**Not modeled**, both found the same day:
+**Not modeled**, found the same day:
 
 - An expired `read -t -k` or `-q` leaves its name untouched in zsh, and here it
   assigns the empty string or `n` (#7038).
-- Two handlers waiting together run in an order bash 5.3 fixes by signal
-  number and zsh does not hold stable; here they run in arrival order (#7039).
+
+Two handlers waiting together, found then too, are `WaitingHandlersRun` now
+(#7039).

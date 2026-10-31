@@ -1739,6 +1739,11 @@ func Semantics() interp.Semantics {
 	// T2' USR1; kill -USR1 $$; echo after` writes T1 and the error and exits
 	// 2, and so does `: $((1/0))` in place of the read (#5360).
 	s.AHandlersErrorEnds = interp.HandlerErrorEndsTheShell
+	// Several handlers waiting together — signals that came while a
+	// foreground command ran — run lowest signal number first, whatever
+	// order they came in. Measured 2026-10-31; see interp.WaitingHandlerOrder
+	// (#7039).
+	s.WaitingHandlersRun = interp.WaitingHandlersRunUpTheSignalNumbers
 	// unanswered ArithStoreRefusalIsAnError: there are no arrays to store an
 	// element of.
 	// unanswered PrintfQuoteOfNoArgumentIsEmpty: `%q` is `invalid

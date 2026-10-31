@@ -4,9 +4,11 @@
 package interp
 
 import (
+	"cmp"
 	"context"
 	"os"
 	"os/signal"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1496,6 +1498,12 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 		if r.inbox != nil {
 			pending = append(pending, r.inbox.take()...)
 		}
+		pending, ok := r.orderWaitingHandlers(pending, func(name string) bool {
+			return r.traps[name] != ""
+		})
+		if !ok {
+			return
+		}
 		for _, name := range pending {
 			if body, ok := r.traps[name]; ok && body != "" {
 				r.runTrapHandler(ctx, name, body)
@@ -1520,8 +1528,16 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 		}
 		return
 	}
-	for _, name := range r.takePending() {
-		s := r.sigs()
+	s := r.sigs()
+	pending, ok := r.orderWaitingHandlers(r.takePending(), func(name string) bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.traps[name] != ""
+	})
+	if !ok {
+		return
+	}
+	for _, name := range pending {
 		s.mu.Lock()
 		body, ok := s.traps[name]
 		origin := originElsewhere
@@ -1539,6 +1555,52 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 			return
 		}
 	}
+}
+
+// orderWaitingHandlers puts one batch of arrivals in the order their handlers
+// run, which is the dialect's: see Semantics.WaitingHandlersRun. handled
+// reports whether a condition has a handler that runs something.
+//
+// The axis is asked only where two different conditions with a handler are
+// in the batch, the one place the answers part; anywhere else the batch is
+// handed back as it came, unasked. The bool is false where the axis has no
+// answer, and the batch is then not run.
+//
+// The sort is stable, so a condition that is in the batch twice keeps both
+// arrivals, next to each other. Whether it should is #7166's question.
+func (r *Runner) orderWaitingHandlers(batch []string, handled func(string) bool) ([]string, bool) {
+	first, several := "", false
+	for _, name := range batch {
+		if !handled(name) {
+			continue
+		}
+		if first == "" {
+			first = name
+		} else if name != first {
+			several = true
+			break
+		}
+	}
+	if !several {
+		return batch, true
+	}
+	byNumber := func(a, b string) int {
+		return cmp.Compare(trapConditionSignal(a), trapConditionSignal(b))
+	}
+	switch r.sem().WaitingHandlersRun {
+	case WaitingHandlersRunAsTheyArrived:
+		// The batch is in the order it came in already.
+	case WaitingHandlersRunUpTheSignalNumbers:
+		slices.SortStableFunc(batch, byNumber)
+	case WaitingHandlersRunDownTheSignalNumbers:
+		slices.SortStableFunc(batch, func(a, b string) int { return byNumber(b, a) })
+	default:
+		r.diagf("%s\n", r.unanswered("the order several waiting signal handlers run in"))
+		r.status = 2
+		r.unspecified = true
+		return nil, false
+	}
+	return batch, true
 }
 
 // runTrapHandler runs one handler body, with what the interrupted script can

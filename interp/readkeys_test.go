@@ -358,3 +358,89 @@ func TestAnExpiredKeyReadDoesNotSwallowTheNextKey(t *testing.T) {
 		}
 	}
 }
+
+// readsKeysAt is readsKeys with `-q` beside it and the answer to whether an
+// expired read keeps what arrived set to keeps. A bad first name is judged
+// after the read, so it is the read that decides whether it is reached.
+func readsKeysAt(keeps Answer) func(*Runner) {
+	return func(r *Runner) {
+		s := *r.Semantics
+		s.ReadOptions = "rqk#u:t:"
+		s.ReadTimeoutKeepsWhatArrived = keeps
+		s.ReadRefusesABadNameBeforeReading = No
+		r.Semantics = &s
+	}
+}
+
+// TestAnExpiredKeyReadAsksWhatAnExpiredLineReadAsks: a `read -k` or `read -q`
+// that reaches its deadline short asks the question an expired line read asks,
+// Semantics.ReadTimeoutKeepsWhatArrived. The stream holds `pa` and never
+// delivers again, so the deadline passes with two of five characters in. Yes
+// assigns what came, or the `n` a short `-q` stores, and no leaves the name as
+// it was — so a name that is no name at all is never reached to be refused.
+// The status is the short read's either way, and unanswered is a refusal at 2
+// with the name left.
+func TestAnExpiredKeyReadAsksWhatAnExpiredLineReadAsks(t *testing.T) {
+	for _, tc := range []struct {
+		name, read string
+		keeps      Answer
+		want       string
+	}{
+		{"-k kept", `read -t 0.05 -k 5 -u 0 v`, Yes, "st=1 [pa] [seed]\n"},
+		{"-k left", `read -t 0.05 -k 5 -u 0 v`, No, "st=1 [old] [seed]\n"},
+		{"-q kept", `read -t 0.05 -q -k 5 -u 0 v`, Yes, "st=2 [n] [seed]\n"},
+		{"-q left", `read -t 0.05 -q -k 5 -u 0 v`, No, "st=2 [old] [seed]\n"},
+		{"REPLY kept", `read -t 0.05 -k 5 -u 0`, Yes, "st=1 [old] [pa]\n"},
+		{"REPLY left", `read -t 0.05 -k 5 -u 0`, No, "st=1 [old] [seed]\n"},
+		{"-k not a name", `read -t 0.05 -k 5 -u 0 1x`, No, "st=1 [old] [seed]\n"},
+		{"-q not a name", `read -t 0.05 -q -k 5 -u 0 1x`, No, "st=2 [old] [seed]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			in := &halfLineThenBlocks{text: "pa", done: make(chan struct{})}
+			t.Cleanup(func() { close(in.done) })
+			src := `v=old; REPLY=seed; ` + tc.read + `; echo "st=$? [$v] [$REPLY]"`
+			out, _ := run(t, src, func(r *Runner) {
+				readsKeysAt(tc.keeps)(r)
+				r.Stdin = in
+			})
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+	for _, read := range []string{`read -t 0.05 -k 5 -u 0 v`, `read -t 0.05 -q -k 5 -u 0 v`} {
+		t.Run("unanswered "+read, func(t *testing.T) {
+			in := &halfLineThenBlocks{text: "pa", done: make(chan struct{})}
+			t.Cleanup(func() { close(in.done) })
+			out, _ := run(t, `v=old; `+read+`; echo "st=$? [$v]"`, func(r *Runner) {
+				readsKeysAt(Unspecified)(r)
+				r.Stdin = in
+			})
+			if !strings.Contains(out, "an expired `read -t` assigning what did arrive: "+shellsDisagree) ||
+				!strings.HasSuffix(out, "st=2 [old]\n") {
+				t.Errorf("got %q, want the refusal naming the question, 2 and the name left", out)
+			}
+		})
+	}
+}
+
+// TestAKeyReadAtTheEndOfItsInputAsksNothingAboutADeadline: a timed `read -k`
+// or `read -q` whose stream ends before the deadline is short at the end of its
+// input, not at the deadline, and assigns as an untimed one does — what came,
+// or `n` — with the question about the deadline unanswered and never put.
+func TestAKeyReadAtTheEndOfItsInputAsksNothingAboutADeadline(t *testing.T) {
+	for _, tc := range []struct{ read, want string }{
+		{`read -t 5 -k 5 -u 0 v`, "st=1 [pa]\n"},
+		{`read -t 5 -q -k 5 -u 0 v`, "st=2 [n]\n"},
+	} {
+		t.Run(tc.read, func(t *testing.T) {
+			out, _ := run(t, `v=old; `+tc.read+`; echo "st=$? [$v]"`, func(r *Runner) {
+				readsKeysAt(Unspecified)(r)
+				r.Stdin = strings.NewReader("pa")
+			})
+			if out != tc.want {
+				t.Errorf("got %q, want %q and no refusal", out, tc.want)
+			}
+		})
+	}
+}

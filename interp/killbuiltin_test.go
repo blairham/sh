@@ -54,6 +54,12 @@ func killSem() Semantics {
 	// is pinned in dialect/zsh; answering it here keeps a case about some
 	// *other* kill axis from meeting an unanswered one on the way.
 	s.KillNameOptionReadsANumber = Yes
+	// And the majority's shape for a death the shell sends itself with an
+	// EXIT trap to run: taken at the next command, and read the same inside
+	// a function as at the top. The other answers have cases of their own
+	// in selfaimeddeath_test.go.
+	s.SelfAimedDeathIsTakenAtTheNextCommand = Yes
+	s.DeathInAFunctionEndsTheCallAsKilled = No
 	return s
 }
 

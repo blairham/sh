@@ -259,3 +259,48 @@ func endsOnItsOwn(t *testing.T, dialect, script string) (syscall.WaitStatus, str
 	b, _ := os.ReadFile(logPath)
 	return ws, string(b)
 }
+
+// What each dialect's EXIT trap reads after the shell sent itself a fatal
+// signal with `kill` (#7062).
+//
+// Measured 2026-10-30, each shell in a process group of its own, `trap 'echo
+// "bye $?"' EXIT; (exit 7)` and then the line:
+//
+//	                       kill     ! kill   f(){ kill; }   ( kill )
+//	bash 5.3, 3.2, sh      bye 0    bye 1    bye 0          bye 7
+//	ksh93u+                bye 7    bye 7    bye 271        bye 271
+//	zsh 5.9.2, dash        killed by TERM, nothing written, in all four
+//
+// BusyBox ash runs no EXIT trap on a death either — its preset's measurement.
+// Every one of them dies of TERM. Semantics.SelfAimedDeathIsTakenAtTheNextCommand
+// and Semantics.DeathInAFunctionEndsTheCallAsKilled, read here through each
+// preset and the front end that owns the process.
+func TestADialectsExitTrapReadsWhatItsOwnKillLeft(t *testing.T) {
+	const trap = `trap 'echo "bye $?"' EXIT; (exit 7); `
+	quiet := map[string]string{"zsh": "", "dash": "", "ash": ""}
+	for _, c := range []struct {
+		name, script string
+		bash, ksh    string
+	}{
+		{"kill", "kill -TERM $$; echo after", "bye 0\n", "bye 7\n"},
+		{"a negated kill", "! kill -TERM $$; echo after", "bye 1\n", "bye 7\n"},
+		{"a function", "f() { (exit 7); kill -TERM $$; echo inf; }; f; echo after", "bye 0\n", "bye 271\n"},
+		{"a subshell", "(kill -TERM $$); echo after", "bye 7\n", "bye 271\n"},
+	} {
+		want := map[string]string{"bash": c.bash, "ksh": c.ksh}
+		for name, out := range quiet {
+			want[name] = out
+		}
+		for name, out := range want {
+			t.Run(name+"/"+c.name, func(t *testing.T) {
+				ws, got := endsOnItsOwn(t, name, trap+c.script)
+				if !ws.Signaled() || ws.Signal() != syscall.SIGTERM {
+					t.Errorf("ended %v, want killed by %v", ws, syscall.SIGTERM)
+				}
+				if got != out {
+					t.Errorf("wrote %q, want %q", got, out)
+				}
+			})
+		}
+	}
+}

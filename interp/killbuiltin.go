@@ -266,6 +266,11 @@ func (r *Runner) signalListingName(name string) string {
 
 func biKill(r *Runner, ctx context.Context, args []string) int {
 	st := biKillSend(r, args)
+	if r.takeTheSelfAimedDeathAsKillReturns() {
+		// The death `kill` sent the shell, in the dialect that takes it
+		// here rather than at the next command. See selfaimeddeath.go.
+		return r.status
+	}
 	if !r.inSubshell && r.ctl == controlNone {
 		// What the shell just sent itself is handled before `kill` returns,
 		// and so before the next command of an and-or list: measured
@@ -1288,7 +1293,7 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 			// *parent's* table decided trapped above, which is the same
 			// boundary: a trap the subshell set for itself catches nothing
 			// aimed at a pid it does not have.
-			r.recordSharedDeath(name, sig)
+			r.recordSharedDeathBy(name, sig, true)
 			// And whether the subshell has anything left to do is the
 			// dialect's. Five of the six run the rest of the body, because
 			// five of the six gave the subshell a process of its own and the
@@ -1302,9 +1307,24 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 				// Only the subshell stops here. The death is already
 				// recorded, so the parent takes it at the next sequence
 				// point and ends by the signal exactly as it would have.
+				//
+				// At the status a command killed by the signal reports, as
+				// the ignored case above leaves it: the parent's EXIT trap
+				// reads it. Measured 2026-10-30, `trap 'echo "bye $?"' EXIT;
+				// (kill -TERM $$)` writes `bye 271` in ksh93 (#7062). Read
+				// rather than asked, as there.
 				r.status = 128 + int(sig)
+				if r.sem().SignalDeathStatusIsTwoFiftySix == Yes {
+					r.status = 256 + int(sig)
+				}
 				r.stopTheShell()
 			}
+			return nil
+		}
+		if r.holdTheSelfAimedDeath(name, sig) {
+			// Sent, and the shell has caught it to run its EXIT trap: the
+			// rest of the operands are still `kill`'s to send. See
+			// selfaimeddeath.go.
 			return nil
 		}
 		r.signalDeath(name, sig)

@@ -155,6 +155,12 @@ type signalState struct {
 	// and never reaches here.
 	died    string
 	diedSig syscall.Signal
+	// diedByAKill says the death was a copy's `kill` aimed at `$$`, and
+	// diedHolding is `$?` as the shell at the top held it when it made that
+	// copy — which one dialect's EXIT trap reads. See
+	// Runner.copysSelfAimedDeathShows.
+	diedByAKill bool
+	diedHolding int
 	// defaultRestored names the signals `trap -` has explicitly handed back
 	// to their default action. It is not the complement of traps: a signal
 	// nobody has ever mentioned is absent from both, and the difference
@@ -1060,30 +1066,45 @@ func (r *Runner) runSelfRaisedTraps(ctx context.Context) {
 // the top-level runner to die of. First one wins: a process killed twice
 // died of the first.
 func (r *Runner) recordSharedDeath(name string, sig syscall.Signal) {
+	r.recordSharedDeathBy(name, sig, false)
+}
+
+// recordSharedDeathBy is recordSharedDeath told whether the copy's own `kill`
+// sent it, which is what the shell's EXIT trap may be shown about it.
+func (r *Runner) recordSharedDeathBy(name string, sig syscall.Signal, byAKill bool) {
 	s := r.sigs()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.diedSig == 0 {
 		s.died, s.diedSig = name, sig
+		s.diedByAKill, s.diedHolding = byAKill, r.statusAtTheCopy
 		s.queued.Store(true)
 	}
 }
 
+// sharedDeath is a death a subshell caused, as takeSharedDeath hands it over.
+type sharedDeath struct {
+	name    string
+	sig     syscall.Signal
+	byAKill bool
+	holding int
+}
+
 // takeSharedDeath reports a death a subshell has already caused, once.
-func (r *Runner) takeSharedDeath() (string, syscall.Signal, bool) {
+func (r *Runner) takeSharedDeath() (sharedDeath, bool) {
 	s := r.signals
 	if s == nil {
-		return "", 0, false
+		return sharedDeath{}, false
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.diedSig == 0 {
-		return "", 0, false
+		return sharedDeath{}, false
 	}
-	name, sig := s.died, s.diedSig
-	s.died, s.diedSig = "", 0
+	d := sharedDeath{name: s.died, sig: s.diedSig, byAKill: s.diedByAKill, holding: s.diedHolding}
+	s.died, s.diedSig, s.diedByAKill, s.diedHolding = "", 0, false, 0
 	s.settleQueued()
-	return name, sig, true
+	return d, true
 }
 
 // takePending reports the arrivals the handler has not run yet.
@@ -1382,9 +1403,18 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 	if s := r.signals; s == nil || s.nothingArrived() {
 		return
 	}
-	if name, sig, died := r.takeSharedDeath(); died {
+	if d, died := r.takeSharedDeath(); died {
 		// A subshell killed the process, and the process is this shell.
-		r.signalDeath(name, sig)
+		// What the EXIT trap then reads, where the subshell's `kill` sent
+		// it, is a question of its own. See Runner.copysSelfAimedDeathShows.
+		shown := r.status
+		if d.byAKill {
+			shown = r.copysSelfAimedDeathShows(d)
+		}
+		r.signalDeath(d.name, d.sig)
+		if d.byAKill {
+			r.showTheExitTrap(shown, d.name, d.sig)
+		}
 		return
 	}
 	for _, name := range r.takePending() {

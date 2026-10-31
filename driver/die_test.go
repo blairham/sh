@@ -138,6 +138,10 @@ func dieRunningAsAShell() {
 	if os.Getenv(dyingExitTrapRuns) != "" {
 		sh.Semantics.FatalSignalInTheExitTrapEndsOnlyTheTrap = interp.No
 		sh.Semantics.ExitInTheExitTrapOverridesASignalDeath = interp.No
+		// And the majority's answers for where a death the shell sent
+		// itself is taken and what a function changes about it.
+		sh.Semantics.SelfAimedDeathIsTakenAtTheNextCommand = interp.Yes
+		sh.Semantics.DeathInAFunctionEndsTheCallAsKilled = interp.No
 	}
 	if os.Getenv(dyingTrapEnds) == "yes" {
 		sh.Semantics.FatalSignalInTheExitTrapEndsOnlyTheTrap = interp.Yes

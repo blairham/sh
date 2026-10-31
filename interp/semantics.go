@@ -6458,6 +6458,51 @@ type Semantics struct {
 	// without bye2 (#7064).
 	FatalSignalInTheExitTrapEndsOnlyTheTrap Answer
 
+	// SelfAimedDeathIsTakenAtTheNextCommand decides where a shell that sent
+	// itself a fatal signal with `kill`, and has an EXIT trap to run for it,
+	// takes the death — and so which `$?` the trap reads.
+	//
+	//	trap 'echo "bye $?"' EXIT; (exit 7); kill -TERM $$; echo after
+	//
+	// Yes takes it at the next command, the way a signal from another
+	// process is taken: `kill` finishes and its status is recorded, so bash
+	// writes `bye 0`, and `bye 1` for `! kill -TERM $$`. No takes it as
+	// `kill` returns, before its status is recorded, so ksh93 writes `bye 7`
+	// for both — what the shell held as `kill` ran, which a substitution in
+	// its operands moves: `kill -TERM $(exit 4) $$` is `bye 4` there.
+	// Neither runs the command after the `kill`, `&&` or `||` included, and
+	// both finish the operands after `$$` first: `kill -TERM $$ 99999999`
+	// writes the complaint about the second in both.
+	//
+	// A `( … )`, `$( … )` or pipeline element that sends it is the same
+	// question asked of a copy: the death is the shell's once the copy is
+	// done, and yes shows the status the shell held when it made the copy —
+	// bash's parent, a process of its own, stops waiting for its child —
+	// where no shows the status the copy left: ksh93 runs the copy in the
+	// shell's own process, the signal ends it at 271, and that is what the
+	// trap reads.
+	//
+	// Measured 2026-10-30, each shell in a process group of its own: bash
+	// 5.3.20, 3.2.57 and 5.3 called `sh` yes, ksh93u+ no. zsh, dash and
+	// BusyBox ash run no EXIT trap on a death and die as `kill` sends, so
+	// nothing is held for them to ask about. See selfaimeddeath.go (#7062).
+	SelfAimedDeathIsTakenAtTheNextCommand Answer
+
+	// DeathInAFunctionEndsTheCallAsKilled makes the EXIT trap of a fatal
+	// signal that landed while a function was running read the status of a
+	// command killed by that signal, as though the call had been one.
+	//
+	//	trap 'echo "bye $?"' EXIT; f() { (exit 7); kill -TERM $$; }; f
+	//
+	// writes `bye 271` in ksh93 and `bye 0` in bash, and the same signal
+	// sent by `/bin/kill` while the function waits for a program is `bye
+	// 271` against `bye 7`. Two functions deep and `! f` are 271 as well.
+	// Measured 2026-10-30, each shell in a process group of its own: ksh93u+
+	// yes; bash 5.3.20, 3.2.57 and 5.3 called `sh` no. Reached only where an
+	// EXIT trap runs on a death and a function is running when it is taken,
+	// so zsh, dash and BusyBox ash never ask (#7062).
+	DeathInAFunctionEndsTheCallAsKilled Answer
+
 	// ExitTrapRunsInsideTheExitingCall runs the EXIT trap at the point `exit`
 	// was written, with the call that ran it still standing, rather than
 	// after the stack has unwound.

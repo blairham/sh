@@ -21383,6 +21383,61 @@ The death is set aside for the body and put back afterwards, so `kill` in
 the trap sends — `trap 'kill $worker' EXIT` sent nothing here before — and
 a `( … )` in it is not born dead. That part is unanimous and is core.
 
+**`SelfAimedDeathIsTakenAtTheNextCommand`** — bash yes · dash no · ksh93
+no · zsh no · ash no
+
+Decides where a shell that sent itself a fatal signal with `kill`, and has
+an EXIT trap to run for it, takes the death — and so which `$?` the trap
+reads. Measured 2026-10-30, each shell in a process group of its own,
+`trap 'echo "bye $?"' EXIT; (exit 7)` and then the line:
+
+| line | bash 5.3, 3.2, `sh` | ksh93 |
+| --- | --- | --- |
+| `kill -TERM $$` | bye 0 | bye 7 |
+| `! kill -TERM $$` | bye 1 | bye 7 |
+| `kill -TERM $$ && echo and` | bye 0 | bye 7 |
+| `false; kill -TERM $$` | bye 0 | bye 1 |
+| `kill -TERM $(exit 4) $$` | bye 0 | bye 4 |
+| `! { kill -TERM $$; }` | bye 1 | bye 7 |
+| `! { kill -TERM $$; echo in; }` | bye 0 | bye 7 |
+| `(kill -TERM $$)` | bye 7 | bye 271 |
+| `x=$(kill -TERM $$)` | bye 7 | bye 271 |
+| `true && (kill -TERM $$)` | bye 0 | bye 271 |
+| `kill -TERM $$ \| cat` | bye 7 | bye 0 |
+
+The same for HUP and USR1, and every one dies of the signal without running
+what follows the `kill`. Yes takes the death at the next command, as a
+signal from another process is taken: whatever `kill` and a `!` around it
+left is read, and in `! { kill; echo in; }` the next command comes before
+the outer `!`. No takes it as `kill` returns, before kill's own status is
+recorded, so the trap reads what the shell held as `kill` ran. A copy that
+sends it is the same question: yes reads what the shell held when it made
+the copy — bash's parent is a process of its own and stops waiting for its
+child — and no reads what the copy left, which in ksh93 is 271, the copy
+being the shell's own process and ended by the signal.
+
+Both finish `kill`'s operands first: `kill -TERM $$ 99999999` writes the
+complaint about the second in bash and ksh93 alike, where with no EXIT trap
+— and in zsh and dash, which run none on a death — the shell dies as it
+sends and writes nothing. That part is core.
+
+Not modeled: bash 5.3 also takes the death as an `eval` or a `.` file ends,
+so `! eval 'kill -TERM $$'` is bye 0 there and bye 1 in bash 3.2 and here;
+ksh93 reads 0 for `false | kill -TERM $$`, where its last element runs in
+the shell, and here 7; and ksh93 reads the bare number, 15, after a `.` file
+sent it (#7062).
+
+**`DeathInAFunctionEndsTheCallAsKilled`** — bash no · dash no · ksh93 yes ·
+zsh no · ash no
+
+Makes the EXIT trap of a fatal signal taken while a function runs read the
+status of a command killed by that signal. `trap 'echo "bye $?"' EXIT; f()
+{ (exit 7); kill -TERM $$; }; f` is bye 271 in ksh93 and bye 0 in bash. Two
+calls deep, `! f`, a `( … )` in the function, and `/bin/kill -TERM` from
+another process while the function waits for a program are 271 in ksh93
+too, where bash reads what it reads at the top: 0, 1, 7 and 7. Measured
+2026-10-30 (#7062).
+
 **`ExitTrapRunsInsideTheExitingCall`** — bash yes · dash yes · ksh93 no ·
 zsh no · ash yes
 

@@ -2937,6 +2937,14 @@ func Semantics() interp.Semantics {
 	// #7064).
 	s.ExitInTheExitTrapOverridesASignalDeath = interp.Yes
 	s.FatalSignalInTheExitTrapEndsOnlyTheTrap = interp.Yes
+	// And a `kill` aimed at `$$` is taken as it returns, before its status is
+	// recorded: `(exit 7); kill -TERM $$` and `! kill -TERM $$` are both `bye
+	// 7`, a `( … )` or `$( … )` that sends it is the 271 the copy left, and
+	// inside a function — on that route and from another process alike — the
+	// trap reads 271 however the call was reached. Measured 2026-10-30 on
+	// ksh93u+ 2012-08-01, alone in the panel on both (#7062).
+	s.SelfAimedDeathIsTakenAtTheNextCommand = interp.No
+	s.DeathInAFunctionEndsTheCallAsKilled = interp.Yes
 	// And a `-c` string ending over an error the shell reported still runs
 	// it: measured 2026-10-16 on ksh93, a division by zero, a readonly
 	// reassignment and an unset name under `set -u` each print the handler

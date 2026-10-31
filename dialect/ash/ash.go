@@ -2099,6 +2099,10 @@ func Semantics() interp.Semantics {
 	// and dies of USR1, as it does for one sent from outside (#7064).
 	s.ExitInTheExitTrapOverridesASignalDeath = interp.No
 	s.FatalSignalInTheExitTrapEndsOnlyTheTrap = interp.No
+	// And no death is ever held for an EXIT trap here, since none runs on
+	// one, so neither question about it is asked (#7062).
+	s.SelfAimedDeathIsTakenAtTheNextCommand = interp.No
+	s.DeathInAFunctionEndsTheCallAsKilled = interp.No
 	// And a `-c` string ending over an error the shell reported still runs
 	// it: measured 2026-10-16 on BusyBox ash 1.37.0 in alpine:3, a division by zero, a readonly
 	// reassignment and an unset name under `set -u` each print the handler

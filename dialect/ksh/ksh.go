@@ -2929,6 +2929,14 @@ func Semantics() interp.Semantics {
 	// zsh still search the current directory.
 	s.EmptyPathIsTheCurrentDirectory = interp.No
 	s.ExitTrapRunsOnSignalDeath = interp.Yes
+	// And the trap is the last word on how the shell leaves: an `exit 5` in it
+	// exits 5 where a signal was killing the shell, and a fatal signal that
+	// lands while it runs ends the trap and nothing else, so the shell leaves
+	// at the status or by the signal it was already leaving with. Measured
+	// 2026-10-30 on ksh93u+ 2012-08-01, alone in the panel on both (#7063,
+	// #7064).
+	s.ExitInTheExitTrapOverridesASignalDeath = interp.Yes
+	s.FatalSignalInTheExitTrapEndsOnlyTheTrap = interp.Yes
 	// And a `-c` string ending over an error the shell reported still runs
 	// it: measured 2026-10-16 on ksh93, a division by zero, a readonly
 	// reassignment and an unset name under `set -u` each print the handler

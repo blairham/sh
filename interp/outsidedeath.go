@@ -77,23 +77,45 @@ const (
 	outsideRevoked
 )
 
-// outsideDeath is one process's record of a fatal signal handed over from
-// outside, part of signalState and shared by every copy of the shell.
-type outsideDeath struct {
+// handover is one fatal signal from outside handed to the shell: the death
+// itself, or the signal that ends the EXIT trap it runs.
+type handover struct {
 	// state is one of the outside* constants. It moves forward only.
 	state atomic.Int32
 	// name and sig are the signal, written once before state reads posted
 	// and read only after.
 	name string
 	sig  syscall.Signal
-	// dying is closed when the death is handed over, and is what a wait that
-	// gives itself up for one selects on.
+	// dying is closed when the signal is handed over, and is what a wait
+	// that gives itself up for one selects on.
 	dying chan struct{}
-	// claimed is closed when the shell takes the death.
+	// claimed is closed when the shell takes it.
 	claimed chan struct{}
-	// abandoned says a wait was given up for the death, so the command that
-	// was running when it landed never finished. See Runner.takeOutsideDeath.
+	// abandoned says a wait was given up for it, so the command that was
+	// running when it landed never finished. See Runner.takeOutsideDeath.
 	abandoned atomic.Bool
+}
+
+// post hands sig over, and reports what TakesAFatalSignal's closure reports.
+// Called with the signal state's lock held.
+func (h *handover) post(name string, sig syscall.Signal) (<-chan struct{}, func() bool, bool) {
+	h.name, h.sig = name, sig
+	h.state.Store(outsidePosted)
+	close(h.dying)
+	return h.claimed, func() bool { return h.state.CompareAndSwap(outsidePosted, outsideRevoked) }, true
+}
+
+// outsideDeath is one process's record of a fatal signal handed over from
+// outside, part of signalState and shared by every copy of the shell.
+type outsideDeath struct {
+	// The death.
+	handover
+	// trapEnd is a fatal signal that lands while the shell at the top runs
+	// its EXIT trap, in the dialect where that ends the trap and not the
+	// shell, and trapRunning says the trap is running there. See
+	// Runner.publishTheTrapRunning.
+	trapEnd     handover
+	trapRunning atomic.Bool
 	// armed says the shell at the top has an EXIT trap set, and a front end
 	// has asked to hand it a death. See Runner.publishExitTrap.
 	armed atomic.Bool
@@ -124,7 +146,10 @@ var errAbandonedForADeath = errors.New("abandoned for a fatal signal from outsid
 // been handed a death — a second signal while the first one's EXIT trap runs
 // is the front end's to end the process with, as it ends a reference: measured
 // 2026-10-29, a second TERM, USR1 or HUP during a `sleep` in the trap ends
-// bash 5.3, bash 3.2 and ksh93 at once.
+// bash 5.3, bash 3.2 and ksh93 at once. Except in the dialect where any fatal
+// signal while the EXIT trap runs ends only the trap, which ksh93's does at
+// once and then leaves by the first: there it is taken, as the signal that
+// ends the trap. See Semantics.FatalSignalInTheExitTrapEndsOnlyTheTrap.
 //
 // Shaped like TrapsSignal and for its reason: asked from the front end's own
 // goroutine, it closes over the shared signal state and over the answers as
@@ -137,9 +162,10 @@ func (r *Runner) TakesAFatalSignal() func(syscall.Signal) (claimed <-chan struct
 	s.outside.heard.Store(true)
 	runsOnADeath := r.sem().ExitTrapRunsOnSignalDeath == Yes
 	hangupExits := r.sem().HangupIsAnOrderlyExit == Yes
+	endsTheTrap := r.sem().FatalSignalInTheExitTrapEndsOnlyTheTrap == Yes
 	return func(sig syscall.Signal) (<-chan struct{}, func() bool, bool) {
 		o := &s.outside
-		if interactive || !o.armed.Load() {
+		if interactive {
 			return nil, nil, false
 		}
 		// A signal with no name runs no EXIT trap in any column, which is
@@ -147,6 +173,12 @@ func (r *Runner) TakesAFatalSignal() func(syscall.Signal) (claimed <-chan struct
 		// one of those as its number, which is not a name the table holds.
 		name, ok := signalName(sig)
 		if _, named := trappableSignals[name]; !ok || !named {
+			return nil, nil, false
+		}
+		if endsTheTrap && o.trapRunning.Load() {
+			return o.endTheTrap(&s.mu, name, sig)
+		}
+		if !o.armed.Load() {
 			return nil, nil, false
 		}
 		if !runsOnADeath && (name != "HUP" || !hangupExits) {
@@ -157,11 +189,29 @@ func (r *Runner) TakesAFatalSignal() func(syscall.Signal) (claimed <-chan struct
 		if o.state.Load() != outsideNone {
 			return nil, nil, false
 		}
-		o.name, o.sig = name, sig
-		o.state.Store(outsidePosted)
-		close(o.dying)
-		return o.claimed, func() bool { return o.state.CompareAndSwap(outsidePosted, outsideRevoked) }, true
+		return o.post(name, sig)
 	}
+}
+
+// endTheTrap hands over a fatal signal that landed while the shell's EXIT
+// trap runs, in the dialect where it ends the trap rather than the shell. See
+// Semantics.FatalSignalInTheExitTrapEndsOnlyTheTrap.
+//
+// One ends it, and a later one while it is still being ended is taken as the
+// same: the shell is leaving as it was already leaving, and the watch waits
+// for that rather than ending the process by the later signal. One that came
+// after the watch took the first back is the watch's, as before.
+func (o *outsideDeath) endTheTrap(mu *sync.Mutex, name string, sig syscall.Signal) (<-chan struct{}, func() bool, bool) {
+	mu.Lock()
+	defer mu.Unlock()
+	e := &o.trapEnd
+	switch e.state.Load() {
+	case outsideNone:
+		return e.post(name, sig)
+	case outsideRevoked:
+		return nil, nil, false
+	}
+	return e.claimed, func() bool { return e.state.CompareAndSwap(outsidePosted, outsideRevoked) }, true
 }
 
 // publishExitTrap tells the front end's watch whether the shell at the top
@@ -208,13 +258,19 @@ func (r *Runner) publishExitTrap() {
 func (r *Runner) takeOutsideDeath() bool {
 	// One load at every command, and a call only once there is something to
 	// act on, so the door stays the price it was.
-	if s := r.signals; s == nil || s.outside.state.Load() != outsidePosted {
+	s := r.signals
+	if s == nil {
+		return false
+	}
+	if s.outside.state.Load() != outsidePosted &&
+		(!r.inExitTrap || s.outside.trapEnd.state.Load() != outsidePosted) {
 		return false
 	}
 	return r.actOnOutsideDeath()
 }
 
-// actOnOutsideDeath is takeOutsideDeath once a death is waiting.
+// actOnOutsideDeath is takeOutsideDeath once a death is waiting, or a signal
+// that ends the EXIT trap.
 func (r *Runner) actOnOutsideDeath() bool {
 	s := r.signals
 	if r.inSubshell {
@@ -228,6 +284,16 @@ func (r *Runner) actOnOutsideDeath() bool {
 		return true
 	}
 	o := &s.outside
+	if e := &o.trapEnd; r.inExitTrap && e.state.Load() == outsidePosted {
+		if !e.state.CompareAndSwap(outsidePosted, outsideClaimed) {
+			return false
+		}
+		close(e.claimed)
+		// Which ends the trap, as the same signal sent by the trap itself
+		// would. See Runner.fatalSignalEndsOnlyTheExitTrap.
+		r.signalDeath(e.name, e.sig)
+		return true
+	}
 	if !o.state.CompareAndSwap(outsidePosted, outsideClaimed) {
 		// Taken back: the front end is ending the process itself.
 		return false
@@ -252,20 +318,34 @@ func (r *Runner) actOnOutsideDeath() bool {
 // That includes the EXIT trap's own waits once the shell has taken a death:
 // the trap is cleared before its body runs, so the body's first statement
 // publishes the shell as unarmed and nothing the trap waits for is given up.
+//
+// Except in the dialect where a fatal signal ends the EXIT trap and not the
+// shell: there the trap's waits are given up for that signal instead. See
+// Runner.publishTheTrapRunning.
 func (r *Runner) abandonsForADeath() <-chan struct{} {
 	s := r.signals
-	if s == nil || r.bg != nil || !s.outside.armed.Load() {
+	if s == nil || r.bg != nil {
+		return nil
+	}
+	if r.inExitTrap && s.outside.trapRunning.Load() {
+		return s.outside.trapEnd.dying
+	}
+	if !s.outside.armed.Load() {
 		return nil
 	}
 	return s.outside.dying
 }
 
-// waitAbandonedForADeath records that a wait was given up for the death
+// waitAbandonedForADeath records that a wait was given up for the signal
 // handed over, and hands back its signal.
 func (r *Runner) waitAbandonedForADeath() syscall.Signal {
 	o := &r.signals.outside
-	o.abandoned.Store(true)
-	return o.sig
+	h := &o.handover
+	if r.inExitTrap && o.trapRunning.Load() {
+		h = &o.trapEnd
+	}
+	h.abandoned.Store(true)
+	return h.sig
 }
 
 // outputsDetachedOnADeath puts a program's output streams that os/exec copies

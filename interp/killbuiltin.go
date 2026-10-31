@@ -1517,6 +1517,11 @@ func (r *Runner) signalDeath(name string, sig syscall.Signal) {
 		r.stopTheShell()
 		return
 	}
+	if r.fatalSignalEndsOnlyTheExitTrap() {
+		// Not a death either, in the one shell where a fatal signal while
+		// the EXIT trap runs ends the trap. See exittrapdeath.go.
+		return
+	}
 	r.killedBy, r.killedBySig = name, sig
 	r.diedOfSig = sig
 	r.status = 128 + int(sig)

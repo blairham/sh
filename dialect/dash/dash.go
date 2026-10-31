@@ -1273,6 +1273,13 @@ func Semantics() interp.Semantics {
 	// silent at status 0, which zsh agrees with and bash and ksh93 do not.
 	s.DotDirectoryOperandIsAnError = interp.No
 	s.ExitTrapRunsOnSignalDeath = interp.No
+	// So no `exit` ever runs in a trap over a death to ask about; no is the
+	// answer that leaves the death alone. A fatal signal while the EXIT trap
+	// runs ends the shell by that signal: measured 2026-10-30 on dash,
+	// `trap 'echo bye; kill -USR1 $$; echo after' EXIT; exit 3` writes bye
+	// and dies of USR1, as it does for one sent from outside (#7064).
+	s.ExitInTheExitTrapOverridesASignalDeath = interp.No
+	s.FatalSignalInTheExitTrapEndsOnlyTheTrap = interp.No
 	// And a `-c` string ending over an error the shell reported still runs
 	// it: measured 2026-10-16 on dash, a division by zero, a readonly
 	// reassignment and an unset name under `set -u` each print the handler

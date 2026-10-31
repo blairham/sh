@@ -4365,6 +4365,13 @@ type Runner struct {
 	// slot no longer holds — see Semantics.ExitTrapListedWhileItRuns.
 	runningExitTrap     *string
 	exitTrapEntryStatus int
+	// exitTrapDeath is the death the EXIT trap is running ahead of, set
+	// aside while the body runs and put back once it is done, and
+	// exitTrapEndedBySignal says a fatal signal ended the body in the
+	// dialect where that ends the trap rather than the shell. See
+	// Runner.setTheDeathAside.
+	exitTrapDeath         setAsideDeath
+	exitTrapEndedBySignal bool
 
 	// redirectForBuiltin is the builtin whose redirections are being opened,
 	// which is not the same as the builtin speaking: one dialect names where
@@ -7840,6 +7847,10 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 	// reason: the handler is more of the script and runs to its end, and the
 	// stop is still the shell's afterwards. See Runner.holdScriptStop.
 	defer r.holdScriptStop()()
+	// The body runs as a living shell's, and the death it is running ahead
+	// of is put back once it is done. See exittrapdeath.go.
+	r.setTheDeathAside()
+	trapDone := r.publishTheTrapRunning()
 	// Kept for a bare `exit` inside the body, which in three of the four
 	// reports this rather than whatever the body's last command did.
 	r.inExitTrap, r.exitTrapEntryStatus = true, before
@@ -7865,13 +7876,20 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 	}
 	// Cleared for hygiene rather than for effect: the EXIT trap is the last
 	// thing a shell runs, so nothing reads this afterwards.
+	trapDone()
 	r.inExitTrap, r.runningExitTrap = false, nil
-	exitedInTheBody = r.ctl == controlExit
+	// A fatal signal that ended the body, in the dialect where that ends
+	// only the trap, is not the body exiting: the shell leaves as it was
+	// leaving. See Semantics.FatalSignalInTheExitTrapEndsOnlyTheTrap.
+	endedBySignal := r.exitTrapEndedBySignal
+	r.exitTrapEndedBySignal = false
+	exitedInTheBody = r.ctl == controlExit && !endedBySignal
 	if !exitedInTheBody && !r.returnNamedTheExitStatus() {
 		// The body ran to the end without naming a status, so the script
 		// keeps the one it already had.
 		r.status = before
 	}
+	r.takeTheDeathBack()
 	r.stopTheShell()
 	return exitedInTheBody
 }

@@ -185,6 +185,8 @@ func (r *Runner) sigs() *signalState {
 		}
 		r.signals.outside.dying = make(chan struct{})
 		r.signals.outside.claimed = make(chan struct{})
+		r.signals.outside.trapEnd.dying = make(chan struct{})
+		r.signals.outside.trapEnd.claimed = make(chan struct{})
 	}
 	return r.signals
 }

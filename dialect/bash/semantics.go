@@ -2293,6 +2293,12 @@ func Semantics() interp.Semantics {
 	// bash reports success if it signaled anything at all, where the others
 	// count failures one way or another.
 	s.ExitTrapRunsOnSignalDeath = interp.Yes
+	// And dying is still dying once the trap has run: an `exit 5` in it does
+	// not save the shell, and a second fatal signal while it runs ends the
+	// shell at once by that second signal. Measured 2026-10-30 on bash 5.3.20,
+	// 3.2.57 and 5.3 called `sh` (#7063, #7064).
+	s.ExitInTheExitTrapOverridesASignalDeath = interp.No
+	s.FatalSignalInTheExitTrapEndsOnlyTheTrap = interp.No
 	// And a `-c` string ending over an error the shell reported still runs
 	// it: measured 2026-10-16 on bash 5.3.20, a division by zero, a readonly
 	// reassignment and an unset name under `set -u` each print the handler

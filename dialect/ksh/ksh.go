@@ -3583,6 +3583,10 @@ func Semantics() interp.Semantics {
 	// See Semantics.TrapActionListedFromItsParse.
 	s.TrapActionListedFromItsParse = interp.No
 	s.AHandlersErrorEnds = interp.HandlerErrorEndsTheHandler
+	// Several handlers waiting together run highest signal number first,
+	// whatever order they came in. Measured 2026-10-31 on ksh93u+; see
+	// interp.WaitingHandlerOrder (#7039).
+	s.WaitingHandlersRun = interp.WaitingHandlersRunDownTheSignalNumbers
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
 	// `printf '[%q]'` with no operand is `[]`, measured 2026-10-02 on 93u+
 	// 2012-08-01 (#5153).

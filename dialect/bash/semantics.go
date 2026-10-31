@@ -2824,6 +2824,11 @@ func Semantics() interp.Semantics {
 	// raises no ERR. Measured 2026-10-02 on 5.3.20, see
 	// interp.HandlerErrorReach (#5360).
 	s.AHandlersErrorEnds = interp.HandlerErrorEndsTheHandlerUnlessAParameterIsUnset
+	// Several handlers waiting together — signals that came while a
+	// foreground command ran — run lowest signal number first, whatever
+	// order they came in. Measured 2026-10-31 on 5.3.20 and 3.2.57, and on
+	// 5.3 under the name `sh`; see interp.WaitingHandlerOrder (#7039).
+	s.WaitingHandlersRun = interp.WaitingHandlersRunUpTheSignalNumbers
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
 	// `read -d £` stops at the first byte of the `£`, under a UTF-8 locale
 	// too, and the second begins the next record. Measured 2026-10-02 on

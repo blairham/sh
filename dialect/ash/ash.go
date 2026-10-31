@@ -1972,6 +1972,11 @@ func Semantics() interp.Semantics {
 	// signal's ends the shell; the error itself raises no ERR. Measured
 	// 2026-10-02 on BusyBox 1.37.0, see interp.HandlerErrorReach (#5360).
 	s.AHandlersErrorEnds = interp.HandlerErrorEndsAnErrHandler
+	// Several handlers waiting together run lowest signal number first, by
+	// Linux's numbers. Measured 2026-10-31 on BusyBox 1.38.0 in
+	// `busybox:latest`: USR1 TERM HUP USR2 sent during a `/bin/sleep` run
+	// HUP USR1 USR2 TERM. See interp.WaitingHandlerOrder (#7039).
+	s.WaitingHandlersRun = interp.WaitingHandlersRunUpTheSignalNumbers
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
 	// The ERR trap stays in the frame that set it, and errtrace carries it
 	// into a function but not into a subshell. Measured 2026-10-03 in the

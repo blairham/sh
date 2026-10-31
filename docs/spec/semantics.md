@@ -11674,6 +11674,20 @@ The letters themselves diverge before the behaviors do:
   The same input under `-N 5` reports 1 in both, bash keeping `ab` and
   ksh93 assigning nothing — `ReadExactCountKeepsPartial`. Wholly empty
   input is st=1 with nothing assigned everywhere.
+- **A count of zero.** `printf 'ab\ncd\n' | { read -n 0 v; read w; }` is
+  `v=` and `w=ab` at 0 in bash 5.3: zero characters are a count like any
+  other, and the line stays for the next reader. BusyBox ash 1.37.0 and
+  bash 3.2.57 take zero for no count at all and read the line, `v=ab` and
+  `w=cd` — and every spelling around it answers as the same read without
+  `-n 0`: `ab` with no newline is st=1 keeping `ab`, empty input st=1, a
+  backslash-newline folds without -r, `-d x` stops at the x, two names
+  split, and `-t 1` on a pipe held open waits the second and fails at 1
+  with v untouched, where bash 5.3 returns at once at 0. The official bash
+  images put the change at 5.0 (4.4.23 reads on, 5.0.18 does not), so it
+  is a release's choice and not a build's. ksh93u+ takes nothing from the
+  stream either, but assigns bytes it never read, different on every run.
+  `ReadCountOfZeroIsNoCount` (oracle runs, 2026-10-31, #7036). Asked only
+  of `-n`: BusyBox has no `-N`.
 - **A timeout of zero is not a timeout.** `-t 0` is a question about the
   state of the stream, and every dialect with the letter treats it as one.
   Measured three ways (oracle runs, 2026-09-05): a whole line already

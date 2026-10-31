@@ -3506,6 +3506,8 @@ func Semantics() interp.Semantics {
 	// ReadCountJudgesTheNamesAfterTheFirst is left unanswered here too, and
 	// so is ReadCountFillsTheFirstNameWhole, for the reason below.
 	// unanswered ReadCountFillsTheFirstNameWhole: see the line above.
+	// unanswered ReadCountOfZeroIsNoCount: the same reason — no `-n` here is
+	// a count, so `read -n 0 v` never reaches a count of zero.
 	// This shell's `-n` is a flag rather than a count and its `-k` reads
 	// from the terminal — `printf 'XYZW\n' | zsh -c 'read -k 3 a'` answers
 	// `not interactive and can't open terminal` — so no count ever reaches

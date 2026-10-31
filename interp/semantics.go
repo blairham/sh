@@ -3124,6 +3124,56 @@ type Semantics struct {
 	// there — a full count, a delimiter, or a wholly empty input answers
 	// the same way everywhere.
 	ReadPartialCountSucceeds Answer
+	// ReadCountOfZeroIsNoCount decides what `read -n 0` reads. Yes takes a
+	// count of zero for no count at all: the read goes on to the delimiter
+	// or the end of the input exactly as a plain `read` does, and answers
+	// as one. No takes it at its word: nothing is read, the names are
+	// assigned empty, the status is 0 whatever the input holds, and the
+	// line is left for the next reader.
+	//
+	// BusyBox ash answers yes, and so does bash before 5.0. Measured
+	// 2026-10-31 from -c, with v=x set first; the plain-read column is what
+	// `read v` answers on the same input, for every row that has one:
+	//
+	//	printf           read                    ash 1.37.0 / bash 3.2.57   bash 5.3.20
+	//	`ab`             -n 0 v                  st=1 [ab]                  st=0 []
+	//	nothing          -n 0 v                  st=1 []                    st=0 []
+	//	`ab\ncd`         -n 0 v                  st=0 [ab]                  st=0 []
+	//	`ab\ncd\n`       -n 0 v; read w          st=0 [ab][cd]              st=0 [][ab]
+	//	`a\\\nb\n`       -n 0 v                  st=0 [ab]                  st=0 []
+	//	`a\\\nb\n`       -r -n 0 v               st=0 [a\]                  st=0 []
+	//	`abxcd`          -d x -n 0 v             st=0 [ab]                  st=0 []
+	//	`a b c\n`        -n 0 x y                st=0 [a][b c]              st=0 [][]
+	//	`ab\n`           -n 0 (REPLY)            st=0 [ab]                  st=0 []
+	//	`ab\n`           -n 00 v                 st=0 [ab]                  st=0 []
+	//	`ab`, held open  -t 1 -n 0 v             st=1 [x], a second later   st=0 [], at once
+	//
+	// The last row is the plain read's timeout in both columns that read
+	// on: `read -t 1 v` and `read -t 1 -n 5 v` answer `st=1 [x]` there too
+	// (bash 5.3 says 142 for those two). The fourth row answers the same
+	// from a fifo and from a regular file as from a pipe, in every column.
+	// The official bash images draw
+	// the line at a release: 4.0.44 and 4.4.23 read on, 5.0.18, 5.1.16 and
+	// 5.2.37 read nothing, so bash 5.3 is a change and not a build.
+	//
+	// ksh93u+ 2012-08-01 reads nothing as well — the next `read` takes
+	// `ab` — but assigns bytes it never read, different on every run, so
+	// it answers No for what it leaves in the stream and nothing usable
+	// for the value.
+	//
+	// Asked only where `-n`'s argument is zero and no `-N` follows it.
+	// BusyBox has no `-N` (`read -N 0` is `illegal option -N` at 2), so no
+	// shell with the yes reading has the second count letter.
+	//
+	// unpinned ash: no corpus row reads with a count of zero. Pinned by
+	// TestACountOfZeroIsNoCountAtAll.
+	//
+	// unpinned bash: the same reach. Pinned by
+	// TestACountOfZeroReadsWhatTheShellsRead.
+	//
+	// unpinned ksh: the same reach. Pinned by
+	// TestACountOfZeroReadsWhatTheShellsRead.
+	ReadCountOfZeroIsNoCount Answer
 	// ReadExactCountKeepsPartial decides what `read -N N` leaves behind
 	// when the input ends short: bash assigns the partial text and ksh93
 	// assigns nothing, both reporting 1. Asked only on that partial text.

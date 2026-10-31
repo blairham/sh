@@ -37,7 +37,8 @@ import (
 //
 // `$?` in the trap is what the shell held when the signal landed: `(exit 7);
 // sleep 3` shows 7 in all three, in a function as at the top — ksh93 in a
-// function apart, which shows 256 plus the number — and a `read` the signal
+// function apart, which shows 256 plus the number: see
+// Semantics.DeathInAFunctionEndsTheCallAsKilled — and a `read` the signal
 // gave up shows the status from before the `read`.
 //
 // # The route
@@ -306,9 +307,7 @@ func (r *Runner) actOnOutsideDeath() bool {
 		shown = r.statusWhenTheCommandBegan
 	}
 	r.signalDeath(o.name, o.sig)
-	if r.diedOfItsOwnSignal() {
-		r.exitTrapShownStatus = &shown
-	}
+	r.showTheExitTrap(shown, o.name, o.sig)
 	return true
 }
 

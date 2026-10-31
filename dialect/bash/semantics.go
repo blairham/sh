@@ -2299,6 +2299,14 @@ func Semantics() interp.Semantics {
 	// 3.2.57 and 5.3 called `sh` (#7063, #7064).
 	s.ExitInTheExitTrapOverridesASignalDeath = interp.No
 	s.FatalSignalInTheExitTrapEndsOnlyTheTrap = interp.No
+	// A `kill` aimed at `$$` is taken at the next command, as a signal from
+	// another process is, so the trap reads what `kill` left: `(exit 7); kill
+	// -TERM $$` is `bye 0`, `! kill -TERM $$` is `bye 1`, and a function
+	// changes neither. A `( … )` that sends it reads 7, the status from before
+	// the copy. Measured 2026-10-30 on bash 5.3.20, 3.2.57 and 5.3 called `sh`
+	// (#7062).
+	s.SelfAimedDeathIsTakenAtTheNextCommand = interp.Yes
+	s.DeathInAFunctionEndsTheCallAsKilled = interp.No
 	// And a `-c` string ending over an error the shell reported still runs
 	// it: measured 2026-10-16 on bash 5.3.20, a division by zero, a readonly
 	// reassignment and an unset name under `set -u` each print the handler

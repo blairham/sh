@@ -2778,6 +2778,11 @@ func Semantics() interp.Semantics {
 	// and dies of USR1, as it does for one sent from outside (#7064).
 	s.ExitInTheExitTrapOverridesASignalDeath = interp.No
 	s.FatalSignalInTheExitTrapEndsOnlyTheTrap = interp.No
+	// And no death is ever held for an EXIT trap here, so neither question
+	// about one is asked: `kill -TERM $$ 99999999` dies as it sends, without
+	// the complaint about the second operand. Measured 2026-10-30 (#7062).
+	s.SelfAimedDeathIsTakenAtTheNextCommand = interp.No
+	s.DeathInAFunctionEndsTheCallAsKilled = interp.No
 	s.ExitTrapRunsInsideTheExitingCall = interp.No
 	// But it does run inside the `eval` text or the sourced file the stop
 	// was raised in, once any function frames are left: `( trap…; eval

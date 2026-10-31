@@ -5014,6 +5014,12 @@ type Runner struct {
 	// told the front end about its EXIT trap. See outsidedeath.go.
 	exitTrapShownStatus *int
 	exitTrapPublished   bool
+	// selfAimedDeath is a fatal signal the shell at the top sent itself with
+	// an EXIT trap standing to run for it, held until the shell takes it, and
+	// statusAtTheCopy is `$?` as the shell at the top held it when it made
+	// the copy this runner is, or the copy above it. See selfaimeddeath.go.
+	selfAimedDeath  heldDeath
+	statusAtTheCopy int
 	// reservedOff is the declaration reserved words switched off, and
 	// reservedCommand the one the running simple command is, if any. See
 	// reservedoff.go.
@@ -6151,6 +6157,11 @@ func (r *Runner) clone() *Runner {
 	}
 	c := *r
 	c.fdNode = fdNode
+	if !r.inSubshell {
+		// What the shell was holding when it made the outermost copy, which
+		// a copy inside it inherits. See Runner.copysSelfAimedDeathShows.
+		c.statusAtTheCopy = r.status
+	}
 	c.inSubshell = true
 	// Where the parent was when it made the copy, for the dialect that
 	// counts a subshell's EXIT trap from there. See Runner.subshellOpenLine.
@@ -7566,6 +7577,10 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 		r.releaseCancellation()
 		return ctx.Err()
 	}
+	// The input ran out with a death the shell sent itself still held — its
+	// `kill` was the last command, or the last a prompt's line held — and
+	// there is no next command to take it at. See selfaimeddeath.go.
+	r.takeTheSelfAimedDeath()
 	return nil
 }
 
@@ -7630,8 +7645,9 @@ func (r *Runner) Finish(ctx context.Context) int {
 		}
 	}
 	// Anything that arrived during the last command still runs, before the
-	// EXIT trap does.
+	// EXIT trap does — a death the shell sent itself first, as at a command.
 	r.ctx = ctx
+	r.takeTheSelfAimedDeath()
 	r.runPendingTraps(ctx)
 	// A shell with no prompt accounts for the jobs it is abandoning here,
 	// because there is no `exit` to hold and no second one to leave on. At a
@@ -8186,6 +8202,12 @@ func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
 		// ended the session where the plain shape had been fixed, which is
 		// the half a fix at the raise site alone cannot reach.
 		r.ctl, r.abandon, r.errexitStopped = controlExit, abandonSubstParse, false
+		return nil
+	}
+	// A death the shell sent itself and has held for its EXIT trap, which
+	// the dialect that waits for the next command takes here. See
+	// selfaimeddeath.go.
+	if r.takeTheSelfAimedDeath() {
 		return nil
 	}
 	// Whatever arrived while the previous command ran. A shell finishes what
@@ -8802,7 +8824,7 @@ func (r *Runner) commandAt(ctx context.Context, c syntax.Command) error {
 	// `&&` list. Before the status the next command begins with is recorded,
 	// because the EXIT trap is shown the one the interrupted command began
 	// with. See outsidedeath.go.
-	if r.takeOutsideDeath() {
+	if r.takeOutsideDeath() || r.takeTheSelfAimedDeath() {
 		return nil
 	}
 	// Where this command begins, not where the statement holding it did.

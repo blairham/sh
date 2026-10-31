@@ -3389,7 +3389,19 @@ func (r *Runner) arithSpanValue(s syntax.Span) (string, bool) {
 	// its own — and one with no sentence of its own, which is the whole of
 	// what substLevel.arith says (#3355).
 	defer r.inArithText(s).undo()
+	failedBefore := r.expansionHasFailed()
 	tree, text, perr := r.arithTreeOver(s.Arith, s.Value, arithTextWritten)
+	if r.expansionFailedHere(failedBefore) {
+		// The text would not expand, and has said so where it failed. What it
+		// left is not the expression the script wrote, so it is neither read
+		// nor evaluated: measured 2026-10-31 under `-c`, `readonly a; echo
+		// $(( b=1${a[1]:=x}5 ))` is the refusal alone in bash 5.3.20, ksh93u+
+		// and zsh 5.9.2, as `echo $(( b = $((1/0)) + 1 ))` is the division
+		// alone, where this went on to read `b=1x5` or `b = + 1` and refuse
+		// that too. The `(( ))` command makes the same stop (#7189).
+		r.expandErr = true
+		return "", false
+	}
 	if perr != nil {
 		// A failure to *read* the expression, which can only happen once
 		// it has been expanded — so it is reported here rather than by

@@ -2197,6 +2197,9 @@ func Semantics() interp.Semantics {
 	// `(( ))` grammar here at all — `(( 1 ))` is a subshell running the
 	// command `1` — so no subscript ever fails inside one.
 	//
+	// unanswered FailedExpansionEscapesAnArithmeticCommand: the same wall —
+	// no `(( ))` grammar, so no text of one to fail to expand.
+	//
 	// unanswered ValuelessSubscriptedOperand: the same wall, one operand
 	// shape over. `readonly 'q[b c]'` with no value is the same `bad
 	// variable name` at 2, so there is no subscripted operand here to read

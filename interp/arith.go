@@ -3592,18 +3592,32 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 		failedBefore := r.expansionHasFailed()
 		tree, text, perr := r.arithTreeOver(c.Parsed, c.Expr, arithTextWritten)
 		putBackLine.undo()
+		expansionFailed := r.expansionFailedHere(failedBefore)
+		if expansionFailed && r.ask(r.sem().FailedExpansionEscapesAnArithmeticCommand,
+			"a failed expansion inside `(( ))` being given up as the expansion's failure") {
+			// The expansion's failure and not the construct's, given up the
+			// way a heading's is and before the construct is traced: see
+			// Semantics.FailedExpansionEscapesAnArithmeticCommand (#7189).
+			r.failedHeading()
+			return nil
+		}
 		// Traced from the expanded text and after the expansion, which is
 		// where the shells put it: `(( $(echo 1) ))` traces the substitution
 		// first and then `((  1  ))`. Before the parse, so an expression that
 		// will not parse is still reported as having been reached — a trace
 		// that skips what failed is the gap #2126 is about.
 		r.traceArithCommand(text, r.diag().TraceArithCommand)
-		if perr != nil && r.expansionFailedHere(failedBefore) {
+		if expansionFailed {
 			// The text would not expand, which has been reported where it
-			// failed: the expression it left is no expression, and reading it
-			// would report a second failure the script never caused. What is
-			// left is the status, which is the construct's own failure in the
-			// dialect whose failures are 2 (#5608).
+			// failed: what it left is not the expression the script wrote,
+			// so it is neither read nor evaluated. Reading it reported a
+			// second failure the script never caused (#5608), and evaluating
+			// it ran a store the script never asked for — `(( a[${a[1]:=x}]=5
+			// ))` on a frozen `a` was refused once for the expansion and again
+			// for the store, and `(( b = 15 + ${a[1]:=x}0 ))` assigned 15
+			// (#7189). That half is unanimous. What is left is the status,
+			// which is the construct's own failure in the dialect whose
+			// failures are 2.
 			if r.ctl == controlNone && r.ask(r.sem().ArithCommandErrorStatusIsTwo, "the status a failed `(( ))` leaves") {
 				r.status = 2
 			}

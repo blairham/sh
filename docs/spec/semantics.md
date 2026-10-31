@@ -18862,6 +18862,47 @@ and goes through the same door: `for (( i=a[b c]; i<1; i++ ))` writes the
 bare sentence and gives up the line in bash, where `for (( i=b c; … ))` —
 the header's own arithmetic — keeps the `((: ` prefix (#3507).
 
+### Nor is an expansion that fails in its text
+
+An expansion inside the text of `(( ))` or `$(( ))` is performed before the
+expression is read, so when it fails the text it leaves is not the
+expression the script wrote. **No column evaluates it**, and that half is
+unanimous. Measured 2026-10-31 under `-c`:
+
+    readonly a; (( b = 15 + ${a[1]:=x}0 ))     b is not assigned, anywhere
+    declare -a a; readonly a; (( a[${a[1]:=x}]=5 ))
+                                               `a: readonly variable` once
+    readonly a; echo $(( b = 1${a[1]:=x}5 ))   the refusal and nothing after
+    echo $(( b = $((1/0)) + 1 ))               the division and nothing after
+
+in bash 5.3.20, ksh93u+ and zsh 5.9.2. This implementation read and
+evaluated what was left: `b = 15 + x0` assigned 15, the frozen element's
+store was refused a second time, and `b=1x5` and `b = + 1` were refused as
+expressions after the expansion had already been (#7189).
+
+**What the failure ends is not unanimous**, and it is the same split as the
+bad subscript above, one noun over. With `; echo "after st=$?"` behind the
+construct and `echo line2 st=$?` on the next line:
+
+                                    bash 5.3.20  ksh93u+         zsh 5.9.2
+    (( $((1/0)) + 1 ))              line2 st=1   ends, 1         after st=2
+    set -x; (( b = $((1/0)) + 1 ))  no trace     no trace        traced
+    set -x; (( b = 1/0 ))           after st=1   traced, ends 1  after st=2
+
+The last row is the control: the construct's **own** failure. bash traces
+it and carries on with 1, and gives up the line — untraced — when the
+failure was the expansion's, exactly as `echo $((1/0))` and a `for (( ))`
+header do. ksh93 ends the shell either way, and the trace is what tells the
+two apart there: it traces its own failure and not the expansion's. zsh
+treats both as the construct's — traced, its own 2, the line running on.
+
+`Semantics.FailedExpansionEscapesAnArithmeticCommand` is Yes in bash and
+ksh93, where the failure goes through the door a compound command's
+heading does (so `FailedExpansionAbandonsTheLine` decides how far), and No
+in zsh, where the construct keeps `ArithCommandErrorStatusIsTwo`'s status.
+dash and BusyBox ash have no `(( ))` and leave it unanswered. `$(( ))` asks
+no axis: it is an expansion, and its failure is already the word's.
+
 ### Who made a write that could not aim a reference
 
 A value that cannot aim a name reference is refused, and the refusal

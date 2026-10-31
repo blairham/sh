@@ -4041,6 +4041,12 @@ func Semantics() interp.Semantics {
 	// evaluate: measured 2026-09-17, `(( a[b c] ))` is `b c: arithmetic
 	// syntax error` and exit 1 with nothing after it, by both routes.
 	s.BadSubscriptEscapesAnArithmeticCommand = interp.No
+	// An expansion that fails in the text is the expansion's failure, not
+	// the construct's: measured 2026-10-31, `set -x; (( b = $((1/0)) + 1
+	// ))` ends the shell at 1 with no trace of the construct, where `set -x;
+	// (( b = 1/0 ))` traces it before ending. See
+	// interp.Semantics.FailedExpansionEscapesAnArithmeticCommand (#7189).
+	s.FailedExpansionEscapesAnArithmeticCommand = interp.Yes
 	s.BadSubscriptToADeclaration = interp.BadSubscriptEndsTheScript
 	// An out-of-range store through each builtin, measured 2026-10-16 (#6835):
 	// see interp.Semantics.OutOfRangeElementToAnOutputOperand.

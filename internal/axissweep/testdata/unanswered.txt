@@ -153,6 +153,7 @@ ash   ExportLetterDeclaresAGlobal
 ash   ExportOrReadonlyTakesAReferenceToAnElement
 ash   ExportThroughASubscriptedOperandRecordsTheLetter
 ash   ExportedCompoundReachesAChildAsItsFirstValue
+ash   FailedExpansionEscapesAnArithmeticCommand
 ash   FailedOperandLeavesTheLettersKind
 ash   FailedSubscriptedLiteralKeepsWhatItStored
 ash   FailedTableAppendKeepsThePairsItAdded
@@ -569,6 +570,7 @@ dash  ExportLetterDeclaresAGlobal
 dash  ExportOrReadonlyTakesAReferenceToAnElement
 dash  ExportThroughASubscriptedOperandRecordsTheLetter
 dash  ExportedCompoundReachesAChildAsItsFirstValue
+dash  FailedExpansionEscapesAnArithmeticCommand
 dash  FailedOperandLeavesTheLettersKind
 dash  FailedSubscriptedLiteralKeepsWhatItStored
 dash  FailedTableAppendKeepsThePairsItAdded

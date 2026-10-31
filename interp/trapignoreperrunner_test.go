@@ -263,3 +263,75 @@ func TestARunnerLeavesAloneAnIgnoreItDidNotSet(t *testing.T) {
 		t.Error("a Runner that never ignored SIGUSR2 took away an ignore the program set while it ran")
 	}
 }
+
+// An ignore the process already had goes back when the last Runner holding the
+// signal finishes, and not before — #7052, in the shape it was found in.
+//
+// The process starts this row ignoring SIGUSR2, as one started under `nohup`
+// or with an ignore its parent set would. The *first* Runner does one thing to
+// USR2 and parks; the *listener* traps it and waits on a job. Each Runner used
+// to keep its own note of what the process was doing before its first `trap`,
+// and the two notes disagreed: the first found the ignore, and the listener
+// found the first's subscription. So the first to finish put the ignore back
+// with signal.Ignore while the listener was still waiting, which took the
+// listener's subscription with it, and a USR2 from another process was then
+// dropped by the kernel — `done` without `heard`. Finishing in the other order
+// heard it, so the outcome hung on an order nothing in either script can see.
+//
+// The second half is the other side of the same note: whichever Runner is the
+// last to let go, the process is ignoring USR2 again afterwards, because the
+// ignore was the process's and not either Runner's.
+func TestAnInheritedIgnoreGoesBackOnlyWhenTheLastRunnerHoldingTheSignalFinishes(t *testing.T) {
+	kill := externalKill(t)
+	const listen = "trap 'echo heard; kill $! 2>/dev/null' USR2\n" +
+		"/bin/sleep 5 &\n" +
+		"step ready\n" +
+		"wait $!\n" +
+		"echo done\n"
+	for _, first := range []struct{ name, src string }{
+		{"a handler", "trap : USR2"},
+		{"an ignore", "trap '' USR2"},
+		{"a reset of nothing", "trap - USR2"},
+	} {
+		for _, firstFinishesFirst := range []bool{true, false} {
+			order := "the first finishing first"
+			if !firstFinishesFirst {
+				order = "the first finishing last"
+			}
+			t.Run(first.name+", "+order, func(t *testing.T) {
+				restoreDispositionsAfter(t, []string{"USR2"})
+				signal.Ignore(syscall.SIGUSR2)
+
+				other := startSteppedWith(t, first.src+"\nstep ready\necho finished\n", reportsAKilledJob)
+				other.reach(t, "ready")
+				listener := startSteppedWith(t, listen, reportsAKilledJob)
+				listener.reach(t, "ready")
+
+				if firstFinishesFirst {
+					other.release()
+					other.wait(t)
+				}
+				if out, err := exec.Command(kill, "-USR2", strconv.Itoa(os.Getpid())).CombinedOutput(); err != nil {
+					t.Fatalf("%s -USR2: %v: %s", kill, err, out)
+				}
+				listener.release()
+				listener.wait(t)
+				if !firstFinishesFirst {
+					other.release()
+					other.wait(t)
+				}
+
+				if got, want := listener.out.String(), "heard\ndone\n"; got != want {
+					t.Errorf("the listener wrote %q, want %q: the Runner that finished first put the "+
+						"process's ignore back under it", got, want)
+				}
+				if got, want := other.out.String(), "finished\n"; got != want {
+					t.Errorf("the first Runner wrote %q, want %q", got, want)
+				}
+				if !signal.Ignored(syscall.SIGUSR2) {
+					t.Error("both Runners finished and the process no longer ignores SIGUSR2, which it did before either touched it")
+				}
+			})
+		}
+	}
+}

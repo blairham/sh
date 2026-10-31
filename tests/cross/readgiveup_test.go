@@ -175,6 +175,10 @@ func TestATrappedSignalGivesUpAReadWhereTheShellsDo(t *testing.T) {
 		{"part, command's <p", "ksh", partOfALine(readingOnly, "ab", `command read -r l <p`), gaveUpAB258, 0},
 		{"part, eval's <p", "ksh", partOfALine(readingOnly, "ab", `eval 'read -r l' <p`), gaveUpAB258, 0},
 		{"part, a function's <p", "ksh", partOfALine(readingOnly, "ab", `f() { read -r l; }; f <p`), readOn, 0},
+		{
+			"part, the <p of a function named for a builtin", "ksh",
+			partOfALine(readingOnly, "ab", `true() { command read -r l; }; true <p`), readOn, 0,
+		},
 		{"part, a group's <p", "ksh", partOfALine(readingOnly, "ab", `{ read -r l; } <p`), readOn, 0},
 		// And a copy of a descriptor open both ways is open both ways: a
 		// signal already waiting gives it up, `ab` left.

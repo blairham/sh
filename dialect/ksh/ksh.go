@@ -4117,8 +4117,9 @@ func Semantics() interp.Semantics {
 	s.ReadAbandonedReportsTheSignal = interp.Yes
 	// Except a read of its standard input from a descriptor open for reading
 	// alone, which reads on once a byte of its line is in: `cmd | read`, a
-	// pipe, a fifo opened `<`. Measured 2026-10-29 on ksh93u+; see
-	// interp.Semantics.ReadAbandonedWhen.
+	// pipe, a fifo opened `<`, the standard input the shell was handed, and a
+	// `-u` copy of any of them. Measured 2026-10-29 and 2026-10-31 on
+	// ksh93u+; see interp.Semantics.ReadAbandonedWhen.
 	s.ReadAbandonedWhen = interp.ReadAbandonedOnlyAtTheStartOfALine
 	// And such a read stops to run the handler of a signal that arrives
 	// during it, then goes on; one already waiting as it begins runs then.

@@ -27629,7 +27629,17 @@ command's end, which bash 5.3 and dash place by its number: HUP CHLD USR1
 USR2 for USR2 USR1 HUP sent during a `/bin/sleep`. A handler that replaces a
 later one's trap hands it the new action at its turn, in bash and dash.
 
-Asked only where two different conditions with a handler are in the batch.
+**Signals that land in a `read` are not a batch.** bash, zsh and ksh93 run a
+handler mid-read at the arrival (#7031), so USR1 and then HUP sent 0.3 s
+apart into a `read` that goes on run USR1 HUP in bash 5.3, bash 3.2 and zsh,
+and ksh93 does the same for INT and then USR1 three seconds apart. This shell
+runs them after the read, so each arrival in one is made a batch of its own.
+Four sent back to back do wait together in a bash `read` — `INT USR1 HUP
+TERM`, `TERM HUP USR1 INT` and `USR1 TERM INT HUP` all run HUP INT TERM USR1
+in 5.3 — and here they keep the order they came in, because nothing tells
+them from the spaced ones until a handler runs at the arrival here too.
+
+Asked only where two different conditions with a handler are in one batch.
 Not answered here: the three sorting columns run a condition that arrived
 twice once, and zsh once per arrival (#7166); this axis keeps both arrivals,
 side by side.
@@ -35336,4 +35346,6 @@ goroutine, and nothing ends that wait.
   assigns the empty string or `n` (#7038).
 
 Two handlers waiting together, found then too, are `WaitingHandlersRun` now
-(#7039).
+(#7039). The case that found it — signals sent back to back into a `read` —
+still runs in arrival order here, and waits on a handler run at the arrival
+(#7031).

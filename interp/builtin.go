@@ -6308,6 +6308,15 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// the optstring is an answer rather than a constant.
 	defer func(was int) { r.readWritesAsked = was }(r.readWritesAsked)
 	r.readWritesAsked = 0
+	// What arrives while the read waits runs one by one, in the order it
+	// came, rather than as one batch: see arrivalsDuringAReadRunOneByOne.
+	// The mark is taken without the lock where nothing has arrived, which is
+	// every read of a script that is not being signaled.
+	readMark := 0
+	if s := r.signals; s != nil && !s.nothingArrived() {
+		readMark = r.arrivalMark()
+	}
+	defer r.arrivalsDuringAReadRunOneByOne(readMark)
 	letters := r.sem().ReadOptions
 	if letters == "" {
 		letters = "r"

@@ -38559,6 +38559,15 @@ const (
 // action, read at its turn: bash 5.3, bash 3.2 and dash run `HUP NEW` for
 // `trap "echo HUP; trap 'echo NEW' USR2" HUP` with USR2 waiting behind it.
 //
+// Signals that land in a `read` are not a batch. bash, zsh and ksh93 run a
+// handler mid-read at the arrival (#7031), so two that come at different
+// moments run in the order they came there; this shell runs them after the
+// read, one batch each. Four sent back to back into a bash `read` do wait
+// together, and bash 5.3 runs them HUP INT TERM USR1 whatever order they were
+// sent in; this shell cannot tell those from the spaced ones until it runs a
+// handler at the arrival too, so they keep the order they came in. See
+// Runner.arrivalsDuringAReadRunOneByOne.
+//
 // What this does not answer is how many times a condition that arrived twice
 // runs: the three columns that sort run it once, and zsh once per arrival.
 // That is its own question (#7166); here a repeated condition keeps every

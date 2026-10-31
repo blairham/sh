@@ -116,6 +116,11 @@ type signalState struct {
 	// pending is what the shell already knows has arrived, ahead of the
 	// runtime telling it. Only `kill` puts anything here — see selfSignaled.
 	pending []string
+	// batchEnds splits pending into the batches its handlers run in, each
+	// entry one past a batch's last arrival; whatever follows the last entry
+	// is one batch. Empty — the usual case — is one batch of everything. See
+	// Runner.arrivalsDuringAReadRunOneByOne, the one writer that adds.
+	batchEnds []int
 	// queued is true while pending or a shared death may hold something,
 	// and is written only with mu held, by queue and recordSharedDeath and
 	// by the two takers that empty them. It is what lets the check made at
@@ -1212,22 +1217,60 @@ func (r *Runner) takeSharedDeath() (sharedDeath, bool) {
 	return d, true
 }
 
-// takePending reports the arrivals the handler has not run yet.
+// takePending reports the arrivals the handler has not run yet, and where the
+// batches they run in end (see signalState.batchEnds).
 //
 // What the shell recorded itself comes first and is already in order; what the
 // runtime forwarded — a signal from some other process — is drained after it.
-func (r *Runner) takePending() []string {
+func (r *Runner) takePending() (got []string, ends []int) {
 	s := r.signals
 	if s == nil {
-		return nil
+		return nil, nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.drainForwarded()
-	got := s.pending
-	s.pending = nil
+	got, ends = s.pending, s.batchEnds
+	s.pending, s.batchEnds = nil, nil
 	s.settleQueued()
-	return got
+	return got, ends
+}
+
+// arrivalsDuringAReadRunOneByOne makes every arrival from mark on a batch of
+// its own, mark being arrivalMark as a `read` began; it is deferred there.
+//
+// A `read` is where the shells that run a handler mid-read do it at the
+// arrival — bash, zsh and ksh93 (#7031) — so two signals that land in one at
+// different moments never wait together there, and run in the order they came
+// whatever Semantics.WaitingHandlersRun says. This shell runs them after the
+// read instead, which would make one batch of them for that axis to sort.
+// Measured 2026-10-31 with USR1 and then HUP sent 0.3 s apart into a `read`
+// that goes on: bash 5.3.20, bash 3.2.57 and zsh 5.9.2 run USR1 HUP, and
+// ksh93u+ does the same with INT and then USR1 three seconds apart.
+//
+// Signals that land at the same moment do wait together there — bash 5.3
+// runs four sent back to back into a `read` in number order — and this shell
+// cannot tell those apart from these until it runs a handler at the arrival
+// too, which is #7031. Until then they run in the order they came, as they
+// did before the axis existed. A subshell's read is left alone: what it
+// holds is the shell at the top's, which was waiting for a child.
+func (r *Runner) arrivalsDuringAReadRunOneByOne(mark int) {
+	s := r.signals
+	if s == nil || r.inSubshell || s.nothingArrived() {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.drainForwarded()
+	from := mark
+	if n := len(s.batchEnds); n > 0 && s.batchEnds[n-1] > from {
+		from = s.batchEnds[n-1]
+	}
+	for end := from; end <= len(s.pending); end++ {
+		if end > 0 && (len(s.batchEnds) == 0 || s.batchEnds[len(s.batchEnds)-1] < end) {
+			s.batchEnds = append(s.batchEnds, end)
+		}
+	}
 }
 
 // pendingTrap reports an arrival that has a handler waiting to run, and the
@@ -1498,7 +1541,7 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 		if r.inbox != nil {
 			pending = append(pending, r.inbox.take()...)
 		}
-		pending, ok := r.orderWaitingHandlers(pending, func(name string) bool {
+		pending, ok := r.orderWaitingHandlers(pending, nil, func(name string) bool {
 			return r.traps[name] != ""
 		})
 		if !ok {
@@ -1529,7 +1572,8 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 		return
 	}
 	s := r.sigs()
-	pending, ok := r.orderWaitingHandlers(r.takePending(), func(name string) bool {
+	batch, ends := r.takePending()
+	pending, ok := r.orderWaitingHandlers(batch, ends, func(name string) bool {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		return s.traps[name] != ""
@@ -1557,19 +1601,58 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 	}
 }
 
-// orderWaitingHandlers puts one batch of arrivals in the order their handlers
-// run, which is the dialect's: see Semantics.WaitingHandlersRun. handled
+// orderWaitingHandlers puts the arrivals in the order their handlers run,
+// which within each batch is the dialect's: see Semantics.WaitingHandlersRun.
+// ends is where the batches end (see signalState.batchEnds), and handled
 // reports whether a condition has a handler that runs something.
 //
 // The axis is asked only where two different conditions with a handler are
-// in the batch, the one place the answers part; anywhere else the batch is
-// handed back as it came, unasked. The bool is false where the axis has no
-// answer, and the batch is then not run.
+// in one batch, the one place the answers part; anywhere else the arrivals
+// are handed back as they came, unasked. The bool is false where the axis has
+// no answer, and nothing is then run.
 //
-// The sort is stable, so a condition that is in the batch twice keeps both
+// The sort is stable, so a condition that is in a batch twice keeps both
 // arrivals, next to each other. Whether it should is #7166's question.
-func (r *Runner) orderWaitingHandlers(batch []string, handled func(string) bool) ([]string, bool) {
-	first, several := "", false
+func (r *Runner) orderWaitingHandlers(arrivals []string, ends []int, handled func(string) bool) ([]string, bool) {
+	var batches [][]string
+	from := 0
+	for _, end := range append(ends, len(arrivals)) {
+		end = min(end, len(arrivals))
+		if end > from {
+			batches = append(batches, arrivals[from:end])
+			from = end
+		}
+	}
+	if !slices.ContainsFunc(batches, func(b []string) bool { return severalHandled(b, handled) }) {
+		return arrivals, true
+	}
+	byNumber := func(a, b string) int {
+		return cmp.Compare(trapConditionSignal(a), trapConditionSignal(b))
+	}
+	var order func(a, b string) int
+	switch r.sem().WaitingHandlersRun {
+	case WaitingHandlersRunAsTheyArrived:
+		return arrivals, true
+	case WaitingHandlersRunUpTheSignalNumbers:
+		order = byNumber
+	case WaitingHandlersRunDownTheSignalNumbers:
+		order = func(a, b string) int { return byNumber(b, a) }
+	default:
+		r.diagf("%s\n", r.unanswered("the order several waiting signal handlers run in"))
+		r.status = 2
+		r.unspecified = true
+		return nil, false
+	}
+	for _, b := range batches {
+		slices.SortStableFunc(b, order)
+	}
+	return arrivals, true
+}
+
+// severalHandled reports whether a batch holds two different conditions with
+// a handler each.
+func severalHandled(batch []string, handled func(string) bool) bool {
+	first := ""
 	for _, name := range batch {
 		if !handled(name) {
 			continue
@@ -1577,30 +1660,10 @@ func (r *Runner) orderWaitingHandlers(batch []string, handled func(string) bool)
 		if first == "" {
 			first = name
 		} else if name != first {
-			several = true
-			break
+			return true
 		}
 	}
-	if !several {
-		return batch, true
-	}
-	byNumber := func(a, b string) int {
-		return cmp.Compare(trapConditionSignal(a), trapConditionSignal(b))
-	}
-	switch r.sem().WaitingHandlersRun {
-	case WaitingHandlersRunAsTheyArrived:
-		// The batch is in the order it came in already.
-	case WaitingHandlersRunUpTheSignalNumbers:
-		slices.SortStableFunc(batch, byNumber)
-	case WaitingHandlersRunDownTheSignalNumbers:
-		slices.SortStableFunc(batch, func(a, b string) int { return byNumber(b, a) })
-	default:
-		r.diagf("%s\n", r.unanswered("the order several waiting signal handlers run in"))
-		r.status = 2
-		r.unspecified = true
-		return nil, false
-	}
-	return batch, true
+	return false
 }
 
 // runTrapHandler runs one handler body, with what the interrupted script can

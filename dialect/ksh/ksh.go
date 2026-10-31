@@ -2318,6 +2318,13 @@ func Semantics() interp.Semantics {
 	// declines the line. Measured 2026-09-26 on ksh93u+ 2012-08-01 (#4622).
 	s.ReadArrayTakesOneNameOnly = interp.No
 	s.ReadPartialCountSucceeds = interp.Yes
+	// A count of zero takes nothing from the stream: after `read -n 0 v`
+	// on `ab\ncd\n` the next `read` takes `ab`. What lands in v is bytes
+	// that were never read, different on every run, so the value is not
+	// modeled and the stream is what this answers. Measured 2026-10-31 on
+	// ksh93u+ 2012-08-01. See interp.Semantics.ReadCountOfZeroIsNoCount
+	// (#7036).
+	s.ReadCountOfZeroIsNoCount = interp.No
 	s.ReadExactCountKeepsPartial = interp.No
 	s.ReadTimeoutKeepsWhatArrived = interp.No
 	s.ReadTimeoutBoundsReadability = interp.No

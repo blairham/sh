@@ -2105,6 +2105,8 @@ func Semantics() interp.Semantics {
 	// `read` has no count letter — `-n` and `-N` are both `Illegal option`
 	// — so nothing here can ask it.
 	// unanswered ReadCountFillsTheFirstNameWhole: the same reason.
+	// unanswered ReadCountOfZeroIsNoCount: the same reason — `read -n 0 v`
+	// is `Illegal option -n` at 2 before anything is read.
 	// unanswered ExportThroughASubscriptedOperandRecordsTheLetter: no
 	// arrays and no subscripted operand, so nothing reaches it.
 	s.DeclarationTakesASubscript = interp.No

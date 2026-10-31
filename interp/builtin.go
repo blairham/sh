@@ -6551,6 +6551,18 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		}
 		count, exact = n, true
 	}
+	// A count of zero is the one count the shells read two ways: as a
+	// count, which reads nothing, or as no count at all, which reads on to
+	// the delimiter. See Semantics.ReadCountOfZeroIsNoCount.
+	if count == 0 && !exact {
+		if r.ask(r.sem().ReadCountOfZeroIsNoCount,
+			"`read -n 0` reading on as though no count were given") {
+			count = -1
+		}
+		if r.unspecified {
+			return r.status
+		}
+	}
 
 	// -k is the third count and is not one of these two: it reads characters
 	// from the *terminal*, nothing is a terminator, and one name is filled

@@ -309,6 +309,48 @@ func TestAShortCountAsksTheDialect(t *testing.T) {
 	}
 }
 
+// TestACountOfZeroAsksTheDialect: `-n 0` is the one count the shells read two
+// ways, so it asks ReadCountOfZeroIsNoCount. No reads nothing and leaves the
+// line for the next reader; yes reads it as a plain `read` would, delimiter,
+// status and all; unanswered, the read is refused by name at 2 before it takes
+// anything. The controls hold the count away from zero, or make it `-N 0`, and
+// answer the same under every value — so it is the zero of `-n` that asks.
+func TestACountOfZeroAsksTheDialect(t *testing.T) {
+	answering := func(a Answer) func(*Runner) {
+		return func(r *Runner) {
+			s := *r.Semantics
+			s.ReadCountOfZeroIsNoCount = a
+			r.Semantics = &s
+		}
+	}
+	for _, tc := range []struct{ name, src, no, yes string }{
+		{"a line and more", `printf 'ab\ncd\n' | { v=x; read -n 0 v; read w; echo "st=$? [$v][$w]"; }`, "st=0 [][ab]\n", "st=0 [ab][cd]\n"},
+		{"no newline", `printf ab | { v=x; read -n 0 v; echo "st=$? [$v]"; }`, "st=0 []\n", "st=1 [ab]\n"},
+		{"nothing at all", `printf '' | { v=x; read -n 0 v; echo "st=$? [$v]"; }`, "st=0 []\n", "st=1 []\n"},
+		{"its own delimiter", `printf abxcd | { v=x; read -d x -n 0 v; echo "st=$? [$v]"; }`, "st=0 []\n", "st=0 [ab]\n"},
+		{"two names", `printf 'a b c\n' | { read -n 0 x y; echo "st=$? [$x][$y]"; }`, "st=0 [][]\n", "st=0 [a][b c]\n"},
+		{"a zero spelled twice", `printf 'ab\n' | { v=x; read -n 00 v; echo "st=$? [$v]"; }`, "st=0 []\n", "st=0 [ab]\n"},
+
+		{"a count of one", `printf 'ab\n' | { v=x; read -n 1 v; echo "st=$? [$v]"; }`, "st=0 [a]\n", "st=0 [a]\n"},
+		{"an exact count of zero", `printf 'ab\n' | { v=x; read -N 0 v; read w; echo "st=$? [$v][$w]"; }`, "st=0 [][ab]\n", "st=0 [][ab]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if out, st := run(t, tc.src, answering(No)); out != tc.no || st != 0 {
+				t.Errorf("no: got %q (status %d), want %q", out, st, tc.no)
+			}
+			if out, st := run(t, tc.src, answering(Yes)); out != tc.yes || st != 0 {
+				t.Errorf("yes: got %q (status %d), want %q", out, st, tc.yes)
+			}
+		})
+	}
+	src := `printf 'ab\ncd\n' | { v=x; read -n 0 v; echo "st=$? [$v]"; read w; echo "[$w]"; }`
+	out, _ := run(t, src, answering(Unspecified))
+	if !strings.Contains(out, "`read -n 0` reading on as though no count were given: "+shellsDisagree) ||
+		!strings.HasSuffix(out, "st=2 [x]\n[ab]\n") {
+		t.Errorf("got %q, want the refusal naming the question, v untouched and the line still there", out)
+	}
+}
+
 // TestReadExactCountTakesTheTextWhole: -N makes the delimiter and the
 // backslash ordinary and hands the text over unsplit — the second name gets
 // nothing rather than a field.

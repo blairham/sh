@@ -256,6 +256,9 @@ func testSemantics() Semantics {
 	s.ReadOptions = "rsa:d:n:N:p:t:u:"
 	s.ReadExactCountKeepsPartial = Yes
 	s.ReadPartialCountSucceeds = No
+	// A count of zero reads nothing, which is bash 5's answer. The test
+	// that is about both is TestACountOfZeroAsksTheDialect.
+	s.ReadCountOfZeroIsNoCount = No
 	// A count splits what it took across the names, which is bash's answer.
 	// The suite that is about both is readcountwhole_test.go.
 	s.ReadCountFillsTheFirstNameWhole = No

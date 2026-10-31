@@ -2713,6 +2713,13 @@ func Semantics() interp.Semantics {
 	// bash 5.3 and 3.2 answer each row identically and ksh93 calls them all
 	// 0. Measured 2026-10-29 in the pinned image, BusyBox v1.37.0 (#7033).
 	s.ReadPartialCountSucceeds = interp.No
+	// A count of zero is no count at all: `printf 'ab\ncd\n' | { read -n 0
+	// v; read w; }` leaves v=ab and w=cd, and every row around it — -r, -d,
+	// -t, two names, REPLY, a fifo, a regular file — answers as the same
+	// read without `-n 0` does. bash 3.2 agrees row for row and bash 5.3
+	// reads nothing. Measured 2026-10-31 in the pinned image, BusyBox
+	// v1.37.0; the rows are on the field (#7036).
+	s.ReadCountOfZeroIsNoCount = interp.Yes
 
 	// `set -e` stops for a failure only pipefail saw: `set -eo pipefail;
 	// false | true; echo reached` reaches nothing and the shell ends at 1,

@@ -674,6 +674,7 @@ dash  ReadArrayDefault
 dash  ReadArrayTakesOneNameOnly
 dash  ReadCountFillsTheFirstNameWhole
 dash  ReadCountJudgesTheNamesAfterTheFirst
+dash  ReadCountOfZeroIsNoCount
 dash  ReadDelimiterIsTheLocalesCharacter
 dash  ReadEchoLettersWriteTheValues
 dash  ReadExactCountKeepsPartial
@@ -891,6 +892,7 @@ zsh   PrintfOutputPrecedesComplaint
 zsh   PrintfReportsAMissingHexDigit
 zsh   ReadCountFillsTheFirstNameWhole
 zsh   ReadCountJudgesTheNamesAfterTheFirst
+zsh   ReadCountOfZeroIsNoCount
 zsh   ReadExactCountKeepsPartial
 zsh   ReadPartialCountSucceeds
 zsh   ReadonlyReferenceLetter

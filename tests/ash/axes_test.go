@@ -96,6 +96,12 @@ func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 				"reaches no question and cannot stand in for this (#7033)",
 		},
 		{
+			"a count of zero",
+			`printf 'ab\ncd\n' | { read -n 0 v; read w; echo "st=$? [$v][$w]"; }`,
+			"ReadCountOfZeroIsNoCount — asked only where `-n`'s argument is " +
+				"zero, so any other count reaches no question (#7036)",
+		},
+		{
 			"which of echo -e -E decides",
 			`echo -e -E 'm\tn'`,
 			"EchoLastEscapeFlagWins",

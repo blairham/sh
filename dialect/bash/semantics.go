@@ -1150,6 +1150,12 @@ func Semantics() interp.Semantics {
 	// after it is an ordinary name to fill and there is no second array
 	// operand to judge. Measured 2026-09-26 on bash 5.3.
 	s.ReadPartialCountSucceeds = interp.No
+	// A count of zero reads nothing: `printf 'ab\ncd\n' | { read -n 0 v;
+	// read w; }` leaves v empty at 0 and w=ab. bash 3.2 and 4.4 read the
+	// line instead, as though no count were given; 5.0 is the first release
+	// that does not. This preset is bash 5's. See
+	// interp.Semantics.ReadCountOfZeroIsNoCount (#7036).
+	s.ReadCountOfZeroIsNoCount = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes
 	s.ReadTimeoutKeepsWhatArrived = interp.Yes
 	s.ReadTimeoutBoundsReadability = interp.No

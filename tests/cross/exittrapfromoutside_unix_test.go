@@ -206,6 +206,51 @@ func TestAFatalSignalFromOutsideEndsAKeywordCallInOneDialect(t *testing.T) {
 	}
 }
 
+// What each dialect does with a fatal signal from another process that lands
+// while a `( … )` or `$( … )` waits for a program (#7068).
+//
+// Measured 2026-10-31, each shell in a session of its own, TERM from
+// `/bin/kill` in another process while the `sleep` runs:
+//
+//	trap 'echo "bye $?"' EXIT; (exit 7); ( /bin/sleep 2; echo in ); echo after
+//	    ksh93u+               in, bye 0, killed by TERM at 2 s
+//	    bash 5.3.20           bye 7, killed by TERM at once
+//	    zsh 5.9.2             killed by TERM at once, nothing run
+//	trap 'echo "bye $?"' EXIT; (exit 7); x=$(/bin/sleep 2; exit 3); echo after
+//	    ksh93u+               bye 3, killed by TERM at 2 s
+//	    bash 5.3.20           bye 7, killed by TERM at once
+//
+// ksh93 runs both in its own process and waits them out, which is
+// Semantics.SignalDeathWaitsForAnUnforkedSubshell read through each preset and
+// the front end that owns the process. This shell's ksh died at once in both
+// with `bye 7`. The program here outlives the signal by longer than the front
+// end waits for a death it hands over to be taken, so a shell that waits it
+// out has to have taken the death first, or the front end would end the
+// process with nothing run.
+func TestADeathFromOutsideWaitsForAnUnforkedSubshellInOneDialect(t *testing.T) {
+	const wait = `/bin/sh -c 'printf r >"$1"; exec sleep 2.5' sh "$READY"`
+	const trap = `trap 'echo "bye $?"' EXIT; (exit 7); `
+	for _, c := range []struct {
+		dialect, name, script, out string
+	}{
+		{"ksh", "parentheses", trap + `( ` + wait + `; echo in ); echo after`, "in\nbye 0\n"},
+		{"ksh", "a substitution", trap + `x=$(` + wait + `; exit 3); echo after`, "bye 3\n"},
+		{"bash", "parentheses", trap + `( ` + wait + `; echo in ); echo after`, "bye 7\n"},
+		{"bash", "a substitution", trap + `x=$(` + wait + `; exit 3); echo after`, "bye 7\n"},
+		{"zsh", "parentheses", trap + `( ` + wait + `; echo in ); echo after`, ""},
+	} {
+		t.Run(c.dialect+"/"+c.name, func(t *testing.T) {
+			ws, out := diesFromOutside(t, c.dialect, syscall.SIGTERM, c.script)
+			if !ws.Signaled() || ws.Signal() != syscall.SIGTERM {
+				t.Errorf("ended %v, want killed by TERM", ws)
+			}
+			if out != c.out {
+				t.Errorf("wrote %q, want %q", out, c.out)
+			}
+		})
+	}
+}
+
 // outsideDeathTrapAt7 is the script TestADialectsExitTrapAnswersAFatalSignalFromOutside
 // measures: an EXIT trap, `$?` at 7, and a program the shell waits for.
 const outsideDeathTrapAt7 = `trap 'echo "bye $?"' EXIT; (exit 7); /bin/sh -c 'printf r >"$1"; exec sleep 30' sh "$READY"; echo after`

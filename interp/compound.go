@@ -168,6 +168,11 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// are a background job's body or a pipeline element that is not the
 		// last. See Runner.subshellUnforked.
 		sub.subshellUnforked = !r.forkedForABackgroundJob && !r.midPipeline
+		// And one a fatal signal from outside waits for, in the dialect
+		// that runs them in its own process. See unforkeddeath.go.
+		if sub.subshellUnforked {
+			defer r.enterAnUnforkedSubshell(sub)()
+		}
 		// And a signal aimed at the job, where these parentheses are the
 		// job's fork: their traps are the ones it reaches. See
 		// bodyinbox.go.
@@ -236,6 +241,9 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 			r.signalDeath("INT", syscall.SIGINT)
 			r.heldInterruptDeath = true
 		}
+		// And a fatal signal from outside the body held is this shell's now.
+		// See unforkeddeath.go.
+		r.takeOverAHeldDeath(sub)
 		// And a signal that ended the *parentheses themselves* is a child
 		// this shell has to say something about, in the dialect that says
 		// anything about one. It is the same sentence an external command

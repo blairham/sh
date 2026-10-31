@@ -186,6 +186,9 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// get it are measured.
 	sub.arraysAreAView = true
 	sub.subshellUnforked = true
+	// And one a fatal signal from outside waits for, in the dialect that runs
+	// it in its own process. See unforkeddeath.go.
+	defer r.enterAnUnforkedSubshell(sub)()
 	// **Whether the body's shell holds `set -e`** — the one option a
 	// substitution does not simply inherit, and a disagreement rather than a
 	// gap. See Semantics.ErrExitEntersACommandSubstitution for the panel.
@@ -297,6 +300,12 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// a pipe to a child, and reaps that child here. See Runner.childReaped.
 	r.childWaitedFor()
 	r.noticeFinishedJobs()
+	if r.takeOverAHeldDeath(sub) {
+		// A fatal signal from outside the body held ends the subshell this
+		// shell is, and the word holding the substitution is never
+		// finished. See unforkeddeath.go.
+		return ""
+	}
 	return r.substitutedValue(out.String())
 }
 

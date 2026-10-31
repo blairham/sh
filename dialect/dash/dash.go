@@ -1292,6 +1292,10 @@ func Semantics() interp.Semantics {
 	s.DeathInAFunctionEndsTheCallAsKilled = interp.No
 	// dash has no `function` keyword, and catches nothing to end one with.
 	s.SignalDeathEndsAtAKeywordFunctionCall = interp.No
+	// Nor a subshell to wait out: measured 2026-10-31, TERM during `(
+	// /bin/sleep 2; echo in )` kills dash at once with no trap run, the
+	// parentheses writing `in` at 2 s (#7068).
+	s.SignalDeathWaitsForAnUnforkedSubshell = interp.No
 	// And a `-c` string ending over an error the shell reported still runs
 	// it: measured 2026-10-16 on dash, a division by zero, a readonly
 	// reassignment and an unset name under `set -u` each print the handler

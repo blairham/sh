@@ -283,6 +283,9 @@ func (r *Runner) startBeside(
 		parts:   1,
 		Command: name,
 	}
+	// A command beside the shell forks a subshell the shell was running in
+	// its own process, as `&` does. See unforkeddeath.go.
+	r.startsAJob()
 	sub := r.clone()
 	sub.inheritJobs(jobBoundaryBackground)
 	sub.retagTrapBoundary(trapContextBackground)

@@ -6567,6 +6567,46 @@ type Semantics struct {
 	// ask.
 	SignalDeathEndsAtAKeywordFunctionCall Answer
 
+	// SignalDeathWaitsForAnUnforkedSubshell holds a fatal signal the shell
+	// has caught, landing while a `( … )` or `$( … )` it runs in its own
+	// process waits for a program, until that subshell is over: the program
+	// and the rest of the subshell run to their end, and the shell dies of
+	// the signal there.
+	//
+	//	trap 'echo "bye $?"' EXIT; (exit 7)
+	//	( /bin/sleep 2; echo in ); echo after
+	//
+	// with TERM from another process during the `sleep` writes `in` and `bye
+	// 0` and dies of TERM at 2 s in ksh93; bash 5.3 writes `bye 7` and dies at
+	// once, and so do zsh and dash with nothing written, since each runs the
+	// parentheses in a child the signal never reaches. `x=$(/bin/sleep 2;
+	// exit 3)` is `bye 3` at 2 s in ksh93 and `bye 7` at once in bash 5.3.
+	// Measured 2026-10-31, each shell in a session of its own: ksh93u+ yes;
+	// bash 5.3.20, zsh 5.9.2 and dash no (#7068). bash 3.2.57 waits for the
+	// substitution and not for the parentheses, and no dialect models it.
+	//
+	// Caught means what it means for SignalDeathEndsAtAKeywordFunctionCall:
+	// an EXIT trap set at any point. A builtin the signal lands in ends the
+	// subshell as killed, the subshell around it dies of it as it ends, and a
+	// later program or subshell inside it lets it go. See unforkeddeath.go
+	// for the rows. Reached only where ExitTrapRunsOnSignalDeath says yes,
+	// because a shell that runs no EXIT trap on a death has caught nothing:
+	// zsh, dash and BusyBox ash never ask.
+	//
+	// unpinned bash: no corpus row sends the shell a signal from outside;
+	// pinned by TestADeathFromOutsideWaitsForAnUnforkedSubshellInOneDialect.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestADeathFromOutsideWaitsForAnUnforkedSubshellInOneDialect.
+	//
+	// unpinned zsh: never asked, since no EXIT trap runs on a death; pinned
+	// by TestADeathFromOutsideWaitsForAnUnforkedSubshellInOneDialect.
+	//
+	// unpinned dash: never asked, for the same reason.
+	//
+	// unpinned ash: never asked, for the same reason.
+	SignalDeathWaitsForAnUnforkedSubshell Answer
+
 	// ExitTrapRunsInsideTheExitingCall runs the EXIT trap at the point `exit`
 	// was written, with the call that ran it still standing, rather than
 	// after the stack has unwound.

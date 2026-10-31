@@ -2793,6 +2793,10 @@ func Semantics() interp.Semantics {
 	// same TERM in one dies with nothing written. Measured 2026-10-31 on zsh
 	// 5.9.2 (#7067).
 	s.SignalDeathEndsAtAKeywordFunctionCall = interp.No
+	// Nor for a subshell to wait out: the same TERM during `( /bin/sleep 2;
+	// echo in )` kills it at once with no trap run, the parentheses writing
+	// `in` at 2 s. Measured 2026-10-31 on zsh 5.9.2 (#7068).
+	s.SignalDeathWaitsForAnUnforkedSubshell = interp.No
 	s.ExitTrapRunsInsideTheExitingCall = interp.No
 	// But it does run inside the `eval` text or the sourced file the stop
 	// was raised in, once any function frames are left: `( trap…; eval

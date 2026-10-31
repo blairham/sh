@@ -822,6 +822,9 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// Starting a job is a moment the shell sees what has ended, without
 	// reaping it. See Runner.noticeElementEndsAs.
 	r.noticeElementEndsAs(false)
+	// And it forks a subshell the shell was running in its own process, in
+	// the dialect that waits a death out for one. See unforkeddeath.go.
+	r.startsAJob()
 	job := &Job{
 		done:     make(chan struct{}),
 		ready:    make(chan struct{}),

@@ -2111,6 +2111,8 @@ func Semantics() interp.Semantics {
 	// And it catches no fatal signal for a `function name { … }` call to end,
 	// since it runs no EXIT trap on one (#7067).
 	s.SignalDeathEndsAtAKeywordFunctionCall = interp.No
+	// Nor a subshell to wait out, for the same reason (#7068).
+	s.SignalDeathWaitsForAnUnforkedSubshell = interp.No
 	// And a `-c` string ending over an error the shell reported still runs
 	// it: measured 2026-10-16 on BusyBox ash 1.37.0 in alpine:3, a division by zero, a readonly
 	// reassignment and an unset name under `set -u` each print the handler

@@ -2317,6 +2317,12 @@ func Semantics() interp.Semantics {
 	// -TERM $$` in the body. Measured 2026-10-31 on bash 5.3.20 and 3.2.57
 	// (#7067).
 	s.SignalDeathEndsAtAKeywordFunctionCall = interp.No
+	// And a `( … )` or `$( … )` is a child the signal never reaches, so the
+	// shell dies at once: `trap 'echo "bye $?"' EXIT; (exit 7); ( /bin/sleep 2;
+	// echo in ); echo after` with TERM from another process writes `bye 7` and
+	// dies at once, the parentheses writing `in` at 2 s. Measured 2026-10-31 on
+	// bash 5.3.20; bash 3.2.57 waits for a substitution (#7068).
+	s.SignalDeathWaitsForAnUnforkedSubshell = interp.No
 	// And a `-c` string ending over an error the shell reported still runs
 	// it: measured 2026-10-16 on bash 5.3.20, a division by zero, a readonly
 	// reassignment and an unset name under `set -u` each print the handler

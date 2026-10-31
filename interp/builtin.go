@@ -6712,12 +6712,14 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	next, giveBack := lineByteSource(in)
 	defer giveBack()
 	// What a trapped signal that gives this read up looks at, in the dialect
-	// that gives one up: whether the stream was named by number and whether
-	// the read counts. See Semantics.ReadAbandonedWhen. The signal itself is
+	// that gives one up: the number the stream was named by and whether the
+	// read counts. See Semantics.ReadAbandonedWhen. The signal itself is
 	// cleared first, since only this read's may be reported.
 	r.readAbandonedBy = 0
-	_, byNumber := optArg['u']
-	byNumber = byNumber || coprocSource >= 0
+	readsFrom := readFd
+	if coprocSource >= 0 {
+		readsFrom = coprocSource
+	}
 	switch {
 	case timed && timeout == 0:
 		// A timeout of zero is a question about the stream rather than a
@@ -6770,7 +6772,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// up (#7027), and in the others may still end its wait for the first
 		// byte as the deadline would (#7032), or stop it to run its handler
 		// (#7031).
-		watch := r.timedReadWatchFor(ctx, in, byNumber, count >= 0)
+		watch := r.timedReadWatchFor(ctx, in, readsFrom, count >= 0)
 		if polled, can := polledTimedSource(ctx, in, timeout, whole, watch); can {
 			next = polled
 			break
@@ -6785,7 +6787,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// stops to run its handler in the middle of, in the dialect that
 		// does that. See Semantics.ReadIsAbandonedByATrappedSignal and
 		// Semantics.ReadHandlersRun.
-		if watch, ok := r.readWatchFor(ctx, in, byNumber, count >= 0); ok && !buffered {
+		if watch, ok := r.readWatchFor(ctx, in, readsFrom, count >= 0); ok && !buffered {
 			src, stop := r.trapInterruptibleByteSource(in, watch)
 			next = src
 			defer stop()

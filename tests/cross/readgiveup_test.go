@@ -148,6 +148,41 @@ func TestATrappedSignalGivesUpAReadWhereTheShellsDo(t *testing.T) {
 		{"part, -u", "ksh", partOfALine(readingOnly, "ab", byNumber), gaveUpAB258, 0},
 		{"nothing, -u", "ksh", partOfALine(readingOnly, "", byNumber), "T\nst=258 l=[]\nnext [cd]\n", 0},
 		{"part, -n", "ksh", partOfALine(readingOnly, "ab", `read -r -n 4 l <&3`), "T\nst=0 l=[ab]\nnext [cd]\n", 0},
+		// Where the stream came from (#7030), measured 2026-10-31 on ksh93u+
+		// with these scripts. A `-u` read of a descriptor the script opened
+		// at that number is given up at the next byte, and one of a copy
+		// reads on as standard input does — a copy of itself, and a copy
+		// whose source has been closed, included; a move keeps what its
+		// source was.
+		{"part, -u on a copy", "ksh", partOfALine(readingOnly+`; exec 5<&3`, "ab", `read -r -u5 l`), readOn, 0},
+		{"part, -u on a copy of itself", "ksh", partOfALine(readingOnly+`; exec 3<&3`, "ab", byNumber), readOn, 0},
+		{"part, -u on a {name} copy", "ksh", partOfALine(readingOnly+`; exec {v}<&3`, "ab", `read -r -u$v l`), readOn, 0},
+		{
+			"part, -u on a copy whose source closed", "ksh",
+			partOfALine(`exec 4<>p 5<p; exec 3<&5; exec 5<&-`, "ab", byNumber), readOn, 0,
+		},
+		{"part, -u on a move", "ksh", partOfALine(`exec 4<>p 5<p; exec 3<&5-`, "ab", byNumber), gaveUpAB258, 0},
+		{
+			"part, -u on a moved copy", "ksh",
+			partOfALine(`exec 4<>p 5<p; exec 6<&5; exec 3<&6-`, "ab", byNumber), readOn, 0,
+		},
+		// `-u0` is standard input, which reads on — unless a builtin's own
+		// redirection opened it, which `exec` and a function's or a group's
+		// do not count as.
+		{"part, -u0", "ksh", partOfALine(readingOnly+`; exec 0<&3`, "ab", `read -r -u0 l`), readOn, 0},
+		{"part, its own <p", "ksh", partOfALine(readingOnly, "ab", `read -r l <p`), gaveUpAB258, 0},
+		{"part, -u0 and its own <p", "ksh", partOfALine(readingOnly, "ab", `read -r -u0 l <p`), gaveUpAB258, 0},
+		{"part, command's <p", "ksh", partOfALine(readingOnly, "ab", `command read -r l <p`), gaveUpAB258, 0},
+		{"part, eval's <p", "ksh", partOfALine(readingOnly, "ab", `eval 'read -r l' <p`), gaveUpAB258, 0},
+		{"part, a function's <p", "ksh", partOfALine(readingOnly, "ab", `f() { read -r l; }; f <p`), readOn, 0},
+		{"part, a group's <p", "ksh", partOfALine(readingOnly, "ab", `{ read -r l; } <p`), readOn, 0},
+		// And a copy of a descriptor open both ways is open both ways: a
+		// signal already waiting gives it up, `ab` left.
+		{
+			"pending, -u on a copy, both ways", "ksh",
+			pendingAsItBegins(bothWays+`; exec 5<&3`, "ab", `read -r -u5 l`, `read -r -u5 m`),
+			"T\nst=258 l=[]\nnext [abcd]\n", 0,
+		},
 		// A newline read starts the next line, so a continued line is given
 		// up after its backslash-newline.
 		{"continued", "ksh", partOfALine(readingOnly, `a\\\n`, `read l <&3`), "T\nst=258 l=[a]\nnext [cd]\n", 0},

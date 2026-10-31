@@ -2091,6 +2091,11 @@ type Runner struct {
 	// standard input, which is a different question from ownStdin and has a
 	// different reader. See Runner.noteExecReplacedStdin.
 	execStdin io.Reader
+	// builtinStdin is the standard input a running builtin's own
+	// redirection opened, nil where none did; openedStdin is what the
+	// redirection list being applied opened there, which simpleCommand
+	// hands on. See Runner.holdBuiltinStdin.
+	builtinStdin, openedStdin io.Reader
 	// midPipeline says this runner is an element of a pipeline whose status
 	// it does not decide — everything but the last. Kept because a signal
 	// that ends such an element is announced by one dialect and passed over
@@ -3341,6 +3346,10 @@ type Runner struct {
 	// that command — see ExecOpenedFdReachesACommand, which is the only
 	// reader.
 	execFds map[int]bool
+	// dupFds are the numbers in that table whose entry a duplication made —
+	// a second name for a stream another number already held. See
+	// Runner.duplicated, which says who reads it.
+	dupFds map[int]bool
 	// cloexecFds are the numbers in that table a builtin has marked as not
 	// reaching what this shell runs — `sysopen -o cloexec` and nothing else
 	// so far. See Runner.KeepDescriptorFromChildren, which is the only
@@ -10274,10 +10283,11 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	if len(lateTrace) > 0 {
 		traceDest = r.traceDestination()
 	}
-	r.fdVarStores = nil
+	r.fdVarStores, r.openedStdin = nil, nil
 	closers, err := r.applyRedirs(ctx, c.Redirs, false, owner)
 	fdStores := r.fdVarStores
-	r.fdVarStores = nil
+	openedStdin := r.openedStdin
+	r.fdVarStores, r.openedStdin = nil, nil
 	r.redirectForBuiltin, r.redirForCommandWord = "", ""
 	// Read here rather than in the defer: a builtin that runs a program of its
 	// own — `eval`, `.` — applies redirections of its own on the way, and this
@@ -10387,6 +10397,13 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		r.endsTheShellOverABadTarget(owner == redirOwnerThisShell)
 		r.applyArrayOperandsPastAFailedOpen(ctx, c)
 		return nil
+	}
+
+	// A standard input this command's own redirection opened is one the
+	// builtin it runs reads as a stream it opened, for as long as it runs.
+	// See Runner.holdBuiltinStdin.
+	if openedStdin != nil {
+		defer r.holdBuiltinStdin(argv, openedStdin)()
 	}
 
 	// The prefix traced after the redirections would not expand. See the

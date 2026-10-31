@@ -1451,6 +1451,15 @@ func Semantics() interp.Semantics {
 	s.ArithKeyReadCreatesTheElement = interp.No
 	// See interp.Semantics.ArithStoreIntoAFrozenTableIsTaken (#6826).
 	s.ArithStoreIntoAFrozenTableIsTaken = interp.No
+	// An expression's store the freeze refuses still takes a declared-only
+	// array out of the declared-only set, and no other writer's refusal
+	// does: `declare -a a; readonly a; (( a[5]=5 ))` lists `declare -ar
+	// a=()`. See interp.Semantics.ArithStoreRefusedByAFreezeSetsTheArray
+	// (#6847).
+	s.ArithStoreRefusedByAFreezeSetsTheArray = interp.Yes
+	// A refused store under a table's key leaves the table as it was. See
+	// interp.Semantics.RefusedTableStoreKeepsTheKey (#6847).
+	s.RefusedTableStoreKeepsTheKey = interp.No
 	s.FrozenContainerTakesAnElementLiteral = interp.No
 	s.ReadArrayIntoAnElementRefillsTheArray = interp.No
 	// See interp.Semantics.ArithSubscriptDollarSingleIsDecoded (#6773).

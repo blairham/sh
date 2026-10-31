@@ -1116,6 +1116,16 @@ func Semantics() interp.Semantics {
 	s.ArithKeyReadCreatesTheElement = interp.Yes
 	// See interp.Semantics.ArithStoreIntoAFrozenTableIsTaken (#6826).
 	s.ArithStoreIntoAFrozenTableIsTaken = interp.No
+	// Every writer the freeze refuses under a table's key leaves the key
+	// behind, declared and holding nothing: `typeset -A a; readonly a; let
+	// 'a[k]=5'` lists `typeset -r -A a=([k]=)`. See
+	// interp.Semantics.RefusedTableStoreKeepsTheKey (#6847).
+	s.RefusedTableStoreKeepsTheKey = interp.Yes
+	// Not the expression's refusal alone, so not this question: the trace is
+	// the key above for a table, and for an indexed array a count no
+	// subscript lists (#7186). See
+	// interp.Semantics.ArithStoreRefusedByAFreezeSetsTheArray.
+	s.ArithStoreRefusedByAFreezeSetsTheArray = interp.No
 	// An element literal is stored through the freeze — `b=(x y); readonly
 	// b; b[1]=(p)` is `(x (p) )` at 0 — everywhere but directly under a
 	// table's missing key. See

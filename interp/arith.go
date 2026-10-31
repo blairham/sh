@@ -1435,6 +1435,11 @@ func (r *Runner) writePlace(p arithPlace, v arithNum, from syntax.ArithExpr) err
 var errReadonlyRefusedInACommand = errors.New("readonly refusal already reported")
 
 func (r *Runner) storePlace(p arithPlace, v arithNum, from syntax.ArithExpr) error {
+	// Marked for the freeze, whose refusal of an expression's store is not
+	// the refusal every other writer gets in one column. See
+	// Semantics.ArithStoreRefusedByAFreezeSetsTheArray.
+	r.arithStoreInFlight++
+	defer func() { r.arithStoreInFlight-- }()
 	// The expression's output format reaches the value an assignment stores,
 	// not only the answer an expansion produces: measured, `x=5; (( x = [#16]
 	// 255 ))` leaves x holding the six characters `16#FF`.

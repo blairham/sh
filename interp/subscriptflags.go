@@ -1371,6 +1371,11 @@ func (r *Runner) assignAssocElement(a *syntax.Assign) {
 		// store in Runner.assign (#6579).
 		return
 	}
+	if r.holdsTheFreezeFor(a) {
+		// What the refusal leaves behind, ahead of the refusal. See
+		// interp/refusedstoretrace.go.
+		r.refusedTableStoreKeepsTheKey(a.Name, key)
+	}
 	if r.refuseTheHeldFreeze(a) {
 		// A frozen table, refused at the store — the key and the value both
 		// expanded. See interp/frozenorder.go.

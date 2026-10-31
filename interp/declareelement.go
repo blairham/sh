@@ -113,6 +113,11 @@ func (r *Runner) declareElement(
 		}
 		return
 	}
+	if tableBefore && r.freezeRefuses(base, assignedByDeclaration) {
+		// What the refusal leaves behind, ahead of the refusal. See
+		// interp/refusedstoretrace.go.
+		r.refusedTableStoreKeepsTheKey(base, sub)
+	}
 	if r.refuseReadonly(base, assignedByDeclaration) {
 		// By the base's name, which is the same rule `unset a[0]` follows.
 		return

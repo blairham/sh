@@ -10796,6 +10796,75 @@ type Semantics struct {
 	// only where an expression stores into a frozen table (#6826).
 	ArithStoreIntoAFrozenTableIsTaken Answer
 
+	// ArithStoreRefusedByAFreezeSetsTheArray takes a frozen array that was
+	// only declared out of the declared-only set when an arithmetic store
+	// into it is refused: the element is not written, and the listing gains
+	// its `=()`.
+	//
+	// bash alone, and arithmetic alone. Measured 2026-10-31, `-c`, bash
+	// 5.3.20, read back by an EXIT trap:
+	//
+	//	declare -a a; readonly a; (( a[5]=5 ))      declare -ar a=()
+	//	declare -A a; readonly a; let 'a[k]=5'      declare -Ar a=()
+	//	declare -a a; readonly a; (( a=5 ))         declare -ar a=()
+	//	… $(( a[1]=5 )), for (( a[1]=5;; )), (( a[1]++ ))   the same
+	//	… a[5]=5, read 'a[5]', printf -v, ${a[5]:=x}         declare -ar a
+	//	declare -a a; (( a[-1]=5 )), unfrozen       declare -a a
+	//	declare -a a; readonly a; (( a[1/0]=5 ))    declare -ar a
+	//
+	// So it is the freeze's refusal of an expression's store: every other
+	// writer refused by the same freeze leaves the name declared-only, and a
+	// store an expression refuses for another reason — a subscript out of
+	// range, a division by zero — leaves it alone too. A scalar declared and
+	// frozen keeps its listing (`declare a; readonly a; (( a=5 ))` is still
+	// `declare -r a`), which is only to say there is no declared-only mark on
+	// a scalar to take off.
+	//
+	// ksh93 leaves a trace of its own for every writer and not only this one
+	// — see RefusedTableStoreKeepsTheKey — and zsh has no declared-only array
+	// to take out of the set: `typeset -a a` already lists `a=(  )` there.
+	// Asked only where the freeze has refused an expression's store into a
+	// name that is still declared-only (#6847).
+	ArithStoreRefusedByAFreezeSetsTheArray Answer
+
+	// RefusedTableStoreKeepsTheKey leaves the key behind, declared and
+	// holding nothing, when the freeze on an associative array refuses a
+	// store under it: the value is not written, and the key now lists as
+	// `[k]=` and is counted by `${!a[@]}`.
+	//
+	// ksh93 alone, and every writer. Measured 2026-10-31, `-c`, ksh93u+
+	// 2012-08-01, after `typeset -A a; readonly a`, each refused:
+	//
+	//	(( a[k]=5 )), let 'a[k]=5', : ${a[k]:=x}      typeset -r -A a=([k]=)
+	//	a[k]=5, a[k]+=x, a[k]=                         the same
+	//	typeset 'a[k]=1', export …, readonly …          the same
+	//	read 'a[k]', read -A 'a[k]', getopts x 'a[k]' -x   the same
+	//	typeset -n r='a[k]'; r=5                       the same
+	//	a=([k]=5), a+=([k]=5), unset 'a[k]'            typeset -r -A a=()
+	//	typeset -A a=([j]=1); readonly a; a[k]=5       ([j]=1 [k]=)
+	//
+	// A key already there keeps what it held. The literal is refused whole
+	// and `unset` writes nothing, so neither leaves a key. A `read` or
+	// `getopts` operand's subscript is the text as written — `read
+	// 'a[$x]'` leaves `['$x']=` — which is the key the operand would have
+	// stored under. bash 5.3.20 and zsh 5.9.2 leave the table as it was by
+	// every one of those routes.
+	//
+	// The key is left ahead of the refusal and not after it: under `set -x`
+	// an empty key's `adding empty subscript` warning comes before `is read
+	// only` from the statement, `read`, `read -A`, `getopts`, `let` and a
+	// declaration alike.
+	//
+	// The statement leaves the key only where its refusal waits for the store,
+	// which is where the key is worked out: a column that refuses before the
+	// subscript is expanded has no key to leave. See
+	// FrozenElementIsRefusedBeforeItsSubscript, which ksh93 answers No.
+	//
+	// An indexed array frozen the same way is not this: ksh93 leaves a count
+	// of an element no subscript lists (#7186). Asked only once the freeze
+	// has refused a store under a table's key (#6847).
+	RefusedTableStoreKeepsTheKey Answer
+
 	// FrozenContainerTakesAnElementLiteral stores an element **literal** —
 	// `b[1]=(p)`, a chain's `r[1][2]=(p)`, and a declaration's `typeset
 	// b[1]=(p)` — into a frozen indexed array, and under a frozen table's
@@ -36584,6 +36653,10 @@ func PosixSemantics() Semantics {
 		ArithKeyReadCreatesTheElement: No,
 		// Nor any to freeze, so no expression writes into a frozen one.
 		ArithStoreIntoAFrozenTableIsTaken: No,
+		// No array to be only declared, and no table to keep a key in, so a
+		// refused store leaves nothing behind either way.
+		ArithStoreRefusedByAFreezeSetsTheArray: No,
+		RefusedTableStoreKeepsTheKey:           No,
 		// And no literal to store through one.
 		FrozenContainerTakesAnElementLiteral: No,
 		// No array letter, so no element for `read -A` to name.

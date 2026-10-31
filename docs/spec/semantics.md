@@ -2248,8 +2248,30 @@ hang a script all five references run to the end. A group kill —
 `kill -USR1 0`, `kill -- -$$` — is not aimed at the shell alone. It
 reaches the shell's children, which every reference's do receive, so it
 goes to the kernel like any other send to another process, through the
-gate — and the shell's own copy then comes back through `os/signal`,
-which runs a trapped handler a command late (#7043).
+gate. But the shell is in the group too, and its own copy came back
+through `os/signal`, which ran a trapped handler a command late — or,
+with the script over by then, not at all (#7043). Measured 2026-10-31,
+each in a process group of its own, against the same five:
+
+    trap 'echo T' USR1; kill -USR1 0;   echo after    T, after in all five
+    trap 'echo T' USR1; kill -USR1 -$$; echo after    T, after in all five
+    trap 'echo H' HUP; kill -HUP 0; echo a;
+      kill -USR1 -$$; echo b                         H a T b in all five
+    trap 'echo C' CHLD; kill -CHLD 0; echo after      C first in dash only,
+                                                      as for `kill -CHLD $$`
+    trap 'echo W' WINCH; kill -WINCH 0; echo after    no W in zsh, W first
+                                                      elsewhere, as for `$$`
+
+A shell cannot tell a signal its group was sent from one aimed at it
+alone, and the last two rows show the references do not try: each
+answers the group's copy exactly as it answers `kill $$`. So where the
+signal is trapped with a handler, the shell's own arrival is recorded
+where the send succeeds — the same recording `kill $$` makes, asking
+the same two questions of CHLD and WINCH — and the kernel's copy is
+dropped when the runtime forwards it, as a broken pipe the shell
+answered at the write is. An ignored signal, and a fatal or stopping one
+nobody trapped, act on the shell as the kernel delivers them, which is
+what every reference does and agreed already.
 
 The lesson is about the instrument: a corpus records what a shell does,
 and it cannot record a *sometimes*. Anything measured has to be

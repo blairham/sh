@@ -140,6 +140,17 @@ type signalState struct {
 	// A credit nobody spends costs at most one later PIPE from outside the
 	// process, which is not a thing a shell's own broken pipe ever is.
 	pipeAbsorbed int
+	// groupCopies counts, per condition, the arrivals a `kill` aimed at the
+	// shell's own process group has already recorded at the send, so that
+	// the kernel's copy of each — which os/signal forwards a moment later on
+	// a goroutine of its own — is dropped rather than run a second time. See
+	// Runner.signalTheShellsOwnGroup.
+	//
+	// A count for the reason pipeAbsorbed is one, and with the same cost: two
+	// sends the runtime folds into one arrival leave a credit nobody spends,
+	// and that credit takes one later copy of the same signal from outside
+	// the process. The script's own sends are never the ones miscounted.
+	groupCopies map[string]int
 	// died and diedSig record a fatal signal a *subshell* aimed at the
 	// process. The process is the top-level shell, so the death is the
 	// parent's to die: the subshell that sent it carries on — measured,
@@ -331,6 +342,13 @@ func (s *signalState) forwarded(sig os.Signal) {
 		return
 	}
 	switch {
+	case s.groupCopies[name] > 0:
+		// The shell's own copy of a signal its `kill` sent to its own process
+		// group, which the send already recorded. First, because what it
+		// answers is "the shell has this one already", whatever the signal:
+		// a PIPE or a CHLD the script sent its group is still one the script
+		// sent, and dropping it here or below comes to the same.
+		s.groupCopies[name]--
 	case name == "PIPE" && s.pipeAbsorbed > 0:
 		// The kernel's copy of a broken pipe the shell already answered at
 		// the write that caused it. One write is one arrival, and whether the

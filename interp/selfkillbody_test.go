@@ -76,7 +76,7 @@ func TestABodyWithNoGroupIsNeverTheTargetAndStartsNothing(t *testing.T) {
 
 // The arrival goes on the body's own list and not the process's, which is what
 // keeps the parent from running its handler for a signal the process never
-// had. Same argument as brokenPipeAbsorbed, same list.
+// had. Same argument as writeSignalAbsorbed, same list.
 func TestABodysOwnSignalIsRecordedOnItsOwnList(t *testing.T) {
 	r := newTestRunner(t, &Runner{inSubshell: true, traps: map[string]string{"TERM": "echo T"}})
 	r.selfSignaledBody("TERM")

@@ -71,8 +71,9 @@ import (
 //     here, where in every reference shell they are a child's. The copy the
 //     kernel raises for one of those arrives exactly as one sent by `kill`
 //     does, so a watch that died of it would end the whole shell for a
-//     subshell's broken pipe. A shell's own broken pipe is answered at the
-//     write instead (interp's brokenPipeAbsorbed).
+//     subshell's broken pipe. A shell's own broken pipe, and its own write
+//     past the limit, are answered at the write instead (interp's
+//     writeSignalAbsorbed and filesizedeath.go).
 //   - PROF never reaches os/signal at all: the runtime keeps it for its
 //     profiler and answers it before anything subscribed could be told.
 //

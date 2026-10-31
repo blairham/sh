@@ -95,7 +95,7 @@ func (r *Runner) aimedAtThisBody(pid int) bool {
 //     ends the process.
 //
 // The arrival goes on the body's own pending list rather than the shared one,
-// for the reason brokenPipeAbsorbed puts a broken pipe there: the process
+// for the reason writeSignalAbsorbed puts a broken pipe there: the process
 // never had this signal, and the handler that answers it is the one the body
 // set. See Runner.runPendingTraps, which drains that list between the body's
 // commands — so the handler runs before the `kill` line's own status is read,

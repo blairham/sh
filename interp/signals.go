@@ -138,22 +138,24 @@ type signalState struct {
 	// back is a *moment* and the pending list has already passed it: an
 	// entry there runs at the top of the next statement by definition.
 	heldForInput []string
-	// pipeAbsorbed counts the broken pipes answered at the write that caused
-	// them, so the kernel's own copies of those SIGPIPEs — forwarded
-	// whenever the shell has asked to handle one — are dropped rather than
-	// counted again. A count and not a flag, because a script may break
-	// several pipes before anything looks at the pending list.
+	// writeAbsorbed counts, per condition, the signals a write of the shell's
+	// own raised and the shell answered at the write — a broken pipe's PIPE,
+	// a write past `ulimit -f`'s XFSZ — so the kernel's own copies of them,
+	// forwarded whenever the shell has asked to handle one, are dropped
+	// rather than counted again. A count and not a flag, because a script may
+	// break several pipes before anything looks at the pending list.
 	//
-	// A credit nobody spends costs at most one later PIPE from outside the
-	// process, which is not a thing a shell's own broken pipe ever is.
-	pipeAbsorbed int
+	// A credit nobody spends costs at most one later copy of the same signal
+	// from outside the process, which is not a thing a shell's own failed
+	// write ever is.
+	writeAbsorbed map[string]int
 	// groupCopies counts, per condition, the arrivals a `kill` aimed at the
 	// shell's own process group has already recorded at the send, so that
 	// the kernel's copy of each — which os/signal forwards a moment later on
 	// a goroutine of its own — is dropped rather than run a second time. See
 	// Runner.signalTheShellsOwnGroup.
 	//
-	// A count for the reason pipeAbsorbed is one, and with the same cost: two
+	// A count for the reason writeAbsorbed is one, and with the same cost: two
 	// sends the runtime folds into one arrival leave a credit nobody spends,
 	// and that credit takes one later copy of the same signal from outside
 	// the process. The script's own sends are never the ones miscounted.
@@ -356,9 +358,10 @@ func (s *signalState) forwarded(sig os.Signal) {
 		// a PIPE or a CHLD the script sent its group is still one the script
 		// sent, and dropping it here or below comes to the same.
 		s.groupCopies[name]--
-	case name == "PIPE" && s.pipeAbsorbed > 0:
-		// The kernel's copy of a broken pipe the shell already answered at
-		// the write that caused it. One write is one arrival, and whether the
+	case s.writeAbsorbed[name] > 0:
+		// The kernel's copy of a broken pipe, or of a write past the
+		// file-size limit, the shell already answered at the write that
+		// caused it. One write is one arrival, and whether the
 		// runtime's forwarding goroutine gets to run before the script ended
 		// is not something a handler should fire a second time over —
 		// measured at one `handled` in some runs and two in others over the
@@ -368,7 +371,7 @@ func (s *signalState) forwarded(sig os.Signal) {
 		// that started it: the copy is real and the runtime delivers it here
 		// whatever descriptor the write was on, and no panel shell runs the
 		// outer handler for a signal the outer process never had.
-		s.pipeAbsorbed--
+		s.writeAbsorbed[name]--
 	case name == "CHLD":
 		// The kernel's answer to a fork this shell may not have made, and the
 		// set it names is not the set of children a real shell would have had:
@@ -1013,9 +1016,10 @@ func (r *Runner) selfSignaled(name string) {
 	s.poke()
 }
 
-// brokenPipeAbsorbed answers the SIGPIPE a failed write of this shell's own
-// just caused: delivered to a handler between commands where deliver says so,
-// and taken out of the runtime's hands either way.
+// writeSignalAbsorbed answers the signal a failed write of this shell's own
+// just caused — SIGPIPE for a pipe nobody reads, SIGXFSZ for a write past
+// `ulimit -f` — delivered to a handler between commands where deliver says
+// so, and taken out of the runtime's hands either way.
 //
 // Delivered rather than waited for, which is the argument selfSignaled makes
 // at length: the shell holds the answer already — the write it just made is
@@ -1037,21 +1041,24 @@ func (r *Runner) selfSignaled(name string) {
 // above states from the other side. Recording it on the shared list is what a
 // naive fix does, and it makes the parent run its own PIPE handler for a
 // broken pipe an element caused: measured, no panel shell does that either.
-func (r *Runner) brokenPipeAbsorbed(deliver bool) {
+func (r *Runner) writeSignalAbsorbed(name string, deliver bool) {
 	if deliver && r.traps != nil {
 		// A subshell's own handler, for a signal that never left the
 		// subshell. Run between the subshell's commands, and once more as
 		// its body ends — see runSelfRaisedTraps.
-		r.selfPending = append(r.selfPending, "PIPE")
+		r.selfPending = append(r.selfPending, name)
 		deliver = false
 	}
 	s := r.sigs()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if deliver {
-		s.queue("PIPE")
+		s.queue(name)
 	}
-	s.pipeAbsorbed++
+	if s.writeAbsorbed == nil {
+		s.writeAbsorbed = map[string]int{}
+	}
+	s.writeAbsorbed[name]++
 	s.poke()
 }
 

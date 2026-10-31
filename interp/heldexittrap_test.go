@@ -14,12 +14,15 @@ import (
 )
 
 // heldTrapSemantics scopes EXIT to a function — which is what makes a call
-// hold its caller's trap at all — and answers the axis under test.
+// hold its caller's trap at all — and answers the axis under test. A HUP ends
+// the shell as an exit, which is what makes `kill -HUP $$` one of the stops
+// the axis is about rather than a death that runs no trap at all.
 func heldTrapSemantics(scoped, lose Answer) Semantics {
 	s := permissive()
 	s.ExitTrapIsFunctionLocal = scoped
 	s.StopInsideACallLosesTheHeldExitTrap = lose
 	s.ArithDivisionByZeroYieldsAValue = No
+	s.HangupIsAnOrderlyExit = Yes
 	return s
 }
 
@@ -44,11 +47,18 @@ func TestAStopInsideACallLosesTheHeldExitTrapWhereTheAxisSays(t *testing.T) {
 		{"errexit two calls down", handler + "set -e\nf() { g; }\ng() { false; }\nf\nprintf after", Yes, true, ""},
 		{"a parameter error inside the call", handler + "f() { : ${q?b}; }\nf\nprintf after", Yes, true, ""},
 		{"the call's own trap still fires", handler + "set -e\nf() { trap 'printf OWN' EXIT; false; }\nf\nprintf after", Yes, true, "OWN"},
+		// An untrapped HUP the shell ends on as an exit, which is a stop
+		// that ends it where it stands (#7065).
+		{"a hangup inside the call", handler + "f() { kill -HUP $$; }\nf\nprintf after", Yes, true, ""},
+		{"a hangup two calls down", handler + "f() { g; }\ng() { kill -HUP $$; }\nf\nprintf after", Yes, true, ""},
+		{"a hangup leaves the call's own trap firing", handler + "f() { trap 'printf OWN' EXIT; kill -HUP $$; }\nf\nprintf after", Yes, true, "OWN"},
 		// Controls.
 		{"errexit at the top level", handler + "set -e\nfalse\nprintf after", Yes, false, ""},
+		{"a hangup at the top level", handler + "kill -HUP $$\nprintf after", Yes, false, ""},
 		{"an error the shell reported inside the call", handler + "f() { : $((1/0)); }\nf\nprintf after", Yes, false, ""},
 		{"exit inside the call", handler + "f() { exit 3; }\nf\nprintf after", Yes, false, ""},
 		{"a shell that holds nothing", handler + "set -e\nf() { false; }\nf\nprintf after", No, false, ""},
+		{"a hangup in a shell that holds nothing", handler + "f() { kill -HUP $$; }\nf\nprintf after", No, false, ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			for _, lose := range []Answer{Yes, No} {

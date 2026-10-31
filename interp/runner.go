@@ -4797,6 +4797,12 @@ type Runner struct {
 	// the EXIT trap on its way out, which reaches a trap a call is holding
 	// as well as the one standing. See Runner.heldExitTrapIsLost.
 	execDroppedTheExitTrap bool
+	// hungUp says the shell is stopping for an untrapped HUP that it ends on
+	// as an exit — Semantics.HangupIsAnOrderlyExit — which is a stop that
+	// ends the shell where it stands, and so one more that loses a held trap.
+	// Set where signalDeath stops for it and never cleared: nothing catches
+	// that stop. See Runner.heldExitTrapIsLost.
+	hungUp bool
 
 	// errTrap, debugTrap and returnTrap are the pseudo-conditions: not
 	// signals, so nothing about them touches os/signal, and not EXIT, so
@@ -5013,7 +5019,11 @@ type Runner struct {
 	// from outside, and exitTrapPublished what the shell at the top last
 	// told the front end about its EXIT trap. See outsidedeath.go.
 	exitTrapShownStatus *int
-	exitTrapPublished   bool
+	exitTrapPublished   int32
+	// exitHookList is the name of the dialect's exit hook's list, spelled
+	// once rather than between every two statements. See
+	// Runner.exitHookStandsForAHangup.
+	exitHookList string
 	// selfAimedDeath is a fatal signal the shell at the top sent itself with
 	// an EXIT trap standing to run for it, held until the shell takes it, and
 	// statusAtTheCopy is `$?` as the shell at the top held it when it made

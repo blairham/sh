@@ -308,6 +308,7 @@ arguments**. Measured 2026-09-12, zsh 5.9.2:
 | whether `exit` changes it | **yes**, and the *last* one wins: `exit 9` in the named hook and `exit 11` in a member left it exiting 11 |
 | whether an item that exited stops the rest | **no** — the member after `exit 9` still ran |
 | after a fatal signal | neither this nor the EXIT trap runs: a script killed by SIGTERM wrote nothing and exited 143 |
+| after an untrapped HUP | it runs, after the EXIT trap, with `$?` at 1 — whether the shell sent the HUP itself or another process did, and inside a function call as at the top (measured 2026-10-30, #7066) |
 | in a subshell | a subshell that calls `exit` explicitly fires it — `(exit 7)` ran it with `$ZSH_SUBSHELL` of 1 — where one that falls off its end does not |
 
 **The subshell firing is a second site, and its rule is narrower than the

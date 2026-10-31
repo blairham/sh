@@ -3241,6 +3241,35 @@ Four things about *how* are measured and kept:
   HUP 0.3s into a trap's `sleep 1` leaves `bye` without `bye2`. bash dies of
   the second signal and ksh93 of the first; this shell dies of the second.
 
+**zsh's HUP runs `zshexit` as well as the trap, and inside a function call
+only the call's own trap** (#7065, #7066). Measured 2026-10-30 on zsh 5.9.2
+under `-f`, in a session of its own, with `/bin/kill -HUP` from another process
+while the shell waits on `/bin/sleep 3` — and the same with `kill -HUP $$`
+written in place of the wait, which answers alike in every row:
+
+| script | zsh, exit 1 in every row |
+| --- | --- |
+| `zshexit() { echo hook; }; WAIT` | `hook` |
+| `h() { echo hook; }; zshexit_functions=(h); WAIT` | `hook` |
+| `trap 'echo top' EXIT; WAIT` | `top` |
+| `trap 'echo top' EXIT; f() { WAIT; }; f` | nothing |
+| `trap 'echo top' EXIT; f() { trap 'echo own' EXIT; WAIT; }; f` | `own` |
+| `… g() { trap 'echo g' EXIT; WAIT; }; f() { trap 'echo f' EXIT; g; }; f` | `g` |
+| `trap 'echo top' EXIT; zshexit() { echo hook; }; f() { WAIT; }; f` | `hook` |
+| `setopt posixtraps; trap 'echo top' EXIT; f() { WAIT; }; f` | `top` |
+
+A call in zsh holds its caller's EXIT trap for the length of the body, and a
+HUP is a stop that ends the shell where it stands, so the call never puts the
+trap back: it is `set -e` firing inside a call again, row for row
+(`StopInsideACallLosesTheHeldExitTrap`). This shell put the top level's trap
+back as the call unwound, so the self-sent route wrote `top` after the call's
+own; and it handed a HUP from outside over to the shell only for an EXIT trap,
+so with nothing but a hook the front end ended the process having run nothing.
+The hook arms the hand-over now — for a HUP alone, since a death runs no hook —
+and only until a death has been handed over, so the waits the EXIT trap and the
+hook make on the way out are waited out: `zshexit() { s=$SECONDS; /bin/sleep 2;
+echo "hook $((SECONDS - s))"; }` writes `hook 2` in zsh.
+
 Where the shell is blocked somewhere nothing gives up — a write into a full
 pipe — the front end takes the death back after two seconds and ends the
 process without the trap, as before: a shell a signal cannot end is worse than

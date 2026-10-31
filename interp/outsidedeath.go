@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -62,8 +63,16 @@ import (
 //
 // Only where something would run. Without an EXIT trap, or in a dialect that
 // runs none on a death, the watch ends the process where the signal lands, as
-// it did before; nothing here slows that down. And never at a prompt, where
-// the shell is waiting on a person rather than on a command.
+// it did before; nothing here slows that down. A HUP in the dialect that ends
+// on one as an exit is the exception that has two reasons to be handed over:
+// the trap, or the dialect's exit hook, which that ending runs too (#7066).
+// And never at a prompt, where the shell is waiting on a person rather than on
+// a command.
+//
+// A HUP taken inside a function call in that dialect is a stop that ends the
+// shell where it stands, so the call loses the EXIT trap it was holding for its
+// caller: the call's own trap runs and the top level's does not, as for one
+// the shell sent itself. See Semantics.StopInsideACallLosesTheHeldExitTrap.
 //
 // A wait nobody gives up — a write into a full pipe, say — is the watch's to
 // answer: a death the shell has not taken within its grace is taken back, and
@@ -76,6 +85,16 @@ const (
 	outsidePosted
 	outsideClaimed
 	outsideRevoked
+)
+
+// What the shell at the top has told the front end's watch it would run on
+// its way out of a fatal signal from outside: nothing, the dialect's exit hook
+// alone — which runs only on a HUP the dialect ends on as an exit, since a
+// shell killed by a signal runs none (Runner.fireExitHook) — or an EXIT trap.
+const (
+	armedForNothing int32 = iota
+	armedForAHangup
+	armedForADeath
 )
 
 // handover is one fatal signal from outside handed to the shell: the death
@@ -117,9 +136,10 @@ type outsideDeath struct {
 	// Runner.publishTheTrapRunning.
 	trapEnd     handover
 	trapRunning atomic.Bool
-	// armed says the shell at the top has an EXIT trap set, and a front end
-	// has asked to hand it a death. See Runner.publishExitTrap.
-	armed atomic.Bool
+	// armed is one of the armedFor* constants: what the shell at the top
+	// has to run on its way out, where a front end has asked to hand it a
+	// death. See Runner.publishExitTrap.
+	armed atomic.Int32
 	// heard says a front end took TakesAFatalSignal, which is the only way a
 	// death is ever handed over: a Runner nobody listens for is never armed,
 	// and its waits keep the plainer forms.
@@ -137,7 +157,8 @@ var errAbandonedForADeath = errors.New("abandoned for a fatal signal from outsid
 //
 // The closure reports taken where the shell has something to run first — an
 // EXIT trap, in a dialect that runs one on a death or, for HUP, in the one
-// that ends on it as an exit — and has been handed the signal. claimed is
+// that ends on it as an exit, where the dialect's exit hook is reason enough
+// too (#7066) — and has been handed the signal. claimed is
 // closed once the shell has taken it, after which the shell runs its EXIT
 // trap and ends the process itself through Runner.DieBySignal. revoke takes
 // back a death the shell has not taken yet and reports whether it did, for a
@@ -179,11 +200,19 @@ func (r *Runner) TakesAFatalSignal() func(syscall.Signal) (claimed <-chan struct
 		if endsTheTrap && o.trapRunning.Load() {
 			return o.endTheTrap(&s.mu, name, sig)
 		}
-		if !o.armed.Load() {
+		hangup := name == "HUP" && hangupExits
+		switch o.armed.Load() {
+		case armedForNothing:
 			return nil, nil, false
-		}
-		if !runsOnADeath && (name != "HUP" || !hangupExits) {
-			return nil, nil, false
+		case armedForAHangup:
+			// The exit hook alone, which a death would not run.
+			if !hangup {
+				return nil, nil, false
+			}
+		default:
+			if !runsOnADeath && !hangup {
+				return nil, nil, false
+			}
 		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -217,10 +246,19 @@ func (o *outsideDeath) endTheTrap(
 	return e.claimed, func() bool { return e.state.CompareAndSwap(outsidePosted, outsideRevoked) }, true
 }
 
-// publishExitTrap tells the front end's watch whether the shell at the top
-// has an EXIT trap, which is the one thing a death from outside is handed over
-// for, and has the front end listen for the signals it would otherwise leave
-// to end the process where they land.
+// publishExitTrap tells the front end's watch what the shell at the top would
+// run on its way out — an EXIT trap, or the dialect's exit hook where a HUP
+// ends the shell as an exit — which is the one thing a death from outside is
+// handed over for, and has the front end listen for the signals it would
+// otherwise leave to end the process where they land.
+//
+// The hook as well as the trap, because the dialect that ends on a HUP as an
+// exit runs its hook for one from outside as for one it sent itself: measured
+// 2026-10-30 on zsh 5.9.2, `/bin/kill -HUP` from another process at
+// `zshexit() { echo hook; }; /bin/sleep 3` writes `hook` and exits 1, and so
+// does the same with the function named in `zshexit_functions` instead. This
+// shell armed for the trap alone, so the watch ended the process with nothing
+// run (#7066).
 //
 // Asked between statements, which is where a `trap` has taken effect, and
 // written only when the answer moves. The shell at the top alone: a copy's
@@ -232,15 +270,66 @@ func (r *Runner) publishExitTrap() {
 	if s == nil {
 		return
 	}
-	armed := r.exitTrap != nil && !r.Interactive && s.outside.heard.Load()
+	armed := armedForNothing
+	// And only until one has been handed over. Taken, it is what the shell is
+	// leaving by, and the EXIT trap and the hook it runs on the way out wait
+	// as any command does: armed, a wait of theirs would select on a death
+	// that has already landed and be given up at once — `/bin/sleep 2` in
+	// `zshexit` returned at once where zsh 5.9.2 waits it out.
+	if !r.Interactive && s.outside.heard.Load() && s.outside.state.Load() == outsideNone {
+		switch {
+		case r.exitTrap != nil:
+			armed = armedForADeath
+		case r.exitHookStandsForAHangup():
+			armed = armedForAHangup
+		}
+	}
 	if armed == r.exitTrapPublished {
 		return
 	}
 	r.exitTrapPublished = armed
 	s.outside.armed.Store(armed)
-	if armed && r.ListenForFatalSignals != nil && r.sem().ExitTrapRunsOnSignalDeath == Yes {
+	if armed == armedForADeath && r.ListenForFatalSignals != nil && r.sem().ExitTrapRunsOnSignalDeath == Yes {
 		r.ListenForFatalSignals()
 	}
+}
+
+// exitHookStandsForAHangup reports whether the dialect's exit hook has a
+// function to run — its own name, or one its list names — in the dialect that
+// ends on a HUP as an exit, which is the only ending from outside a hook runs
+// for. A name with nothing defined behind it runs nothing, as Runner.FireChain
+// passes it over.
+//
+// Asked between every two statements where there is no EXIT trap, so it
+// builds nothing: the list's name is kept once it has been spelled.
+func (r *Runner) exitHookStandsForAHangup() bool {
+	sem := r.sem()
+	name := sem.ExitHook
+	if name == "" || sem.HangupIsAnOrderlyExit != Yes {
+		return false
+	}
+	if _, ok := r.funcs[name]; ok {
+		return true
+	}
+	if sem.HookListSuffix == "" || r.arraysLen() == 0 {
+		return false
+	}
+	list := r.exitHookList
+	if len(list) != len(name)+len(sem.HookListSuffix) ||
+		!strings.HasPrefix(list, name) || !strings.HasSuffix(list, sem.HookListSuffix) {
+		list = name + sem.HookListSuffix
+		r.exitHookList = list
+	}
+	a, ok := r.arraysLookup(list)
+	if !ok {
+		return false
+	}
+	for _, fn := range r.readArray(a) {
+		if _, ok := r.funcs[fn]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // takeOutsideDeath is the shell acting on a fatal signal from outside that
@@ -313,12 +402,13 @@ func (r *Runner) actOnOutsideDeath() bool {
 
 // abandonsForADeath is what a wait this runner makes selects on to be given
 // up for a fatal signal from outside: closed once one has been handed to the
-// shell, and nil where none could be — no EXIT trap at the top, or a
-// background job.
+// shell, and nil where none could be — nothing for the shell at the top to
+// run on its way out, or a background job.
 //
-// That includes the EXIT trap's own waits once the shell has taken a death:
-// the trap is cleared before its body runs, so the body's first statement
-// publishes the shell as unarmed and nothing the trap waits for is given up.
+// That includes the EXIT trap's own waits once the shell has taken a death,
+// and the exit hook's: the body's first statement publishes the shell as
+// unarmed once a death has been handed over, so nothing either waits for is
+// given up. See Runner.publishExitTrap.
 //
 // Except in the dialect where a fatal signal ends the EXIT trap and not the
 // shell: there the trap's waits are given up for that signal instead. See
@@ -331,7 +421,7 @@ func (r *Runner) abandonsForADeath() <-chan struct{} {
 	if r.inExitTrap && s.outside.trapRunning.Load() {
 		return s.outside.trapEnd.dying
 	}
-	if !s.outside.armed.Load() {
+	if s.outside.armed.Load() == armedForNothing {
 		return nil
 	}
 	return s.outside.dying

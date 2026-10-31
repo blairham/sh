@@ -26,9 +26,10 @@ type heldExitTrap struct {
 // trap it held instead of putting it back, because what is unwinding it is a
 // stop that ends the shell from inside the call.
 //
-// Two producers answer it through the axis — `set -e` firing and `${x?word}`
-// firing, see Semantics.StopInsideACallLosesTheHeldExitTrap — and a third
-// without it: an `exec` that could not run, where the dialect has already
+// Three producers answer it through the axis — `set -e` firing, `${x?word}`
+// firing, and an untrapped HUP the dialect ends on as an exit, whether the
+// shell sent it itself or another process did (Runner.hungUp); see
+// Semantics.StopInsideACallLosesTheHeldExitTrap — and a fourth without it: an `exec` that could not run, where the dialect has already
 // said the EXIT trap is dropped (Semantics.ExecFailureRunsExitTrap and the
 // pathname field beside it). A dropped trap is dropped wherever it is
 // standing, and a held one is standing in the caller. Measured 2026-10-30 on
@@ -47,7 +48,7 @@ func (r *Runner) heldExitTrapIsLost() bool {
 	if r.execDroppedTheExitTrap {
 		return true
 	}
-	if !r.errexitStopped && r.abandon != abandonParamError {
+	if !r.errexitStopped && r.abandon != abandonParamError && !r.hungUp {
 		return false
 	}
 	return r.sem().StopInsideACallLosesTheHeldExitTrap == Yes

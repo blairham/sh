@@ -101,7 +101,9 @@ func (r *Runner) errorOperatorSeesTheElement(e *syntax.ParamExpr) bool {
 // `$a` is `${a[0]}` where arrays start at zero. A **keyed** table has no such
 // element — measured, `typeset -A t; ${t[k]?m}` is quiet in the column this
 // serves, and so is a table whose key is missing — so it answers no rather
-// than sending a string key to the arithmetic evaluator.
+// than sending a string key to the arithmetic evaluator. That column makes the
+// missing key before the test as well, so the key is there by the time this is
+// asked; see Semantics.AssignOrErrorOperatorDeclaresTheKey (#7187).
 //
 // It reads the brackets a second time, which is a cost this file pays rather
 // than threads. The read is the same one Runner.unboundSubscript already

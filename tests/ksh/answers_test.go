@@ -139,6 +139,9 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		// bare read names, so `${a[9]?m}` is quiet and `${nope[0]?m}` is
 		// not (#3241).
 		{"ErrorOperatorSeesOnlyTheBareElement", s.ErrorOperatorSeesOnlyTheBareElement, interp.Yes},
+		// And `=` and `?` reach a table's element as a place, so a missing
+		// key is made before the test finds it set (#7187).
+		{"AssignOrErrorOperatorDeclaresTheKey", s.AssignOrErrorOperatorDeclaresTheKey, interp.Yes},
 		{"LengthOfAMissingElementIsRefused", s.LengthOfAMissingElementIsRefused, interp.No},
 		{"UnsetNameWithAWholeArraySubscriptIsRefused", s.UnsetNameWithAWholeArraySubscriptIsRefused, interp.No},
 		// And the colon form of the same operator reads the array's first

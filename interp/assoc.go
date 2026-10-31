@@ -516,6 +516,11 @@ func (r *Runner) absentAssocElement(e *syntax.ParamExpr, key string) []string {
 		// known — see absentparam.go.
 		return nil
 	}
+	if r.operatorDeclaresTheKey(e, key) {
+		// The operator reached the element as a place and made the key, so
+		// what it reads is the key now there: set, and holding nothing.
+		return []string{""}
+	}
 	// nil says the element was not there, exactly as the indexed path does: a
 	// value of "" is set and `${m[k]:-d}` has to tell the two apart.
 	return nil

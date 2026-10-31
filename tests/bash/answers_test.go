@@ -138,6 +138,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		// The three subscripted refusals this column takes the common
 		// reading of (#2980, #3241).
 		{"ErrorOperatorSeesOnlyTheBareElement", s.ErrorOperatorSeesOnlyTheBareElement, interp.No},
+		{"AssignOrErrorOperatorDeclaresTheKey", s.AssignOrErrorOperatorDeclaresTheKey, interp.No},
 		{"LengthOfAMissingElementIsRefused", s.LengthOfAMissingElementIsRefused, interp.No},
 		{"UnsetNameWithAWholeArraySubscriptIsRefused", s.UnsetNameWithAWholeArraySubscriptIsRefused, interp.No},
 		{"AssignThroughExpansionMayNameAPositional", s.AssignThroughExpansionMayNameAPositional, interp.No},

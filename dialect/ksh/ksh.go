@@ -2951,6 +2951,13 @@ func Semantics() interp.Semantics {
 	// ksh93u+ 2012-08-01, alone in the panel on both (#7062).
 	s.SelfAimedDeathIsTakenAtTheNextCommand = interp.No
 	s.DeathInAFunctionEndsTheCallAsKilled = interp.Yes
+	// And a fatal signal the shell has caught, once an EXIT trap has been set,
+	// ends a `function name { … }` call rather than the shell: `trap 'echo
+	// "bye $?"' EXIT; function f { /bin/sleep 3; }; f; echo "after $?"` with
+	// TERM from another process writes `after 271` and `bye 0` and exits 0, and
+	// `kill -TERM $$` in the body does the same. Measured 2026-10-31 on ksh93u+
+	// 2012-08-01, alone in the panel (#7067, #7145).
+	s.SignalDeathEndsAtAKeywordFunctionCall = interp.Yes
 	// And a `-c` string ending over an error the shell reported still runs
 	// it: measured 2026-10-16 on ksh93, a division by zero, a readonly
 	// reassignment and an unset name under `set -u` each print the handler

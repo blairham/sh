@@ -21497,6 +21497,53 @@ another process while the function waits for a program are 271 in ksh93
 too, where bash reads what it reads at the top: 0, 1, 7 and 7. Measured
 2026-10-30 (#7062).
 
+**`SignalDeathEndsAtAKeywordFunctionCall`** — bash no · dash no · ksh93
+yes · zsh no · ash no
+
+Puts a boundary at the call of a `function name { … }` body for a fatal
+signal the shell has caught: the signal ends the call rather than the
+shell, the call answers the status of a command killed by it, and the
+caller goes on.
+
+    trap 'echo "bye $?"' EXIT; function f { /bin/sleep 3; echo inf; }
+    f; echo "after $?"
+
+With TERM from another process during the `sleep`, ksh93 writes `after
+271` and `bye 0` and exits 0; bash 5.3 and 3.2 write `bye 0` and die of
+TERM; zsh dies with nothing written. A busy loop in place of the `sleep`,
+and `kill -TERM $$` in the body, are the same in each. HUP, USR1, USR2,
+ALRM, PIPE, VTALRM, PROF, XCPU and XFSZ end the call in ksh93 as TERM does,
+at 256 plus their number; INT does not, and ends the shell from inside it.
+The POSIX-form call `f() { … }` is no boundary in any column, and in ksh93
+reads `bye 271` and dies. Measured 2026-10-31, each shell in a session of
+its own (#7067, #7145).
+
+In ksh93:
+
+- **Caught means an EXIT trap was set in the shell, ever.** With none the
+  shell dies from inside the call. A trap set and then taken away, set to
+  `''`, or set inside an earlier `function` call and fired at its return
+  all leave the call ending; a trap on another signal does not.
+- **The innermost `function` call ends.** A POSIX-form call inside it is
+  not a boundary — `g() { /bin/sleep 3; }; function f { g; echo inf; }`
+  ends at `f` with `inf` unwritten — and a `function` call inside a
+  POSIX-form one ends and lets the outer one go on.
+- **The call's own EXIT trap runs as it ends**, reading what the shell held
+  where the signal landed: `function f { trap 'echo "fexit $?"' EXIT;
+  (exit 5); /bin/sleep 3; }` writes `fexit 5` and answers 271, and so does
+  a `read` the signal gave up in place of the `sleep`. Where the signal
+  landed in a POSIX-form call inside it, the trap reads 271. An `exit` in
+  that trap ends the shell, and a `return` in it returns from the caller.
+- **`kill` finishes its operands first**: `kill -TERM $$ 99999999` writes
+  the complaint about the second and then ends the call.
+- **A second signal ends a second call** the same way.
+
+Not modeled: ksh93 also catches a signal it has ever had a trap of its own
+for — `trap 'echo t' TERM` at the top, or set and taken away — and ends a
+`function` call on it with the caller's handler unrun; and an ignored
+signal stays ignored inside the call, where this shell's `function` call
+takes the ignore away with the rest of the trap table (#7156, #7157).
+
 **`ExitTrapRunsInsideTheExitingCall`** — bash yes · dash yes · ksh93 no ·
 zsh no · ash yes
 

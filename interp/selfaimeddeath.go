@@ -83,10 +83,15 @@ func (r *Runner) exitTrapRunsOnThisDeath(name string, sig syscall.Signal) bool {
 // it, and reports whether it did. A second one changes nothing: a process
 // killed twice died of the first.
 //
+// Or where it would end a `function name { … }` call rather than the shell,
+// which has caught it as surely: `kill` finishes there too. See
+// keywordcalldeath.go.
+//
 // Not inside the EXIT trap itself, where a fatal signal is a second death and
 // ends the shell, or the trap, at once. See exittrapdeath.go.
 func (r *Runner) holdTheSelfAimedDeath(name string, sig syscall.Signal) bool {
-	if r.inSubshell || r.inExitTrap || !r.exitTrapRunsOnThisDeath(name, sig) {
+	if r.inSubshell || r.inExitTrap ||
+		!r.exitTrapRunsOnThisDeath(name, sig) && !r.aDeathWouldEndAKeywordCall(name, sig) {
 		return false
 	}
 	if r.selfAimedDeath.sig == 0 {
@@ -148,6 +153,9 @@ func (r *Runner) showTheExitTrap(shown int, name string, sig syscall.Signal) {
 	if !r.diedOfItsOwnSignal() {
 		return
 	}
+	// What a `function name { … }` call the death ends shows its own EXIT
+	// trap, before the rule below. See keywordcalldeath.go.
+	r.deathTaken.held = shown
 	if r.exitTrapRunsOnThisDeath(name, sig) && r.insideAFunctionCall() &&
 		r.ask(r.sem().DeathInAFunctionEndsTheCallAsKilled,
 			"the `$?` the EXIT trap reads after a death inside a function") {

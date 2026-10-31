@@ -2110,6 +2110,12 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// pair above this function, because a call is not the only thing that
 	// opens one.
 	sc := r.pushScope(fn.Keyword)
+	if fn.Keyword {
+		// Counted for the front end's watch, which hands a death from
+		// outside over where one of these would end on it. See
+		// keywordcalldeath.go.
+		r.keywordCalls++
+	}
 	// The frame now knows where its own scope sits, which is what a frame
 	// selection needs to read the locals standing in it. Here rather than at
 	// the push, because the frame goes on the stack before the scope does
@@ -2336,6 +2342,16 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	// call's when the handler runs.
 	r.judgeTheBodyForErr(ctx)
 
+	// And a fatal signal the shell caught, in the dialect where it ends the
+	// call of a `function name { … }` body rather than the shell: here,
+	// before the call's own EXIT trap below, which reads what the shell held
+	// where the signal landed. The call's status is the signal's, once that
+	// trap has run. See keywordcalldeath.go.
+	var endedBy syscall.Signal
+	if fn.Keyword {
+		r.keywordCalls--
+		endedBy = r.endTheCallOnADeath(r.depth)
+	}
 	r.depth--
 	r.popScope(sc)
 	// The last thing read off the scope, so it goes back for the next call
@@ -2512,6 +2528,11 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 	if fn.Keyword && r.pendingFileError() &&
 		r.ask(r.sem().FatalErrorEndsAtAKeywordFunctionCall, "a fatal error ending at the call of a `function` body") {
 		r.takeFileError()
+	}
+	if endedBy != 0 && r.ctl == controlNone {
+		// Unless the call's own trap ended the shell or returned from the
+		// caller, which keeps what it said.
+		r.status, r.diedOfSig = r.signalDeathStatus(endedBy), endedBy
 	}
 	return err
 }

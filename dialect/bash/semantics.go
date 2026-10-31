@@ -2311,6 +2311,12 @@ func Semantics() interp.Semantics {
 	// (#7062).
 	s.SelfAimedDeathIsTakenAtTheNextCommand = interp.Yes
 	s.DeathInAFunctionEndsTheCallAsKilled = interp.No
+	// And a `function name { … }` call is no boundary for one: `trap 'echo
+	// "bye $?"' EXIT; function f { /bin/sleep 3; }; f; echo after` with TERM
+	// from another process writes `bye 0` and dies of it, and so does `kill
+	// -TERM $$` in the body. Measured 2026-10-31 on bash 5.3.20 and 3.2.57
+	// (#7067).
+	s.SignalDeathEndsAtAKeywordFunctionCall = interp.No
 	// And a `-c` string ending over an error the shell reported still runs
 	// it: measured 2026-10-16 on bash 5.3.20, a division by zero, a readonly
 	// reassignment and an unset name under `set -u` each print the handler

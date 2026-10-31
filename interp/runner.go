@@ -5020,6 +5020,14 @@ type Runner struct {
 	// told the front end about its EXIT trap. See outsidedeath.go.
 	exitTrapShownStatus *int
 	exitTrapPublished   int32
+	// caughtByAnExitTrap says an EXIT trap has been set in this shell at
+	// some point, which is what has it catching the fatal signals from then
+	// on; keywordCalls counts the `function name { … }` calls standing; and
+	// deathTaken is where the death now unwinding was taken and what the
+	// shell held there. See keywordcalldeath.go.
+	caughtByAnExitTrap bool
+	keywordCalls       int
+	deathTaken         takenDeath
 	// exitHookList is the name of the dialect's exit hook's list, spelled
 	// once rather than between every two statements. See
 	// Runner.exitHookStandsForAHangup.

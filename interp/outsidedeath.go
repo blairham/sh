@@ -91,10 +91,13 @@ const (
 // its way out of a fatal signal from outside: nothing, the dialect's exit hook
 // alone — which runs only on a HUP the dialect ends on as an exit, since a
 // shell killed by a signal runs none (Runner.fireExitHook) — or an EXIT trap.
+// Or, with none of those standing, the end of a `function name { … }` call
+// the signal would end instead of the shell: see keywordcalldeath.go.
 const (
 	armedForNothing int32 = iota
 	armedForAHangup
 	armedForADeath
+	armedForACall
 )
 
 // handover is one fatal signal from outside handed to the shell: the death
@@ -217,6 +220,11 @@ func (r *Runner) TakesAFatalSignal() func(syscall.Signal) (claimed <-chan struct
 			if !hangup {
 				return nil, nil, false
 			}
+		case armedForACall:
+			// The call alone, which some signals do not end.
+			if !signalEndsAKeywordCall(name, sig) {
+				return nil, nil, false
+			}
 		default:
 			if !runsOnADeath && !hangup {
 				return nil, nil, false
@@ -288,6 +296,8 @@ func (r *Runner) publishExitTrap() {
 		switch {
 		case r.exitTrap != nil:
 			armed = armedForADeath
+		case r.aKeywordCallEndsOnADeath():
+			armed = armedForACall
 		case r.exitHookStandsForAHangup():
 			armed = armedForAHangup
 		}
@@ -297,7 +307,8 @@ func (r *Runner) publishExitTrap() {
 	}
 	r.exitTrapPublished = armed
 	s.outside.armed.Store(armed)
-	if armed == armedForADeath && r.ListenForFatalSignals != nil && r.sem().ExitTrapRunsOnSignalDeath == Yes {
+	if (armed == armedForADeath || armed == armedForACall) &&
+		r.ListenForFatalSignals != nil && r.sem().ExitTrapRunsOnSignalDeath == Yes {
 		r.ListenForFatalSignals()
 	}
 }
@@ -432,6 +443,10 @@ func (r *Runner) abandonsForADeath() <-chan struct{} {
 	if s.outside.armed.Load() == armedForNothing {
 		return nil
 	}
+	// Under the lock, because a death a call ended puts a fresh one in its
+	// place. See Runner.reopenTheHandover.
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.outside.dying
 }
 

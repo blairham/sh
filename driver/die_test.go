@@ -148,6 +148,7 @@ func dieRunningAsAShell() {
 		// itself is taken and what a function changes about it.
 		sh.Semantics.SelfAimedDeathIsTakenAtTheNextCommand = interp.Yes
 		sh.Semantics.DeathInAFunctionEndsTheCallAsKilled = interp.No
+		sh.Semantics.SignalDeathEndsAtAKeywordFunctionCall = interp.No
 	}
 	if os.Getenv(dyingTrapEnds) == "yes" {
 		sh.Semantics.FatalSignalInTheExitTrapEndsOnlyTheTrap = interp.Yes

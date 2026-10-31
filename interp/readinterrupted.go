@@ -345,20 +345,33 @@ func (w *readWatch) givesUpWithAByteThere() (syscall.Signal, bool) {
 // already there to be read, with a trapped signal waiting: run the handlers
 // first, in the dialect that runs them as soon as they arrive, and otherwise
 // read on. readRefused is an unanswered axis, already reported.
-func (w *readWatch) handlersRunWithAByteThere() (readVerdict, bool) {
+//
+// **It asks givesUpWithAByteThere again before it says to run them**, and
+// answers readGivenUp with the signal where that now gives the read up. It is
+// asked after that question said no, and a signal can land between the two:
+// the first found nothing waiting, this one finds the signal, and running its
+// handler here takes it off the list, and a read the signal gives up at the
+// next byte read on to the end of its line instead — `T st=0` where `T
+// st=258` belongs, a few runs in a hundred under load (#7181). The arrivals
+// only grow while the read is under way, so what this one saw the second
+// asking sees too.
+func (w *readWatch) handlersRunWithAByteThere() (syscall.Signal, readVerdict, bool) {
 	if w.deathOnly {
-		return 0, false
+		return 0, 0, false
 	}
 	if _, ok := w.trapWaiting(); !ok {
-		return 0, false
+		return 0, 0, false
+	}
+	if sig, gives := w.givesUpWithAByteThere(); gives {
+		return sig, readGivenUp, true
 	}
 	switch w.momentNow() {
 	case ReadHandlersRunAsSoonAsTheyArrive:
-		return readRunsHandlers, true
+		return 0, readRunsHandlers, true
 	case ReadHandlerMomentUnspecified:
-		return readRefused, true
+		return 0, readRefused, true
 	}
-	return 0, false
+	return 0, 0, false
 }
 
 // arrivedDuring is the question a wait for the next byte asks each time
@@ -562,10 +575,12 @@ func (w *readWatch) awaitByte(ctx context.Context, fd int, deadline time.Time) i
 			if sig, gives := w.givesUpWithAByteThere(); gives {
 				return w.gaveUp(sig)
 			}
-			verdict, stops := w.handlersRunWithAByteThere()
+			sig, verdict, stops := w.handlersRunWithAByteThere()
 			switch {
 			case !stops:
 				return evByte
+			case verdict == readGivenUp:
+				return w.gaveUp(sig)
 			case verdict == readRefused || w.runHandlers():
 				return evEOF
 			}

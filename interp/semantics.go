@@ -10958,12 +10958,18 @@ type Semantics struct {
 	// cleanly never reaches it.
 	ConditionArithmeticErrorIsFatal Answer
 
-	// ConditionFinishesAfterAnArithmeticError lets a `[[ ]]` whose arithmetic
-	// failed run to its end before the line is abandoned, every later
-	// arithmetic evaluation in it reading 0 without being evaluated, so that
-	// the status the shell ends with is the condition's own. zsh. bash and
-	// ksh93 abandon at the failure — and only bash carries on afterwards,
-	// which is ConditionArithmeticErrorIsFatal's question.
+	// ConditionFinishesAfterAFailure lets a `[[ ]]` whose arithmetic
+	// failed, or one of whose operands would not expand, run to its end
+	// before the line is abandoned, so that the status the shell ends with is
+	// the condition's own. zsh. bash and ksh93 abandon at the failure — and
+	// only bash carries on afterwards, which is
+	// ConditionArithmeticErrorIsFatal's question for the arithmetic and
+	// FailedExpansionAbandonsTheLine's for the expansion.
+	//
+	// Nothing after the failure is worked out. Every later arithmetic
+	// evaluation in the condition reads 0, and every later word is read as
+	// the script wrote it, unexpanded — so a command substitution in it never
+	// runs.
 	//
 	// Measured 2026-10-03 on zsh 5.9.2 under `env -i PATH=/usr/bin:/bin`,
 	// `-f -c`, with `a=(x y z)` and `echo after` behind each (#5588). Every
@@ -10980,18 +10986,52 @@ type Semantics struct {
 	//	[[ 2 -gt 1/0 ]]                  0
 	//	[[ ! 1/0 -eq 1 ]]                1
 	//
-	// bash 5.3.20 and ksh93u+ exit 1 on every one of the `-v` rows. The
-	// operand that would not *expand* is not this — `[[ ! $((1/0)) -eq 0 ]]`
-	// is 1 in zsh too — because that failure is the word's and happens
-	// before the condition is evaluated at all.
+	// bash 5.3.20 and ksh93u+ exit 1 on every one of the `-v` rows.
 	//
-	// Asked only on the failure path, and only where
+	// **An operand that would not expand is this too**, which this comment
+	// used to deny on the strength of `[[ ! $((1/0)) -eq 0 ]]` being 1 — a
+	// row that both readings predict, since a condition abandoned at the word
+	// and one finished over an empty word both come to 1 there. The row that
+	// parts them drops the `!`: `[[ $((1/0)) -eq 0 ]]` ends a command string
+	// at **0** (#6722). Measured 2026-10-30 on zsh 5.9.2 under the same
+	// setup, F standing for `${(P)'a b'}` — a bad substitution — and each
+	// row writing the complaint and nothing after it:
+	//
+	//	[[ -z F ]]   [[ F = '' ]]   [[ F != x ]]      0   F reads as empty
+	//	[[ -n F ]]   [[ F = x ]]    [[ x = F ]]       1
+	//	[[ F -eq 1 ]]   [[ $((1/0)) -eq 1 ]]          0   both sides read 0
+	//	[[ -z a${(P)'a b'}b ]]   [[ -z "F" ]]         1   what was written ahead
+	//	[[ a$PATH${(P)'a b'} = a ]]                   0   of the first substitution
+	//	[[ 'a'${(P)'a b'} = "'a'" ]]                  0   is kept, quotes and all
+	//	[[ -z F && -n $(echo ran >&2) ]]              0   nothing runs: a later
+	//	[[ -z F && -z "" ]]                           1   word is its written text
+	//	[[ -z F && $PATH = '$PATH' ]]                 0
+	//	[[ -z F && $x = $'x' ]]                       0
+	//	[[ F = * ]]   [[ -z F && x = (x) ]]           1   a live pattern after it
+	//	[[ F != * ]]  [[ -z F && x* = 'x*' ]]         0   matches nothing
+	//	[[ -z F && $(echo x) = "$(echo x)" ]]         1   a substitution is live
+	//	[[ F =~ '' ]]                                 1   nor does an expression
+	//	[[ -z ${x:?boom} ]]   [[ -z ${x?} ]]          1   not this: `?` is an exit
+	//
+	// So the expansion failure keys on what the arithmetic one does: from a
+	// script file every row above is 1, and `( … )`, `eval`, a function,
+	// `&&` and `||` behind the condition answer as their arithmetic
+	// counterparts do — `[[ -z F ]] && :` is 1 by AndAfterAFinishedConditionFails.
+	// And the arithmetic failure leaves its later words unexpanded too: `[[
+	// 1/0 -eq 1 && -n $(echo ran >&2) ]]` is 0 and runs nothing.
+	//
+	// Measured and not modeled: `set -u; [[ -z $nosuch ]]` is 0 under `-c`
+	// as well, but an unset name ends the shell here before the condition can
+	// go on (#7139); and a pattern read after the failure is traced as written, where
+	// the reference writes `'$PATH'` as `'\$PATH'`.
+	//
+	// Asked only on the failure path, and for the arithmetic only where
 	// ConditionArithmeticErrorIsFatal says the failure ends the input.
-	ConditionFinishesAfterAnArithmeticError Answer
+	ConditionFinishesAfterAFailure Answer
 
 	// AndAfterAFinishedConditionFails ends the line at 1 when the left side
 	// of an `&&` is a `[[ ]]` that ran to its end after its arithmetic
-	// failed and came to 0 — the status ConditionFinishesAfterAnArithmeticError
+	// failed and came to 0 — the status ConditionFinishesAfterAFailure
 	// leaves a command string at — rather than at that 0.
 	//
 	// Measured 2026-10-03 on zsh 5.9.2 under `-c`, each row writing the
@@ -33565,7 +33605,7 @@ type Semantics struct {
 	//	the complaint names         nothing       nothing     `test:` / `[:`
 	//
 	// An em dash is zsh ending the script at the first one — after running
-	// the test to its end, by ConditionFinishesAfterAnArithmeticError, so
+	// the test to its end, by ConditionFinishesAfterAFailure, so
 	// `test ! -v 'a[1/0]'` ends a command string at 0 there. So bash gives up
 	// the command, zsh the script, and ksh93 reports a failed builtin at 1
 	// and carries on: one value each of this type.
@@ -36422,7 +36462,7 @@ func PosixSemantics() Semantics {
 		// not a special builtin's.
 		ConditionArithmeticErrorIsFatal: No,
 		// And with nothing fatal there is nothing to finish before.
-		ConditionFinishesAfterAnArithmeticError: No,
+		ConditionFinishesAfterAFailure: No,
 		// Unreachable behind the No above, which is what every shell but
 		// one answers: no condition runs to its end after a failure.
 		AndAfterAFinishedConditionFails: No,

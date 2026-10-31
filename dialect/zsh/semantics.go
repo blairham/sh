@@ -2396,10 +2396,11 @@ func Semantics() interp.Semantics {
 	// in `(( ))` complains and the shell goes on.
 	s.ConditionArithmeticErrorIsFatal = interp.Yes
 	// And the condition runs to its end first, every later arithmetic in it
-	// reading 0, so the shell ends at the condition's own status: `[[ ! -v
-	// 'a[1/0]' ]]` ends it at 0. See
-	// interp.Semantics.ConditionFinishesAfterAnArithmeticError (#5588).
-	s.ConditionFinishesAfterAnArithmeticError = interp.Yes
+	// reading 0 and every later word read as written, so the shell ends at
+	// the condition's own status: `[[ ! -v 'a[1/0]' ]]` ends it at 0, and so
+	// does `[[ -z ${(P)'a b'} ]]`, whose operand would not expand. See
+	// interp.Semantics.ConditionFinishesAfterAFailure (#5588, #6722).
+	s.ConditionFinishesAfterAFailure = interp.Yes
 	// And an `&&` behind such a condition ends the line at 1, where the
 	// condition alone ends a command string at 0: `[[ 1/0 -eq 1 ]] && :` is
 	// 1 under `-c`, measured 2026-10-03. See

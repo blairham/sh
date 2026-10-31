@@ -1955,6 +1955,10 @@ func Semantics() interp.Semantics {
 	// input is there to be read leaves a line still arriving to be finished.
 	// Measured 2026-10-29; see interp.Semantics.ReadAbandonedWhen.
 	s.ReadAbandonedWhen = interp.ReadAbandonedOnlyDuringAWait
+	// And the handler of a signal that lands in a read that goes on runs
+	// once the read is over. Measured 2026-10-31; see
+	// interp.ReadHandlerMoment (#7031).
+	s.ReadHandlersRun = interp.ReadHandlersRunAfterTheRead
 	s.CommandRejectsUnknownOption = interp.Yes
 	// Whether `command -v` answers for every name it was given, and what
 	// decides the status when it found some of them. See

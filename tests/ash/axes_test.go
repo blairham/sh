@@ -72,6 +72,13 @@ func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 				"field ahead of the last name is complete (#7028)",
 		},
 		{
+			"a trapped signal waiting as a read that goes on begins",
+			`mkfifo p; exec 4<>p 3<p; trap 'echo T' INT; printf 'ab\n' >p; ` +
+				`read -r l <&3 5>"$(kill -INT $$)/dev/null"; echo "st=$? l=[$l]"`,
+			"ReadHandlersRun — asked only where a trapped signal is waiting during " +
+				"a read nothing gives up (#7031)",
+		},
+		{
 			"read -t 0 polling",
 			`printf 'a\nb\n' >f; exec <f; read -t 0 v; echo "st=$? v=[$v]"; read w; echo "w=[$w]"`,
 			"ReadZeroTimeout",

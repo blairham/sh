@@ -1153,6 +1153,12 @@ func Semantics() interp.Semantics {
 	s.ReadExactCountKeepsPartial = interp.Yes
 	s.ReadTimeoutKeepsWhatArrived = interp.Yes
 	s.ReadTimeoutBoundsReadability = interp.No
+	// A trapped signal that lands while a `read` waits for input stops it to
+	// run every handler waiting, and the read goes on; one that lands while
+	// bytes are there, or came before the read, waits for that or for the
+	// read's end. Measured 2026-10-31 on 5.3.20 and 3.2.57; see
+	// interp.ReadHandlerMoment (#7031).
+	s.ReadHandlersRun = interp.ReadHandlersRunWhenAWaitIsInterrupted
 	// A directory the PATH search walked past leaves no trace: with nothing
 	// runnable anywhere, bash says the name was never found at all.
 	s.DirectoryOnPathIsACandidate = interp.No

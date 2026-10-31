@@ -19358,10 +19358,9 @@ type Semantics struct {
 	//
 	// What is not modeled, all ksh93's: an inherited standard input open both
 	// ways reads on where this gives it up, and so does a `-u` descriptor made
-	// by `exec 4<&3`; `read -N` given up keeps nothing and leaves what it had
-	// read in the stream; and the handler of a read that goes on runs at the
-	// arrival, as bash's and zsh's do, where here it runs after the read
-	// (#7030, #7031). See docs/spec/semantics.md.
+	// by `exec 4<&3`; and `read -N` given up keeps nothing and leaves what it
+	// had read in the stream (#7030). See docs/spec/semantics.md. When the
+	// handler of a read that goes on runs is ReadHandlersRun.
 	//
 	// unexhibited ReadAbandonedAtTheNextByte: no column answers it whole. It is
 	// the reading this shell had for all three, and ksh93's for the reads its
@@ -19445,6 +19444,34 @@ type Semantics struct {
 	//
 	// unpinned dash: never asked. dash has no `read -t`.
 	ReadTimeoutWaitEndedByATrappedSignal Answer
+	// ReadHandlersRun is when the handler of a trapped signal that arrives
+	// during a `read` the signal does not end runs: once the builtin has
+	// returned, as it would after any other command, or in the middle of the
+	// read, which then goes on. See ReadHandlerMoment for the measurements
+	// and the three answers.
+	//
+	// Asked only where a trapped signal with a handler is waiting while a
+	// `read` that goes on looks for its next byte, on a stream that can make
+	// it wait: a read nothing arrives during, a read given up by the signal
+	// (ReadIsAbandonedByATrappedSignal, ReadAbandonedWhen), a read ended at
+	// its wait for the first byte (ReadTimeoutWaitEndedByATrappedSignal) and
+	// a read of a regular file ask nothing.
+	//
+	// unpinned bash: no corpus row times a signal against a read that goes
+	// on. Pinned by TestAHandlerRunsDuringAReadWhereTheShellsRunIt.
+	//
+	// unpinned zsh: the same reach. Pinned by
+	// TestAHandlerRunsDuringAReadWhereTheShellsRunIt.
+	//
+	// unpinned ksh: the same reach. Pinned by
+	// TestAHandlerRunsDuringAReadWhereTheShellsRunIt.
+	//
+	// unpinned dash: the same reach. Pinned by
+	// TestAHandlerRunsDuringAReadWhereTheShellsRunIt.
+	//
+	// unpinned ash: the same reach. Pinned by
+	// TestAHandlerRunsDuringAReadWhereTheShellsRunIt.
+	ReadHandlersRun ReadHandlerMoment
 	// DisownRemovesTheJob makes `disown` take the job out of the table, so
 	// a later `jobs` no longer lists it: bash and zsh. ksh93's disown only
 	// shields the job from the HUP an exiting shell would send, and its
@@ -37624,6 +37651,11 @@ func PosixSemantics() Semantics {
 		// columns with the letter whose reads go on through a trapped signal,
 		// bash 5.3 and 3.2 answer this and zsh does not. See the field.
 		ReadTimeoutWaitEndedByATrappedSignal: No,
+		// And the handler of a signal that arrives during a read that goes on
+		// runs after it: XCU 2.11 holds a trap until the foreground command
+		// it arrived during has completed, and dash and ash answer this. See
+		// the field.
+		ReadHandlersRun: ReadHandlersRunAfterTheRead,
 		// And a read given up keeps what arrived, as at the end of the
 		// input, its names past what arrived cleared: dash and ksh93, two of
 		// the three columns that give one up. BusyBox ash keeps only the
@@ -38559,14 +38591,13 @@ const (
 // action, read at its turn: bash 5.3, bash 3.2 and dash run `HUP NEW` for
 // `trap "echo HUP; trap 'echo NEW' USR2" HUP` with USR2 waiting behind it.
 //
-// Signals that land in a `read` are not a batch. bash, zsh and ksh93 run a
-// handler mid-read at the arrival (#7031), so two that come at different
-// moments run in the order they came there; this shell runs them after the
-// read, one batch each. Four sent back to back into a bash `read` do wait
-// together, and bash 5.3 runs them HUP INT TERM USR1 whatever order they were
-// sent in; this shell cannot tell those from the spaced ones until it runs a
-// handler at the arrival too, so they keep the order they came in. See
-// Runner.arrivalsDuringAReadRunOneByOne.
+// A `read` makes batches of its own in the dialects that run a handler in the
+// middle of one (ReadHandlersRun): what is waiting when the read stops to run
+// handlers is a batch, so two signals that land in it at different moments
+// run in the order they came — USR1 and then HUP sent 0.3 s apart into a
+// `read` that goes on run USR1 HUP in bash 5.3, bash 3.2 and zsh — and four
+// sent back to back wait together, which bash 5.3 runs HUP INT TERM USR1
+// whatever order they were sent in.
 //
 // What this does not answer is how many times a condition that arrived twice
 // runs: the three columns that sort run it once, and zsh once per arrival.
@@ -38598,6 +38629,99 @@ func (o WaitingHandlerOrder) String() string {
 		return "waiting handlers run up the signal numbers"
 	case WaitingHandlersRunDownTheSignalNumbers:
 		return "waiting handlers run down the signal numbers"
+	}
+	return "unspecified"
+}
+
+// ReadHandlerMoment is when the handler of a trapped signal that arrives during
+// a `read` the signal does not end runs. See Semantics.ReadHandlersRun.
+//
+// Measured 2026-10-31 from -c against bash 5.3.20, bash 3.2.57, zsh 5.9.2,
+// ksh93u+ 2012-08-01, dash 0.5.12 and BusyBox ash 1.37.0 in the pinned alpine
+// image. The read is the shell's standard input, a pipe, with `ab` written
+// before it starts. INT comes from another process 0.3 s in, the writer puts
+// `W` on the terminal at 0.6 s and ends the line with `cd` at 0.9 s, and the
+// handler is `echo "T st=$? l=[$l]"` after `l=old; false`:
+//
+//	bash 5.3, bash 3.2, zsh, ksh93   T st=1 l=[old], W, st=0 l=[abcd]
+//	dash                             T st=1 l=[ab], W (the read is given up)
+//	this shell, before               W, T, st=0 l=[abcd]
+//
+// So in three columns the read stops, runs the handler, and goes on to the end
+// of its line. The handler sees `$?` as it stood when the read began and the
+// name as it was, since nothing is assigned until the line is in. The same
+// holds for `-t 5`, `-d x`, `-u 0` and, in bash, `-n 6`. dash and ash run it
+// after the builtin: both give a read up when the signal lands while it waits,
+// and where it goes on — the signal landed while bytes were there to read —
+// the handler waits for its end. Two signals 0.3 s apart in a 30 MB line
+// read from a file, which dash and ash take a byte at a time and never wait
+// on, run HUP and then USR1, sorted, once the read is over in both.
+//
+// The three columns that run it during the read disagree about which moment
+// counts, and that is the axis's third answer:
+//
+//   - **A wait the signal interrupts**, in bash 5.3 and 3.2. A signal landing
+//     while the read waits for input runs then, and with it every handler
+//     waiting — one whose signal came before the read began, raised by
+//     `$(kill -INT $$)` in the read's own redirection, runs at a USR1 that
+//     lands mid-read, `T` and `U` together. With nothing landing in a wait it
+//     runs after the read: the pending INT alone is `W` and then `T`. A signal
+//     that lands while the bytes are still there to read waits as well — a
+//     10 MB line on a pipe, INT at 0.5 s, gave `W T` in two runs of three in
+//     5.3, and from a 30 MB file 3.2 ran it as the read ended.
+//   - **As soon as it arrives**, in zsh and ksh93. zsh ran HUP and USR1 at
+//     0.32 s and 0.63 s in that 30 MB file read, which never waits, and ended
+//     the read at 8.3 s. A signal that lands while the read's own redirection
+//     is still being expanded, from another process, runs in ksh93 as the read
+//     begins (1.28 s into a 1.3 s expansion) and the read goes on, where bash
+//     runs it after the read. zsh had already run it before the expansion
+//     ended, which this shell, running no handler during an expansion, can
+//     only meet at the start of the read.
+//
+// A handler that leaves the shell — `exit 3` — ends the read with no name
+// touched: an EXIT trap reads `l=[old]` and 3 in bash, zsh and ksh93. One
+// that returns from the function the read is in returns with no name touched
+// in bash 5.3 and ksh93, with the handler's status; the rest of the line is
+// the next reader's.
+//
+// Not modeled: zsh's handler that returns from the function assigns what
+// arrived and returns 1; ksh93's read reports 258 to a handler for a signal
+// its own command substitution sent; zsh runs a handler for a signal that
+// lands during any command substitution at the end of that substitution
+// rather than at the next command; and a file read in this shell, which is
+// never watched because it never waits, runs zsh's handlers after it.
+type ReadHandlerMoment uint8
+
+const (
+	// ReadHandlerMomentUnspecified is no answer, refused by name, and only
+	// where a trapped signal is waiting during a read that goes on.
+	ReadHandlerMomentUnspecified ReadHandlerMoment = iota
+	// ReadHandlersRunAfterTheRead runs the handler once the builtin has
+	// returned, as after any other command: dash and BusyBox ash, and POSIX
+	// (XCU 2.11 holds a trap until the foreground command it arrived during
+	// has completed).
+	ReadHandlersRunAfterTheRead
+	// ReadHandlersRunWhenAWaitIsInterrupted runs every waiting handler when
+	// a trapped signal lands while the read waits for input, and the read
+	// then goes on. A signal that lands while bytes are there to read, or
+	// came before the read began, waits for the next such landing or for the
+	// end of the read: bash 5.3 and 3.2.
+	ReadHandlersRunWhenAWaitIsInterrupted
+	// ReadHandlersRunAsSoonAsTheyArrive runs every waiting handler as soon
+	// as the read looks for its next byte — as it begins, at a byte that is
+	// there, and in a wait the signal lands in — and the read then goes on:
+	// zsh and ksh93.
+	ReadHandlersRunAsSoonAsTheyArrive
+)
+
+func (m ReadHandlerMoment) String() string {
+	switch m {
+	case ReadHandlersRunAfterTheRead:
+		return "read handlers run after the read"
+	case ReadHandlersRunWhenAWaitIsInterrupted:
+		return "read handlers run when a wait is interrupted"
+	case ReadHandlersRunAsSoonAsTheyArrive:
+		return "read handlers run as soon as they arrive"
 	}
 	return "unspecified"
 }

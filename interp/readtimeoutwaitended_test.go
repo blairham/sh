@@ -14,14 +14,17 @@ import (
 // Semantics.ReadTimeoutWaitEndedByATrappedSignal unanswered, so a read that
 // asks it is refused and one that does not is not. Semantics.ReadAbandonedWhen
 // is unanswered too: a read that goes on through a trapped signal has no
-// business asking when one gives it up. bounded is
-// ReadTimeoutBoundsReadability, which decides what the deadline covers and
+// business asking when one gives it up. When its handler runs is answered, as
+// POSIX answers it: a trapped signal waiting during a read that goes on asks
+// that (Semantics.ReadHandlersRun), and it is not the question here. bounded
+// is ReadTimeoutBoundsReadability, which decides what the deadline covers and
 // not whether this is asked.
 func timedReadOn(base Semantics, bounded Answer) Semantics {
 	s := base
 	s.ReadIsAbandonedByATrappedSignal = No
 	s.ReadAbandonedWhen = ReadAbandonmentUnspecified
 	s.ReadTimeoutWaitEndedByATrappedSignal = Unspecified
+	s.ReadHandlersRun = ReadHandlersRunAfterTheRead
 	s.ReadOptions = "rt:u:"
 	s.ReadTimeoutBoundsReadability = bounded
 	s.ReadTimeoutKeepsWhatArrived = No

@@ -75,8 +75,10 @@ func (a ReadAbandonmentReading) String() string {
 }
 
 // readWatch is one `read`'s watch for the trapped signal that gives it up, in
-// the dialect that gives one up. See Semantics.ReadIsAbandonedByATrappedSignal
-// and Semantics.ReadAbandonedWhen.
+// the dialect that gives one up, and for the handlers a trapped signal runs in
+// the middle of a read that goes on. See
+// Semantics.ReadIsAbandonedByATrappedSignal, Semantics.ReadAbandonedWhen and
+// Semantics.ReadHandlersRun.
 //
 // **The dialect is asked only once a signal has arrived.** Every reading
 // waits for a byte, and reads it, exactly alike until then, so a read nothing
@@ -101,12 +103,27 @@ type readWatch struct {
 	// as reading, worked out the first time it matters: 0 not yet, 1 yes, -1
 	// no. Only ReadAbandonedOnlyAtTheStartOfALine asks.
 	bothWays int8
-	// firstWaitOnly is the watch of a `read -t` in a dialect whose reads go
-	// on through a trapped signal. It watches the wait for the first byte and
-	// no other, asks Semantics.ReadTimeoutWaitEndedByATrappedSignal rather
-	// than Semantics.ReadAbandonedWhen, and ends the read as its deadline
-	// would. ends is that answer, and asked says it has been asked.
-	firstWaitOnly, ends bool
+	// goesOn is the watch of a read in a dialect whose reads go on through a
+	// trapped signal: nothing it sees gives the read up, and it is kept for
+	// the handlers the dialect runs in the middle of a read
+	// (Semantics.ReadHandlersRun). timed is a `read -t`, whose wait for its
+	// first byte the dialect may end as the deadline would
+	// (Semantics.ReadTimeoutWaitEndedByATrappedSignal); ends is that answer,
+	// and asked says it has been asked.
+	goesOn, timed, ends bool
+	// started is true once a byte has been read: the wait a signal may end
+	// in a timed read that goes on is the one for the first byte.
+	started bool
+	// moment is the dialect's answer to when a handler runs during a read
+	// that goes on, asked the first time a trapped signal is waiting there;
+	// momentAsked says it has been.
+	moment      ReadHandlerMoment
+	momentAsked bool
+	// ended is why the current wait ended on an arrival, set by the
+	// question that wait asks. See readVerdict.
+	ended readVerdict
+	// ctx is the builtin's, for the handlers run in the middle of the read.
+	ctx context.Context
 	// deathOnly is the watch of a read nothing trapped can give up, kept for
 	// a fatal signal from outside that the shell has been handed to die of:
 	// every wait for a byte is given up for that, and for nothing else. See
@@ -114,23 +131,61 @@ type readWatch struct {
 	deathOnly bool
 }
 
-// readWatchFor is the watch for a read of in, and false where nothing can give
-// that read up: the dialect reads on through a trapped signal or no signal is
-// trapped, and no fatal signal from outside could be handed over either — or
-// the stream is a regular file, whose reads do not wait for anybody.
-func (r *Runner) readWatchFor(in io.Reader, byNumber, counted bool) (*readWatch, bool) {
-	if w, ok := r.trapWatchFor(in, byNumber, counted); ok {
+// readVerdict is why a wait of a watched read ended on an arrival.
+type readVerdict uint8
+
+const (
+	// readGivenUp gives the read up, as at the end of its input — for a
+	// trapped signal in the dialects whose reads are given up, and for a
+	// fatal signal from outside in any. See readWatch.gaveUp.
+	readGivenUp readVerdict = iota
+	// readTimedOut ends a timed read's wait for its first byte as its
+	// deadline would. See Semantics.ReadTimeoutWaitEndedByATrappedSignal.
+	readTimedOut
+	// readRunsHandlers stops the read to run the handlers waiting, and then
+	// goes on. See Semantics.ReadHandlersRun.
+	readRunsHandlers
+	// readRefused ends the read over an axis with no answer, which has
+	// already been reported.
+	readRefused
+)
+
+// readWatchFor is the watch for a read of in, and false where nothing can stop
+// that read: no signal is trapped, and no fatal signal from outside could be
+// handed over either — or the stream is a regular file, whose reads do not
+// wait for anybody.
+func (r *Runner) readWatchFor(ctx context.Context, in io.Reader, byNumber, counted bool) (*readWatch, bool) {
+	if w, ok := r.trapWatchFor(ctx, in, byNumber, counted); ok {
+		return w, true
+	}
+	if w, ok := r.goesOnWatchFor(ctx, in); ok {
 		return w, true
 	}
 	return r.deathWatchFor(in)
 }
 
-// trapWatchFor is readWatchFor for the trapped signals alone.
-func (r *Runner) trapWatchFor(in io.Reader, byNumber, counted bool) (*readWatch, bool) {
+// trapWatchFor is readWatchFor for the trapped signals, in the dialect whose
+// reads they give up.
+func (r *Runner) trapWatchFor(ctx context.Context, in io.Reader, byNumber, counted bool) (*readWatch, bool) {
 	if r.sem().ReadIsAbandonedByATrappedSignal != Yes || !r.anySignalTrapped() || neverWaits(in) {
 		return nil, false
 	}
-	return &readWatch{r: r, in: in, byNumber: byNumber, counted: counted, began: r.arrivalMark()}, true
+	return &readWatch{r: r, in: in, byNumber: byNumber, counted: counted, began: r.arrivalMark(), ctx: ctx}, true
+}
+
+// goesOnWatchFor is readWatchFor for the trapped signals, in the dialect whose
+// reads go on through them: none gives the read up, and the watch is there
+// for the handlers that may run in the middle of it. See
+// Semantics.ReadHandlersRun.
+//
+// It is made wherever a signal is trapped and asks nothing until one is
+// waiting during the read — so a read nothing arrives during, which is every
+// read of a script that is not being signaled, puts no question at all.
+func (r *Runner) goesOnWatchFor(ctx context.Context, in io.Reader) (*readWatch, bool) {
+	if r.sem().ReadIsAbandonedByATrappedSignal == Yes || !r.anySignalTrapped() || neverWaits(in) {
+		return nil, false
+	}
+	return &readWatch{r: r, in: in, goesOn: true, ctx: ctx}, true
 }
 
 // deathWatchFor is the watch of a read that only a fatal signal from outside
@@ -156,24 +211,16 @@ func neverWaits(in io.Reader) bool {
 }
 
 // timedReadWatchFor is the watch for a `read -t` of in, nil where nothing can
-// end that read early: readWatchFor's, in a dialect a trapped signal gives any
-// read up in, and otherwise one that watches only the wait for the first byte.
-// See Semantics.ReadTimeoutWaitEndedByATrappedSignal.
-//
-// The second is made wherever a signal is trapped, and asks nothing until one
-// lands in that wait — so a timed read whose byte arrives in time, which is
-// every timed read of an ordinary script, puts no question at all.
-func (r *Runner) timedReadWatchFor(in io.Reader, byNumber, counted bool) *readWatch {
-	if w, ok := r.trapWatchFor(in, byNumber, counted); ok {
-		return w
+// stop that read early: readWatchFor's, with the wait for the first byte of a
+// read that goes on also one a trapped signal may end. See
+// Semantics.ReadTimeoutWaitEndedByATrappedSignal.
+func (r *Runner) timedReadWatchFor(ctx context.Context, in io.Reader, byNumber, counted bool) *readWatch {
+	w, ok := r.readWatchFor(ctx, in, byNumber, counted)
+	if !ok {
+		return nil
 	}
-	if r.sem().ReadIsAbandonedByATrappedSignal == Yes || !r.anySignalTrapped() {
-		// Nothing trapped ends it early, and a fatal signal from outside
-		// still may. See deathWatchFor.
-		w, _ := r.deathWatchFor(in)
-		return w
-	}
-	return &readWatch{r: r, in: in, firstWaitOnly: true}
+	w.timed = w.goesOn
+	return w
 }
 
 // readingNow is the dialect's answer, asked the first time it is needed. An
@@ -237,7 +284,7 @@ func (w *readWatch) trapWaiting() (syscall.Signal, bool) {
 // that is already there to be read. Only a reading that does not wait for a
 // wait to be interrupted does.
 func (w *readWatch) givesUpWithAByteThere() (syscall.Signal, bool) {
-	if w.firstWaitOnly || w.deathOnly {
+	if w.goesOn || w.deathOnly {
 		// A byte there is a wait that never began, and a death from
 		// outside is taken at the next command either way.
 		return 0, false
@@ -257,71 +304,177 @@ func (w *readWatch) givesUpWithAByteThere() (syscall.Signal, bool) {
 	return sig, true
 }
 
+// handlersRunWithAByteThere is what a read that goes on does at a byte that is
+// already there to be read, with a trapped signal waiting: run the handlers
+// first, in the dialect that runs them as soon as they arrive, and otherwise
+// read on. readRefused is an unanswered axis, already reported.
+func (w *readWatch) handlersRunWithAByteThere() (readVerdict, bool) {
+	if w.deathOnly {
+		return 0, false
+	}
+	if _, ok := w.trapWaiting(); !ok {
+		return 0, false
+	}
+	switch w.momentNow() {
+	case ReadHandlersRunAsSoonAsTheyArrive:
+		return readRunsHandlers, true
+	case ReadHandlerMomentUnspecified:
+		return readRefused, true
+	}
+	return 0, false
+}
+
 // arrivedDuring is the question a wait for the next byte asks each time
-// something may have arrived, mark being arrivalMark as the wait began.
+// something may have arrived, mark being arrivalMark as the wait began. It
+// leaves why the wait ended in w.ended.
 //
 // A signal that came before the wait does not end it in the reading that
 // gives a read up only during one — it is still on the pending list, and it
 // runs once the read is over — so that reading looks only past the mark.
 func (w *readWatch) arrivedDuring(mark int) func() (syscall.Signal, bool) {
-	if w.firstWaitOnly {
-		return w.endsTheFirstWait(mark)
-	}
 	if w.deathOnly {
-		// No trapped arrival gives this read up; the wait itself is given
-		// up for a death from outside. See Runner.awaitOrArrival.
+		// No trapped arrival stops this read; the wait itself is given up
+		// for a death from outside. See Runner.awaitOrArrival.
 		return func() (syscall.Signal, bool) { return 0, false }
+	}
+	if w.goesOn {
+		return func() (syscall.Signal, bool) {
+			if w.timed && !w.started {
+				if sig, ends := w.endsTheFirstWait(mark); ends {
+					w.ended = readTimedOut
+					return sig, true
+				}
+			}
+			return w.handlersRunDuringAWait(mark)
+		}
 	}
 	return func() (syscall.Signal, bool) {
 		sig, ok := w.r.pendingTrap()
 		if !ok {
 			return 0, false
 		}
+		gives := true
 		switch w.readingNow() {
 		case ReadAbandonedOnlyDuringAWait:
-			return w.r.pendingTrapFrom(mark)
+			sig, gives = w.r.pendingTrapFrom(mark)
 		case ReadAbandonedOnlyAtTheStartOfALine:
-			if sig, gives, handled := w.startOfALine(&mark); handled {
-				return sig, gives
+			if at, g, handled := w.startOfALine(&mark); handled {
+				sig, gives = at, g
 			}
 		}
-		return sig, true
+		if gives || w.r.unspecified {
+			w.ended = readGivenUp
+			return sig, true
+		}
+		return w.handlersRunDuringAWait(mark)
 	}
 }
 
-// endsTheFirstWait is arrivedDuring for the watch that watches a timed read's
-// wait for its first byte and no other: only a trapped signal that lands
-// during that wait is looked at, and the dialect is asked about it then. A
-// signal handled before the read began is not one — measured, zsh reads on
-// over it — and nor is one already waiting, which pendingTrapFrom leaves out.
+// handlersRunDuringAWait is the arrival that stops a wait of a read that goes
+// on, to run the handlers waiting: any of them, in the dialect that runs them
+// as soon as they arrive, and one that landed in this wait in the dialect that
+// runs them when a wait is interrupted. The dialect is asked only once a
+// trapped signal is waiting; an unanswered axis ends the read.
+func (w *readWatch) handlersRunDuringAWait(mark int) (syscall.Signal, bool) {
+	sig, ok := w.r.pendingTrap()
+	if !ok {
+		return 0, false
+	}
+	switch w.momentNow() {
+	case ReadHandlersRunAsSoonAsTheyArrive:
+	case ReadHandlersRunWhenAWaitIsInterrupted:
+		if sig, ok = w.r.pendingTrapFrom(mark); !ok {
+			return 0, false
+		}
+	case ReadHandlerMomentUnspecified:
+		w.ended = readRefused
+		return sig, true
+	default:
+		return 0, false
+	}
+	w.ended = readRunsHandlers
+	return sig, true
+}
+
+// momentNow is the dialect's answer to when a handler runs during a read that
+// goes on, asked the first time it is needed. An unanswered axis is refused
+// there, and the read ends so that the builtin can report the refusal.
+func (w *readWatch) momentNow() ReadHandlerMoment {
+	if !w.momentAsked {
+		w.momentAsked = true
+		w.moment = w.r.sem().ReadHandlersRun
+		if w.moment == ReadHandlerMomentUnspecified {
+			w.r.diagf("%s\n", w.r.unanswered("when the handler of a signal that arrives during a `read` runs"))
+			w.r.status = 2
+			w.r.unspecified = true
+		}
+	}
+	return w.moment
+}
+
+// runHandlers runs the handlers waiting, in the middle of the read, and
+// reports whether the read ends there: a handler left the shell — `exit`, a
+// `return` out of the function the read is in — or one was refused. A read
+// that ends so touches no name; the builtin hands back the status the
+// handler left. See Semantics.ReadHandlersRun.
+//
+// **The handler sees `$?` as it stands.** The read has not finished, so it
+// has no status of its own for the dialect that shows a handler the status
+// from before the command (Semantics.SignalHandlerSeesEarlierStatus) to look
+// past: measured 2026-10-31, zsh's handler mid-read reads 1 after `false`, as
+// bash's does, and 0 after a command substitution in the read's own
+// redirection, as bash's does.
+//
+// Everything waiting is taken, so what arrives from here on is the read's: the
+// mark of the arrivals before it began is moved to the front.
+func (w *readWatch) runHandlers() bool {
+	r := w.r
+	before := r.statusBefore
+	r.statusBefore = r.status
+	r.runPendingTraps(w.ctx)
+	r.statusBefore = before
+	w.began = 0
+	return r.ctl != controlNone || r.unspecified
+}
+
+// endsTheFirstWait is the question of a timed read that goes on, asked of a
+// wait for its first byte: whether the trapped signal that landed in it ends
+// the read as the deadline would. Only one that lands during that wait is
+// looked at, and the dialect is asked about it then. A signal handled before
+// the read began is not one — measured, zsh reads on over it — and nor is one
+// already waiting, which pendingTrapFrom leaves out.
 //
 // An unanswered axis is refused there, and the read ends so that the builtin
 // can report the refusal.
-func (w *readWatch) endsTheFirstWait(mark int) func() (syscall.Signal, bool) {
-	return func() (syscall.Signal, bool) {
-		sig, ok := w.r.pendingTrapFrom(mark)
-		if !ok {
-			return 0, false
-		}
-		if !w.asked {
-			w.asked = true
-			w.ends = w.r.ask(w.r.sem().ReadTimeoutWaitEndedByATrappedSignal,
-				"a trapped signal ending a `read -t` still waiting for its first byte")
-		}
-		return sig, w.ends || w.r.unspecified
+func (w *readWatch) endsTheFirstWait(mark int) (syscall.Signal, bool) {
+	sig, ok := w.r.pendingTrapFrom(mark)
+	if !ok {
+		return 0, false
 	}
+	if !w.asked {
+		w.asked = true
+		w.ends = w.r.ask(w.r.sem().ReadTimeoutWaitEndedByATrappedSignal,
+			"a trapped signal ending a `read -t` still waiting for its first byte")
+	}
+	return sig, w.ends || w.r.unspecified
 }
 
-// gaveUp records that sig gave the read up and ends it as at the end of the
-// input: nothing more is read, and the handler runs once the builtin has
-// returned, like any other trap between commands.
+// gaveUp ends the read for the arrival that ended its wait, sig being the
+// signal, as w.ended says.
 //
-// The watch of a timed read's first wait ends it as the deadline would
-// instead, which is what that reading is — the status is the timeout's and no
-// name is touched — and leaves the read's status nothing of the signal's.
+// A read given up ends as at the end of the input: nothing more is read, and
+// the handler runs once the builtin has returned, like any other trap between
+// commands. A timed read's first wait ended by a signal ends as the deadline
+// would instead, which is what that reading is — the status is the timeout's
+// and no name is touched — and leaves the read's status nothing of the
+// signal's. A refused axis ends it as at the end of input too, with the
+// refusal already said.
 func (w *readWatch) gaveUp(sig syscall.Signal) int {
-	if w.firstWaitOnly {
+	switch w.ended {
+	case readTimedOut:
 		return evTimeout
+	case readRefused:
+		return evEOF
 	}
 	w.r.readAbandonedBy = sig
 	return evEOF
@@ -342,6 +495,7 @@ func (w *readWatch) track(read func() (byte, int)) func() (byte, int) {
 			return b, ev
 		}
 		w.inLine = b != '\n'
+		w.started = true
 		return b, ev
 	}
 }
@@ -360,40 +514,77 @@ func (w *readWatch) track(read func() (byte, int)) func() (byte, int) {
 //
 // Where the byte is already there no goroutine is started, and the readings
 // part over a signal already waiting: see givesUpWithAByteThere.
+//
+// **A read that stops to run handlers waits again afterwards**, for whatever
+// is left of the same deadline: the read goes on as though the handlers had
+// taken no time out of it, and a handler that left the shell ends it. See
+// Semantics.ReadHandlersRun.
 func (w *readWatch) awaitByte(ctx context.Context, fd int, deadline time.Time) int {
-	if ready, _ := fdset.ReadableWithin(fd, 0); ready {
-		if sig, gives := w.givesUpWithAByteThere(); gives {
-			return w.gaveUp(sig)
+	for {
+		if ready, _ := fdset.ReadableWithin(fd, 0); ready {
+			if sig, gives := w.givesUpWithAByteThere(); gives {
+				return w.gaveUp(sig)
+			}
+			verdict, stops := w.handlersRunWithAByteThere()
+			switch {
+			case !stops:
+				return evByte
+			case verdict == readRefused || w.runHandlers():
+				return evEOF
+			}
+			// The handler may have read the stream itself, so the byte is
+			// looked for again.
+			continue
+		}
+		sig, trapped, ready, can := w.waitOnce(ctx, fd, deadline)
+		if trapped {
+			if w.ended != readRunsHandlers {
+				return w.gaveUp(sig)
+			}
+			if w.runHandlers() {
+				return evEOF
+			}
+			continue
+		}
+		switch {
+		case deadline.IsZero():
+			return evByte
+		case !can:
+			return evEOF
+		case !ready:
+			return evTimeout
 		}
 		return evByte
 	}
+}
+
+// waitOnce is one wait of awaitByte's: until fd is readable, the deadline
+// passes, or an arrival ends it, which trapped reports and w.ended explains.
+//
+// The goroutine's answer is read only once it has closed readable; a wait
+// ended by an arrival leaves it to notice the cancel and go, unread.
+func (w *readWatch) waitOnce(ctx context.Context, fd int, deadline time.Time) (sig syscall.Signal, trapped, ready, can bool) {
 	mark := w.r.arrivalMark()
 	readable := make(chan struct{})
-	var ready, can bool
+	var isReady, canAsk bool
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go func() {
 		defer close(readable)
-		ready, can = awaitReadable(ctx, fd, deadline)
+		isReady, canAsk = awaitReadable(ctx, fd, deadline)
 	}()
+	w.ended = readGivenUp
 	if sig, trapped, _ := w.r.awaitOrArrival(readable, nil, w.arrivedDuring(mark)); trapped {
-		return w.gaveUp(sig)
+		return sig, true, false, false
 	}
-	switch {
-	case deadline.IsZero():
-		return evByte
-	case !can:
-		return evEOF
-	case !ready:
-		return evTimeout
-	}
-	return evByte
+	return 0, false, isReady, canAsk
 }
 
 // trapInterruptibleByteSource reads a stream a byte at a time and gives the
 // read up when a trapped signal does, in the dialect that abandons a `read`
-// that way. See Semantics.ReadIsAbandonedByATrappedSignal and
-// Semantics.ReadAbandonedWhen.
+// that way, and stops it to run the handlers in the dialect that runs them in
+// the middle of one. See Semantics.ReadIsAbandonedByATrappedSignal,
+// Semantics.ReadAbandonedWhen and Semantics.ReadHandlersRun.
 //
 // A descriptor is waited on rather than read until its byte is there — see
 // readWatch.awaitByte — so a read given up leaves nothing in flight. Only a
@@ -402,7 +593,8 @@ func (w *readWatch) awaitByte(ctx context.Context, fd int, deadline time.Time) i
 // byte that arrives on one of those after the read was given up is lost,
 // which is that same cost and is confined to the stream the abandoned read was
 // on. There every byte is a wait, since nothing says whether it was already
-// there. stop releases the goroutine.
+// there, and a read that stops to run handlers goes back to waiting for the
+// byte already asked for. stop releases the goroutine.
 func (r *Runner) trapInterruptibleByteSource(in io.Reader, w *readWatch) (next func() (byte, int), stop func()) {
 	if fd, can := pollableDescriptor(in); can {
 		return w.track(polledSource(in, func() int {
@@ -433,8 +625,19 @@ func (r *Runner) trapInterruptibleByteSource(in io.Reader, w *readWatch) (next f
 		mark := r.arrivalMark()
 		req <- struct{}{}
 		done := <-ready
-		if sig, trapped, _ := r.awaitOrArrival(done, nil, w.arrivedDuring(mark)); trapped {
-			return 0, w.gaveUp(sig)
+		for {
+			w.ended = readGivenUp
+			sig, trapped, _ := r.awaitOrArrival(done, nil, w.arrivedDuring(mark))
+			if !trapped {
+				break
+			}
+			if w.ended != readRunsHandlers {
+				return 0, w.gaveUp(sig)
+			}
+			if w.runHandlers() {
+				return 0, evEOF
+			}
+			mark = r.arrivalMark()
 		}
 		if got.eof {
 			return 0, evEOF

@@ -6308,15 +6308,6 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// the optstring is an answer rather than a constant.
 	defer func(was int) { r.readWritesAsked = was }(r.readWritesAsked)
 	r.readWritesAsked = 0
-	// What arrives while the read waits runs one by one, in the order it
-	// came, rather than as one batch: see arrivalsDuringAReadRunOneByOne.
-	// The mark is taken without the lock where nothing has arrived, which is
-	// every read of a script that is not being signaled.
-	readMark := 0
-	if s := r.signals; s != nil && !s.nothingArrived() {
-		readMark = r.arrivalMark()
-	}
-	defer r.arrivalsDuringAReadRunOneByOne(readMark)
 	letters := r.sem().ReadOptions
 	if letters == "" {
 		letters = "r"
@@ -6777,8 +6768,9 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		//
 		// A trapped signal still gives it up, in the dialects that give one
 		// up (#7027), and in the others may still end its wait for the first
-		// byte as the deadline would (#7032).
-		watch := r.timedReadWatchFor(in, byNumber, count >= 0)
+		// byte as the deadline would (#7032), or stop it to run its handler
+		// (#7031).
+		watch := r.timedReadWatchFor(ctx, in, byNumber, count >= 0)
 		if polled, can := polledTimedSource(ctx, in, timeout, whole, watch); can {
 			next = polled
 			break
@@ -6789,9 +6781,11 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// The read that never returns, which is the one a coprocess makes
 		// by construction.
 		r.settleBackgroundJobBeforeABlockingRead(in)
-		// Or one a trapped signal gives up, in the dialect that does. See
-		// Semantics.ReadIsAbandonedByATrappedSignal.
-		if watch, ok := r.readWatchFor(in, byNumber, count >= 0); ok && !buffered {
+		// Or one a trapped signal gives up, in the dialect that does, or
+		// stops to run its handler in the middle of, in the dialect that
+		// does that. See Semantics.ReadIsAbandonedByATrappedSignal and
+		// Semantics.ReadHandlersRun.
+		if watch, ok := r.readWatchFor(ctx, in, byNumber, count >= 0); ok && !buffered {
 			src, stop := r.trapInterruptibleByteSource(in, watch)
 			next = src
 			defer stop()
@@ -6814,6 +6808,15 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	giveBack()
 	if r.unspecified {
 		return 2
+	}
+	if r.ctl != controlNone {
+		// A handler run in the middle of the read left the shell or the
+		// function the read is in, and the read ended there with no name
+		// touched: measured 2026-10-31, an EXIT trap after `exit 3` in one
+		// reads the name as it was in bash, zsh and ksh93, and a `return 5`
+		// returns 5 in bash 5.3 and ksh93. The status is the handler's. See
+		// Semantics.ReadHandlersRun.
+		return r.status
 	}
 
 	// A `read` that fails still assigns. All four shells clear the variables

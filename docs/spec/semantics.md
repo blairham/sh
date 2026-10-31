@@ -27629,20 +27629,30 @@ command's end, which bash 5.3 and dash place by its number: HUP CHLD USR1
 USR2 for USR2 USR1 HUP sent during a `/bin/sleep`. A handler that replaces a
 later one's trap hands it the new action at its turn, in bash and dash.
 
-**Signals that land in a `read` are not a batch.** bash, zsh and ksh93 run a
-handler mid-read at the arrival (#7031), so USR1 and then HUP sent 0.3 s
-apart into a `read` that goes on run USR1 HUP in bash 5.3, bash 3.2 and zsh,
-and ksh93 does the same for INT and then USR1 three seconds apart. This shell
-runs them after the read, so each arrival in one is made a batch of its own.
-Four sent back to back do wait together in a bash `read` — `INT USR1 HUP
-TERM`, `TERM HUP USR1 INT` and `USR1 TERM INT HUP` all run HUP INT TERM USR1
-in 5.3 — and here they keep the order they came in, because nothing tells
-them from the spaced ones until a handler runs at the arrival here too.
+**A `read` makes batches of its own.** bash, zsh and ksh93 stop a read that
+goes on to run the handlers waiting (`ReadHandlersRun`), so USR1 and then HUP
+sent 0.3 s apart into one run USR1 HUP in bash 5.3, bash 3.2 and zsh, and
+ksh93 does the same for INT and then USR1 three seconds apart. Four sent back
+to back do wait together — `INT USR1 HUP TERM`, `TERM HUP USR1 INT` and `USR1
+TERM INT HUP` all run HUP INT TERM USR1 in a bash 5.3 `read` — because they
+have all landed by the time the read stops.
 
 Asked only where two different conditions with a handler are in one batch.
 Not answered here: the three sorting columns run a condition that arrived
 twice once, and zsh once per arrival (#7166); this axis keeps both arrivals,
 side by side.
+
+**`ReadHandlersRun`** — bash when a wait is interrupted · zsh, ksh93 as soon
+as they arrive · dash, ash after the read
+
+When the handler of a trapped signal that lands in a `read` the signal does
+not end runs. bash, zsh and ksh93 stop the read, run it and go on, the handler
+seeing the name as it was; dash and ash, and POSIX, run it once the read is
+over. bash stops only for a signal that lands while the read waits for input,
+and then runs every handler waiting; zsh and ksh93 run one whenever the read
+looks for a byte, as it begins included. Asked only where a trapped signal is
+waiting during a read that goes on, on a stream that can make it wait. See
+*When a handler runs during a read that goes on*.
 
 
 ### descriptor variables and redirection targets
@@ -35129,7 +35139,7 @@ in, and `cd` and `end` come half a second later:
 ksh93 answers the first column with `read -r -u3 l`, `read -r -n 4 l` and
 `read -r -t 5 l` too. A trap body that prints `$l` says when the handler ran:
 `l=[cd]` in dash and ash, after the read; `l=[old]` in ksh93, as the read
-began (#7031). On a descriptor open both ways ksh93 gives the read up before it
+began (`ReadHandlersRun`, below). On a descriptor open both ways ksh93 gives the read up before it
 has taken a byte, and `ab` is the next read's.
 
 **A second signal.** The same, with nothing written after INT and a USR1
@@ -35208,8 +35218,7 @@ descriptor is open for writing is `fcntl(F_GETFL)`, asked the first time it
 matters. bash 5.3, bash 3.2 and zsh
 read on through a trapped signal and never ask it.
 
-**Not modeled**, all ksh93's, measured the same day — #7030 for the first four,
-#7031 for the fifth:
+**Not modeled**, all ksh93's, measured the same day (#7030):
 
 - An *inherited* standard input open both ways (`ksh -c … <>p`) reads on as a
   read-only one does — and so does a descriptor duplicated from it — where
@@ -35222,11 +35231,6 @@ read on through a trapped signal and never ask it.
 - `read -n 4` on a pipe with nothing in is given up at 258, and every later
   read of that pipe answers 0 with an empty line; here the next read has the
   line written after.
-- The handler of a read that goes on runs **at the arrival** in ksh93, as it
-  does in bash and zsh: with `W` written to the terminal between the signal
-  and the end of the line, the order is `T W`, and a signal already waiting
-  has its handler run as the read begins. Here the handler runs once the read
-  is over (`W T`), in all four.
 
 #### What a read that ends short keeps
 
@@ -35346,6 +35350,98 @@ goroutine, and nothing ends that wait.
   assigns the empty string or `n` (#7038).
 
 Two handlers waiting together, found then too, are `WaitingHandlersRun` now
-(#7039). The case that found it — signals sent back to back into a `read` —
-still runs in arrival order here, and waits on a handler run at the arrival
-(#7031).
+(#7039). The case that found it — signals sent back to back into a `read` — is
+a batch of its own once the read stops to run them (`ReadHandlersRun`, below).
+
+#### When a handler runs during a read that goes on
+
+`Semantics.ReadHandlersRun` (#7031). A trapped signal that lands in a `read`
+and does not end it has a handler, and the panel disagrees about when that
+runs: after the builtin, as after any other command, or in the middle of the
+read, which then goes on. Measured 2026-10-31 from `-c` against bash 5.3.20,
+bash 3.2.57, zsh 5.9.2, ksh93u+ 2012-08-01, dash 0.5.12 and BusyBox ash 1.37.0
+in the pinned alpine image. The read is the shell's standard input, a pipe,
+with `ab` in before it starts; INT comes from another process at 0.3 s, the
+writer puts `W` on the terminal at 0.6 s and ends the line with `cd` at 0.9 s,
+and the handler is `echo "T st=$? l=[$l]"` after `l=old; false`:
+
+| | output |
+| --- | --- |
+| bash 5.3, bash 3.2, zsh, ksh93 | `T st=1 l=[old]`, `W`, `st=0 l=[abcd]` |
+| dash | `T st=1 l=[ab]`, `W` — the read is given up (`ReadAbandonedWhen`) |
+| this shell before | `W`, `T`, `st=0 l=[abcd]`, in every dialect |
+
+So in three columns the read stops, runs the handler and goes on. The handler
+sees the name as it was — nothing is assigned until the line is in — and `$?`
+as it stood when the read began; after a command substitution in the read's
+own redirection, that is the substitution's status, in zsh as in bash, though
+zsh shows a handler between commands the status from before the command. The
+same holds for `-t 5`, `-d x`, `-u 0` and, in bash, `-n 6`.
+
+dash and ash give a read up when the signal lands while it waits, so the
+handler runs after the builtin there anyway. Where their read goes on — the
+signal landed while bytes were there to read — the handler waits for its end:
+USR1 and then HUP 0.3 s apart in a 30 MB line read from a file, which both take
+a byte at a time and never wait on, ran HUP and then USR1, sorted, once the
+read was over. That is POSIX's reading too: XCU 2.11 holds a trap until the
+foreground command it arrived during has completed.
+
+The three columns that run it mid-read disagree about which moment counts:
+
+| | a signal landing in a wait | landing while bytes are there | waiting as the read begins |
+| --- | --- | --- | --- |
+| bash 5.3, bash 3.2 | runs then, with every handler waiting | after the read | after the read |
+| zsh, ksh93 | runs then | runs then | runs as it begins |
+
+- **bash** runs a handler only when a signal interrupts a wait. INT raised by
+  `$(kill -INT $$)` in the read's own redirection, with USR1 landing mid-read,
+  runs `T` and `U` together at USR1's arrival; with no USR1, INT runs after the
+  read (`W T`). A 10 MB line on a pipe with INT at 0.5 s gave `W T` in two runs
+  of three in 5.3 — the signal found the reader taking bytes rather than
+  waiting — and from a 30 MB file 3.2 ran it as the read ended.
+- **zsh** runs a handler at its arrival wherever the read is: HUP and USR1 at
+  0.32 s and 0.63 s into a 30 MB file read that ended at 8.3 s.
+- **ksh93** runs one already waiting as the read begins: INT from another
+  process, landing while the read's own prefix assignment was being expanded,
+  ran at 1.28 s, as that 1.3 s expansion ended, and the read went on.
+
+So the axis has three answers: `ReadHandlersRunAfterTheRead` (dash, ash,
+POSIX), `ReadHandlersRunWhenAWaitIsInterrupted` (bash), and
+`ReadHandlersRunAsSoonAsTheyArrive` (zsh, ksh93). Running handlers mid-read
+takes every arrival waiting, so what a read stops for is one batch for
+`WaitingHandlersRun`: two signals that land in it at different moments run in
+the order they came, and four sent back to back by another process run in the
+dialect's order — bash 5.3 ran `HUP INT TERM USR1` for `INT USR1 HUP TERM` in
+four runs of five, and so does this shell. Sent by the script's own background
+job, whose `kill` reaches this shell without the kernel, the read wakes before
+the rest have landed, and the order is mostly not bash's.
+
+A handler that leaves the shell ends the read with no name touched: after
+`exit 3` in one, an EXIT trap reads `l=[old]` and 3 in bash, zsh and ksh93. One
+that returns from the function the read is in returns at once with the
+handler's status in bash 5.3 and ksh93, and the rest of the line is the next
+reader's (`m=[cd]`).
+
+The question is asked only where a trapped signal with a handler is waiting
+while a `read` that goes on looks for its next byte, on a stream that can make
+it wait. A read nothing arrives during, an ignored signal, a read given up by
+the signal, a timed read's first wait ended by one, and a read of a regular
+file ask nothing. A read is watched for this wherever a signal is trapped, so
+it waits for each byte to be there before taking it: a 3 MB line read with a
+trap set went from 1.3 s to 2.0 s in `cmd/bash`, which is what dash, ash and
+ksh93 already paid for being given up.
+
+**Not modeled**:
+
+- zsh runs the handler of a signal that lands during any command substitution
+  as that substitution ends, before the command it belongs to runs: `echo Y
+  "$(/bin/kill -INT $$)" "$(echo E >&3)"` prints `T` before `E`. Here it runs
+  at the next command, or, for a `read`, as the read begins — the same output
+  for a read, and the handler's `$?` is the substitution's rather than zsh's 1.
+- A file read here is never watched, because it never waits, so zsh's handler
+  runs after it.
+- zsh's handler that returns from the function the read is in assigns what
+  arrived and returns 1 (`out st=1 l=[ab]`); here it returns the handler's
+  status with nothing assigned, as bash and ksh93 do.
+- ksh93 shows a handler run as the read begins `$?` 258 when the signal came
+  from its own command substitution's `kill`; from another process it shows 0.

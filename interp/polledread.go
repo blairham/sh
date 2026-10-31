@@ -137,13 +137,14 @@ func timeNow() time.Time { return time.Now() }
 // Semantics.ReadAbandonedWhen hold here as they do without `-t`: ksh93 reads
 // on through a line it has begun and is then stopped by the deadline.
 //
-// **In a dialect whose reads go on through a trapped signal, the watch covers
-// the first wait and no other**, and a signal landing in it ends the read as
-// the deadline would, where the dialect says so. That is zsh's `-t`: measured
-// 2026-10-29, the same read with nothing in is `T st=1 l=[old]` and the line
-// written after it the next read's, while a byte in before the signal is read
-// on to the end of its line (#7032). See
-// Semantics.ReadTimeoutWaitEndedByATrappedSignal.
+// **In a dialect whose reads go on through a trapped signal, a signal landing
+// in the wait for the first byte ends the read as the deadline would**, where
+// the dialect says so. That is zsh's `-t`: measured 2026-10-29, the same read
+// with nothing in is `T st=1 l=[old]` and the line written after it the next
+// read's, while a byte in before the signal is read on to the end of its line
+// (#7032). See Semantics.ReadTimeoutWaitEndedByATrappedSignal. Every later wait
+// is watched too, for the handlers such a dialect runs in the middle of a read
+// (Semantics.ReadHandlersRun).
 func pollingDeadlineSource(
 	ctx context.Context,
 	in io.Reader,
@@ -153,9 +154,8 @@ func pollingDeadlineSource(
 	watch *readWatch,
 ) func() (byte, int) {
 	first := true
-	watched := func() bool { return watch != nil && (first || !watch.firstWaitOnly) }
 	wait := func(until time.Time) int {
-		if watched() {
+		if watch != nil {
 			return watch.awaitByte(ctx, fd, until)
 		}
 		ready, can := awaitReadable(ctx, fd, until)
@@ -176,9 +176,10 @@ func pollingDeadlineSource(
 			if ev := wait(deadline); ev != evByte {
 				return ev
 			}
-		case watched():
+		case watch != nil:
 			// The rest of a read whose deadline bounded only its first
-			// byte, which a trapped signal can still give up.
+			// byte, which a trapped signal can still give up or stop to
+			// run its handler.
 			if ev := wait(time.Time{}); ev != evByte {
 				return ev
 			}

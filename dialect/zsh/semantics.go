@@ -2182,6 +2182,11 @@ func Semantics() interp.Semantics {
 	// on through the same signal. Measured 2026-10-29 (#7032); see
 	// interp.Semantics.ReadTimeoutWaitEndedByATrappedSignal.
 	s.ReadTimeoutWaitEndedByATrappedSignal = interp.Yes
+	// The handler of a trapped signal that arrives during a `read` that goes
+	// on runs at the arrival, wherever the read is — waiting, or taking a
+	// file a byte at a time — and the read then goes on. Measured 2026-10-31
+	// on 5.9.2; see interp.ReadHandlerMoment (#7031).
+	s.ReadHandlersRun = interp.ReadHandlersRunAsSoonAsTheyArrive
 	s.ArithLeadingZeroIsOctal = interp.No
 	// Nothing makes a leading zero octal here, so `let` and `(( ))` read one
 	// alike and the axis that parts them elsewhere has nothing to change.

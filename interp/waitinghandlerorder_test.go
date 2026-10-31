@@ -112,10 +112,11 @@ func TestAnUnansweredHandlerOrderIsRefusedOnlyWhereItDecides(t *testing.T) {
 }
 
 // Two signals that land in a `read` at different moments run in the order
-// they came, whatever the axis says: the shells that run a handler mid-read do
-// it at the arrival (#7031), so the two never wait together there. Measured
-// 2026-10-31 with USR1 and HUP 0.2 s apart into a `read` that goes on: bash
-// 5.3.20, bash 3.2.57 and zsh 5.9.2 run USR1 HUP, and USR1 > HUP by number.
+// they came, whatever the axis says, where the read stops to run each handler
+// as its signal lands (Semantics.ReadHandlersRun): the two never wait
+// together there. Measured 2026-10-31 with USR1 and HUP 0.2 s apart into a
+// `read` that goes on: bash 5.3.20, bash 3.2.57 and zsh 5.9.2 run USR1 HUP,
+// and USR1 > HUP by number.
 func TestSignalsLandingInAReadRunInTheOrderTheyCame(t *testing.T) {
 	src := "/usr/bin/mkfifo p; exec 4<>p 3<p\n" +
 		"for s in HUP USR1; do trap \"echo $s\" $s; done\n" +
@@ -127,6 +128,7 @@ func TestSignalsLandingInAReadRunInTheOrderTheyCame(t *testing.T) {
 	// here, which is not the question.
 	sem := waitingSem(WaitingHandlersRunUpTheSignalNumbers)
 	sem.ExecOpenedFdReachesACommand = PosixSemantics().ExecOpenedFdReachesACommand
+	sem.ReadHandlersRun = ReadHandlersRunWhenAWaitIsInterrupted
 	out, errs, st := killRun(t, src, sem, Diagnostics{})
 	if want := "USR1\nHUP\nl=cd\n"; out != want || errs != "" || st != 0 {
 		t.Errorf("got %q, %q, status %d; want %q, no diagnostic, 0", out, errs, st, want)

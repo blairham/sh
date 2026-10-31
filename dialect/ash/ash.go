@@ -2394,6 +2394,10 @@ func Semantics() interp.Semantics {
 	// Measured 2026-10-29 in the pinned image; see
 	// interp.Semantics.ReadAbandonedWhen.
 	s.ReadAbandonedWhen = interp.ReadAbandonedOnlyDuringAWait
+	// And the handler of a signal that lands in a read that goes on runs
+	// once the read is over. Measured 2026-10-31 on BusyBox 1.37.0 in the
+	// pinned image; see interp.ReadHandlerMoment (#7031).
+	s.ReadHandlersRun = interp.ReadHandlersRunAfterTheRead
 
 	// ---- control flow and redirection ----
 

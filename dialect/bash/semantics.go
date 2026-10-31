@@ -2299,6 +2299,10 @@ func Semantics() interp.Semantics {
 	// 3.2.57 and 5.3 called `sh` (#7063, #7064).
 	s.ExitInTheExitTrapOverridesASignalDeath = interp.No
 	s.FatalSignalInTheExitTrapEndsOnlyTheTrap = interp.No
+	// And a SEGV is a death like the rest: `kill -SEGV $$` and one from
+	// another process run the EXIT trap first. Measured 2026-10-30 on bash
+	// 5.3.20 and 3.2.57 (#7069).
+	s.UntrappedSegvEndsTheShellWhereItLands = interp.No
 	// A `kill` aimed at `$$` is taken at the next command, as a signal from
 	// another process is, so the trap reads what `kill` left: `(exit 7); kill
 	// -TERM $$` is `bye 0`, `! kill -TERM $$` is `bye 1`, and a function

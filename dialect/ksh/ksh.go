@@ -2937,6 +2937,12 @@ func Semantics() interp.Semantics {
 	// #7064).
 	s.ExitInTheExitTrapOverridesASignalDeath = interp.Yes
 	s.FatalSignalInTheExitTrapEndsOnlyTheTrap = interp.Yes
+	// Except for an untrapped SEGV, which reaches neither: it kills the shell
+	// where it lands, with no EXIT trap run for it and none of a running one's
+	// ending. Measured 2026-10-30 on ksh93u+ 2012-08-01, `kill -SEGV $$` and
+	// `/bin/kill -SEGV` from another process, alone in the panel; every other
+	// fatal signal runs the trap (#7069).
+	s.UntrappedSegvEndsTheShellWhereItLands = interp.Yes
 	// And a `kill` aimed at `$$` is taken as it returns, before its status is
 	// recorded: `(exit 7); kill -TERM $$` and `! kill -TERM $$` are both `bye
 	// 7`, a `( … )` or `$( … )` that sends it is the 271 the copy left, and

@@ -45,6 +45,7 @@ const (
 // does for a signal the script sends itself.
 func TestADialectsExitTrapAnswersAFatalSignalFromOutside(t *testing.T) {
 	if name := os.Getenv(outsideDeathShell); name != "" {
+		refuseACoreDump()
 		sh := echoShells()[name]
 		os.Exit(driver.MainArgs(sh, []string{sh.Name, "-c", os.Getenv(outsideDeathScript)}))
 	}
@@ -265,6 +266,57 @@ func TestADialectsExitTrapDecidesWhetherASignalEndsTheShell(t *testing.T) {
 				}
 				if out != want.out {
 					t.Errorf("wrote %q, want %q", out, want.out)
+				}
+			})
+		}
+	}
+}
+
+// What each dialect does with an untrapped SEGV it sends itself, with an EXIT
+// trap set (#7069).
+//
+// Measured 2026-10-30, each shell in a process group of its own:
+//
+//	                 trap 'echo "bye $?"' EXIT;   trap 'echo in; kill -SEGV $$;
+//	                 (exit 7); kill -SEGV $$      echo still' EXIT; exit 3
+//	bash 5.3, 3.2    bye 0                        in
+//	ksh93u+          nothing                      in
+//	zsh 5.9.2        nothing                      in
+//	dash             nothing                      in
+//	BusyBox ash      nothing                      in
+//
+// and every one of them killed by SEGV. ksh93 is the column that runs its
+// EXIT trap on every other fatal signal, and that ends only the trap for one
+// in it — `exit 3` with TERM there — so this is
+// Semantics.UntrappedSegvEndsTheShellWhereItLands, read through each preset
+// and the front end that owns the process. BusyBox ash is 1.36.1 in
+// alpine:3.20, under `--init`.
+func TestADialectsExitTrapAnswersAnUntrappedSegv(t *testing.T) {
+	quiet := map[string]string{"ksh": "", "zsh": "", "dash": "", "ash": ""}
+	for _, c := range []struct {
+		name, script, bash string
+		others             map[string]string
+	}{
+		{
+			"at the top", `trap 'echo "bye $?"' EXIT; (exit 7); kill -SEGV $$; echo after`, "bye 0\n", quiet,
+		},
+		{
+			"in the EXIT trap", `trap 'echo in; kill -SEGV $$; echo still' EXIT; exit 3`, "in\n",
+			map[string]string{"ksh": "in\n", "zsh": "in\n", "dash": "in\n", "ash": "in\n"},
+		},
+	} {
+		want := map[string]string{"bash": c.bash}
+		for name, out := range c.others {
+			want[name] = out
+		}
+		for name, out := range want {
+			t.Run(name+"/"+c.name, func(t *testing.T) {
+				ws, got := endsOnItsOwn(t, name, c.script)
+				if !ws.Signaled() || ws.Signal() != syscall.SIGSEGV {
+					t.Errorf("ended %v, want killed by %v", ws, syscall.SIGSEGV)
+				}
+				if got != out {
+					t.Errorf("wrote %q, want %q", got, out)
 				}
 			})
 		}

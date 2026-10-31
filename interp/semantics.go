@@ -6473,6 +6473,32 @@ type Semantics struct {
 	// without bye2 (#7064).
 	FatalSignalInTheExitTrapEndsOnlyTheTrap Answer
 
+	// UntrappedSegvEndsTheShellWhereItLands makes a SEGV that no trap names
+	// end the shell at once, as the signal's default action would: no EXIT
+	// trap runs for it, and one that lands while the EXIT trap runs ends the
+	// shell rather than only the trap. It is the one fatal signal the two
+	// axes above do not reach in a dialect that answers yes here.
+	//
+	//	trap 'echo "bye $?"' EXIT; (exit 7); kill -SEGV $$
+	//
+	// Measured 2026-10-30, each shell in a process group of its own: ksh93
+	// writes nothing and dies of SEGV, where bash 5.3 and 3.2 write `bye 0`
+	// and then die of it. The same with `/bin/kill -SEGV` from another
+	// process at a shell in a `sleep` or a busy loop — ksh93 nothing, both
+	// bashes `bye 7` and `bye 0` — inside a function, from a `( … )` and from
+	// a `$( … )`. And in the trap: `trap 'echo in; kill -SEGV $$; echo still'
+	// EXIT; exit 3` writes `in` and dies of SEGV in ksh93, which exits 3 for
+	// the same line with TERM. BUS, ILL, TRAP, ABRT, FPE, SYS, EMT, QUIT,
+	// PIPE, XCPU, XFSZ, PROF and the rest run ksh93's EXIT trap as TERM does,
+	// on both roads (#7069).
+	//
+	// A trap for SEGV itself is caught in every column — `trap 'echo caught'
+	// SEGV; kill -SEGV $$; echo after` writes both lines in ksh93 — so this
+	// is about the untrapped signal alone. zsh, dash and BusyBox ash die of
+	// it where it lands, measured the same day, as they die of every fatal
+	// signal; they never reach the question.
+	UntrappedSegvEndsTheShellWhereItLands Answer
+
 	// SelfAimedDeathIsTakenAtTheNextCommand decides where a shell that sent
 	// itself a fatal signal with `kill`, and has an EXIT trap to run for it,
 	// takes the death — and so which `$?` the trap reads.

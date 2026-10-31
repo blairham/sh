@@ -7816,6 +7816,14 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 		if !r.ask(r.sem().ExitTrapRunsOnSignalDeath, "the EXIT trap after a fatal signal") {
 			return false
 		}
+		// Except the one fatal signal a dialect may leave to kill the shell
+		// where it lands. Asked only of a SEGV, and only where the trap
+		// would otherwise run for it. See
+		// Semantics.UntrappedSegvEndsTheShellWhereItLands.
+		if r.killedBy == segvName && r.ask(r.sem().UntrappedSegvEndsTheShellWhereItLands,
+			"the EXIT trap after an untrapped SEGV") {
+			return false
+		}
 	}
 	// And a shell ending over an error it reported, with `set -e` on, in the
 	// one column that runs no EXIT trap there — see

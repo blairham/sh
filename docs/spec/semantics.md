@@ -21412,6 +21412,36 @@ The death is set aside for the body and put back afterwards, so `kill` in
 the trap sends — `trap 'kill $worker' EXIT` sent nothing here before — and
 a `( … )` in it is not born dead. That part is unanimous and is core.
 
+**`UntrappedSegvEndsTheShellWhereItLands`** — bash no · dash yes · ksh93
+yes · zsh yes · ash yes
+
+Makes a SEGV that no trap names end the shell at once, as the signal's
+default action would: no EXIT trap runs for it, and one that lands while
+the EXIT trap runs ends the shell rather than only the trap.
+
+    trap 'echo "bye $?"' EXIT; (exit 7); kill -SEGV $$
+
+writes nothing and dies of SEGV in ksh93, and writes `bye 0` and then dies
+of it in bash 5.3 and 3.2. The same with `/bin/kill -SEGV` from another
+process at a shell in a `sleep` or a busy loop — ksh93 nothing, both bashes
+`bye 7` or `bye 0` — inside a function, from a `( … )` and from a
+`$( … )`. In the trap, `trap 'echo in; kill -SEGV $$; echo still' EXIT;
+exit 3` writes `in` and dies of SEGV in ksh93, which exits 3 for the same
+line with TERM. Measured 2026-10-30 (#7069).
+
+ksh93 runs its EXIT trap for every other fatal signal on both roads — BUS,
+ILL, TRAP, ABRT, FPE, SYS, EMT, QUIT, PIPE, XCPU, XFSZ, PROF and the rest —
+so this is one signal in one column, which is why it is an axis of its own
+rather than an answer to the two above. A SEGV with a trap of its own is
+caught everywhere: `trap 'echo caught' SEGV; kill -SEGV $$; echo after`
+writes both lines in ksh93. dash, zsh and BusyBox ash die of an untrapped
+SEGV where it lands, as they die of every fatal signal, so they never reach
+the question; their yes is what they do.
+
+On macOS a SEGV, BUS or ILL sent from another process never reaches a Go
+program's front end — the kernel does not mark it as sent, and the runtime
+takes it for a real fault — so that road is this axis's on Linux only.
+
 **`SelfAimedDeathIsTakenAtTheNextCommand`** — bash yes · dash no · ksh93
 no · zsh no · ash no
 

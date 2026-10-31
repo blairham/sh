@@ -232,6 +232,77 @@ func TestTheOneDialectWhereTheExitTrapDecidesHowTheShellLeaves(t *testing.T) {
 	}
 }
 
+// An untrapped SEGV from outside ends the shell where it lands in the dialect
+// that says so, which runs its EXIT trap for every other fatal signal: before
+// the trap, and in place of the end of a running one (#7069).
+//
+// Measured 2026-10-30, each shell in a process group of its own, `/bin/kill
+// -SEGV` from another process: ksh93u+ writes nothing and dies of SEGV at
+// `trap 'echo "bye $?"' EXIT; (exit 7); sleep 3`, and writes `in` and dies of
+// SEGV while `trap 'echo in; sleep 3; echo still' EXIT; exit 3` waits —
+// exiting 3 for TERM there — where bash 5.3 and 3.2 write `bye 7` and die of
+// it. BUS runs ksh93's trap as TERM does.
+//
+// Only where the front end hears a SEGV at all: on darwin a sent one never
+// reaches it, which TestAFatalSignalFromOutsideKillsTheShellQuietly asserts.
+func TestAnUntrappedSegvFromOutsideEndsTheShellWhereItLands(t *testing.T) {
+	dieRunningAsAShell()
+	if !reachesTheFrontEnd(syscall.SIGSEGV) {
+		t.Skip("a sent SEGV does not reach the front end here; see reachesTheFrontEnd")
+	}
+	trapWaitsReady := `trap 'echo in; /bin/sh -c "printf r >\"\$READY\"; exec sleep 30"; echo still' EXIT; `
+	kills := []string{
+		dyingExitTrapRuns + "=yes", dyingHangupExits + "=no",
+		dyingTrapEnds + "=yes", dyingExitOverrides + "=yes", dyingSegvKills + "=yes",
+	}
+	runsTheTrap := []string{dyingExitTrapRuns + "=yes", dyingHangupExits + "=no"}
+	for _, tc := range []struct {
+		name, setup, hold string
+		sig               syscall.Signal
+		env               []string
+		dies              syscall.Signal
+		status            int
+		out               string
+	}{
+		{
+			name: "at a program", setup: `trap 'echo "bye $?"' EXIT; `, hold: "(exit 7); " + waitsHere,
+			sig: syscall.SIGSEGV, env: kills, dies: syscall.SIGSEGV,
+		},
+		{
+			name: "in the EXIT trap", setup: trapWaitsReady, hold: "exit 3",
+			sig: syscall.SIGSEGV, env: kills, dies: syscall.SIGSEGV, out: "in\n",
+		},
+		{
+			name: "another fatal signal in the same dialect", setup: `trap 'echo "bye $?"' EXIT; `,
+			hold: "(exit 7); " + waitsHere, sig: syscall.SIGBUS, env: kills, dies: syscall.SIGBUS, out: "bye 7\n",
+		},
+		{
+			name: "a TERM in the EXIT trap in the same dialect", setup: trapWaitsReady, hold: "exit 3",
+			sig: syscall.SIGTERM, env: kills, status: 3, out: "in\n",
+		},
+		{
+			name: "at a program, where the trap runs first", setup: `trap 'echo "bye $?"' EXIT; `,
+			hold: "(exit 7); " + waitsHere, sig: syscall.SIGSEGV, env: runsTheTrap,
+			dies: syscall.SIGSEGV, out: "bye 7\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ws, out := signaledInAGroupOfItsOwn(t, "^TestAnUntrappedSegvFromOutsideEndsTheShellWhereItLands$",
+				outsideSignal{setup: tc.setup, hold: tc.hold, sig: tc.sig, ownReady: true, env: tc.env})
+			if tc.dies != 0 {
+				diedOfAfter(t, ws, out, tc.dies, tc.out)
+				return
+			}
+			if ws.Signaled() {
+				t.Fatalf("killed by %v, want an exit at %d (wrote %q)", ws.Signal(), tc.status, firstLine(out))
+			}
+			if ws.ExitStatus() != tc.status || out != tc.out {
+				t.Errorf("status %d, wrote %q; want %d and %q", ws.ExitStatus(), out, tc.status, tc.out)
+			}
+		})
+	}
+}
+
 // Where nothing is to run first, nothing changes: the shell dies of the signal
 // where it lands and writes nothing. That is a dialect that answers no —
 // measured 2026-10-29, zsh and dash print nothing in every cell above — a

@@ -2099,6 +2099,11 @@ func Semantics() interp.Semantics {
 	// and dies of USR1, as it does for one sent from outside (#7064).
 	s.ExitInTheExitTrapOverridesASignalDeath = interp.No
 	s.FatalSignalInTheExitTrapEndsOnlyTheTrap = interp.No
+	// A SEGV kills the shell where it lands, as every fatal signal does here,
+	// so the question is never reached: measured 2026-10-30 on BusyBox ash 1.36.1 in alpine:3.20,
+	// `kill -SEGV $$` with an EXIT trap set writes nothing and dies of it, in
+	// the trap as before it (#7069).
+	s.UntrappedSegvEndsTheShellWhereItLands = interp.Yes
 	// And no death is ever held for an EXIT trap here, since none runs on
 	// one, so neither question about it is asked (#7062).
 	s.SelfAimedDeathIsTakenAtTheNextCommand = interp.No

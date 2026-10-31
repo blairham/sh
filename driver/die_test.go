@@ -49,6 +49,11 @@ const (
 	dyingExitOverrides = "SH_TEST_DYING_EXIT_OVERRIDES"
 )
 
+// dyingSegvKills answers Semantics.UntrappedSegvEndsTheShellWhereItLands yes
+// in the shell half: a SEGV from outside is not handed over, and ends the
+// process where it lands. Unset, it is no wherever dyingExitTrapRuns is set.
+const dyingSegvKills = "SH_TEST_DYING_SEGV_KILLS"
+
 // dyingExitHook names Semantics.ExitHook in the shell half: the function a
 // shell runs as it ends, beside its EXIT trap.
 const dyingExitHook = "SH_TEST_DYING_EXIT_HOOK"
@@ -138,6 +143,7 @@ func dieRunningAsAShell() {
 	if os.Getenv(dyingExitTrapRuns) != "" {
 		sh.Semantics.FatalSignalInTheExitTrapEndsOnlyTheTrap = interp.No
 		sh.Semantics.ExitInTheExitTrapOverridesASignalDeath = interp.No
+		sh.Semantics.UntrappedSegvEndsTheShellWhereItLands = interp.No
 		// And the majority's answers for where a death the shell sent
 		// itself is taken and what a function changes about it.
 		sh.Semantics.SelfAimedDeathIsTakenAtTheNextCommand = interp.Yes
@@ -148,6 +154,9 @@ func dieRunningAsAShell() {
 	}
 	if os.Getenv(dyingExitOverrides) == "yes" {
 		sh.Semantics.ExitInTheExitTrapOverridesASignalDeath = interp.Yes
+	}
+	if os.Getenv(dyingSegvKills) == "yes" {
+		sh.Semantics.UntrappedSegvEndsTheShellWhereItLands = interp.Yes
 	}
 	if hook := os.Getenv(dyingExitHook); hook != "" {
 		sh.Semantics.ExitHook = hook

@@ -14941,7 +14941,7 @@ the script over a bad name — and:
   ahead of the utility leaves it to the utility where a `function` body may
   shadow the name, and `export` and `readonly` then refuse it there — so
   whether to name the builtin is asked of the operand's *written* shape,
-  `Runner.operandsWrittenAsAssignments`, which reads chains and dotted
+  `Runner.operandWrittenAsAnAssignment`, which reads chains and dotted
   names as ksh93 does rather than only the operands this engine expands as
   assignments. And a name restricted mode froze keeps the mode's sentence
   when the builtin names itself, `typeset: PATH: restricted`, where the

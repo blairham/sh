@@ -5540,13 +5540,14 @@ type Runner struct {
 	// type letter over exactly that shape. See
 	// Semantics.TypeLetterAndAnArrayLiteralIsAnInconsistentType.
 	literalOperands map[string]bool
-	// assignmentOperands is the names this declaration's operands assign to
-	// where the operand was **written as an assignment**, in the column that
-	// stores such an operand itself ahead of the utility, and nil everywhere
-	// else. A refusal of one of them is the shell's and not the utility's,
-	// even where this engine leaves the store to the utility. See
-	// Runner.operandsWrittenAsAssignments (#7188).
-	assignmentOperands map[string]bool
+	// assignmentWordsOf is the declaration now running, in the column that
+	// stores an operand written as an assignment ahead of the utility, and nil
+	// everywhere else. A refusal of a name one of its words was written to
+	// assign is the shell's and not the utility's, even where this engine
+	// leaves the store to the utility. Kept as the command rather than as the
+	// names, because only a refusal reads it and every declaration would pay
+	// for a set. See Runner.operandWrittenAsAnAssignment (#7188).
+	assignmentWordsOf *syntax.SimpleCmd
 	// operandsOverANonArray is the subset of literalOperands whose name was
 	// not an array and carried an attribute a re-creation drops *before* the
 	// line ran, on a line writing no type letter of its own — read by
@@ -11124,8 +11125,8 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// z=(1 2)` is refused in the same words as `typeset -i z=(1 2)`.
 		outerLiterals := r.literalOperands
 		r.literalOperands = arrayLiteralOperands(c)
-		outerAssignments := r.assignmentOperands
-		r.assignmentOperands = r.operandsWrittenAsAssignments(c, argv)
+		outerAssignments := r.assignmentWordsOf
+		r.assignmentWordsOf = r.declarationWithAssignmentWords(c, argv)
 		outerLetterContainers := r.containerByThisLinesLetter
 		r.containerByThisLinesLetter = nil
 		outerOverANonArray := r.operandsOverANonArray
@@ -11294,7 +11295,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		}
 		r.freezing = outerFreezing
 		r.literalOperands = outerLiterals
-		r.assignmentOperands = outerAssignments
+		r.assignmentWordsOf = outerAssignments
 		r.containerByThisLinesLetter = outerLetterContainers
 		r.declarationArgvLen = outerArgvLen
 		r.compoundOperands = outerCompounds
@@ -14401,11 +14402,11 @@ func (r *Runner) appendedValue(name, old, add string) (string, bool) {
 // differently through the identical word — see
 // Diagnostics.ReadonlyAttributeRefusalNamesBuiltin.
 func (r *Runner) readonlyRefusalNamesBuiltin(form assignForm, name string) bool {
-	if form != attributeRatherThanAValue && r.assignmentOperands[name] {
+	if form != attributeRatherThanAValue && r.operandWrittenAsAnAssignment(name) {
 		// An operand written as an assignment, in the column that stores
 		// one ahead of the utility: the shell's store, refused by the shell,
 		// whichever of the two this engine let make it. See
-		// Runner.operandsWrittenAsAssignments (#7188).
+		// Runner.operandWrittenAsAnAssignment (#7188).
 		return false
 	}
 	if r.rereadingAQuotedLiteral {

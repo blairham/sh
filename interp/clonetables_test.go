@@ -565,7 +565,6 @@ func seedTables(r *Runner) {
 	r.concurrent = map[string]*Concurrent{"seed": {name: "seed"}}
 	r.freezing = map[string]bool{"seed": true}
 	r.literalOperands = map[string]bool{"seed": true}
-	r.assignmentOperands = map[string]bool{"seed": true}
 	r.containerByThisLinesLetter = map[string]bool{"seed": true}
 	r.operandsOverANonArray = map[string]bool{"seed": true}
 	r.compoundOperands = map[string]bool{"seed": true}

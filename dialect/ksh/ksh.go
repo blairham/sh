@@ -5903,7 +5903,7 @@ func Diagnostics() interp.Diagnostics {
 			// utility (interp/declarationinturn.go), so its refusal is the
 			// shell's and names nothing — including where this engine
 			// leaves that store to the utility, which
-			// Runner.operandsWrittenAsAssignments is for (#7188).
+			// Runner.operandWrittenAsAnAssignment is for (#7188).
 			"typeset": true, "export": true, "readonly": true,
 		},
 		ReadonlyVariableInRead: "%[2]s: warning: %[1]s: is read only",

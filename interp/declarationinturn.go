@@ -366,16 +366,29 @@ func (r *Runner) storeOperandInTurn(argv []string, turn *operandsInTurn) []strin
 	return argv
 }
 
-// operandsWrittenAsAssignments is the names a declaration's operands assign
-// to where the operand was **written** as an assignment — an array literal, or
-// a word whose name and `=` stand unquoted in the source — in the column that
-// stores such an operand ahead of the utility. Nil in every other column, and
-// for a declaration with no such operand.
+// declarationWithAssignmentWords is c where it is a declaration utility in the
+// column that stores an operand written as an assignment ahead of the
+// utility, and nil otherwise — the record Runner.operandWrittenAsAnAssignment
+// reads.
+func (r *Runner) declarationWithAssignmentWords(c *syntax.SimpleCmd, argv []string) *syntax.SimpleCmd {
+	if !r.declarationOperandsStoredInTurn() || len(argv) == 0 || !r.declarationCommand(c, argv) {
+		// Not a declaration utility, so a `name=value` word is an ordinary
+		// argument: `let x=2` is the builtin's own operand and its refusal is
+		// `let: x: is read only` (#3568).
+		return nil
+	}
+	return c
+}
+
+// operandWrittenAsAnAssignment reports whether one of the running
+// declaration's operands was **written** as an assignment to name — an array
+// literal, or a word whose name and `=` stand unquoted in the source — in the
+// column that stores such an operand ahead of the utility.
 //
-// In that column a refusal of one of these names is the shell's own and names
-// no builtin, wherever this engine makes it: measured 2026-10-31 on ksh93u+,
+// In that column a refusal of such a name is the shell's own and names no
+// builtin, wherever this engine makes it: measured 2026-10-31 on ksh93u+,
 // `readonly b=1; function f { export b=2; }; f` is `f: line 1: b: is read
-// only` and `set -r; function f { typeset PATH=x; }; f` is `f: line 2: PATH:
+// only` and `set -r; function f { typeset PATH=x; }; f` is `f: line 1: PATH:
 // restricted`, though the walk above leaves both to the utility because a
 // `function` body may shadow. The same operand written as a word the utility
 // reads, `export 'b=2'`, is `f[1]: export: b: is read only`. See
@@ -385,33 +398,25 @@ func (r *Runner) storeOperandInTurn(argv []string, turn *operandsInTurn) []strin
 // because that record holds only the operands this engine expands as
 // assignments, and ksh93's assignment words are wider: a chain,
 // `typeset r[1+1][2]=z`, and a dotted name, `typeset .sh=1`, are refused there
-// with no builtin named as well.
-func (r *Runner) operandsWrittenAsAssignments(c *syntax.SimpleCmd, argv []string) map[string]bool {
-	if !r.declarationOperandsStoredInTurn() || len(argv) == 0 || !r.declarationCommand(c, argv) {
-		// Not a declaration utility, so a `name=value` word is an ordinary
-		// argument: `let x=2` is the builtin's own operand and its refusal is
-		// `let: x: is read only` (#3568).
-		return nil
+// with no builtin named as well. Asked only by a refusal, so the words are
+// read then and not for every declaration.
+func (r *Runner) operandWrittenAsAnAssignment(name string) bool {
+	c := r.assignmentWordsOf
+	if c == nil {
+		return false
 	}
-	var names map[string]bool
-	add := func(name string) {
-		if names == nil {
-			names = map[string]bool{}
-		}
-		names[name] = true
-	}
-	for name := range r.literalOperands {
-		add(name)
+	if r.literalOperands[name] {
+		return true
 	}
 	for i, w := range c.Args {
 		if i == 0 {
 			continue
 		}
-		if name, ok := writtenAssignmentName(w); ok {
-			add(name)
+		if written, ok := writtenAssignmentName(w); ok && written == name {
+			return true
 		}
 	}
-	return names
+	return false
 }
 
 // writtenAssignmentName is the name a word assigns to where it is written as

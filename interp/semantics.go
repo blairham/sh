@@ -10770,9 +10770,10 @@ type Semantics struct {
 	// element after `: $(( b[5] ))` that `typeset -p` does not list, which is
 	// a state rather than a value and is recorded rather than modeled. The
 	// same slot is left by a valueless subscripted declaration over a name
-	// holding a value — `x=s; typeset x[1]` — and docs/spec/semantics.md
-	// holds the whole table of what reads it as set and what does not, under
-	// this axis (#6367, #6536).
+	// holding a value — `x=s; typeset x[1]` — and by a store the freeze
+	// refuses into a frozen indexed array, and docs/spec/semantics.md holds
+	// the whole table of what reads it as set and what does not, under this
+	// axis (#6367, #6536, #7186).
 	//
 	// Asked only where the key is missing from a stored association, so a
 	// read of a key that is there never raises it, and neither does a
@@ -10861,8 +10862,10 @@ type Semantics struct {
 	// FrozenElementIsRefusedBeforeItsSubscript, which ksh93 answers No.
 	//
 	// An indexed array frozen the same way is not this: ksh93 leaves a count
-	// of an element no subscript lists (#7186). Asked only once the freeze
-	// has refused a store under a table's key (#6847).
+	// of an element no subscript lists, the allocated, unset slot recorded
+	// and not modeled under ArithKeyReadCreatesTheElement (#7186), and this
+	// shell leaves the array as it was. Asked only once the freeze has
+	// refused a store under a table's key (#6847).
 	RefusedTableStoreKeepsTheKey Answer
 
 	// AssignOrErrorOperatorDeclaresTheKey has `${a[k]=word}` and

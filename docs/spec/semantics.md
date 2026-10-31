@@ -26060,26 +26060,28 @@ joins its empty value with the rest: `[  9]` after reading both `*` and
 `@`. bash 5.3 and zsh 5.9.2 leave the table unchanged. The axis is asked
 only when the key is missing from a stored association.
 
-**The indexed "allocated, unset" slot, measured whole and not modeled (#6367, #6536).**
-Two routes leave this state behind in ksh93u+ 2012-08-01, and they leave the
+**The indexed "allocated, unset" slot, measured whole and not modeled (#6367, #6536, #7186).**
+Three routes leave this state behind in ksh93u+ 2012-08-01, and they leave the
 same state: an arithmetic read of a missing indexed element (`a=(1 2);
-: $(( a[5] ))`) and a valueless subscripted declaration past the first element
+: $(( a[5] ))`), a valueless subscripted declaration past the first element
 over a name holding a value (`x=s; typeset x[1]`, under `readonly` and
-`export` alike, and `x=(a b); typeset x[3]`). Measured 2026-10-15 and
-2026-10-27 under `env -i PATH=/usr/bin:/bin`, `-c`:
+`export` alike, and `x=(a b); typeset x[3]`), and a store the freeze refuses
+into a frozen indexed array (`a=(1 2); readonly a; read 'a[5]'`, by every
+writer — see below). Measured 2026-10-15, 2026-10-27 and 2026-10-31 under
+`env -i PATH=/usr/bin:/bin`, `-c`:
 
-| observation | `a=(1 2); : $(( a[5] ))` | `x=s; typeset x[1]` | `x=(a b); typeset x[3]` |
-| --- | --- | --- | --- |
-| `${#name[@]}` | `3` | `2` | `3` |
-| `"${name[k]-u}"` | empty (set) | empty (set) | — |
-| `"${name[k]+set}"` | **empty (unset)** | **empty (unset)** | — |
-| `[[ -v name[k] ]]` | false | false | — |
-| `${!name[@]}` | `0 1` | `0 1` | `0 1` |
-| `"${name[@]}"`, as words | `1 2` (two) | `s` and `` (**two**) | `a b` (two) |
-| `typeset -p` | `a=([0]=1 [1]=2)` | `typeset -a x=(s )` | `([0]=a [1]=b)` |
-| `name+=(z)` lands at | `[6]`, count `4` | `[2]`, listed `(s  z)` | — |
-| `unset 'name[k]'`, then count | `2` | `1`, listed `(s)` | — |
-| a later `name[k]=v` | a real element | `(s q)`, count `2` | — |
+| observation | `a=(1 2); : $(( a[5] ))` | `x=s; typeset x[1]` | `x=(a b); typeset x[3]` | `a=(1 2); readonly a; read 'a[5]'` |
+| --- | --- | --- | --- | --- |
+| `${#name[@]}` | `3` | `2` | `3` | `3` |
+| `"${name[k]-u}"` | empty (set) | empty (set) | — | empty (set) |
+| `"${name[k]+set}"` | **empty (unset)** | **empty (unset)** | — | **empty (unset)** |
+| `[[ -v name[k] ]]` | false | false | — | false |
+| `${!name[@]}` | `0 1` | `0 1` | `0 1` | `0 1` |
+| `"${name[@]}"`, as words | `1 2` (two) | `s` and `` (**two**) | `a b` (two) | `1 2` (two) |
+| `typeset -p` | `a=([0]=1 [1]=2)` | `typeset -a x=(s )` | `([0]=a [1]=b)` | `typeset -r -a a=([0]=1 [1]=2)` |
+| `name+=(z)` lands at | `[6]`, count `4` | `[2]`, listed `(s  z)` | — | refused |
+| `unset 'name[k]'`, then count | `2` | `1`, listed `(s)` | — | refused |
+| a later `name[k]=v` | a real element | `(s q)`, count `2` | — | refused |
 
 So the slot is counted and holds the append position, `-` calls it set while
 `+` and `-v` call it unset, the key listing never shows it, and whether the
@@ -26101,6 +26103,48 @@ array as it was, which is also bash 5.3.20's answer for `declare x[1]` over a
 scalar (`declare -a x=([0]="s")`, count 1) and for the arithmetic read, and
 zsh 5.9.2 has neither route (`typeset x[1]` is `no matches found: x[1]`). The
 coordinator's call under the maintainer's delegated pattern, 2026-10-27.
+
+**The third route: a store the freeze refuses (#7186).** Found beside
+`RefusedTableStoreKeepsTheKey`, which is the same refusal leaving a real
+key in a *table*; an indexed array frozen the same way is left holding the
+slot instead. Measured 2026-10-31, `-c`, ksh93u+ 2012-08-01, each listed by
+an EXIT trap after `a=(1 2); readonly a`:
+
+| writer, refused | ksh93u+ `typeset -p a`, `${#a[@]}` |
+| --- | --- |
+| `read 'a[5]'`, `getopts x 'a[5]' -x` | `typeset -r -a a=([0]=1 [1]=2)`, `3` |
+| `(( a[5]=5 ))`, `let 'a[5]=5'`, `: ${a[5]:=x}` | the same |
+| `a[5]=5`, `typeset 'a[5]=1'`, `typeset -n r='a[5]'; r=5` | the same |
+| `read -A 'a[5]'` | the same listing, `4` — two slots |
+| `read 'a[5]'` twice / then `read 'a[7]'` | `3` / `4` — one slot per index |
+| `read 'a[2]'` — the slot next to the last element | `typeset -r -a a=(1 2 )`, `3`; `${!a[@]}` `0 1 2`, three words |
+| `typeset -a a=([3]=x); readonly a; read 'a[5]'` | `typeset -r -a a=([3]=x)`, `2` |
+| `typeset -a a; readonly a; read 'a[5]'` (or `a[5]=5`) | `typeset -r -a a=([0]=)`, `1`; `${!a[@]}` `0`, no words |
+| `typeset -a a; readonly a; read 'a[0]'` | `typeset -r -a a`, `0` — nothing |
+| `typeset -a a; readonly a; a[0]=5` | `typeset -r -a a=()`, `1` |
+| `a+=([5]=5)`, `unset 'a[5]'`, `typeset -n r='a[5]'` alone (controls) | `typeset -r -a a=(1 2)`, `2` |
+
+So it is the slot of the table above — counted, `-` set, `+` and `-v`
+unset, kept out of the key listing and out of the words except next to the
+last element — and the empty array's `([0]=)` with a key `0` is the same
+state on an array with nothing in it: `typeset -a a; : $(( a[5] ))`, the
+arithmetic route, lists exactly that. The edges move with the writer, which
+is one more sign of an internal slot rather than a rule: element 0 of an
+empty array is left untouched by `read` and counted by the statement, and
+`read -A` allocates two slots where every other writer allocates one. bash
+5.3.20 and zsh 5.9.2 leave the array as it was by every writer (bash's
+arithmetic store into a *declared-only* array is a separate trace, see
+`ArithStoreRefusedByAFreezeSetsTheArray`).
+
+**Recorded, not modeled**, by the reasoning of the 2026-10-27 call above,
+which this route does not change: the freeze refuses the append, the
+`unset` and every later store, but the readers a third element state would
+have to answer — the count, `-`, `+`, `-v`, the key listing, the words and
+`typeset -p` — are all still reachable. This shell leaves the frozen array as
+it was, bash's and zsh's answer, and
+`TestARefusedStoreIntoAFrozenIndexedArrayLeavesItAsItWas` pins that so the
+table's key trace cannot start leaving a real element in an indexed array.
+The lane's call on #7186, 2026-10-31.
 
 **One more row of the declaration route is recorded with it, because it is
 the same slot read twice.** A valueless subscripted operand's subscript is

@@ -1460,6 +1460,10 @@ func Semantics() interp.Semantics {
 	// A refused store under a table's key leaves the table as it was. See
 	// interp.Semantics.RefusedTableStoreKeepsTheKey (#6847).
 	s.RefusedTableStoreKeepsTheKey = interp.No
+	// `${a[k]=x}` on a missing key assigns it and `${a[k]?m}` refuses it,
+	// as on any unset parameter. See
+	// interp.Semantics.AssignOrErrorOperatorDeclaresTheKey (#7187).
+	s.AssignOrErrorOperatorDeclaresTheKey = interp.No
 	s.FrozenContainerTakesAnElementLiteral = interp.No
 	s.ReadArrayIntoAnElementRefillsTheArray = interp.No
 	// See interp.Semantics.ArithSubscriptDollarSingleIsDecoded (#6773).

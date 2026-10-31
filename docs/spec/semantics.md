@@ -25778,7 +25778,9 @@ aim is taken. What that column does differently there is name the array —
 `Diagnostics.ParamErrorNamesTheArray`, the same reading showing through
 the other half of the sentence. A keyed table has no bare element, so the
 brackets never name one and the key is never sent to the arithmetic
-evaluator to find that out.
+evaluator to find that out. ksh93 also makes the missing key before the
+test, so `${m[q]?m}` leaves `[q]=` behind: that is
+`AssignOrErrorOperatorDeclaresTheKey`, below (#7187).
 
 **`LengthOfAMissingElementIsRefused`** — bash no · dash n/a · ksh93 no · zsh yes
 
@@ -26116,6 +26118,57 @@ subscript twice as well (`i=2`) and lists `typeset -r c`, frozen: the first
 reading's shape, declared. Not modeled, for the same reason as the rows
 above — the mismatch is a declared element over a scalar shape, which is the
 slot this note is about.
+
+**`AssignOrErrorOperatorDeclaresTheKey`** — bash no · dash not reached · ksh93 **yes** · zsh no · ash not reached
+
+The expression is not the only reader in ksh93 that reaches a table's
+element as a place. `${a[k]=word}` and `${a[k]?word}`, with or without the
+colon, make a key the table has not got — declared and holding nothing —
+before the operator's test is put to it, so the colon-less test finds the
+key set and empty: `=` assigns nothing and substitutes the empty string,
+and `?` refuses nothing. Measured 2026-10-31, `-c`, ksh93u+ 2012-08-01,
+bash 5.3.20 and zsh 5.9.2, after `typeset -A a`:
+
+| program | ksh93u+ | bash 5.3.20 | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `: ${a[k]=x}; typeset -p a` | `a=([k]=)` | `a=([k]="x" )` | `a=( [k]=x )` |
+| `echo "<${a[k]=x}>"` | `<>` | `<x>` | `<x>` |
+| `echo "<${a[k]?m}>"; typeset -p a` | `<>`, `a=([k]=)` | `a[k]: m` | `a[k]: m` |
+| `trap 'typeset -p a' EXIT; : ${a[k]:?m}` | `a: m`, `a=([k]=)` | `a[k]: m`, `a` | `a[k]: m`, `a=( )` |
+| `: ${a[k]:=x}` | `a=([k]=x)` | the same | the same |
+| `echo "<${a[k]-d}>"`, `"<${a[k]+s}>"` | `<d>`, `<>`; `a=()` | the same | the same |
+| `readonly a; : ${a[k]=x}; echo st=$?` | `st=0`, `typeset -r -A a=([k]=)` | `a: readonly variable` | `read-only variable: a` |
+| `typeset -A a=([j]=); readonly a; echo "<${a[j]=x}>"` | `<>` | `<>` | `<>` |
+| `typeset -n r='a[k]'; echo "<${r=x}>"` | `<x>`, `a=([k]=x)` | `<x>` | — |
+| `echo "<${!a[k]=d}>"`, `"<${!a[k]:=x}>"` | `<a[k]>`, `a=([k]=)` | — | — |
+
+**What it is keyed on is the operator's reference to a written
+subscript.** Held at `=` on the same missing key, the answer moves with the
+route and nothing else: the written subscript makes the key and assigns
+nothing, and the same element reached through a reference is assigned.
+Held at the same written subscript, it moves with the operator: `-`, `+`
+and a plain `${a[k]}` leave the table alone. Quoting does not move it, nor
+does the context — a `[[ ]]`, a `case` word, `$(( ))`, a here-document, a
+`function` body, `set -u` — and nor does a freeze: the key is a
+declaration and not a store, so `readonly` refuses nothing and the key
+still appears.
+
+The colon forms make the key too. `:?` leaves it behind, which only an EXIT
+trap can see; `:=` stores into it, and since that store is what makes the
+key there, an empty key traced under `set -x` warns once and not twice.
+Behind a `!`, where ksh93 yields the name and stores nothing, all four make
+it.
+
+Two neighbors are recorded and not modeled here. An **indexed** array's
+missing element is reached the same way — `a=(p q); echo "<${a[3]=x}>"` is
+`<>` and assigns nothing, and `${#a[@]}` counts 3 — but the element is the
+counted, unlisted slot described above. And every one of the four
+operators, written on an empty key that **is** there, still warns `adding
+empty subscript` under `set -x`, as the expression's read does.
+
+bash 3.2.57 has no tables, and dash and BusyBox ash have no arrays. The
+axis is asked only where the key is missing from a stored table and the
+operator is one of these.
 
 **`ArithIntegerOperatorRefusesFloat`** — bash unspecified · dash unspecified · ksh93 yes · zsh no
 

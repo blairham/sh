@@ -10865,6 +10865,48 @@ type Semantics struct {
 	// has refused a store under a table's key (#6847).
 	RefusedTableStoreKeepsTheKey Answer
 
+	// AssignOrErrorOperatorDeclaresTheKey has `${a[k]=word}` and
+	// `${a[k]?word}`, colon or not, reach a table's element as a **place**:
+	// a key the table has not got is made, declared and holding nothing,
+	// before the operator's test is put to it — so the colon-less test finds
+	// it set and empty, assigns nothing and refuses nothing.
+	//
+	// ksh93 alone. Measured 2026-10-31, `-c`, after `typeset -A a`:
+	//
+	//	                              ksh93u+               bash 5.3.20, zsh 5.9.2
+	//	: ${a[k]=x}; typeset -p a     a=([k]=)              a=([k]=x)
+	//	echo "<${a[k]=x}>"            <>                    <x>
+	//	echo "<${a[k]?m}>"            <>, a=([k]=)          a[k]: m
+	//	: ${a[k]:?m}, an EXIT trap    a: m, a=([k]=)        a[k]: m, a=()
+	//	: ${a[k]:=x}                  a=([k]=x)             the same
+	//	"${a[k]-d}", "${a[k]+s}"      d, empty; a=()        the same
+	//	readonly a; : ${a[k]=x}       0, -r -A a=([k]=)     a: readonly variable
+	//	typeset -n r='a[k]'; : ${r=x} a=([k]=x)             bash the same
+	//
+	// So it is the operator's reference and not every read: `-` and `+` see
+	// the missing element as unset and leave the table alone, as a plain
+	// `${a[k]}` does. And it is the **written** subscript: the same element
+	// reached through a reference is assigned. Quoting, the context — a
+	// `[[ ]]`, a `case` word, `$(( ))`, a `function` body — and a freeze do
+	// not move it; the key made under a frozen table is no store, so nothing
+	// is refused.
+	//
+	// The colon forms make the key too, which only a trace can see: the
+	// `:?` refusal leaves it behind, and `:=` stores into it — the store
+	// makes the key itself here, so a traced empty key warns once and not
+	// twice, as it does there. Behind a `!`, where that column yields the
+	// name and stores nothing, all four make it: `${!a[k]=d}` and
+	// `${!a[k]:=x}` are `a[k]` and list `([k]=)`, where `${!a[k]+x}` leaves
+	// `a=()`.
+	//
+	// An indexed array's missing element is made the same way and is not
+	// this: ksh93 counts it and lists nothing, the state
+	// ArithKeyReadCreatesTheElement records rather than models. bash 3.2.57
+	// has no tables, and dash and BusyBox ash no arrays. Asked only where
+	// the key is missing from a stored table and the operator is one of
+	// these, so a read of a key that is there never raises it (#7187).
+	AssignOrErrorOperatorDeclaresTheKey Answer
+
 	// FrozenContainerTakesAnElementLiteral stores an element **literal** —
 	// `b[1]=(p)`, a chain's `r[1][2]=(p)`, and a declaration's `typeset
 	// b[1]=(p)` — into a frozen indexed array, and under a frozen table's
@@ -29392,7 +29434,9 @@ type Semantics struct {
 	// A keyed table has no bare element, so the brackets never name one:
 	// measured, `typeset -A t; ${t[k]?m}` and `${m[q]?m}` are both quiet in
 	// that column, and the key is never sent to the arithmetic evaluator to
-	// find that out.
+	// find that out. The same column also makes the missing key before the
+	// test, which is AssignOrErrorOperatorDeclaresTheKey's half: `${m[q]?m}`
+	// leaves `[q]=` behind (#7187).
 	ErrorOperatorSeesOnlyTheBareElement Answer
 
 	// LengthOfAMissingElementIsRefused counts `${#a[9]}` on an element that
@@ -36695,6 +36739,8 @@ func PosixSemantics() Semantics {
 		// refused store leaves nothing behind either way.
 		ArithStoreRefusedByAFreezeSetsTheArray: No,
 		RefusedTableStoreKeepsTheKey:           No,
+		// And no table for `${a[k]=w}` to make a key in.
+		AssignOrErrorOperatorDeclaresTheKey: No,
 		// And no literal to store through one.
 		FrozenContainerTakesAnElementLiteral: No,
 		// No array letter, so no element for `read -A` to name.

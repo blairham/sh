@@ -1869,6 +1869,14 @@ four and five are not. `ErrorOperatorSeesOnlyTheBareElement` is the axis.
 The last two rows are the control that makes it the `?` operator's own:
 `-` and `+` see the missing element in every column, ksh93 included.
 
+**And on a table, ksh93 makes the key.** `typeset -A m; "[${m[q]?m}]"` is
+quiet there and leaves `[q]=` behind, and `${m[q]=x}` does the same: it
+assigns nothing and substitutes the empty string, where bash and zsh
+assign `x`. The operator reaches the element as a place and makes the key
+before its test, so the test finds it set. `-` and `+` do not, and the
+colon forms make it too. `AssignOrErrorOperatorDeclaresTheKey` is the axis;
+`docs/spec/semantics.md` holds the measurement (#7187).
+
 ### Where `${!x}` is the name, `set -u` is about the name
 
 | probe, `set -u`, ksh93 | answer |

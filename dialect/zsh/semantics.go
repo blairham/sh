@@ -629,6 +629,9 @@ func Semantics() interp.Semantics {
 	// and interp.Semantics.RefusedTableStoreKeepsTheKey (#6847).
 	s.ArithStoreRefusedByAFreezeSetsTheArray = interp.No
 	s.RefusedTableStoreKeepsTheKey = interp.No
+	// `${a[k]=x}` on a missing key assigns it and `${a[k]?m}` refuses it.
+	// See interp.Semantics.AssignOrErrorOperatorDeclaresTheKey (#7187).
+	s.AssignOrErrorOperatorDeclaresTheKey = interp.No
 	// The splice `b[1]=(p)` over a frozen `b` is `read-only variable: b`.
 	// See interp.Semantics.FrozenContainerTakesAnElementLiteral (#6833).
 	s.FrozenContainerTakesAnElementLiteral = interp.No

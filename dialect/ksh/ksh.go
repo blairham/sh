@@ -1121,6 +1121,12 @@ func Semantics() interp.Semantics {
 	// 'a[k]=5'` lists `typeset -r -A a=([k]=)`. See
 	// interp.Semantics.RefusedTableStoreKeepsTheKey (#6847).
 	s.RefusedTableStoreKeepsTheKey = interp.Yes
+	// `=` and `?` reach a table's element as a place, so a missing key is
+	// made, declared and holding nothing, before the test: `typeset -A a;
+	// : ${a[k]=x}` lists `typeset -A a=([k]=)` and assigns nothing, and
+	// `${a[k]?m}` is quiet. See
+	// interp.Semantics.AssignOrErrorOperatorDeclaresTheKey (#7187).
+	s.AssignOrErrorOperatorDeclaresTheKey = interp.Yes
 	// Not the expression's refusal alone, so not this question: the trace is
 	// the key above for a table, and for an indexed array a count no
 	// subscript lists (#7186). See

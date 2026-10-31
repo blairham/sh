@@ -5540,6 +5540,14 @@ type Runner struct {
 	// type letter over exactly that shape. See
 	// Semantics.TypeLetterAndAnArrayLiteralIsAnInconsistentType.
 	literalOperands map[string]bool
+	// assignmentWordsOf is the declaration now running, in the column that
+	// stores an operand written as an assignment ahead of the utility, and nil
+	// everywhere else. A refusal of a name one of its words was written to
+	// assign is the shell's and not the utility's, even where this engine
+	// leaves the store to the utility. Kept as the command rather than as the
+	// names, because only a refusal reads it and every declaration would pay
+	// for a set. See Runner.operandWrittenAsAnAssignment (#7188).
+	assignmentWordsOf *syntax.SimpleCmd
 	// operandsOverANonArray is the subset of literalOperands whose name was
 	// not an array and carried an attribute a re-creation drops *before* the
 	// line ran, on a line writing no type letter of its own — read by
@@ -11117,6 +11125,8 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// z=(1 2)` is refused in the same words as `typeset -i z=(1 2)`.
 		outerLiterals := r.literalOperands
 		r.literalOperands = arrayLiteralOperands(c)
+		outerAssignments := r.assignmentWordsOf
+		r.assignmentWordsOf = r.declarationWithAssignmentWords(c, argv)
 		outerLetterContainers := r.containerByThisLinesLetter
 		r.containerByThisLinesLetter = nil
 		outerOverANonArray := r.operandsOverANonArray
@@ -11285,6 +11295,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		}
 		r.freezing = outerFreezing
 		r.literalOperands = outerLiterals
+		r.assignmentWordsOf = outerAssignments
 		r.containerByThisLinesLetter = outerLetterContainers
 		r.declarationArgvLen = outerArgvLen
 		r.compoundOperands = outerCompounds
@@ -14386,11 +14397,18 @@ func (r *Runner) appendedValue(name, old, add string) (string, bool) {
 }
 
 // readonlyRefusalNamesBuiltin reports whether the running builtin puts its own
-// name in this refusal. A plus form refused the attribute it wanted to remove
-// asks a different table, because one shell answers the two shapes
+// name in this refusal of name. A plus form refused the attribute it wanted to
+// remove asks a different table, because one shell answers the two shapes
 // differently through the identical word — see
 // Diagnostics.ReadonlyAttributeRefusalNamesBuiltin.
-func (r *Runner) readonlyRefusalNamesBuiltin(form assignForm) bool {
+func (r *Runner) readonlyRefusalNamesBuiltin(form assignForm, name string) bool {
+	if form != attributeRatherThanAValue && r.operandWrittenAsAnAssignment(name) {
+		// An operand written as an assignment, in the column that stores
+		// one ahead of the utility: the shell's store, refused by the shell,
+		// whichever of the two this engine let make it. See
+		// Runner.operandWrittenAsAnAssignment (#7188).
+		return false
+	}
 	if r.rereadingAQuotedLiteral {
 		// A store the builtin made while reading a value's text again as a
 		// literal, which the dialect that re-reads names itself for every
@@ -14422,6 +14440,9 @@ func (r *Runner) reportReadonlyRefusal(name string, form assignForm, fatal bool)
 // is named, where, and whether the script ends — the freeze's. See
 // RefuseValues.
 func (r *Runner) reportFreezeRefusal(name string, form assignForm, fatal bool, sentence string) {
+	// Asked of the name refused rather than of the one spoken, which is the
+	// name an operand's record is kept under.
+	namesBuiltin := r.readonlyRefusalNamesBuiltin(form, name)
 	if r.refusalSpokenAs != "" {
 		// A declaration that reached this through a name **reference**, in
 		// the column that speaks of the operand the script wrote rather than
@@ -14465,8 +14486,7 @@ func (r *Runner) reportFreezeRefusal(name string, form assignForm, fatal bool, s
 		// Runner.operandLocatedUnderTheCall.
 		msg = Wording(r.diag().ReadonlyVariableInDeclaration, "", name, r.inBuiltin)
 	} else if (form.namesTheBuiltin() || r.rereadingAQuotedLiteral) &&
-		r.diag().ReadonlyVariableInDeclaration != "" &&
-		r.readonlyRefusalNamesBuiltin(form) {
+		r.diag().ReadonlyVariableInDeclaration != "" && namesBuiltin {
 		wording := r.diag().ReadonlyVariableInDeclaration
 		if r.inBuiltin == "read" && r.diag().ReadonlyVariableInRead != "" {
 			// One dialect words `read`'s refusal apart from every other
@@ -14480,6 +14500,14 @@ func (r *Runner) reportFreezeRefusal(name string, form assignForm, fatal bool, s
 			wording = r.diag().ReadonlyVariableInReadArray
 		}
 		msg = Wording(wording, "", name, r.inBuiltin)
+		if r.restrictedFreeze(name) {
+			// A name restricted mode froze, refused by a builtin that names
+			// itself: the mode's operand sentence, as for a letter below.
+			// Measured 2026-10-31 on ksh93u+ from a script file, `set -r; f()
+			// { typeset 'PATH=x'; }; f` is `<script>[2]: typeset: PATH:
+			// restricted` (#7188).
+			msg = Wording(r.diag().RestrictedOperand, "%[1]s: %[2]s: restricted", r.inBuiltin, name)
+		}
 	}
 	// A name restricted mode froze, refused over a letter rather than a
 	// value: the sentence is the mode's operand refusal, naming the builtin,
@@ -14513,12 +14541,12 @@ func (r *Runner) reportFreezeRefusal(name string, form assignForm, fatal bool, s
 		// `read: Illegal number: x` beside `read: y: is read only`.
 		msg = sentence
 		if r.inBuiltin != "" && (form.namesTheBuiltin() || r.locatedUnderACall) &&
-			r.diag().ReadonlyVariableInDeclaration != "" && r.readonlyRefusalNamesBuiltin(form) {
+			r.diag().ReadonlyVariableInDeclaration != "" && namesBuiltin {
 			msg = r.inBuiltin + ": " + sentence
 		}
 	}
 	keep := restrictedLetter || r.diag().RestrictedVariableNamesTheBuiltin && r.restrictedFreeze(name)
-	if !r.readonlyRefusalNamesBuiltin(form) && !keep {
+	if !namesBuiltin && !keep {
 		outer := r.inBuiltin
 		r.inBuiltin = ""
 		defer func() { r.inBuiltin = outer }()

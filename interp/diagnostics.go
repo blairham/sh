@@ -7594,8 +7594,20 @@ type Diagnostics struct {
 	// A set rather than a flag because one dialect answers it per builtin:
 	// bash writes `declare: r: readonly variable` and `typeset: …` and
 	// leaves the name out of `export: …` and `readonly: …`, which are the
-	// two spellings POSIX has. dash names both of the two it has. ksh93 and
-	// zsh name none, including ksh93's own `typeset`.
+	// two spellings POSIX has. dash names both of the two it has. zsh names
+	// none.
+	//
+	// ksh93 names all three of its declaration words, and it looked for a
+	// long time as though it named none, because the refusal it was measured
+	// with is not the utility's: `readonly b=1; typeset b=2` is `b: is read
+	// only`, and that operand is an assignment word the shell stores before
+	// the utility runs — see Semantics.DeclarationOperandsAreStoredInTurn —
+	// so its refusal is raised with no builtin running at all. An operand the
+	// utility reads itself is refused by the utility and named: measured
+	// 2026-10-31 on ksh93u+, `typeset -A a; readonly a; typeset 'a[k]=1'` is
+	// `typeset: a: is read only`, and `export` and `readonly` the same. The
+	// empty-key warning a store makes is spoken by the same set — see
+	// EmptyTableKeyTraced (#7188).
 	ReadonlyRefusalNamesBuiltin map[string]bool
 	// GetoptsRefusalNamesTheScript writes `$0` where the builtin's name goes
 	// when `getopts` refuses one of its names — a freeze, or a value a typed
@@ -7710,12 +7722,17 @@ type Diagnostics struct {
 	//	       readonly c; typeset -i c   → <script>[2]: typeset: c: is read only
 	//
 	// One word, two sentences and two locations, so the builtin's name
-	// cannot decide it alone. What that shell parts on is whether the
-	// refusal is about a **value** or about an **attribute**: the attribute
-	// shapes take what `set -A` takes — the builtin's own location with the
-	// builtin named — and an assignment through the same word takes the
-	// plain line form. bash names the builtin for all of them and needs no
-	// second answer.
+	// cannot decide it alone. bash names the builtin for all of them and
+	// needs no second answer.
+	//
+	// **The split in that table is the route and not the value**, which was
+	// found later: `typeset x=2` is an assignment word the shell stores
+	// before the utility runs, and the same value written as an operand the
+	// utility reads, `typeset 'x=2'`, is `typeset: x: is read only` there
+	// too (measured 2026-10-31, #7188). So in that shell every refusal the
+	// utility makes itself names it, and ReadonlyRefusalNamesBuiltin now
+	// says so for the three declaration words; this set agrees with it on
+	// them and is kept for the value-free shapes it was measured on.
 	ReadonlyAttributeRefusalNamesBuiltin map[string]bool
 
 	// DeclareNoSuchVariable is what `declare -p` and `typeset -p` say about
@@ -8185,6 +8202,13 @@ type Diagnostics struct {
 	// builtin, `<script>[N]: read: warning: …`. Without `set -x` none of
 	// them writes anything, and neither does an indexed array's `x[""]=1`,
 	// which is element 0 there (#6609).
+	//
+	// Which builtins speak it is ReadonlyRefusalNamesBuiltin: a builtin that
+	// names itself when the freeze refuses its store names itself when the
+	// store warns. Measured 2026-10-31 on ksh93u+, `-c`: `let 'm[]=5'` is
+	// `let: warning: …`, and `typeset 'm[]=1'` — an operand the utility reads
+	// itself, unlike the assignment word `typeset m[""]=1` above — is
+	// `typeset: warning: …`, `export` and `readonly` the same (#7188).
 	EmptyTableKeyTraced string
 	// EmptyTableKeyTracedFromGetoptsIsUnlocated writes that warning, when
 	// `getopts` makes the store, behind the shell's name alone: measured

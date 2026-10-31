@@ -1785,17 +1785,35 @@ func (r *Runner) warnEmptyTableKeyTraced() {
 // writeEmptyTableKeyWarning writes the warning, owed or not.
 func (r *Runner) writeEmptyTableKeyWarning() {
 	w := r.diag().EmptyTableKeyTraced
-	if r.inBuiltin == "read" {
-		// Spoken by the builtin, and located the way a builtin's own
-		// complaint is.
-		w = r.inBuiltin + ": " + w
-	}
 	if r.inBuiltin == "getopts" && r.diag().EmptyTableKeyTracedFromGetoptsIsUnlocated {
 		// The shell's name alone, no line and no builtin. See
 		// Diagnostics.EmptyTableKeyTracedFromGetoptsIsUnlocated.
 		r.flushOpenTraceLine()
 		r.errf("%s: %s\n", r.name(), w)
 		return
+	}
+	// The builtin whose store this is: the one running, or the declaration
+	// whose element store has put its name out of the location for the
+	// store's own complaints — see declareElement and
+	// Runner.declarationSpeaker.
+	speaker := r.inBuiltin
+	if speaker == "" {
+		speaker = r.declarationSpeaker
+	}
+	if r.diag().ReadonlyRefusalNamesBuiltin[speaker] {
+		// Spoken by the builtin, and located the way a builtin's own
+		// complaint is: a builtin that names itself when the freeze refuses
+		// its store names itself when the store warns. Measured 2026-10-31
+		// on ksh93u+ under `set -x`: `read 'a[]'`, `let 'a[]=5'` and
+		// `typeset 'a[]=1'` (and `export`, `readonly`, `integer`) are each
+		// `<builtin>: warning: adding empty subscript`, and inside a
+		// `function` `f[1]: typeset: warning: …`; `(( a[]=5 ))` and the
+		// assignment word `typeset a[""]=1`, which the shell stores before
+		// the utility runs, are unnamed (#7188).
+		w = speaker + ": " + w
+		outer := r.inBuiltin
+		r.inBuiltin = speaker
+		defer func() { r.inBuiltin = outer }()
 	}
 	r.diagf("%s\n", w)
 }

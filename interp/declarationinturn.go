@@ -366,6 +366,108 @@ func (r *Runner) storeOperandInTurn(argv []string, turn *operandsInTurn) []strin
 	return argv
 }
 
+// declarationWithAssignmentWords is c where it is a declaration utility in the
+// column that stores an operand written as an assignment ahead of the
+// utility, and nil otherwise — the record Runner.operandWrittenAsAnAssignment
+// reads.
+func (r *Runner) declarationWithAssignmentWords(c *syntax.SimpleCmd, argv []string) *syntax.SimpleCmd {
+	if !r.declarationOperandsStoredInTurn() || len(argv) == 0 || !r.declarationCommand(c, argv) {
+		// Not a declaration utility, so a `name=value` word is an ordinary
+		// argument: `let x=2` is the builtin's own operand and its refusal is
+		// `let: x: is read only` (#3568).
+		return nil
+	}
+	return c
+}
+
+// operandWrittenAsAnAssignment reports whether one of the running
+// declaration's operands was **written** as an assignment to name — an array
+// literal, or a word whose name and `=` stand unquoted in the source — in the
+// column that stores such an operand ahead of the utility.
+//
+// In that column a refusal of such a name is the shell's own and names no
+// builtin, wherever this engine makes it: measured 2026-10-31 on ksh93u+,
+// `readonly b=1; function f { export b=2; }; f` is `f: line 1: b: is read
+// only` and `set -r; function f { typeset PATH=x; }; f` is `f: line 1: PATH:
+// restricted`, though the walk above leaves both to the utility because a
+// `function` body may shadow. The same operand written as a word the utility
+// reads, `export 'b=2'`, is `f[1]: export: b: is read only`. See
+// Runner.readonlyRefusalNamesBuiltin (#7188).
+//
+// Read off the written words rather than off Runner.declarationOperands,
+// because that record holds only the operands this engine expands as
+// assignments, and ksh93's assignment words are wider: a chain,
+// `typeset r[1+1][2]=z`, and a dotted name, `typeset .sh=1`, are refused there
+// with no builtin named as well. Asked only by a refusal, so the words are
+// read then and not for every declaration.
+func (r *Runner) operandWrittenAsAnAssignment(name string) bool {
+	c := r.assignmentWordsOf
+	if c == nil {
+		return false
+	}
+	if r.literalOperands[name] {
+		return true
+	}
+	for i, w := range c.Args {
+		if i == 0 {
+			continue
+		}
+		if written, ok := writtenAssignmentName(w); ok && written == name {
+			return true
+		}
+	}
+	return false
+}
+
+// writtenAssignmentName is the name a word assigns to where it is written as
+// an assignment: an unquoted name, dotted or not, then any number of
+// subscripts, then an unquoted `=` or `+=`. Only the subscripts may hold
+// quoting or an expansion; anything else in front of the `=` makes the word an
+// ordinary one, whose text the utility reads for itself.
+func writtenAssignmentName(w *syntax.Word) (string, bool) {
+	if w == nil || len(w.Spans) == 0 {
+		return "", false
+	}
+	head := w.Spans[0]
+	if head.Kind != syntax.Literal || head.Quoting != syntax.Unquoted {
+		return "", false
+	}
+	n := 0
+	for n < len(head.Value) && (isNameByte(head.Value[n]) || head.Value[n] == '.') {
+		n++
+	}
+	if n == 0 {
+		return "", false
+	}
+	depth := 0
+	for i, s := range w.Spans {
+		if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
+			if depth == 0 {
+				return "", false
+			}
+			continue
+		}
+		from := 0
+		if i == 0 {
+			from = n
+		}
+		for j := from; j < len(s.Value); j++ {
+			switch c := s.Value[j]; {
+			case c == '[':
+				depth++
+			case c == ']' && depth > 0:
+				depth--
+			case depth > 0:
+			case c == '=', c == '+' && j+1 < len(s.Value) && s.Value[j+1] == '=':
+				return head.Value[:n], true
+			default:
+				return "", false
+			}
+		}
+	}
+	return "", false
+}
+
 // operandSubscriptOf splits a declaration operand's name into the base and
 // the text between its one pair of brackets.
 func operandSubscriptOf(name string) (base, sub string, ok bool) {

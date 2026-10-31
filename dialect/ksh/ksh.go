@@ -5892,6 +5892,19 @@ func Diagnostics() interp.Diagnostics {
 			// location and no builtin in it. So it is this builtin's
 			// sentence and not the arithmetic's (#3568).
 			"let": true,
+			// And the three declaration utilities, for an operand the
+			// utility reads itself. Measured 2026-10-31 on ksh93u+, `-c`:
+			// `readonly b=1; typeset 'b=2'` is `typeset: b: is read only`
+			// where `typeset b=2` is `b: is read only`, and the same split
+			// holds under `export` and `readonly`, for an element and a
+			// table's key, and for an operand that came from an expansion
+			// (`x=b=2; typeset $x`). The noun is the route and not the
+			// name: an assignment word is stored by the shell ahead of the
+			// utility (interp/declarationinturn.go), so its refusal is the
+			// shell's and names nothing — including where this engine
+			// leaves that store to the utility, which
+			// Runner.operandWrittenAsAnAssignment is for (#7188).
+			"typeset": true, "export": true, "readonly": true,
 		},
 		ReadonlyVariableInRead: "%[2]s: warning: %[1]s: is read only",
 		// And the array `read -A` fills, which is not called a warning. See
@@ -5916,11 +5929,12 @@ func Diagnostics() interp.Diagnostics {
 		// failed`. The event-not-found wording is bash's and stays at the
 		// fallback.
 		HistorySubstitutionFailed: "%[2]s: substitution failed",
-		// And `typeset` names itself for a refused *removal* alone. Measured
+		// And `typeset` names itself for a refused *removal*. Measured
 		// 2026-09-07: `typeset +r x` is `<script>[2]: typeset: x: is read
 		// only` where `typeset x=2` on the same name is `<script>: line 2:
-		// x: is read only`. One word, two shapes, two sentences — which is
-		// what the second table is for.
+		// x: is read only`. That second line is an assignment word's,
+		// refused before the utility runs, which is why the first table
+		// holds the same three words now — see its entry above (#7188).
 		//
 		// And `readonly` and `export` for the one attribute refusal they
 		// make: an element declared past the first over a frozen name that

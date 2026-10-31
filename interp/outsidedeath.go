@@ -59,7 +59,9 @@ import (
 // and `wait`. A copy of the shell that the shell is waiting for — a `( … )`, a
 // pipeline element, a substitution's body — stops at its own next command, so
 // the shell above it gets its turn. A background job is not one of those and
-// carries on, as a reference's child would.
+// carries on, as a reference's child would. Except in the dialect that runs a
+// `( … )` or `$( … )` in its own process, where a wait for a program inside
+// one holds the death to the end of it instead: see unforkeddeath.go.
 //
 // Only where something would run. Without an EXIT trap, or in a dialect that
 // runs none on a death, the watch ends the process where the signal lands, as
@@ -79,12 +81,16 @@ import (
 // the process ends without the trap, as it did before.
 
 // The states of a death handed over: nothing yet, handed over and waiting to
-// be taken, taken by the shell, and taken back by the front end.
+// be taken, taken by the shell, and taken back by the front end. Or held by a
+// `( … )` or `$( … )` the shell runs in its own process, for the end of it,
+// and then due at the shell's next command: see unforkeddeath.go.
 const (
 	outsideNone int32 = iota
 	outsidePosted
 	outsideClaimed
 	outsideRevoked
+	outsideHeld
+	outsideDue
 )
 
 // What the shell at the top has told the front end's watch it would run on
@@ -92,12 +98,15 @@ const (
 // alone — which runs only on a HUP the dialect ends on as an exit, since a
 // shell killed by a signal runs none (Runner.fireExitHook) — or an EXIT trap.
 // Or, with none of those standing, the end of a `function name { … }` call
-// the signal would end instead of the shell: see keywordcalldeath.go.
+// the signal would end instead of the shell: see keywordcalldeath.go. Or the
+// end of a `( … )` or `$( … )` the shell runs in its own process, which a
+// shell that has ever set an EXIT trap waits for: see unforkeddeath.go.
 const (
 	armedForNothing int32 = iota
 	armedForAHangup
 	armedForADeath
 	armedForACall
+	armedForASubshell
 )
 
 // handover is one fatal signal from outside handed to the shell: the death
@@ -147,6 +156,12 @@ type outsideDeath struct {
 	// death is ever handed over: a Runner nobody listens for is never armed,
 	// and its waits keep the plainer forms.
 	heard atomic.Bool
+	// inSubshells counts the `( … )` and `$( … )` the shell's own process is
+	// inside, in the dialect that waits a death out for one, and heldDepth is
+	// how deep the one a held death belongs to stands, written under the
+	// signal state's lock. See unforkeddeath.go.
+	inSubshells atomic.Int32
+	heldDepth   int
 }
 
 // errAbandonedForADeath is a wait given up because the shell has been handed
@@ -171,7 +186,8 @@ var errAbandonedForADeath = errors.New("abandoned for a fatal signal from outsid
 // been handed a death — a second signal while the first one's EXIT trap runs
 // is the front end's to end the process with, as it ends a reference: measured
 // 2026-10-29, a second TERM, USR1 or HUP during a `sleep` in the trap ends
-// bash 5.3, bash 3.2 and ksh93 at once. Except in the dialect where any fatal
+// bash 5.3, bash 3.2 and ksh93 at once. A second one while a subshell holds
+// the first is taken as the first, though: see unforkeddeath.go. Except in the dialect where any fatal
 // signal while the EXIT trap runs ends only the trap, which ksh93's does at
 // once and then leaves by the first: there it is taken, as the signal that
 // ends the trap. See Semantics.FatalSignalInTheExitTrapEndsOnlyTheTrap.
@@ -225,6 +241,12 @@ func (r *Runner) TakesAFatalSignal() func(syscall.Signal) (claimed <-chan struct
 			if !signalEndsAKeywordCall(name, sig) {
 				return nil, nil, false
 			}
+		case armedForASubshell:
+			// Only while a subshell that waits it out is running. See
+			// unforkeddeath.go.
+			if o.inSubshells.Load() <= 0 {
+				return nil, nil, false
+			}
 		default:
 			if !runsOnADeath && !hangup {
 				return nil, nil, false
@@ -232,10 +254,17 @@ func (r *Runner) TakesAFatalSignal() func(syscall.Signal) (claimed <-chan struct
 		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		if o.state.Load() != outsideNone {
-			return nil, nil, false
+		switch o.state.Load() {
+		case outsideNone:
+			return o.post(name, sig)
+		case outsideHeld, outsideDue:
+			// One more while a subshell holds the first, which the shell
+			// that holds it takes as the same: measured 2026-10-31, a
+			// second TERM 0.4 s after the first still leaves ksh93 waiting
+			// the `( … )` or `$( … )` out. See unforkeddeath.go.
+			return o.claimed, func() bool { return false }, true
 		}
-		return o.post(name, sig)
+		return nil, nil, false
 	}
 }
 
@@ -298,6 +327,8 @@ func (r *Runner) publishExitTrap() {
 			armed = armedForADeath
 		case r.aKeywordCallEndsOnADeath():
 			armed = armedForACall
+		case r.aSubshellWaitsOutADeath():
+			armed = armedForASubshell
 		case r.exitHookStandsForAHangup():
 			armed = armedForAHangup
 		}
@@ -307,7 +338,7 @@ func (r *Runner) publishExitTrap() {
 	}
 	r.exitTrapPublished = armed
 	s.outside.armed.Store(armed)
-	if (armed == armedForADeath || armed == armedForACall) &&
+	if (armed == armedForADeath || armed == armedForACall || armed == armedForASubshell) &&
 		r.ListenForFatalSignals != nil && r.sem().ExitTrapRunsOnSignalDeath == Yes {
 		r.ListenForFatalSignals()
 	}
@@ -373,7 +404,9 @@ func (r *Runner) takeOutsideDeath() bool {
 	if s == nil {
 		return false
 	}
-	if s.outside.state.Load() != outsidePosted &&
+	// A death a subshell held is due at the top alone: a copy goes on to its
+	// end, as the subshell it is in would. See unforkeddeath.go.
+	if st := s.outside.state.Load(); st != outsidePosted && (st != outsideDue || r.inSubshell) &&
 		(!r.inExitTrap || s.outside.trapEnd.state.Load() != outsidePosted) {
 		return false
 	}
@@ -385,8 +418,16 @@ func (r *Runner) takeOutsideDeath() bool {
 func (r *Runner) actOnOutsideDeath() bool {
 	s := r.signals
 	if r.inSubshell {
-		if r.bg != nil {
+		if r.bg != nil || r.outOfADeathsReach() {
 			return false
+		}
+		if r.inAnUnforkedSubshell() {
+			// A `( … )` or `$( … )` the shell runs in its own process, which
+			// the signal reaches at a builtin: it ends as a command killed
+			// by it, and that is what the shell around it holds. See
+			// unforkeddeath.go.
+			r.status = r.signalDeathStatus(s.outside.sig)
+			s.outside.abandoned.Store(false)
 		}
 		// Stopped as `exit` stops it, and its EXIT trap — and zsh's exit
 		// hook — start and stop again at their first command, which comes
@@ -405,11 +446,16 @@ func (r *Runner) actOnOutsideDeath() bool {
 		r.signalDeath(e.name, e.sig)
 		return true
 	}
-	if !o.state.CompareAndSwap(outsidePosted, outsideClaimed) {
+	switch {
+	case o.state.CompareAndSwap(outsideDue, outsideClaimed):
+		// Held by a subshell that has ended, which closed claimed when it
+		// held it. See unforkeddeath.go.
+	case o.state.CompareAndSwap(outsidePosted, outsideClaimed):
+		close(o.claimed)
+	default:
 		// Taken back: the front end is ending the process itself.
 		return false
 	}
-	close(o.claimed)
 	shown := r.status
 	if o.abandoned.Load() {
 		shown = r.statusWhenTheCommandBegan
@@ -440,11 +486,12 @@ func (r *Runner) abandonsForADeath() <-chan struct{} {
 	if r.inExitTrap && s.outside.trapRunning.Load() {
 		return s.outside.trapEnd.dying
 	}
-	if s.outside.armed.Load() == armedForNothing {
+	if s.outside.armed.Load() == armedForNothing || r.outOfADeathsReach() {
 		return nil
 	}
 	// Under the lock, because a death a call ended puts a fresh one in its
-	// place. See Runner.reopenTheHandover.
+	// place, and so does one a subshell holds. See Runner.reopenTheHandover
+	// and Runner.holdTheDeath.
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.outside.dying

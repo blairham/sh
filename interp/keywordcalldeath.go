@@ -132,7 +132,12 @@ func (r *Runner) reopenTheHandover() {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	o := &s.outside
+	s.outside.reopen()
+}
+
+// reopen puts the handover back where it started, with fresh channels for the
+// next death. Called with the signal state's lock held.
+func (o *outsideDeath) reopen() {
 	o.dying, o.claimed = make(chan struct{}), make(chan struct{})
 	o.abandoned.Store(false)
 	o.state.Store(outsideNone)

@@ -149,6 +149,7 @@ func dieRunningAsAShell() {
 		sh.Semantics.SelfAimedDeathIsTakenAtTheNextCommand = interp.Yes
 		sh.Semantics.DeathInAFunctionEndsTheCallAsKilled = interp.No
 		sh.Semantics.SignalDeathEndsAtAKeywordFunctionCall = interp.No
+		sh.Semantics.SignalDeathWaitsForAnUnforkedSubshell = interp.No
 	}
 	if os.Getenv(dyingTrapEnds) == "yes" {
 		sh.Semantics.FatalSignalInTheExitTrapEndsOnlyTheTrap = interp.Yes

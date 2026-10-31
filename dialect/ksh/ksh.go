@@ -2958,6 +2958,12 @@ func Semantics() interp.Semantics {
 	// `kill -TERM $$` in the body does the same. Measured 2026-10-31 on ksh93u+
 	// 2012-08-01, alone in the panel (#7067, #7145).
 	s.SignalDeathEndsAtAKeywordFunctionCall = interp.Yes
+	// And it waits for a `( … )` or `$( … )` it runs in its own process before
+	// dying of one: `trap 'echo "bye $?"' EXIT; (exit 7); ( /bin/sleep 2; echo
+	// in ); echo after` with TERM from another process writes `in` and `bye 0`
+	// and dies of TERM at 2 s. Measured 2026-10-31 on ksh93u+ 2012-08-01,
+	// alone in the panel (#7068).
+	s.SignalDeathWaitsForAnUnforkedSubshell = interp.Yes
 	// And a `-c` string ending over an error the shell reported still runs
 	// it: measured 2026-10-16 on ksh93, a division by zero, a readonly
 	// reassignment and an unset name under `set -u` each print the handler

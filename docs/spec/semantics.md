@@ -21544,6 +21544,66 @@ for — `trap 'echo t' TERM` at the top, or set and taken away — and ends a
 signal stays ignored inside the call, where this shell's `function` call
 takes the ignore away with the rest of the trap table (#7156, #7157).
 
+**`SignalDeathWaitsForAnUnforkedSubshell`** — bash no · dash no · ksh93
+yes · zsh no · ash no
+
+Holds a fatal signal the shell has caught, if it lands while a `( … )` or
+`$( … )` that the shell runs in its own process is waiting for a program,
+until that subshell is over. The program and the rest of the subshell run
+to their end, and then the shell dies of the signal.
+
+    trap 'echo "bye $?"' EXIT; (exit 7)
+    ( /bin/sleep 2; echo in ); echo after
+
+With TERM from another process 0.4 s in, ksh93 writes `in` and `bye 0`
+and dies of TERM at 2 s. bash 5.3 writes `bye 7` and dies at once. zsh
+and dash die at once and run no trap. All three run the parentheses in a
+child that the signal never reaches, and the child goes on to write `in`
+at 2 s. `x=$(/bin/sleep 2; exit 3); echo after` is `bye 3` at 2 s in
+ksh93 and `bye 7` at once in bash 5.3. bash 3.2 waits for a substitution
+but not for parentheses, and no dialect here models that. HUP, USR1, ALRM,
+QUIT and INT behave as TERM does in ksh93. Measured 2026-10-31, each shell
+in a session of its own (#7068).
+
+In ksh93:
+
+- **Caught means an EXIT trap was set, ever**, as for
+  `SignalDeathEndsAtAKeywordFunctionCall`. Without one the shell dies at
+  once. With one set and then taken away, the shell waits, writes `in`, and
+  dies with nothing run.
+- **The command holding the subshell finishes first.** The death is taken
+  at the next command: `x=$(…; exit 3) || echo or` reads `bye 3` with `or`
+  unwritten, and a program the command then runs is waited for.
+- **A builtin is reached at once.** A busy loop or a `read` inside the
+  parentheses ends them where the signal lands, as a command killed by it:
+  `bye 271`.
+- **The subshell around it dies as this one ends.** `( ( /bin/sleep 2;
+  echo inner ); echo outer )` writes `inner` and `bye 271`, and leaves
+  `outer` unwritten. `( x=$(/bin/sleep 2); echo outer )` behaves the same.
+- **A later program or subshell lets the signal go.** `( /bin/sleep 1;
+  echo a; /bin/sleep 0.1; echo b ); echo after` writes all three and exits
+  0. The same happens with a `( … )` or `$( … )` of builtins in place of
+  the second `sleep`. A later builtin or function call does not let it go.
+- **A child the subshell forks is out of reach.** A pipeline element other
+  than the last runs to its end, and the subshell waits for it. A subshell
+  that starts a background job is forked from then on, so the shell dies at
+  once: `( /bin/sleep 2 & wait $!; echo in )` reads `bye 7` at 0.4 s.
+- **A second signal counts as the first**, and the shell still waits.
+- **Inside a call** the death is taken at the call's next command. A
+  POSIX-form call reads `bye 271` and dies. A `function name { … }` call
+  ends at 271, and the caller goes on.
+
+Not modeled:
+
+- A `$( … )` that starts a background job is forked too, yet ksh93 still
+  waits for it to end: `x=$(/bin/sleep 2 & wait $!; echo in >&2)` writes
+  `in` and `bye 7` at 2 s.
+- ksh93 loses some of a builtin's output after a substitution that held a
+  death. `echo "got $(/bin/sleep 2; echo in)"` writes `got in` without its
+  newline and reads `bye 271`, and `printf` writes nothing.
+- An INT from outside held for parentheses reads `bye 130` here, where
+  ksh93 reads the status the parentheses left (#7159).
+
 **`ExitTrapRunsInsideTheExitingCall`** — bash yes · dash yes · ksh93 no ·
 zsh no · ash yes
 

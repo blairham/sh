@@ -5183,6 +5183,10 @@ type Runner struct {
 	// Semantics.SubshellExitTrapFiresWhereItStopped. Set where the subshell
 	// is made, and cleared by clone so it reaches no further.
 	subshellUnforked bool
+	// unforked is the innermost such subshell this runner is in, in the
+	// dialect where one waits a fatal signal from outside out — kept by
+	// clone, so a copy inside one knows it is. See unforkeddeath.go.
+	unforked *unforkedSubshell
 	// subshellOpenLine is the line the shell was on when it made this
 	// subshell: the `(`, the command holding a substitution, or a pipeline
 	// element's own first line. Set by clone, so every subshell has one,
@@ -16896,6 +16900,9 @@ func (r *Runner) frozenScalarRetyped(a *syntax.Assign) bool {
 // where the goroutine outlives the call, and the process is about to as well.
 // Every other route takes the same single call it always took.
 func (r *Runner) awaitForegroundCommand(pid int) (Wait, error) {
+	// A later program lets go of a death a subshell is holding. See
+	// unforkeddeath.go.
+	r.aProgramLetsAHeldDeathGo()
 	note := r.jobNoticeWake()
 	dying := r.abandonsForADeath()
 	wait := r.WaitForCommand
@@ -16918,6 +16925,12 @@ func (r *Runner) awaitForegroundCommand(pid int) (Wait, error) {
 		case <-note:
 			r.writeFinishedJobNotices()
 		case <-dying:
+			if r.inAnUnforkedSubshell() && r.holdTheDeath() {
+				// Waited out instead, inside a subshell the shell runs
+				// in its own process. See unforkeddeath.go.
+				dying = nil
+				continue
+			}
 			r.waitAbandonedForADeath()
 			return Wait{}, errAbandonedForADeath
 		}

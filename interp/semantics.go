@@ -5979,7 +5979,8 @@ type Semantics struct {
 	// call set aside at its entry — which the shell that scopes EXIT to a
 	// function does with the caller's, and puts back at the return — off
 	// for good when the call is left by `set -e` or `${x?word}` firing
-	// inside it. The call's own trap still fires as it is left; the one it
+	// inside it, or by an untrapped HUP the shell ends on as an exit
+	// (HangupIsAnOrderlyExit). The call's own trap still fires as it is left; the one it
 	// held is never put back, so it never runs. Measured 2026-10-30 on zsh
 	// 5.9.2 under `-f`, script files, `-c` and standard input alike (#6952,
 	// #7007):
@@ -5997,9 +5998,23 @@ type Semantics struct {
 	//	… f() { exit 4; }; f (control)                         T, 4
 	//	setopt posixtraps, then any row above                  T
 	//
+	// The HUP rows, measured 2026-10-30 the same way, each shell in a
+	// session of its own; `kill -HUP $$` in the call, and `/bin/kill -HUP`
+	// from another process while the call waits on `/bin/sleep 3`, answer
+	// alike (#7065):
+	//
+	//	trap 'echo T' EXIT; f() { kill -HUP $$; }; f            nothing, 1
+	//	… f() { trap 'echo FT' EXIT; kill -HUP $$; }; f         FT, 1
+	//	… g() { trap 'echo G' EXIT; kill …; }, f() { trap 'echo F' EXIT; g }  G, 1
+	//	… `( kill -HUP $$ )` or `eval 'kill -HUP $$'` in the call     nothing, 1
+	//	… zshexit() { echo hook; } beside the trap              hook, 1
+	//	trap 'echo T' EXIT; kill -HUP $$ (control)              T, 1
+	//	setopt posixtraps, then the first row                   T, 1
+	//
 	// So it is the trap the call *held* that goes — with `posixtraps` set
 	// there is nothing held and the trap runs — and only for the stops that
-	// end the shell where they stand. An error the shell reported unwinds
+	// end the shell where they stand, a hangup among them: `set -e` in the
+	// nested row above writes G and nothing else, exactly as the HUP does. An error the shell reported unwinds
 	// through the call and gets it back, and `exit` runs it. A stop that is
 	// caught gets it back too: at a prompt, `${q?b}` in a function gives up
 	// the line and `trap` still lists the handler afterwards, where errexit

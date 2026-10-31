@@ -1476,8 +1476,9 @@ func (r *Runner) IgnoresUntrapped() func(sig syscall.Signal) bool {
 // already had it do.
 //
 // Only the status, for a shell with nothing to run on its way out: one with an
-// EXIT trap is handed the HUP instead, through TakesAFatalSignal, and exits
-// the way the self-signaled route does, trap and all (#7054).
+// EXIT trap or an exit hook is handed the HUP instead, through
+// TakesAFatalSignal, and exits the way the self-signaled route does, trap,
+// hook and all (#7054, #7066).
 func (r *Runner) UntrappedHangupExit() func() (status int, exits bool) {
 	sem := r.sem()
 	return func() (int, bool) {
@@ -1535,6 +1536,7 @@ func (r *Runner) signalDeath(name string, sig syscall.Signal) {
 		r.status = hangupExitStatus
 		r.captureLeavingContexts(false)
 		r.stopTheShell()
+		r.hungUp = true
 		return
 	}
 	if r.fatalSignalEndsOnlyTheExitTrap() {

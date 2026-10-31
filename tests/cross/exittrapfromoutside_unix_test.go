@@ -78,7 +78,7 @@ func TestADialectsExitTrapAnswersAFatalSignalFromOutside(t *testing.T) {
 	} {
 		for name, want := range c.want {
 			t.Run(name+"/"+c.name, func(t *testing.T) {
-				ws, out := diesFromOutside(t, name, c.sig)
+				ws, out := diesFromOutside(t, name, c.sig, outsideDeathTrapAt7)
 				switch {
 				case want.sig != 0 && (!ws.Signaled() || ws.Signal() != want.sig):
 					t.Errorf("ended %v, want killed by %v", ws, want.sig)
@@ -93,15 +93,64 @@ func TestADialectsExitTrapAnswersAFatalSignalFromOutside(t *testing.T) {
 	}
 }
 
+// zsh's answer to a HUP from another process while it waits inside a function
+// call, and while it has nothing but `zshexit` to run (#7065, #7066).
+//
+// Measured 2026-10-30 on zsh 5.9.2 under `-f`, in a session of its own, with
+// `/bin/kill -HUP` from another process while the shell waits on `/bin/sleep
+// 3`: every row exits 1, and writes what the right-hand column says.
+//
+//	zshexit() { echo "hook $?"; }; WAIT                              hook 1
+//	h() { echo hook; }; zshexit_functions=(h); WAIT                  hook
+//	trap 'echo top' EXIT; f() { WAIT; }; f                           nothing
+//	trap 'echo top' EXIT; f() { trap 'echo own' EXIT; WAIT; }; f     own
+//	trap 'echo top' EXIT; zshexit() { echo hook; }; f() { WAIT; }; f hook
+//
+// It is the HUP the shell sends itself, reached from outside: the call's own
+// trap runs, the top level's that it held for the call never does, and the
+// hook runs either way. This shell exited 1 having run nothing for the first,
+// second and last, and ran the top level's trap after the call's in the
+// fourth.
+func TestAHangupFromOutsideRunsTheHookAndOnlyTheCallsOwnTrap(t *testing.T) {
+	const wait = `/bin/sh -c 'printf r >"$1"; exec sleep 30' sh "$READY"`
+	for _, c := range []struct{ name, script, out string }{
+		{"only an exit hook", `zshexit() { echo "hook $?"; }; ` + wait + `; echo after`, "hook 1\n"},
+		{"only an exit hook's list", `h() { echo hook; }; zshexit_functions=(h); ` + wait + `; echo after`, "hook\n"},
+		{"in a call holding the trap", `trap 'echo top' EXIT; f() { ` + wait + `; echo in; }; f; echo after`, ""},
+		{
+			"in a call with a trap of its own",
+			`trap 'echo top' EXIT; f() { trap 'echo own' EXIT; ` + wait + `; echo in; }; f; echo after`, "own\n",
+		},
+		{
+			"in a call, with an exit hook",
+			`trap 'echo top' EXIT; zshexit() { echo hook; }; f() { ` + wait + `; echo in; }; f; echo after`, "hook\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			ws, out := diesFromOutside(t, "zsh", syscall.SIGHUP, c.script)
+			if ws.Signaled() || ws.ExitStatus() != 1 {
+				t.Errorf("ended %v, want an exit at 1", ws)
+			}
+			if out != c.out {
+				t.Errorf("wrote %q, want %q", out, c.out)
+			}
+		})
+	}
+}
+
+// outsideDeathTrapAt7 is the script TestADialectsExitTrapAnswersAFatalSignalFromOutside
+// measures: an EXIT trap, `$?` at 7, and a program the shell waits for.
+const outsideDeathTrapAt7 = `trap 'echo "bye $?"' EXIT; (exit 7); /bin/sh -c 'printf r >"$1"; exec sleep 30' sh "$READY"; echo after`
+
 // diesFromOutside runs this test binary as the dialect's shell in a process
-// group of its own, waiting on a program that says it is ready once it runs,
-// sends it sig from here, and reports how it ended and what it wrote.
-func diesFromOutside(t *testing.T, dialect string, sig syscall.Signal) (syscall.WaitStatus, string) {
+// group of its own, running script — which must start a program that writes
+// to `$READY` once it runs, and wait for it — sends it sig from here, and
+// reports how it ended and what it wrote.
+func diesFromOutside(t *testing.T, dialect string, sig syscall.Signal, script string) (syscall.WaitStatus, string) {
 	t.Helper()
 	const deadline = 30 * time.Second
 	dir := t.TempDir()
 	ready, logPath := filepath.Join(dir, "ready"), filepath.Join(dir, "out")
-	script := `trap 'echo "bye $?"' EXIT; (exit 7); /bin/sh -c 'printf r >"$1"; exec sleep 30' sh "$READY"; echo after`
 	cmd := exec.Command(os.Args[0], "-test.run=^TestADialectsExitTrapAnswersAFatalSignalFromOutside$")
 	cmd.Env = append(os.Environ(), outsideDeathShell+"="+dialect, outsideDeathScript+"="+script, "READY="+ready)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

@@ -2706,11 +2706,12 @@ func Semantics() interp.Semantics {
 	// `${v//(b|)/<>}` under extendedglob is `<>a<><>c`.
 	s.ReplacementEmptyMatchDeclined = interp.EmptyMatchDeclinedAtTheEnd
 	s.ExitTrapIsFunctionLocal = interp.Yes
-	// And the caller's trap a call holds is lost when `set -e` or
-	// `${x?word}` ends the shell from inside the call: measured 2026-10-30
-	// on 5.9.2, `trap 'echo T' EXIT; set -e; f() { false; }; f` writes
-	// nothing, where the same `false` at the top level writes T (#6952,
-	// #7007).
+	// And the caller's trap a call holds is lost when `set -e`,
+	// `${x?word}` or an untrapped HUP ends the shell from inside the call:
+	// measured 2026-10-30 on 5.9.2, `trap 'echo T' EXIT; set -e; f() {
+	// false; }; f` writes nothing, where the same `false` at the top level
+	// writes T (#6952, #7007), and `f() { kill -HUP $$; }` in place of the
+	// `set -e` writes nothing either (#7065).
 	s.StopInsideACallLosesTheHeldExitTrap = interp.Yes
 	// And the shell runs no EXIT trap at all when it ends over an error it
 	// reported with `set -e` on. Measured 2026-09-18 over twelve rows, each

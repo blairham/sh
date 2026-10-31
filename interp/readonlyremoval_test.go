@@ -142,7 +142,8 @@ func TestARemovalWithAValueIsRefusedAsAnAssignment(t *testing.T) {
 		ReadonlyVariable:              "%s: is read only",
 		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: is read only",
 		// The assignment table leaves `typeset` out and the removal table
-		// puts it in, which is ksh93's own arrangement.
+		// puts it in: the two tables answering apart, which is the
+		// mechanism under test.
 		ReadonlyRefusalNamesBuiltin:          map[string]bool{"set": true},
 		ReadonlyAttributeRefusalNamesBuiltin: map[string]bool{"typeset": true},
 	}

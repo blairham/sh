@@ -101,5 +101,5 @@ func (r *Runner) reportTheStoresOwnRefusal(name string) {
 func (r *Runner) storeSpeaksBeforeTheBuiltin(form assignForm, name string) bool {
 	return r.diag().LiteralOperandRefusedAlsoSpeaksForTheStore &&
 		r.literalOperands[name] &&
-		r.readonlyRefusalNamesBuiltin(form)
+		r.readonlyRefusalNamesBuiltin(form, name)
 }

@@ -14903,6 +14903,59 @@ the script over a bad name — and:
   builtin's and not the arithmetic's: the same write through the
   arithmetic command is `<file>: line N: x: is read only` there, with no
   builtin in it, and ends the script (#3568).
+
+  **And `typeset`, `export` and `readonly` are in it, for an operand the
+  utility reads itself.** The table said for a long time that ksh93 names
+  none of its declaration words, and the measurement behind that was an
+  assignment word — which that shell stores before the utility runs, so
+  the refusal is the shell's and no builtin is speaking. Measured
+  2026-10-31 on ksh93u+ 2012-08-01, `-c`:
+
+      typeset -A a; readonly a; typeset 'a[k]=1'   typeset: a: is read only
+      … export 'a[k]=1' / readonly 'a[k]=1'        export: … / readonly: …
+      … integer 'a[k]=1'                           typeset: a: is read only
+      … x='a[k]=1'; typeset $x                     typeset: a: is read only
+      typeset -a a; readonly a; typeset 'a[1]=1'   typeset: a: is read only
+      readonly b=1; typeset 'b[1]=2'               typeset: b: is read only
+      readonly b=1; typeset 'b=2'                  typeset: b: is read only
+      function f { …; typeset 'a[k]=1'; }; f       f[1]: typeset: a: is read only
+      typeset -A a; readonly a; typeset a[k]=1     a: is read only
+      readonly b=1; typeset b=2                    b: is read only
+      readonly b=1; function f { export b=2; }; f  f: line 1: b: is read only
+      … function f { export 'b=2'; }; f            f[1]: export: b: is read only
+      readonly r; typeset r[1+1][2]=z              r[2]: is read only
+      set -r; f() { typeset 'PATH=x'; }; f         typeset: PATH: restricted
+      set -r; function f { typeset PATH=x; }; f    f: line 1: PATH: restricted
+
+  So the noun is the **route**: quoted, or produced by an expansion, the
+  operand is the utility's to store and the utility names itself; written
+  as an assignment, it is stored ahead and nothing is named. Neither the
+  table nor the subscript moves it — the scalar `'b=2'` splits the same
+  way. The empty-key warning a store makes under `set -x` follows the same
+  table: `typeset 'a[]=1'` is `typeset: warning: adding empty subscript`
+  and `let "a[$k]=5"` with `k` empty is `let: warning: …`, where the
+  assignment word `typeset a[""]=1` and `(( a[$k]=5 ))` are unnamed.
+  `getopts` keeps its own unlocated form (#6683).
+
+  Two consequences for the engine. The walk that stores an assignment word
+  ahead of the utility leaves it to the utility where a `function` body may
+  shadow the name, and `export` and `readonly` then refuse it there — so
+  whether to name the builtin is asked of the operand's *written* shape,
+  `Runner.operandsWrittenAsAssignments`, which reads chains and dotted
+  names as ksh93 does rather than only the operands this engine expands as
+  assignments. And a name restricted mode froze keeps the mode's sentence
+  when the builtin names itself, `typeset: PATH: restricted`, where the
+  table's own sentence would have replaced it. A declaration's element
+  store puts the builtin out of the location for its own complaints, so the
+  warning reads the builtin it was running for — `Runner.declarationSpeaker`,
+  the one the bad-subscript sentence already reads (#7188).
+
+  One row of that table is not answered yet: a *whole-name* operand the
+  utility reads, `typeset 'b=2'`, is still refused here ahead of the
+  utility by `OperandValueOverAFrozenNameRefusedFirst`, whose scan reads
+  every `name=value` word rather than the assignment words alone — so it
+  is unnamed, and written before the command's redirections and its trace
+  line. #7205 owns it, with the two defects that refusal is masking.
 - `set -A` with nothing after it is a refusal in ksh93 —
   `Diagnostics.SetArrayNeedsAName`, `set: -A: name argument expected`
   with set's usage under it — and a *listing* of every array in zsh,

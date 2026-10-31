@@ -43,7 +43,10 @@ echo never`)
 
 // And the same word carrying a value is refused as an *assignment* instead,
 // which takes the plain line form: the two shapes are one word and two
-// sentences, and the value is what tells them apart.
+// sentences. What tells them apart is that `s1=5` is an assignment word the
+// shell stores ahead of the utility; written as an operand the utility reads,
+// `typeset +r 's1=5'`, ksh93u+ names `typeset` for it too (#7188), which
+// this shell does not yet do (#7205).
 func TestAPlusFormWithAValueIsRefusedAsAnAssignmentHere(t *testing.T) {
 	out, st := runKsh(t, t.TempDir(), `typeset -r s1=1
 typeset +r s1=5

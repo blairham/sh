@@ -1169,9 +1169,10 @@ func (r *Runner) signalGroupPid(pgid int, sig syscall.Signal) error {
 func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 	// Signal 0 is the existence probe and delivers nothing, and anything
 	// aimed elsewhere is somebody else's process. A negative pid, and 0
-	// meaning this shell's process group, are for the other members: which
-	// group this shell is in is a job-control question rather than a
-	// signaling one, so neither is treated as aimed here.
+	// meaning this shell's process group, are for the other members as well
+	// as for the shell, so they go to the kernel — and where the group is the
+	// shell's own, the shell's copy is answered at the send. See
+	// signalTheShellsOwnGroup (#7043).
 	if sig == 0 {
 		return r.killProcess(pid, sig)
 	}
@@ -1184,6 +1185,9 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 		// leads its group (#4596). See selfkillbody.go.
 		if r.aimedAtThisBody(pid) {
 			return r.signalThisBody(name, sig)
+		}
+		if aimedAtTheShellsOwnGroup(pid) {
+			return r.signalTheShellsOwnGroup(pid, name, sig)
 		}
 		return r.killProcess(pid, sig)
 	}

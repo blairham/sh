@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // runAsShellReplacingItself re-executes this test binary as a shell and lets
@@ -258,19 +260,25 @@ func TestARedirectedStandardInputReachesAReplacement(t *testing.T) {
 //
 // What the command reported is the assertion and not what it wrote: with
 // standard output closed there is nowhere for it to write, which is the point.
+// It reports whether the descriptor is open, into a file, rather than how a
+// write to it went — how a write to a closed stream goes is the writing
+// program's policy, and Ubuntu 26.04's /bin/echo calls it success (#7199). See
+// testenv.DescriptorProbe.
 func TestAClosedStandardStreamIsClosedForAReplacement(t *testing.T) {
 	beTheShell()
 	dir := t.TempDir()
 	report := filepath.Join(dir, "report")
 	runAsShellReplacingItself(t, "TestAClosedStandardStreamIsClosedForAReplacement",
-		"exec >&-\nexec /bin/sh -c '/bin/echo hi; echo st=$? >"+report+"'\n",
+		"exec >&-\nexec "+testenv.DescriptorProbe(1, ">"+report)+"\n",
 		func(string) bool { return wrote(report) })
 	b, _ := os.ReadFile(report)
-	if !strings.Contains(string(b), "st=") {
-		t.Fatalf("the replacement did not run, so nothing was proved: %q", b)
-	}
-	if strings.Contains(string(b), "st=0") {
+	switch string(b) {
+	case testenv.DescriptorOpen + "\n":
 		t.Errorf("a closed standard output was open in the replacement: %q", b)
+	case testenv.DescriptorClosed + "\n":
+		return
+	default:
+		t.Fatalf("the replacement did not run, so nothing was proved: %q", b)
 	}
 }
 

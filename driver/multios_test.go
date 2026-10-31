@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/testenv"
 	"github.com/blairham/sh/interp"
 )
 
@@ -93,12 +94,18 @@ func TestAStreamWithTwoTargetsReachesAReplacement(t *testing.T) {
 // The rule it must not disturb: a stream closed *on purpose* is still a
 // closed number, which is what every shell in the panel gives the command.
 // Both are "standard output is not a file"; only one of them is a stream.
+//
+// The command asks whether its standard output is open and answers on
+// standard error, rather than being /bin/echo and complaining: the complaint
+// is the program's, and Ubuntu 26.04's echo makes none (#7199). See
+// testenv.DescriptorProbe.
 func TestAClosedStreamStillCrossesAsClosed(t *testing.T) {
 	beTheMultiosShell()
 	_, out := runMultios(t, "TestAClosedStreamStillCrossesAsClosed",
-		"exec >&-\nexec /bin/echo hi\n")
-	if !strings.Contains(out, "Bad file descriptor") {
-		t.Errorf("out = %q, want the command to have found its stream closed", out)
+		"exec >&-\nexec "+testenv.DescriptorProbe(1, ">&2")+"\n")
+	if out != testenv.DescriptorClosed+"\n" {
+		t.Errorf("out = %q, want %s: a stream the script closed must reach the command closed",
+			out, testenv.DescriptorClosed)
 	}
 }
 

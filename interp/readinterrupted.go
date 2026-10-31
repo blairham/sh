@@ -563,7 +563,11 @@ func (w *readWatch) awaitByte(ctx context.Context, fd int, deadline time.Time) i
 //
 // The goroutine's answer is read only once it has closed readable; a wait
 // ended by an arrival leaves it to notice the cancel and go, unread.
-func (w *readWatch) waitOnce(ctx context.Context, fd int, deadline time.Time) (sig syscall.Signal, trapped, ready, can bool) {
+func (w *readWatch) waitOnce(
+	ctx context.Context,
+	fd int,
+	deadline time.Time,
+) (sig syscall.Signal, trapped, ready, can bool) {
 	mark := w.r.arrivalMark()
 	readable := make(chan struct{})
 	var isReady, canAsk bool

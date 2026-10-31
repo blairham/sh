@@ -34320,6 +34320,44 @@ type Semantics struct {
 	// a subscript's, unanimously (#3507).
 	BadSubscriptEscapesAnArithmeticCommand Answer
 
+	// FailedExpansionEscapesAnArithmeticCommand lets an expansion that fails
+	// in the **text** of `(( ))` be given up as the expansion's failure, the
+	// way a simple command's is, rather than caught as the construct's own.
+	//
+	// That the arithmetic does not run is not the question, and it is
+	// unanimous: no column evaluates what is left of a text that would not
+	// expand, so `readonly a; (( b = 15 + ${a[1]:=x}0 ))` stores nothing in
+	// any of them, and a refused `${a[1]:=x}` in a subscript is not followed
+	// by a second refusal of the store (#7189). What differs is what the
+	// failure ends and what it leaves. Measured 2026-10-31 under `-c`, with
+	// `; echo "after st=$?"` behind it and `echo line2 st=$?` on the next
+	// line:
+	//
+	//	                                bash 5.3.20  ksh93u+         zsh 5.9.2
+	//	(( $((1/0)) + 1 ))              line2 st=1   ends, 1         after st=2
+	//	(( b = $((1/0)) ))              line2 st=1   ends, 1         after st=2
+	//	set -x; (( b = $((1/0)) + 1 ))  no trace     no trace        traced
+	//	set -x; (( b = 1/0 ))           after st=1   traced, ends 1  after st=2
+	//
+	// The last row is the control, and it is what separates the two answers in
+	// both of the columns that escape: the construct's **own** failure is
+	// traced and reported and the line runs on in bash, where a failed
+	// expansion in its text gives up the line exactly as `echo $((1/0))` and a
+	// `for (( ))` header's do; and ksh93 traces its own failure before ending
+	// the shell and does not trace the expansion's. zsh treats the two alike —
+	// the construct is traced, the failure is its own, and the status is its
+	// own 2 (ArithCommandErrorStatusIsTwo) with the line running on.
+	//
+	// Yes gives it up through the same door a compound command's heading
+	// uses, so FailedExpansionAbandonsTheLine decides how far. No leaves the
+	// construct's own status. A failure that has already given the shell up
+	// — `${nope?boom}` — is not this question in either column; nothing is
+	// left to catch it.
+	//
+	// Asked only once the text has failed to expand, so an expression that
+	// expands cleanly never reaches it.
+	FailedExpansionEscapesAnArithmeticCommand Answer
+
 	// ValuelessSubscriptedOperand is what a declaration does with an operand
 	// that names an element and carries **no value** — `typeset 'a[1]'`,
 	// `declare`, `local`, and `readonly`/`export` where those take a

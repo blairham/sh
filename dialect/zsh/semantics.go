@@ -3740,6 +3740,12 @@ func Semantics() interp.Semantics {
 	// line carries on, by both routes. The expansion `$(( a[b c] ))` in the
 	// same shell ends the input, so the two constructs really do part here.
 	s.BadSubscriptEscapesAnArithmeticCommand = interp.No
+	// And an expansion that fails in the text is caught the same way: the
+	// construct is traced and leaves its own 2, and the line carries on.
+	// Measured 2026-10-31, `(( $((1/0)) + 1 )); echo "after st=$?"` prints
+	// `after st=2`. See
+	// interp.Semantics.FailedExpansionEscapesAnArithmeticCommand (#7189).
+	s.FailedExpansionEscapesAnArithmeticCommand = interp.No
 	s.BadSubscriptToADeclaration = interp.BadSubscriptEndsTheScript
 	// An out-of-range store through each builtin, measured 2026-10-16 (#6835):
 	// see interp.Semantics.OutOfRangeElementToAnOutputOperand.

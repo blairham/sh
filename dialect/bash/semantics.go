@@ -3390,6 +3390,12 @@ func Semantics() interp.Semantics {
 	// up whole. `(( b c ))` — the construct's own arithmetic — is reported
 	// and the line carries on, which is the control.
 	s.BadSubscriptEscapesAnArithmeticCommand = interp.Yes
+	// And so is an expansion that fails in the text of `(( ))`: measured
+	// 2026-10-31, `(( $((1/0)) + 1 )); echo "after st=$?"` gives up the
+	// line, untraced, and the next one reads 1, as `echo $((1/0))` does —
+	// where `(( b = 1/0 ))` is traced and the line carries on. See
+	// interp.Semantics.FailedExpansionEscapesAnArithmeticCommand (#7189).
+	s.FailedExpansionEscapesAnArithmeticCommand = interp.Yes
 	s.BadSubscriptToADeclaration = interp.BadSubscriptAbandonsTheCommand
 	// An out-of-range store through each builtin, measured 2026-10-16 (#6835):
 	// see interp.Semantics.OutOfRangeElementToAnOutputOperand.

@@ -1257,6 +1257,9 @@ func Semantics() interp.Semantics {
 	// unanswered BadSubscriptEscapesAnArithmeticCommand: no `(( ))`
 	// grammar here either, and no subscripts to fail inside one.
 	//
+	// unanswered FailedExpansionEscapesAnArithmeticCommand: the same wall —
+	// no `(( ))` grammar, so no text of one to fail to expand.
+	//
 	// unanswered ValuelessSubscriptedOperand: the same wall, one operand
 	// shape over. `readonly 'q[b c]'` with no value is the same refusal at
 	// the same status, so there is no subscripted operand here at all.

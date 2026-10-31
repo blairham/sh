@@ -1734,6 +1734,24 @@ same `MultibyteEncodingIsHonored` question `${#s}` asks, so the two
 agree by construction; reading runes unconditionally answered the UTF-8
 column in both.
 
+### A subscript on a name holding nothing is still evaluated, once
+
+The subscript is arithmetic whether or not the name holds anything, and it
+runs exactly once — the same once it runs when the name holds an array, an
+empty array or a scalar. Measured 2026-10-31 under `-c`, with `x` never
+created:
+
+| probe | bash 5.3 | bash 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `i=0; : ${x[i++]}; echo $i` | `1` | `1` | `1` | `1` |
+| `i=0; : ${x[i++]:-d}; echo $i` | `1` | `1` | `1` | `1` |
+| `i=0; echo "[${x[-1+0*i++]}]"; echo $i` | `x: bad array subscript`, `[]`, `1` | the same | `[]`, `1` | `[]`, `1` |
+
+The refusal a subscript that will not evaluate earns, and the question of
+whether the position falls before the first element, are both asked of
+that one evaluation. Asking each of them by evaluating again ran `i++`
+twice in every dialect that asks the second question (#7189).
+
 ### Under `set -u`, a subscript that names nothing is unset
 
 | probe, `set -u` | zsh | bash 5.3 | bash 3.2 | bash-as-sh | ksh93 | dash |

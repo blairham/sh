@@ -2638,10 +2638,11 @@ func (r *Runner) readArraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 		if r.refusesEmptySubscriptText(trimSubscript(written)) {
 			return nil, true
 		}
-		if !r.absentNameSubscriptEvaluates(e, written) {
+		at, ok := r.absentNameSubscriptEvaluates(e, written)
+		if !ok {
 			return nil, true
 		}
-		r.absentNameSubscriptBeforeTheFirstElement(e, written)
+		r.absentNameSubscriptBeforeTheFirstElement(e, written, at)
 		return nil, true
 	}
 	return r.subscriptOver(e, subscriptSource{name: e.Name, elems: elems, scalar: scalar})
@@ -3132,16 +3133,34 @@ func (r *Runner) subscriptTarget(e *syntax.ParamExpr) (elems []string, scalar, o
 // all makes it. Folding the two left the arithmetic behind that axis, which
 // is exactly why this shell was the only one of ours that missed the row
 // (#4837).
-func (r *Runner) absentNameSubscriptEvaluates(e *syntax.ParamExpr, written string) bool {
+//
+// **The position it came to is handed on, and the subscript is not evaluated
+// again.** The two halves were written as two reads of the same text, and a
+// subscript is arithmetic, so the second read was a second run of it:
+// measured 2026-10-31, `i=0; : ${x[i++]}; echo $i` with `x` never created is
+// `1` in bash 5.3.20, bash 3.2.57, ksh93u+ and zsh 5.9.2, and was `2` here in
+// every dialect that went on to ask whether the position fell before the
+// first element — every one but zsh's, whose answer returns before it reads
+// anything. A name holding anything at all was already `1`, because that
+// read goes through subscriptOver and evaluates once (#7189).
+func (r *Runner) absentNameSubscriptEvaluates(e *syntax.ParamExpr, written string) (absentNamePosition, bool) {
 	if e.IndexRange != nil || r.wholeArrayIndex(e) {
-		return true
+		return absentNamePosition{}, true
 	}
 	idx := trimSubscript(written)
 	if _, _, isRange := splitSubscriptRange(idx); isRange {
-		return true
+		return absentNamePosition{}, true
 	}
-	_, ok := r.subscriptIndexAsWritten(r.writtenSubscript(e, idx), written)
-	return ok
+	n, ok := r.subscriptIndexAsWritten(r.writtenSubscript(e, idx), written)
+	return absentNamePosition{at: n, evaluated: ok}, ok
+}
+
+// absentNamePosition is what a subscript on a name holding nothing came to,
+// and whether it was evaluated to get there — which a pair or a whole-array
+// spelling is not, since neither names one position.
+type absentNamePosition struct {
+	at        int
+	evaluated bool
 }
 
 // absentNameSubscriptBeforeTheFirstElement answers a negative subscript
@@ -3166,7 +3185,11 @@ func (r *Runner) absentNameSubscriptEvaluates(e *syntax.ParamExpr, written strin
 //
 // The text is the one the caller already expanded, because expanding the word
 // twice would run a command substitution in it twice — the mistake #1915 was.
-func (r *Runner) absentNameSubscriptBeforeTheFirstElement(e *syntax.ParamExpr, written string) {
+// And the position is the one the caller already evaluated, for the same
+// reason one step later: evaluating the arithmetic twice ran `i++` twice
+// (#7189). It is evaluated here only where the caller did not evaluate it,
+// which is the pair with nothing before its comma.
+func (r *Runner) absentNameSubscriptBeforeTheFirstElement(e *syntax.ParamExpr, written string, pos absentNamePosition) {
 	if e.Length || e.IndexRange != nil || r.wholeArrayIndex(e) {
 		return
 	}
@@ -3176,11 +3199,14 @@ func (r *Runner) absentNameSubscriptBeforeTheFirstElement(e *syntax.ParamExpr, w
 		// for at all.
 		return
 	}
-	idx := trimSubscript(written)
-	if lo, _, isRange := splitSubscriptRange(idx); isRange && lo != "" {
-		return
+	n, ok := pos.at, pos.evaluated
+	if !pos.evaluated {
+		idx := trimSubscript(written)
+		if lo, _, isRange := splitSubscriptRange(idx); isRange && lo != "" {
+			return
+		}
+		n, ok = r.subscriptIndexAsWritten(r.writtenSubscript(e, idx), written)
 	}
-	n, ok := r.subscriptIndexAsWritten(r.writtenSubscript(e, idx), written)
 	if !ok || n >= 0 {
 		return
 	}

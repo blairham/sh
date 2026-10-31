@@ -85,6 +85,12 @@ func Assembled() bool { return os.Getenv(TripwireHome) != "" }
 // since the person reading one will be reading it from a `go test ./...` line
 // that says nothing about which suite tripped.
 func Run(suite string, m interface{ Run() int }) int {
+	// Before anything is started, so every process below this one dies
+	// through it. Only here at the top: a re-executed child that registered a
+	// handler of its own would die through that one and be reported anyway.
+	if !Assembled() {
+		keepCrashReportsOut()
+	}
 	// The descriptor table is inherited from whoever ran `go test` just as
 	// the environment is, and the shells below read it just as directly.
 	closeInheritedDescriptors()

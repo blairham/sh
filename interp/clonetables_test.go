@@ -547,6 +547,7 @@ func seedTables(r *Runner) {
 	r.withdrawnMathFuncs = map[string]bool{"seed": true}
 	r.execFds = map[int]bool{7: true}
 	r.cloexecFds = map[int]bool{8: true}
+	r.dupFds = map[int]bool{9: true}
 	r.exportedFuncs = map[string]bool{"seed": true}
 	r.withdrawnFuncs = map[string]withdrawnFunction{"seed": {}}
 	r.readonlyFuncs = map[string]bool{"seed": true}

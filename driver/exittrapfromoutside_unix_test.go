@@ -93,8 +93,9 @@ func TestAFatalSignalFromOutsideRunsTheExitTrapFirst(t *testing.T) {
 // /bin/sleep 3` and TERM from outside, then a second signal 0.3s later: bash
 // 5.3, bash 3.2 and ksh93 print `bye` and `bye2` a second later and die of
 // TERM with no second signal; a second TERM, USR1 or HUP ends them at once
-// with `bye` alone — bash by the second signal, ksh93 by the first, which is
-// not modeled here. `exit 5` in the trap leaves bash dying of TERM.
+// with `bye` alone — bash by the second signal. `exit 5` in the trap leaves
+// bash dying of TERM. These are that column; ksh93's answers to the last two
+// are TestTheOneDialectWhereTheExitTrapDecidesHowTheShellLeaves.
 func TestTheExitTrapRunsToItsEndAheadOfADeathFromOutside(t *testing.T) {
 	dieRunningAsAShell()
 	trapWaits := `trap 'echo bye; /bin/sh -c "printf r >\"\$AGAIN\"; exec sleep 30"; echo bye2' EXIT; `
@@ -141,6 +142,92 @@ func TestTheExitTrapRunsToItsEndAheadOfADeathFromOutside(t *testing.T) {
 					env: append([]string{dyingExitTrapRuns + "=yes"}, tc.env...),
 				})
 			diedOfAfter(t, ws, out, tc.dies, tc.out)
+		})
+	}
+}
+
+// In one dialect the EXIT trap decides how the shell leaves: an `exit` that
+// names a status in it ends the shell at that status rather than by the
+// signal it was running ahead of, and a fatal signal from outside while it
+// runs ends the trap and nothing more, so the shell leaves at the status or
+// by the signal it was already leaving with (#7063, #7064).
+//
+// Measured 2026-10-30, each shell in a process group of its own and the
+// signals sent by another process: ksh93u+ exits 5 for `trap 'echo bye; exit
+// 5' EXIT` and a TERM or a USR1; dies of TERM for a TERM and then a USR1 or a
+// HUP 0.3s later while the trap waits for a `sleep`, and of HUP for a HUP and
+// then a TERM; exits 3 for a USR1 while the trap of an `exit 3` waits, and 4
+// for a TERM while the trap of a script that ran off its end at `(exit 4)`
+// waits. bash 5.3 and 3.2 die of the signal in every one of those cells, of
+// the second where there are two, and that column is the test above.
+//
+// The rows nothing but the hand-over could pass are the ones whose trap is
+// waiting: the shell that leaves as it was leaving has to give the wait up
+// for the second signal, where the first one's own wait is long done.
+func TestTheOneDialectWhereTheExitTrapDecidesHowTheShellLeaves(t *testing.T) {
+	dieRunningAsAShell()
+	trapWaits := `trap 'echo bye; /bin/sh -c "printf r >\"\$AGAIN\"; exec sleep 30"; echo bye2' EXIT; `
+	trapWaitsReady := `trap 'echo bye; /bin/sh -c "printf r >\"\$READY\"; exec sleep 30"; echo bye2' EXIT; `
+	const exits = `trap 'echo bye; exit 5' EXIT; `
+	env := []string{
+		dyingExitTrapRuns + "=yes", dyingHangupExits + "=no",
+		dyingTrapEnds + "=yes", dyingExitOverrides + "=yes",
+	}
+	for _, tc := range []struct {
+		name, setup, hold string
+		sig, again        syscall.Signal
+		dies              syscall.Signal
+		status            int
+		out               string
+	}{
+		{
+			name: "an exit in it, for a TERM", setup: exits,
+			sig: syscall.SIGTERM, status: 5, out: "bye\n",
+		},
+		{
+			name: "an exit in it, for a USR1", setup: exits,
+			sig: syscall.SIGUSR1, status: 5, out: "bye\n",
+		},
+		{
+			name: "a second USR1", setup: trapWaits,
+			sig: syscall.SIGTERM, again: syscall.SIGUSR1, dies: syscall.SIGTERM, out: "bye\n",
+		},
+		{
+			name: "a second HUP", setup: trapWaits,
+			sig: syscall.SIGTERM, again: syscall.SIGHUP, dies: syscall.SIGTERM, out: "bye\n",
+		},
+		{
+			name: "a TERM after a HUP", setup: trapWaits,
+			sig: syscall.SIGHUP, again: syscall.SIGTERM, dies: syscall.SIGHUP, out: "bye\n",
+		},
+		{
+			name: "a USR1 in the trap of an exit", setup: trapWaitsReady, hold: "exit 3",
+			sig: syscall.SIGUSR1, status: 3, out: "bye\n",
+		},
+		{
+			name: "a TERM in the trap of a script that ran out", setup: trapWaitsReady, hold: "(exit 4)",
+			sig: syscall.SIGTERM, status: 4, out: "bye\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			hold := tc.hold
+			if hold == "" {
+				hold = waitsHere
+			}
+			ws, out := signaledInAGroupOfItsOwn(t, "^TestTheOneDialectWhereTheExitTrapDecidesHowTheShellLeaves$",
+				outsideSignal{
+					setup: tc.setup, hold: hold, sig: tc.sig, again: tc.again, ownReady: true, env: env,
+				})
+			if tc.dies != 0 {
+				diedOfAfter(t, ws, out, tc.dies, tc.out)
+				return
+			}
+			if ws.Signaled() {
+				t.Fatalf("killed by %v, want an exit at %d (wrote %q)", ws.Signal(), tc.status, firstLine(out))
+			}
+			if ws.ExitStatus() != tc.status || out != tc.out {
+				t.Errorf("status %d, wrote %q; want %d and %q", ws.ExitStatus(), out, tc.status, tc.out)
+			}
 		})
 	}
 }

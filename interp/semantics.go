@@ -6409,6 +6409,55 @@ type Semantics struct {
 	// die of it; zsh, dash and BusyBox ash die and print nothing (#7054).
 	ExitTrapRunsOnSignalDeath Answer
 
+	// ExitInTheExitTrapOverridesASignalDeath makes an `exit` that names a
+	// status, written in the EXIT trap a fatal signal is running, end the
+	// shell at that status rather than by the signal.
+	//
+	//	trap 'echo bye; exit 5' EXIT; kill -TERM $$
+	//
+	// Measured 2026-10-30, each shell in a process group of its own: ksh93
+	// writes bye and exits 5, where bash 5.3, bash 3.2 and bash called `sh`
+	// write bye and die of TERM. The same for USR1 and HUP, for the signal
+	// sent by `kill` from another process, for `exit 0`, and for the `exit`
+	// written in a function the trap calls. A bare `exit` saves nothing in
+	// either — ksh93 dies of the signal too — and nor does `(exit 5)`, which
+	// is the subshell's (#7063).
+	//
+	// Reached only where ExitTrapRunsOnSignalDeath says yes, because a shell
+	// that runs no EXIT trap on a death has no `exit` there to ask about:
+	// zsh, dash and BusyBox ash die of the signal before any could run. zsh's
+	// HUP is HangupIsAnOrderlyExit and not a death at all, so the `exit` in
+	// that trap takes the status without this being asked.
+	ExitInTheExitTrapOverridesASignalDeath Answer
+
+	// FatalSignalInTheExitTrapEndsOnlyTheTrap makes an untrapped fatal signal
+	// that lands while the shell's EXIT trap runs end the trap rather than the
+	// shell: the rest of the body is abandoned, and the shell leaves the way
+	// it was already leaving — at the status it was exiting with, or killed
+	// by the signal whose death the trap was running for.
+	//
+	//	trap 'echo bye; kill -USR1 $$; echo after' EXIT; exit 3
+	//
+	// Measured 2026-10-30, each shell in a process group of its own: ksh93
+	// writes bye and exits 3; bash 5.3, bash 3.2, bash called `sh`, zsh 5.9.2,
+	// dash and BusyBox ash 1.37.0 write bye and die of USR1. The same with
+	// the signal sent by `/bin/kill` from another process while the trap
+	// waits for a program, with `kill -INT $$`, with a `( … )` that sends it
+	// to `$$`, and with the script running off its end at `(exit 4)` rather
+	// than exiting, which ksh93 leaves at 4.
+	//
+	// And over a death, which is where it was found: a second signal while
+	// the EXIT trap of a first one runs.
+	//
+	//	trap 'echo bye; /bin/sleep 1; echo bye2' EXIT; /bin/sleep 3
+	//
+	// with TERM from another process and then USR1 0.3s later, ksh93 writes
+	// bye and dies of TERM, and bash 5.3 and 3.2 write bye and die of USR1;
+	// HUP and then TERM is HUP against TERM; `kill -USR1 $$` in that trap,
+	// over a `kill -TERM $$`, the same again. Every one of them ends at once,
+	// without bye2 (#7064).
+	FatalSignalInTheExitTrapEndsOnlyTheTrap Answer
+
 	// ExitTrapRunsInsideTheExitingCall runs the EXIT trap at the point `exit`
 	// was written, with the call that ran it still standing, rather than
 	// after the stack has unwound.

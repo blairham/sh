@@ -21338,6 +21338,51 @@ handler for killed it, rather than because it reached the end or ran
 prints bye in bash and ksh93 and prints nothing in dash and zsh, and all
 four report 130. A two-two split on whether dying counts as exiting.
 
+**`ExitInTheExitTrapOverridesASignalDeath`** — bash no · dash no · ksh93 yes
+· zsh no · ash no
+
+Makes an `exit` that names a status, written in the EXIT trap a fatal
+signal is running, end the shell at that status rather than by the signal.
+
+    trap 'echo bye; exit 5' EXIT; kill -TERM $$
+
+writes bye in bash and ksh93; ksh93 then exits 5 and bash dies of TERM,
+as does bash called `sh`. The same for USR1 and HUP, for the signal sent
+from another process, for `exit 0`, and for the `exit` in a function the
+trap calls. A bare `exit` saves nothing in either, and neither does
+`(exit 5)`. Measured 2026-10-30 (#7063).
+
+dash, zsh and BusyBox ash run no EXIT trap on a death, so no `exit` there
+is ever asked about; zsh's HUP is `HangupIsAnOrderlyExit`, not a death, and
+an `exit` in that trap takes the status without this.
+
+**`FatalSignalInTheExitTrapEndsOnlyTheTrap`** — bash no · dash no · ksh93
+yes · zsh no · ash no
+
+Makes an untrapped fatal signal that lands while the shell's EXIT trap
+runs end the trap rather than the shell: the rest of the body is
+abandoned, and the shell leaves as it was already leaving — at the status
+it was exiting with, or killed by the signal the trap was running ahead
+of.
+
+    trap 'echo bye; kill -USR1 $$; echo after' EXIT; exit 3
+
+writes bye everywhere; ksh93 then exits 3, and bash 5.3, bash 3.2, zsh,
+dash and BusyBox ash die of USR1. The same for the signal sent by another
+process while the trap waits for a program, for INT, for a `( … )` that
+sends it to `$$`, and for a script that ran off its end at `(exit 4)`,
+which ksh93 leaves at 4.
+
+Over a death it is a second signal: `trap 'echo bye; /bin/sleep 1; echo
+bye2' EXIT; /bin/sleep 3` with TERM and then USR1 from another process
+0.3s apart writes bye alone everywhere it runs the trap, and ksh93 dies of
+TERM where both bashes die of USR1. Measured 2026-10-30 (#7064).
+
+While the trap of a death runs, the shell is leaving rather than dead.
+The death is set aside for the body and put back afterwards, so `kill` in
+the trap sends — `trap 'kill $worker' EXIT` sent nothing here before — and
+a `( … )` in it is not born dead. That part is unanimous and is core.
+
 **`ExitTrapRunsInsideTheExitingCall`** — bash yes · dash yes · ksh93 no ·
 zsh no · ash yes
 

@@ -9398,6 +9398,10 @@ func biExit(r *Runner, ctx context.Context, args []string) int {
 			// through `return`, since a shell that has exited has no `$?`
 			// left to read.
 			r.status = mask8(n)
+			// And in the EXIT trap of a death, the status may be what the
+			// shell leaves with in place of the death. See
+			// Semantics.ExitInTheExitTrapOverridesASignalDeath.
+			r.exitOverridesTheDeath()
 		case r.unspecified:
 			// No dialect answered; statusArgument has already said so, and
 			// the script stops rather than exiting with a status it just

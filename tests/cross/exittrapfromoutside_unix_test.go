@@ -156,3 +156,106 @@ func diesFromOutside(t *testing.T, dialect string, sig syscall.Signal) (syscall.
 	}
 	return ws, readLog()
 }
+
+// What each dialect does with an `exit` in the EXIT trap of a death, and with
+// a fatal signal that lands while the EXIT trap runs (#7063, #7064).
+//
+// Measured 2026-10-30, each shell in a process group of its own:
+//
+//	                 trap 'echo bye; exit 5' EXIT;   trap 'echo bye; kill -USR1 $$;
+//	                 kill -TERM $$                   echo after' EXIT; exit 3
+//	bash 5.3, 3.2    bye, killed by TERM             bye, killed by USR1
+//	ksh93u+          bye, exit 5                     bye, exit 3
+//	zsh 5.9.2        killed by TERM, nothing         bye, killed by USR1
+//	dash             killed by TERM, nothing         bye, killed by USR1
+//	BusyBox ash      killed by TERM, nothing         bye, killed by USR1
+//
+// BusyBox ash is the pinned alpine image internal/oracle reaches, started
+// under `--init` so that it is not PID 1. Both are the dialect answering
+// Semantics.ExitInTheExitTrapOverridesASignalDeath and
+// Semantics.FatalSignalInTheExitTrapEndsOnlyTheTrap, read here through each
+// preset and the front end that owns the process.
+func TestADialectsExitTrapDecidesWhetherASignalEndsTheShell(t *testing.T) {
+	type ending struct {
+		sig    syscall.Signal
+		status int
+		out    string
+	}
+	killed := func(sig syscall.Signal, out string) ending { return ending{sig: sig, out: out} }
+	const (
+		exitInTheTrap   = `trap 'echo bye; exit 5' EXIT; kill -TERM $$; echo after`
+		signalInTheTrap = `trap 'echo bye; kill -USR1 $$; echo after' EXIT; exit 3`
+	)
+	for _, c := range []struct {
+		name, script string
+		want         map[string]ending
+	}{
+		{"an exit in the trap of a death", exitInTheTrap, map[string]ending{
+			"bash": killed(syscall.SIGTERM, "bye\n"),
+			"ksh":  {status: 5, out: "bye\n"},
+			"zsh":  killed(syscall.SIGTERM, ""),
+			"dash": killed(syscall.SIGTERM, ""),
+			"ash":  killed(syscall.SIGTERM, ""),
+		}},
+		{"a fatal signal in the trap of an exit", signalInTheTrap, map[string]ending{
+			"bash": killed(syscall.SIGUSR1, "bye\n"),
+			"ksh":  {status: 3, out: "bye\n"},
+			"zsh":  killed(syscall.SIGUSR1, "bye\n"),
+			"dash": killed(syscall.SIGUSR1, "bye\n"),
+			"ash":  killed(syscall.SIGUSR1, "bye\n"),
+		}},
+	} {
+		for name, want := range c.want {
+			t.Run(name+"/"+c.name, func(t *testing.T) {
+				ws, out := endsOnItsOwn(t, name, c.script)
+				switch {
+				case want.sig != 0 && (!ws.Signaled() || ws.Signal() != want.sig):
+					t.Errorf("ended %v, want killed by %v", ws, want.sig)
+				case want.sig == 0 && (ws.Signaled() || ws.ExitStatus() != want.status):
+					t.Errorf("ended %v, want an exit at %d", ws, want.status)
+				}
+				if out != want.out {
+					t.Errorf("wrote %q, want %q", out, want.out)
+				}
+			})
+		}
+	}
+}
+
+// endsOnItsOwn runs this test binary as the dialect's shell running script, in
+// a process group of its own, and reports how it ended and what it wrote.
+func endsOnItsOwn(t *testing.T, dialect, script string) (syscall.WaitStatus, string) {
+	t.Helper()
+	logPath := filepath.Join(t.TempDir(), "out")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestADialectsExitTrapAnswersAFatalSignalFromOutside$")
+	cmd.Env = append(os.Environ(), outsideDeathShell+"="+dialect, outsideDeathScript+"="+script)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	log, err := os.Create(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = log.Close() }()
+	cmd.Stdout, cmd.Stderr = log, log
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) })
+	reaped := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		close(reaped)
+	}()
+	select {
+	case <-reaped:
+	case <-time.After(30 * time.Second):
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		<-reaped
+		t.Fatal("the shell was still running after 30s")
+	}
+	ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus)
+	if !ok {
+		t.Fatal("no wait status")
+	}
+	b, _ := os.ReadFile(logPath)
+	return ws, string(b)
+}

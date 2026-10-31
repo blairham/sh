@@ -38,6 +38,17 @@ const dyingHangupExits = "SH_TEST_DYING_HANGUP_EXITS"
 // half, `yes` or `no`, which is the other; unset leaves it unanswered.
 const dyingExitTrapRuns = "SH_TEST_DYING_EXIT_TRAP_RUNS"
 
+// dyingTrapEnds answers Semantics.FatalSignalInTheExitTrapEndsOnlyTheTrap
+// in the shell half, `yes` or `no`, and dyingExitOverrides answers
+// Semantics.ExitInTheExitTrapOverridesASignalDeath the same way: what a
+// second signal while the EXIT trap runs, and an `exit` in it, do to a death.
+// Unset, both are no wherever dyingExitTrapRuns is set, which is the column
+// every case written before them was measured against.
+const (
+	dyingTrapEnds      = "SH_TEST_DYING_TRAP_ENDS"
+	dyingExitOverrides = "SH_TEST_DYING_EXIT_OVERRIDES"
+)
+
 // dyingExitHook names Semantics.ExitHook in the shell half: the function a
 // shell runs as it ends, beside its EXIT trap.
 const dyingExitHook = "SH_TEST_DYING_EXIT_HOOK"
@@ -123,6 +134,16 @@ func dieRunningAsAShell() {
 		sh.Semantics.ExitTrapRunsOnSignalDeath = interp.Yes
 	case "no":
 		sh.Semantics.ExitTrapRunsOnSignalDeath = interp.No
+	}
+	if os.Getenv(dyingExitTrapRuns) != "" {
+		sh.Semantics.FatalSignalInTheExitTrapEndsOnlyTheTrap = interp.No
+		sh.Semantics.ExitInTheExitTrapOverridesASignalDeath = interp.No
+	}
+	if os.Getenv(dyingTrapEnds) == "yes" {
+		sh.Semantics.FatalSignalInTheExitTrapEndsOnlyTheTrap = interp.Yes
+	}
+	if os.Getenv(dyingExitOverrides) == "yes" {
+		sh.Semantics.ExitInTheExitTrapOverridesASignalDeath = interp.Yes
 	}
 	if hook := os.Getenv(dyingExitHook); hook != "" {
 		sh.Semantics.ExitHook = hook

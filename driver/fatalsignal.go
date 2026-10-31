@@ -108,8 +108,10 @@ import (
 //
 // A shell that does not take the death within handOverGrace — one standing
 // somewhere nothing gives up for it — has it taken back and dies here, as
-// before. A second signal while the trap runs is not offered: it ends the
-// process at once, as it ends bash.
+// before. A second signal while the trap runs ends the process at once, as it
+// ends bash — except in the dialect where it ends only the trap, where it is
+// offered as that and the shell leaves as it was leaving (#7064). See
+// interp.Semantics.FatalSignalInTheExitTrapEndsOnlyTheTrap.
 
 // fatalSignals are the ones the Go runtime treats as throwing: it prints a
 // goroutine dump and exits rather than letting the default action run.

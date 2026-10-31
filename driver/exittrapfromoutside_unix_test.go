@@ -168,6 +168,11 @@ func TestTheOneDialectWhereTheExitTrapDecidesHowTheShellLeaves(t *testing.T) {
 	dieRunningAsAShell()
 	trapWaits := `trap 'echo bye; /bin/sh -c "printf r >\"\$AGAIN\"; exec sleep 30"; echo bye2' EXIT; `
 	trapWaitsReady := `trap 'echo bye; /bin/sh -c "printf r >\"\$READY\"; exec sleep 30"; echo bye2' EXIT; `
+	const exits = `trap 'echo bye; exit 5' EXIT; `
+	env := []string{
+		dyingExitTrapRuns + "=yes", dyingHangupExits + "=no",
+		dyingTrapEnds + "=yes", dyingExitOverrides + "=yes",
+	}
 	for _, tc := range []struct {
 		name, setup, hold string
 		sig, again        syscall.Signal
@@ -175,13 +180,34 @@ func TestTheOneDialectWhereTheExitTrapDecidesHowTheShellLeaves(t *testing.T) {
 		status            int
 		out               string
 	}{
-		{name: "an exit in it, for a TERM", setup: `trap 'echo bye; exit 5' EXIT; `, sig: syscall.SIGTERM, status: 5, out: "bye\n"},
-		{name: "an exit in it, for a USR1", setup: `trap 'echo bye; exit 5' EXIT; `, sig: syscall.SIGUSR1, status: 5, out: "bye\n"},
-		{name: "a second USR1", setup: trapWaits, sig: syscall.SIGTERM, again: syscall.SIGUSR1, dies: syscall.SIGTERM, out: "bye\n"},
-		{name: "a second HUP", setup: trapWaits, sig: syscall.SIGTERM, again: syscall.SIGHUP, dies: syscall.SIGTERM, out: "bye\n"},
-		{name: "a TERM after a HUP", setup: trapWaits, sig: syscall.SIGHUP, again: syscall.SIGTERM, dies: syscall.SIGHUP, out: "bye\n"},
-		{name: "a USR1 in the trap of an exit", setup: trapWaitsReady, hold: "exit 3", sig: syscall.SIGUSR1, status: 3, out: "bye\n"},
-		{name: "a TERM in the trap of a script that ran out", setup: trapWaitsReady, hold: "(exit 4)", sig: syscall.SIGTERM, status: 4, out: "bye\n"},
+		{
+			name: "an exit in it, for a TERM", setup: exits,
+			sig: syscall.SIGTERM, status: 5, out: "bye\n",
+		},
+		{
+			name: "an exit in it, for a USR1", setup: exits,
+			sig: syscall.SIGUSR1, status: 5, out: "bye\n",
+		},
+		{
+			name: "a second USR1", setup: trapWaits,
+			sig: syscall.SIGTERM, again: syscall.SIGUSR1, dies: syscall.SIGTERM, out: "bye\n",
+		},
+		{
+			name: "a second HUP", setup: trapWaits,
+			sig: syscall.SIGTERM, again: syscall.SIGHUP, dies: syscall.SIGTERM, out: "bye\n",
+		},
+		{
+			name: "a TERM after a HUP", setup: trapWaits,
+			sig: syscall.SIGHUP, again: syscall.SIGTERM, dies: syscall.SIGHUP, out: "bye\n",
+		},
+		{
+			name: "a USR1 in the trap of an exit", setup: trapWaitsReady, hold: "exit 3",
+			sig: syscall.SIGUSR1, status: 3, out: "bye\n",
+		},
+		{
+			name: "a TERM in the trap of a script that ran out", setup: trapWaitsReady, hold: "(exit 4)",
+			sig: syscall.SIGTERM, status: 4, out: "bye\n",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			hold := tc.hold
@@ -190,8 +216,7 @@ func TestTheOneDialectWhereTheExitTrapDecidesHowTheShellLeaves(t *testing.T) {
 			}
 			ws, out := signaledInAGroupOfItsOwn(t, "^TestTheOneDialectWhereTheExitTrapDecidesHowTheShellLeaves$",
 				outsideSignal{
-					setup: tc.setup, hold: hold, sig: tc.sig, again: tc.again, ownReady: true,
-					env: []string{dyingExitTrapRuns + "=yes", dyingHangupExits + "=no", dyingTrapEnds + "=yes", dyingExitOverrides + "=yes"},
+					setup: tc.setup, hold: hold, sig: tc.sig, again: tc.again, ownReady: true, env: env,
 				})
 			if tc.dies != 0 {
 				diedOfAfter(t, ws, out, tc.dies, tc.out)

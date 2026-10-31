@@ -201,7 +201,9 @@ func (r *Runner) TakesAFatalSignal() func(syscall.Signal) (claimed <-chan struct
 // same: the shell is leaving as it was already leaving, and the watch waits
 // for that rather than ending the process by the later signal. One that came
 // after the watch took the first back is the watch's, as before.
-func (o *outsideDeath) endTheTrap(mu *sync.Mutex, name string, sig syscall.Signal) (<-chan struct{}, func() bool, bool) {
+func (o *outsideDeath) endTheTrap(
+	mu *sync.Mutex, name string, sig syscall.Signal,
+) (<-chan struct{}, func() bool, bool) {
 	mu.Lock()
 	defer mu.Unlock()
 	e := &o.trapEnd

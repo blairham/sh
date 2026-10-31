@@ -182,18 +182,22 @@ func TestADialectsExitTrapDecidesWhetherASignalEndsTheShell(t *testing.T) {
 		out    string
 	}
 	killed := func(sig syscall.Signal, out string) ending { return ending{sig: sig, out: out} }
+	const (
+		exitInTheTrap   = `trap 'echo bye; exit 5' EXIT; kill -TERM $$; echo after`
+		signalInTheTrap = `trap 'echo bye; kill -USR1 $$; echo after' EXIT; exit 3`
+	)
 	for _, c := range []struct {
 		name, script string
 		want         map[string]ending
 	}{
-		{"an exit in the trap of a death", `trap 'echo bye; exit 5' EXIT; kill -TERM $$; echo after`, map[string]ending{
+		{"an exit in the trap of a death", exitInTheTrap, map[string]ending{
 			"bash": killed(syscall.SIGTERM, "bye\n"),
 			"ksh":  {status: 5, out: "bye\n"},
 			"zsh":  killed(syscall.SIGTERM, ""),
 			"dash": killed(syscall.SIGTERM, ""),
 			"ash":  killed(syscall.SIGTERM, ""),
 		}},
-		{"a fatal signal in the trap of an exit", `trap 'echo bye; kill -USR1 $$; echo after' EXIT; exit 3`, map[string]ending{
+		{"a fatal signal in the trap of an exit", signalInTheTrap, map[string]ending{
 			"bash": killed(syscall.SIGUSR1, "bye\n"),
 			"ksh":  {status: 3, out: "bye\n"},
 			"zsh":  killed(syscall.SIGUSR1, "bye\n"),

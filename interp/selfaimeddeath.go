@@ -56,7 +56,8 @@ import "syscall"
 // Two rows are not modeled. bash 5.3 also takes the death as an `eval` or a
 // `.` file ends, so `! eval 'kill -TERM $$'` is `bye 0` there and `bye 1` in
 // bash 3.2 and here; and ksh93 reads the bare number, 15, after a `.` file
-// sent it.
+// sent it. ksh93 reads 0 for `false | kill -TERM $$`, too, where this shell
+// reads what it held before the `kill`. See #7146.
 
 // heldDeath is a fatal signal the shell sent itself and has not yet taken.
 type heldDeath struct {

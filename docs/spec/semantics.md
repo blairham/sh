@@ -21425,7 +21425,7 @@ Not modeled: bash 5.3 also takes the death as an `eval` or a `.` file ends,
 so `! eval 'kill -TERM $$'` is bye 0 there and bye 1 in bash 3.2 and here;
 ksh93 reads 0 for `false | kill -TERM $$`, where its last element runs in
 the shell, and here 7; and ksh93 reads the bare number, 15, after a `.` file
-sent it (#7062).
+sent it (#7062, #7146).
 
 **`DeathInAFunctionEndsTheCallAsKilled`** — bash no · dash no · ksh93 yes ·
 zsh no · ash no

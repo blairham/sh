@@ -185,6 +185,7 @@ func (r *Runner) TakesAFatalSignal() func(syscall.Signal) (claimed <-chan struct
 	runsOnADeath := r.sem().ExitTrapRunsOnSignalDeath == Yes
 	hangupExits := r.sem().HangupIsAnOrderlyExit == Yes
 	endsTheTrap := r.sem().FatalSignalInTheExitTrapEndsOnlyTheTrap == Yes
+	segvKills := r.sem().UntrappedSegvEndsTheShellWhereItLands == Yes
 	return func(sig syscall.Signal) (<-chan struct{}, func() bool, bool) {
 		o := &s.outside
 		if interactive {
@@ -195,6 +196,13 @@ func (r *Runner) TakesAFatalSignal() func(syscall.Signal) (claimed <-chan struct
 		// one of those as its number, which is not a name the table holds.
 		name, ok := signalName(sig)
 		if _, named := trappableSignals[name]; !ok || !named {
+			return nil, nil, false
+		}
+		// Nor an untrapped SEGV, in the dialect that lets one kill the
+		// shell where it lands: neither the EXIT trap nor the end of a
+		// running one is the shell's to run first. See
+		// Semantics.UntrappedSegvEndsTheShellWhereItLands.
+		if name == segvName && segvKills {
 			return nil, nil, false
 		}
 		if endsTheTrap && o.trapRunning.Load() {

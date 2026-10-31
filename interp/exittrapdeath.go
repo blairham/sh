@@ -40,6 +40,15 @@ import "syscall"
 //     `exit 3` and then a signal in the trap is 3 in ksh93 — but a death is
 //     where it was found.
 //
+// And one signal neither question reaches, in the dialect that leaves it
+// alone. ksh93 runs its EXIT trap on every fatal signal but SEGV: an
+// untrapped SEGV kills it where it lands, with nothing written, from `kill
+// -SEGV $$` and from another process alike — and in the EXIT trap it kills
+// the shell where TERM would end only the trap. bash runs the trap for it as
+// for the rest. Semantics.UntrappedSegvEndsTheShellWhereItLands, asked where
+// the trap would run on the death and where the signal would end the trap
+// (#7069).
+//
 // A signal from another process reaches the second question by the road a
 // death from outside takes: the front end's watch hands it over, and the
 // shell takes it at its next command. See outsidedeath.go, and
@@ -81,14 +90,36 @@ func (r *Runner) takeTheDeathBack() {
 // The shell at the top only: a copy's EXIT trap is a child's, and a signal
 // aimed at `$$` from a copy is recorded for the shell above and reaches this
 // as that shell's own. See Semantics.FatalSignalInTheExitTrapEndsOnlyTheTrap.
-func (r *Runner) fatalSignalEndsOnlyTheExitTrap() bool {
+func (r *Runner) fatalSignalEndsOnlyTheExitTrap(name string) bool {
 	if !r.inExitTrap || r.inSubshell ||
 		!r.ask(r.sem().FatalSignalInTheExitTrapEndsOnlyTheTrap, "a fatal signal while the EXIT trap runs") {
+		return false
+	}
+	if name == segvName && r.ask(r.sem().UntrappedSegvEndsTheShellWhereItLands,
+		"an untrapped SEGV while the EXIT trap runs") {
 		return false
 	}
 	r.exitTrapEndedBySignal = true
 	r.stopTheShell()
 	return true
+}
+
+// segvName is the one fatal signal a dialect may leave to kill the shell where
+// it lands, ahead of everything a death would otherwise run first. See
+// Semantics.UntrappedSegvEndsTheShellWhereItLands.
+const segvName = "SEGV"
+
+// segvEndsTheShellWhereItLands reports whether a fatal signal by this name is
+// an untrapped SEGV in the dialect that lets one kill the shell where it lands:
+// no EXIT trap is run for it, and one already running is not ended in place
+// of the shell.
+//
+// Read and not asked, for the callers that decide where a death is held or
+// handed over rather than whether a trap runs: an unanswered axis reads as
+// no, so the death goes on to where the trap would run, and the axis is asked
+// there — Runner.runExitTrap.
+func (r *Runner) segvEndsTheShellWhereItLands(name string) bool {
+	return name == segvName && r.sem().UntrappedSegvEndsTheShellWhereItLands == Yes
 }
 
 // exitOverridesTheDeath is an `exit` that named a status, in an EXIT trap the

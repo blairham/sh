@@ -67,15 +67,15 @@ type heldDeath struct {
 
 // exitTrapRunsOnThisDeath reports whether a fatal signal by this name would
 // run the shell's EXIT trap rather than end it where it lands: there is a
-// trap, the signal can be caught and has a name, and the dialect runs the trap
-// on a death.
+// trap, the signal can be caught and has a name, the dialect runs the trap on
+// a death, and it is not the SEGV the dialect leaves to kill where it lands.
 //
 // Read and not asked, as the front end's watch reads it: an unanswered axis is
 // asked where the trap would run, and here it is no, which keeps the death
 // where it was.
 func (r *Runner) exitTrapRunsOnThisDeath(name string, sig syscall.Signal) bool {
 	return r.exitTrap != nil && name != "" && catchableSignal(sig) &&
-		r.sem().ExitTrapRunsOnSignalDeath == Yes
+		r.sem().ExitTrapRunsOnSignalDeath == Yes && !r.segvEndsTheShellWhereItLands(name)
 }
 
 // holdTheSelfAimedDeath keeps a fatal signal the shell at the top just sent

@@ -192,6 +192,12 @@ func (r *Runner) containerWriteSpokenAs(name string) string {
 	return name
 }
 
+// holdsTheFreezeFor reports whether this assignment's store is the one a held
+// refusal is waiting for, without refusing it: refuseTheHeldFreeze, asked.
+func (r *Runner) holdsTheFreezeFor(a *syntax.Assign) bool {
+	return r.heldFreeze.assign != nil && r.heldFreeze.assign == a
+}
+
 // refuseTheHeldFreeze is the store's half of a held refusal: true when this
 // assignment's store is refused, having said so. Every store a held
 // assignment can reach asks it at the point where it would write, after

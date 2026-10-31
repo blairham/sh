@@ -844,7 +844,14 @@ func (r *Runner) getoptsSetName(name, value string, ok int) int {
 		if r.getoptsRefusedName != "" && name == r.getoptsRefusedName {
 			return ok
 		}
-		if !r.getoptsMayWrite(r.frozenReadName(name), false) {
+		target := r.frozenReadName(name)
+		if r.attrHas(target, attrReadonly) {
+			// The name operand is never one of the builtin's own two, so a
+			// freeze on it is a refusal, and what that leaves behind comes
+			// ahead of it. See interp/refusedstoretrace.go.
+			r.refusedOperandKeepsTheKey(name, target)
+		}
+		if !r.getoptsMayWrite(target, false) {
 			return getoptsRefusedStatus
 		}
 		if st, refused := r.storeThroughOperand(name, value); refused {

@@ -3168,6 +3168,10 @@ type Runner struct {
 	// arithStoringAnElement says the keyed store in flight is an arithmetic
 	// expression's. See Runner.refuseAFrozenTableStore.
 	arithStoringAnElement bool
+	// arithStoreInFlight counts the stores arithmetic expressions are making,
+	// so a freeze's refusal can tell an expression's store from every other
+	// writer's. See Semantics.ArithStoreRefusedByAFreezeSetsTheArray.
+	arithStoreInFlight int
 	// prefixTraceStoppedForNoParent says the prefix walk met an entry whose
 	// store a missing parent will refuse, so the command's line is not
 	// written. See Runner.walkThePrefixBeforeTheRedirections.
@@ -14600,6 +14604,9 @@ func (r *Runner) refuseReadonly(name string, form assignForm) bool {
 	if !r.freezeRefuses(name, form) {
 		return false
 	}
+	// What the refusal leaves behind, which is not nothing in every column.
+	// See interp/refusedstoretrace.go.
+	r.refusedArithStoreSetsTheArray(name)
 	// Fatal everywhere but bash, measured with a plain assignment in a
 	// script — which is the contaminated-probe case oracle.md records.
 	//

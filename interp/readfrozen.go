@@ -122,6 +122,9 @@ func (r *Runner) readMayWriteAs(name string, array bool) bool {
 	// the dialect names one — `read: a: is read only` in dash and BusyBox
 	// ash, `read: warning: a: is read only` in ksh93 — and the rest of the
 	// line is not given up, which is what this fixes.
+	// What the refusal leaves behind, ahead of the refusal. See
+	// interp/refusedstoretrace.go.
+	r.refusedOperandKeepsTheKey(name, target)
 	r.reportReadonlyRefusal(target, assignedByBuiltin, fatal)
 	return false
 }

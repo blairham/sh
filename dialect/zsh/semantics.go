@@ -623,6 +623,12 @@ func Semantics() interp.Semantics {
 	// subscript reaches a reading that takes its quotes off here. See the field.
 	// See interp.Semantics.ArithStoreIntoAFrozenTableIsTaken (#6826).
 	s.ArithStoreIntoAFrozenTableIsTaken = interp.Yes
+	// No declared-only array to take out of the set — `typeset -a a` lists
+	// `a=(  )` already — and a refused store under a table's key leaves the
+	// table as it was. See interp.Semantics.ArithStoreRefusedByAFreezeSetsTheArray
+	// and interp.Semantics.RefusedTableStoreKeepsTheKey (#6847).
+	s.ArithStoreRefusedByAFreezeSetsTheArray = interp.No
+	s.RefusedTableStoreKeepsTheKey = interp.No
 	// The splice `b[1]=(p)` over a frozen `b` is `read-only variable: b`.
 	// See interp.Semantics.FrozenContainerTakesAnElementLiteral (#6833).
 	s.FrozenContainerTakesAnElementLiteral = interp.No

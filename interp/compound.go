@@ -2654,6 +2654,19 @@ func (r *Runner) runFunctionExitTrap(ctx context.Context, body string) (returned
 	if r.functionExitTrapSkippedByAGiveUp(ctl) {
 		return false
 	}
+	if r.exitTrapSkippedByADeath() {
+		// A death the shell sent itself, unwinding the call on its way out,
+		// runs the call's own trap no more than the shell's. Measured
+		// 2026-11-01 on zsh 5.9.2 under `-f -c`, each shell in a session of
+		// its own: `f() { trap 'echo local' EXIT; kill -TERM $$; }; f` and
+		// the same from a `(kill -TERM $$)` in the body write nothing and
+		// die of TERM, with or without a top-level trap, and so does a
+		// caller's trap over a call that sent it; HUP, an exit there, writes
+		// `local`. And in ksh93u+ `function f { trap 'echo local' EXIT; kill
+		// -SEGV $$; }; f` writes nothing, the SEGV ending the shell where it
+		// lands (#7149). A death a `function` call ends is no longer one here.
+		return false
+	}
 	r.ctl = controlNone
 	returned := r.status
 	if r.exitTrapAfterAGiveUp(ctl) &&

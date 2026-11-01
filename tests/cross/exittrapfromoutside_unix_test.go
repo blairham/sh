@@ -616,6 +616,60 @@ func TestADialectsExitTrapAnswersAnUntrappedSegv(t *testing.T) {
 	}
 }
 
+// What a trap a function set for itself does when the shell sends itself a
+// death from inside the call (#7149).
+//
+// Measured 2026-11-01 under `-c`, each shell in a session of its own, with
+// `f; echo after` after each definition:
+//
+//	trap 'echo top' EXIT; f() { trap 'echo local' EXIT; kill -TERM $$; }
+//	        zsh 5.9.2, dash nothing; bash 5.3.20 local; killed by TERM in all
+//	f() { trap 'echo local' EXIT; (kill -TERM $$); echo in; }
+//	        zsh nothing, killed by TERM
+//	f() { trap 'echo local' EXIT; kill -HUP $$; }
+//	        zsh local, exit 1
+//	function f { trap 'echo local' EXIT; kill -SEGV $$; }
+//	        ksh93u+ nothing, killed by SEGV
+//	function f { trap 'echo local' EXIT; kill -TERM $$; }
+//	        ksh93u+ local, after, exit 0
+//
+// zsh runs no EXIT trap on a death, and that includes the call's own; HUP is
+// an exit there. Here zsh wrote `local` for both TERM rows, and ksh for SEGV.
+func TestAFunctionsOwnExitTrapAnswersADeathItSentTheShell(t *testing.T) {
+	const (
+		top  = `trap 'echo top' EXIT; `
+		term = `f() { trap 'echo local' EXIT; kill -TERM $$; }; f; echo after`
+	)
+	for _, c := range []struct {
+		dialect, script string
+		sig             syscall.Signal
+		status          int
+		out             string
+	}{
+		{"zsh", top + term, syscall.SIGTERM, 0, ""},
+		{"zsh", term, syscall.SIGTERM, 0, ""},
+		{"zsh", `f() { trap 'echo local' EXIT; (kill -TERM $$); echo in; }; f; echo after`, syscall.SIGTERM, 0, ""},
+		{"zsh", `f() { trap 'echo local' EXIT; kill -HUP $$; }; f; echo after`, 0, 1, "local\n"},
+		{"bash", top + term, syscall.SIGTERM, 0, "local\n"},
+		{"dash", top + term, syscall.SIGTERM, 0, ""},
+		{"ksh", `function f { trap 'echo local' EXIT; kill -SEGV $$; }; f; echo after`, syscall.SIGSEGV, 0, ""},
+		{"ksh", `function f { trap 'echo local' EXIT; kill -TERM $$; }; f; echo after`, 0, 0, "local\nafter\n"},
+	} {
+		t.Run(c.dialect+"/"+c.script, func(t *testing.T) {
+			ws, out := endsOnItsOwn(t, c.dialect, c.script)
+			switch {
+			case c.sig != 0 && (!ws.Signaled() || ws.Signal() != c.sig):
+				t.Errorf("ended %v, want killed by %v", ws, c.sig)
+			case c.sig == 0 && (ws.Signaled() || ws.ExitStatus() != c.status):
+				t.Errorf("ended %v, want an exit at %d", ws, c.status)
+			}
+			if out != c.out {
+				t.Errorf("wrote %q, want %q", out, c.out)
+			}
+		})
+	}
+}
+
 // endsOnItsOwn runs this test binary as the dialect's shell running script, in
 // a process group of its own, and reports how it ended and what it wrote.
 func endsOnItsOwn(t *testing.T, dialect, script string) (syscall.WaitStatus, string) {

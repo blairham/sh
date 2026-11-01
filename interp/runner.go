@@ -7831,6 +7831,45 @@ func (r *Runner) Finish(ctx context.Context) int {
 	return r.status
 }
 
+// exitTrapSkippedByADeath reports whether the shell is dying of a fatal signal
+// it sent itself that runs no EXIT trap: the shell's own as it ends, and a
+// trap a function set for itself as the death unwinds that call (#7149).
+func (r *Runner) exitTrapSkippedByADeath() bool {
+	if !r.diedOfItsOwnSignal() {
+		return false
+	}
+	// A shell killed by a signal it has no name for runs no EXIT trap, and
+	// that is core rather than the axis below: the two columns that do run
+	// it for a named signal do not run it here either.
+	//
+	// Measured 2026-09-19 with `trap 'echo EXITTRAP' EXIT; kill -N $$; echo
+	// survived`, N of 15 and then of 40, each a script file under `env -i
+	// PATH=/usr/bin:/bin LC_ALL=C`: bash 5.2.15 and ksh93 print EXITTRAP for
+	// 15 and print nothing at all for 40, and BusyBox ash 1.37.0, dash 0.5.12
+	// and zsh 5.9 print nothing for either. Five columns, no disagreement —
+	// so nothing is asked (#3777).
+	//
+	// The discriminator is the name and not the number's size, because the
+	// name is what this shell can see. On the one platform where the two
+	// come apart at all they coincide exactly: Linux's range runs
+	// thirty-three numbers past its last name.
+	if r.killedBy == "" {
+		return true
+	}
+	// A shell that was killed rather than ended is a two-two split: bash and
+	// ksh93 treat dying as exiting and run the trap, dash and zsh do not.
+	// Asked only where there is a trap and a death to disagree about — and
+	// only where the signal has a name, per above.
+	if !r.ask(r.sem().ExitTrapRunsOnSignalDeath, "the EXIT trap after a fatal signal") {
+		return true
+	}
+	// Except the one fatal signal a dialect may leave to kill the shell where
+	// it lands. Asked only of a SEGV, and only where the trap would otherwise
+	// run for it. See Semantics.UntrappedSegvEndsTheShellWhereItLands.
+	return r.killedBy == segvName && r.ask(r.sem().UntrappedSegvEndsTheShellWhereItLands,
+		"the EXIT trap after an untrapped SEGV")
+}
+
 // runExitTrap runs `trap … EXIT` as the shell ends.
 //
 // Once per shell, and a subshell is a shell: its own EXIT trap fires when it
@@ -7869,40 +7908,8 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 		// its own. See subshelltrappedsignal.go.
 		return false
 	}
-	if r.diedOfItsOwnSignal() {
-		// A shell killed by a signal it has no name for runs no EXIT trap,
-		// and that is core rather than the axis below: the two columns that
-		// do run it for a named signal do not run it here either.
-		//
-		// Measured 2026-09-19 with `trap 'echo EXITTRAP' EXIT; kill -N $$;
-		// echo survived`, N of 15 and then of 40, each a script file under
-		// `env -i PATH=/usr/bin:/bin LC_ALL=C`: bash 5.2.15 and ksh93 print
-		// EXITTRAP for 15 and print nothing at all for 40, and BusyBox ash
-		// 1.37.0, dash 0.5.12 and zsh 5.9 print nothing for either. Five
-		// columns, no disagreement — so nothing is asked (#3777).
-		//
-		// The discriminator is the name and not the number's size, because
-		// the name is what this shell can see. On the one platform where the
-		// two come apart at all they coincide exactly: Linux's range runs
-		// thirty-three numbers past its last name.
-		if r.killedBy == "" {
-			return false
-		}
-		// A shell that was killed rather than ended is a two-two split: bash
-		// and ksh93 treat dying as exiting and run the trap, dash and zsh do
-		// not. Asked only where there is a trap and a death to disagree
-		// about — and only where the signal has a name, per above.
-		if !r.ask(r.sem().ExitTrapRunsOnSignalDeath, "the EXIT trap after a fatal signal") {
-			return false
-		}
-		// Except the one fatal signal a dialect may leave to kill the shell
-		// where it lands. Asked only of a SEGV, and only where the trap
-		// would otherwise run for it. See
-		// Semantics.UntrappedSegvEndsTheShellWhereItLands.
-		if r.killedBy == segvName && r.ask(r.sem().UntrappedSegvEndsTheShellWhereItLands,
-			"the EXIT trap after an untrapped SEGV") {
-			return false
-		}
+	if r.exitTrapSkippedByADeath() {
+		return false
 	}
 	// And a shell ending over an error it reported, with `set -e` on, in the
 	// one column that runs no EXIT trap there — see

@@ -830,3 +830,36 @@ func TestAFailedSendIsThreeCasesAndNotTwo(t *testing.T) {
 		t.Errorf("stderr: got %q, want the errno spelled out", errs)
 	}
 }
+
+// A trap a function set for itself answers a death the shell sent itself as
+// the shell's own does: where the dialect runs no EXIT trap on a death, the
+// death unwinding the call runs neither the call's trap nor the caller's, and
+// where it runs one both still fire. An orderly hangup is an exit, so the
+// call's trap runs there whatever the axis says (#7149).
+func TestAFunctionsOwnExitTrapAnswersADeathAsTheShellsDoes(t *testing.T) {
+	const (
+		term = `trap 'echo top' EXIT; f() { trap 'echo local' EXIT; kill -TERM $$; echo in; }; f; echo after`
+		hup  = `f() { trap 'echo local' EXIT; kill -HUP $$; echo in; }; f; echo after`
+	)
+	for _, c := range []struct {
+		name, src   string
+		runsOnDeath Answer
+		want        string
+		status      int
+	}{
+		{"a death runs no trap", term, No, "", 128 + int(syscall.SIGTERM)},
+		{"a death runs both", term, Yes, "local\ntop\n", 128 + int(syscall.SIGTERM)},
+		{"a hangup is an exit", hup, No, "local\n", 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			sem := killSem()
+			sem.ExitTrapIsFunctionLocal = Yes
+			sem.HangupIsAnOrderlyExit = Yes
+			sem.ExitTrapRunsOnSignalDeath = c.runsOnDeath
+			out, _, st := killRun(t, c.src, sem, Diagnostics{})
+			if out != c.want || st != c.status {
+				t.Errorf("got %q at %d, want %q at %d", out, st, c.want, c.status)
+			}
+		})
+	}
+}

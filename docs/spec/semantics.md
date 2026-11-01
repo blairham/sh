@@ -21949,6 +21949,14 @@ handler for killed it, rather than because it reached the end or ran
 prints bye in bash and ksh93 and prints nothing in dash and zsh, and all
 four report 130. A two-two split on whether dying counts as exiting.
 
+The same answer covers a trap a function set for itself, which the death
+unwinds on its way out: `f() { trap 'echo local' EXIT; kill -TERM $$; }; f`
+writes nothing in zsh 5.9.2 and dies of TERM, with a top-level trap or
+without, and so does a `(kill -TERM $$)` in the body; HUP, an exit in zsh,
+writes `local`. And ksh93u+ writes nothing for `function f { trap 'echo
+local' EXIT; kill -SEGV $$; }; f`, the SEGV that ends the shell where it
+lands. Measured 2026-11-01, each shell in a session of its own (#7149).
+
 **`ExitInTheExitTrapOverridesASignalDeath`** — bash no · dash no · ksh93 yes
 · zsh no · ash no
 

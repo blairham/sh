@@ -129,3 +129,19 @@ func TestAnUnansweredPipelineEndWaitsAndAsksNothing(t *testing.T) {
 		t.Errorf("got %q at %d, want %q at 0", out, st, "first\nafter 0\n")
 	}
 }
+
+// TestAnElementEndingAsThePipelineLeavesItRacesNothing: an element that ends
+// in the moment between the shell deciding it is still running and the shell
+// moving on writes its answer where the shell's snapshot was read from, and
+// not through the shell's own names as they are replaced. Two builtins end
+// almost together, so a couple of thousand pipelines of them land in that
+// moment; the race detector, which the Linux leg runs this under, is the
+// assertion. Measured 2026-11-01: six reports in 3000 such pipelines before
+// the elements bound their own arrays, none after.
+func TestAnElementEndingAsThePipelineLeavesItRacesNothing(t *testing.T) {
+	t.Parallel()
+	src := `i=0; while [ $i -lt 2000 ]; do : | :; i=$((i+1)); done; wait; echo "end $?"`
+	if out, st := runToAFile(t, src, endsWithLast(Yes)); out != "end 0\n" || st != 0 {
+		t.Errorf("got %q at %d, want %q at 0", out, st, "end 0\n")
+	}
+}

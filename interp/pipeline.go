@@ -701,6 +701,13 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		// package would otherwise be reported to the script as a pipeline
 		// that worked.
 		statuses[i] = internalErrorStatus
+		// The arrays this element writes its answer into, bound here and not
+		// read through the shell's own names: a pipeline that may end with its
+		// last element replaces those with a snapshot once it has left an
+		// element running (pipelineTail.leave), and an element still running
+		// must go on writing where that snapshot was read from — never into the
+		// snapshot, and never through a name the shell is reassigning.
+		elemStatuses, elemSignals, elemErrs := statuses, signals, errs
 		r.spawn(func() {
 			if skip != nil && skip[i] {
 				// A DEBUG action refused this element. The pipe is still
@@ -717,7 +724,7 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 				// costs the writer 141 for a write nobody could ever have
 				// read, which is the answer this shell gives a broken pipe
 				// everywhere else. A hang is not a behavior worth copying.
-				statuses[i] = 0
+				elemStatuses[i] = 0
 				return
 			}
 			start := time.Now()
@@ -726,7 +733,7 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			// line 3 counts the element's EXIT trap from 3 (#6899). See
 			// Runner.subshellOpenLine.
 			subs[i].subshellOpenLine = subs[i].commandLine(cmd)
-			errs[i] = subs[i].command(ctx, cmd)
+			elemErrs[i] = subs[i].command(ctx, cmd)
 			if i == n-1 && subs[i].subshellElementJudgesItself(cmd) {
 				// One column judges a subshell written as the last element
 				// of a pipeline *inside* the element's own process, where
@@ -754,8 +761,8 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			if timing != nil {
 				timing.elems[i].wall = time.Since(start)
 			}
-			statuses[i] = subs[i].status
-			signals[i] = subs[i].diedOfSig
+			elemStatuses[i] = subs[i].status
+			elemSignals[i] = subs[i].diedOfSig
 			if subs[i].bg != nil {
 				// The element that names a backgrounded pipeline has ended
 				// without settling its pid — it started no program — so it
@@ -764,10 +771,10 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 				subs[i].bg.settleNoPID()
 			}
 			if tracked != nil {
-				tracked.elementEnded(i, statuses[i], signals[i])
+				tracked.elementEnded(i, elemStatuses[i], elemSignals[i])
 			}
 			if fgJob != nil {
-				fgJob.pipelineElementEnded(i, statuses[i], signals[i])
+				fgJob.pipelineElementEnded(i, elemStatuses[i], elemSignals[i])
 			}
 		}, func() {
 			// Done last, because it is what releases the shell to read
@@ -797,7 +804,7 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 				if i == n-1 {
 					close(tail.lastEnded)
 				} else {
-					tail.handedOver(i, subs[i], errs[i])
+					tail.handedOver(i, subs[i], elemErrs[i])
 				}
 			}
 		})

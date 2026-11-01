@@ -96,9 +96,10 @@ func TestAPlainScalarStoreAnswersAsTheFullRoadDoes(t *testing.T) {
 // valueless declaration's store must answer exactly as the full road does or
 // leave to it, in a vector where such a declaration sets the name to the empty
 // string: an unset name, a set one, an exported one, the integer and case
-// attributes, an array, a produced parameter, allexport, a redeclaration, the
-// names the store treats specially, and a reference standing anywhere, which
-// comes last because it turns the shortcut off for everything after it.
+// attributes, an array, a produced parameter, allexport, a redeclaration, an
+// integer declaration, whose empty is folded to a number, the names the store
+// treats specially, and a reference standing anywhere, which comes last
+// because it turns the shortcut off for everything after it.
 const plainDeclarationScript = `p() { printf '[%s]' "$@"; echo; }
 dv=outer; de=exp; export de; typeset -i di=3; typeset -u du=abc; command eval 'da=(1 2)'
 f() { local dn dv de di du da; p "<${dn-unset}>" "<$dv>" "<$de>" "<$di>" "<$du>" "<$da>"
@@ -107,6 +108,8 @@ f() { local dn dv de di du da; p "<${dn-unset}>" "<$dv>" "<$de>" "<$di>" "<$du>"
   local COUNT OPTIND PATH IFS; p "<$COUNT>" "<$OPTIND>" "<${PATH-unset}>" "<${IFS-unset}>"; }
 f; p "$dv" "$de" "$di" "$du" "<${dn-unset}>" "${da[1]}"
 g() { local q; q=in; p "$q"; local q; p "<$q>"; }; g; p "<${q-unset}>"
+typeset -i oi=7; k() { typeset -i ni oi; p "<$ni>" "<$oi>"; ni=2+3; p "$ni"; }
+k; p "$oi"; k2() { typeset -i ki=4 kj; typeset -i kj; p "$ki" "<$kj>"; }; k2
 command eval 'typeset -n ref=dv'; h() { local dv; p "<$dv>" "<$ref>"; }; h; p "$dv"
 `
 
@@ -141,6 +144,7 @@ func TestAPlainDeclarationStoreAnswersAsTheFullRoadDoes(t *testing.T) {
 	// the outer values back after the return.
 	for _, row := range []string{
 		"[<>][<>][<>][<>][<>]", "[<>]\n", "[outer][exp][3][ABC][<unset>]", "[in]\n[<in>]\n[<unset>]\n",
+		"[<0>][<0>]\n[5]\n",
 	} {
 		if !strings.Contains(full, row) {
 			t.Errorf("the script did not reach %q:\n%s", row, full)

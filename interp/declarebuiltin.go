@@ -6018,10 +6018,16 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 		// road was about a seventh of what each name in `local a b c d e`
 		// cost in zsh, the dialect that stores here (#6373). See
 		// Runner.storesPlainly for the questions and why this form's road
-		// answers them as an assignment's does.
-		if r.storesPlainly(name) {
+		// answers them as an assignment's does. An integer declaration's
+		// empty is folded to a number by the road's own fold, and that is the
+		// one question the attribute adds.
+		if r.storesPlainly(name, attrInteger) {
 			r.releaseEnvCopy(name)
-			r.varsPut(name, "")
+			if !r.attrHas(name, attrInteger) {
+				r.varsPut(name, "")
+			} else if v, ok := r.attributeFolded(name, ""); ok {
+				r.varsPut(name, v)
+			}
 		} else {
 			r.setVarAs(name, "", assignedAsTheCompoundView)
 		}

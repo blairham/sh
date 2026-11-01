@@ -29,6 +29,7 @@ import (
 // spellings alone agrees with "words and redirections always interleave",
 // which is wrong in half the grammar.
 func TestTheParenthesisedHeaderInterleavesWordsAndRedirections(t *testing.T) {
+	t.Parallel()
 	const body = `{ printf "[%s]" "$*" }`
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
@@ -52,6 +53,7 @@ func TestTheParenthesisedHeaderInterleavesWordsAndRedirections(t *testing.T) {
 // The keyword header is the other half of that grid: words, then the trailing
 // redirections any compound command carries, and **no word after one**.
 func TestTheKeywordHeaderTakesItsWordsBeforeAnyRedirection(t *testing.T) {
+	t.Parallel()
 	const body = `{ printf "[%s]" "$*" }`
 	dir := t.TempDir()
 	// The rows that run. Words alone, and words with the redirections
@@ -100,6 +102,7 @@ func TestTheKeywordHeaderTakesItsWordsBeforeAnyRedirection(t *testing.T) {
 // body does not. `PS4` is set to something without `%N` in it so the rows
 // grade where the bytes went and nothing else.
 func TestARedirectionInFrontOfTheBodyIsTheBodys(t *testing.T) {
+	t.Parallel()
 	const pre = "PS4='@ '\nsetopt xtrace\n"
 	const tail = "unsetopt xtrace\nprint -r -- \"[$(<e)]\"\n"
 	dir := t.TempDir()
@@ -150,6 +153,7 @@ func TestARedirectionInFrontOfTheBodyIsTheBodys(t *testing.T) {
 // `function >f foo` **runs** it. Measured with `foo` already defined —
 // `${#functions}` is 1 either side, so nothing was declared.
 func TestTheKeywordTakesABodyBehindARedirection(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{

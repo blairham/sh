@@ -21,6 +21,7 @@ func runCharCode(t *testing.T, src string) (string, int) {
 // reason it is worth having a test that says so: `$((#a))` looks like a length
 // and the length is `$(( $#a ))`.
 func TestTheCharacterCodeOperatorIsNotALength(t *testing.T) {
+	t.Parallel()
 	out, st := runCharCode(t, `a=(1 2); printf "[%s][%s]" "$((#a))" "${#a[@]}"`)
 	if out != "[49][2]" || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, "[49][2]")
@@ -29,6 +30,7 @@ func TestTheCharacterCodeOperatorIsNotALength(t *testing.T) {
 
 // What each operand reads, and what has no answer at all.
 func TestTheCharacterCodeOperatorReadsItsOperand(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a value's first character", `b=zebra; printf "%s" $((#b))`, "122"},
 		{"a name never set", `printf "%s" $((#nothing))`, "0"},
@@ -56,6 +58,7 @@ func TestTheCharacterCodeOperatorReadsItsOperand(t *testing.T) {
 // The radix literal is untouched with the flag on: its `#` follows digits and
 // is read by the number, where this one stands where an operand belongs.
 func TestTheRadixLiteralIsUnaffected(t *testing.T) {
+	t.Parallel()
 	out, st := runCharCode(t, `printf "%s %s %s" $((16#ff)) $((2#101)) $((8#17))`)
 	if out != "255 5 15" || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, "255 5 15")

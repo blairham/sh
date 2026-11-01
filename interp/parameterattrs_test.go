@@ -26,6 +26,7 @@ import (
 // a `--- FAIL` line — and the row also asserts the answer, so a fix that
 // stopped the loop by reporting the wrong kind would still be caught.
 func TestDescribingAProducedTableDoesNotAskItToDescribeItself(t *testing.T) {
+	t.Parallel()
 	out, _ := runGrammar(t, `echo "[${self[self]}][${self[mine]}]"`, nil, func(rr *Runner) {
 		rr.SetVar("mine", "1")
 		rr.SetDynamicAssoc("self", func(inner *Runner) AssocArray {
@@ -57,6 +58,7 @@ func TestDescribingAProducedTableDoesNotAskItToDescribeItself(t *testing.T) {
 // declaration utility to put it on with. They are asserted there against the
 // real shell, which is the stronger statement anyway.
 func TestParameterKindPutsTheContainerFirst(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		setup func(*Runner)
@@ -96,6 +98,7 @@ func TestParameterKindPutsTheContainerFirst(t *testing.T) {
 // carry. That is right for a listing and wrong for a report on what the shell
 // has: `$funcstack` is as real to the script asking as `$PATH` is.
 func TestParameterNamesCoversTheProducedOnesToo(t *testing.T) {
+	t.Parallel()
 	var r *Runner
 	runGrammar(t, `:`, nil, func(rr *Runner) {
 		r = rr
@@ -147,6 +150,7 @@ func kindWord(k ParameterKind) string {
 // the Vars check answers for a name the Arrays check was supposed to. It
 // passed against a build with `r.Arrays` deleted from the union.
 func TestTheTwoReadingsOfParameterNamesAgree(t *testing.T) {
+	t.Parallel()
 	var r *Runner
 	runGrammar(t, `:`, nil, func(rr *Runner) {
 		r = rr

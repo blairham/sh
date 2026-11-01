@@ -19,6 +19,7 @@ import (
 // dialect, so a script bash names the loops for and carries on from stopped
 // at 2 (#2299).
 func TestWhetherAMisplacedLoopControlJudgesThePlaceFirst(t *testing.T) {
+	t.Parallel()
 	base := func(order Answer) Semantics {
 		s := CoreSemantics()
 		s.LoopControlPlaceIsJudgedBeforeTheCount = order

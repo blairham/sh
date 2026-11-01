@@ -31,6 +31,7 @@ func scopeRun(t *testing.T, src string) (string, string, int) {
 // same state answers differently because the *answer* is about the reader's
 // scope and not about the name.
 func TestAListedGlobalSaysSoOnlyFromInsideAFunction(t *testing.T) {
+	t.Parallel()
 	const src = `g=1; f(){ typeset -p g; }; f; typeset -p g`
 	out, errs, st := scopeRun(t, src)
 	if want := "typeset -g g=1\ntypeset g=1\n"; out != want || st != 0 || errs != "" {
@@ -41,6 +42,7 @@ func TestAListedGlobalSaysSoOnlyFromInsideAFunction(t *testing.T) {
 // And a local of the running function takes no letter, which is the other
 // half of the same claim: a bare declaration already lands there.
 func TestAListedLocalTakesNoScopeWord(t *testing.T) {
+	t.Parallel()
 	out, errs, st := scopeRun(t, `f(){ local l=2; typeset -p l; }; f`)
 	if want := "typeset l=2\n"; out != want || st != 0 || errs != "" {
 		t.Errorf("got %q/%d stderr %q, want %q", out, st, errs, want)
@@ -51,6 +53,7 @@ func TestAListedLocalTakesNoScopeWord(t *testing.T) {
 // not this function's to redeclare — a bare declaration here would shadow it
 // rather than reach it — so the listing writes it as a global.
 func TestACallersLocalListsAsAGlobal(t *testing.T) {
+	t.Parallel()
 	out, errs, st := scopeRun(t, `inner(){ typeset -p L; }; outer(){ local L=1; inner; }; outer`)
 	if want := "typeset -g L=1\n"; out != want || st != 0 || errs != "" {
 		t.Errorf("got %q/%d stderr %q, want %q", out, st, errs, want)
@@ -61,6 +64,7 @@ func TestACallersLocalListsAsAGlobal(t *testing.T) {
 // attributes keeps them where they were. Three kinds, because the cluster is
 // built differently for each.
 func TestTheScopeWordStandsAheadOfTheCluster(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset -a a=(x y); f(){ typeset -p a; }; f`, "typeset -g -a a=( x y )\n"},
 		{`typeset -r r=1; f(){ typeset -p r; }; f`, "typeset -g -r r=1\n"},
@@ -79,6 +83,7 @@ func TestTheScopeWordStandsAheadOfTheCluster(t *testing.T) {
 // and keeps it. Both halves in one test, because either alone reads as a
 // fixed spelling.
 func TestAnExportedNameSpellsItsScopeInTheCommandWord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`export e=1; f(){ typeset -p e; }; f`, "export e=1\n"},
 		{`f(){ local -x e=9; typeset -p e; }; f`, "local -x e=9\n"},
@@ -100,6 +105,7 @@ func TestAnExportedNameSpellsItsScopeInTheCommandWord(t *testing.T) {
 // the ExportSpelled form's shape rather than a rule of the engine's. The same
 // global read from the same place, under each of the other four.
 func TestTheOtherListingFormsAreSilentAboutScope(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		form DeclarationListingForm

@@ -95,6 +95,7 @@ var subscriptFlagRows = []struct {
 // it is the measurement written as a test: each shape is asked twice in one
 // script, once with the `!` and once with the flag the `!` stands for.
 func TestTheSigilIsTheSubscriptFlagWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, row := range subscriptFlagRows {
 		t.Run(row.name, func(t *testing.T) {
 			src := `printf "[%s]" "${!` + row.written + `}"; echo` + "\n" +
@@ -119,6 +120,7 @@ func TestTheSigilIsTheSubscriptFlagWhereTheAxisSaysSo(t *testing.T) {
 // all", which is true of the four rows with no subscript and false of the
 // rest — the shape of a grid keyed on the wrong noun.
 func TestTheSubscriptFlagIsNotThePlainExpansion(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, written, sigil, plain string }{
 		{"the first element", "a[0]", "[0]", "[zero]"},
 		{"a key the table has", "m[ka]", "[ka]", "[va]"},
@@ -143,6 +145,7 @@ func TestTheSubscriptFlagIsNotThePlainExpansion(t *testing.T) {
 // With the axis at No the same text is an **indirection**, which is what says
 // the axis is live rather than the rewrite being the only reading there is.
 func TestWithoutTheAxisTheSigilIsAnIndirection(t *testing.T) {
+	t.Parallel()
 	// `n` holds `s`, and `s` holds SVAL: the indirection reads twice and the
 	// flag reads the subscript, so the two answers cannot be confused.
 	if out, _ := subscriptFlagRun(t, No, `printf "[%s]" "${!n}"`); out != "[SVAL]" {
@@ -162,6 +165,7 @@ func TestWithoutTheAxisTheSigilIsAnIndirection(t *testing.T) {
 // the shell this reading belongs to has no such spelling, and the two that do
 // answer No. A dialect that has never answered still reads `${!ZQ_@}`.
 func TestThePrefixListingDoesNotAskTheAxis(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ParamIndirection = true
 	d.ParamIndirectionPrefixListing = true
@@ -190,6 +194,7 @@ func TestThePrefixListingDoesNotAskTheAxis(t *testing.T) {
 // never touched, and a node written through is then invisible. The tree here
 // is parsed once and run twice, the second time with the axis the other way.
 func TestTheRewriteLeavesTheTreeAlone(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ParamIndirection = true
 	d.ParamExpansionFlags = true

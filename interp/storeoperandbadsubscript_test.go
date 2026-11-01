@@ -32,6 +32,7 @@ const storeOperandSrc = "r=(1 2 3)\n" +
 // two of the three columns run to the end, with no trap and no `||` able to
 // see it.
 func TestAStoreThroughAnOperandGivesUpAsMuchAsTheDialectDoes(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
 		giveUp BadSubscriptPolicy
@@ -79,6 +80,7 @@ func TestAStoreThroughAnOperandGivesUpAsMuchAsTheDialectDoes(t *testing.T) {
 // a status alone cannot show: the builtin gives up at the bad operand rather
 // than filling the rest from the line it already read.
 func TestAStoreThroughAnOperandGivesUpTheNamesBehindIt(t *testing.T) {
+	t.Parallel()
 	const src = "r=(1 2 3)\nb=preset\n" +
 		`{ read 'r[1/0]' b; echo "same=$?"; } <<EOF` + "\n" +
 		"x y\nEOF\n" +
@@ -96,6 +98,7 @@ func TestAStoreThroughAnOperandGivesUpTheNamesBehindIt(t *testing.T) {
 // own status is the store's rather than the formatting's, which reported 0
 // over a write that never happened.
 func TestPrintfIntoAnOperandGivesUpTheSameWay(t *testing.T) {
+	t.Parallel()
 	const src = "r=(1 2 3)\n" +
 		`printf -v 'r[1/0]' %s Q; echo "same=$?"` + "\n" +
 		`echo "next=$? r=[${r[*]}]"`
@@ -118,6 +121,7 @@ func TestPrintfIntoAnOperandGivesUpTheSameWay(t *testing.T) {
 // The answer that gives up a command gives up a **command string** whole,
 // exactly as it does one builtin over.
 func TestAStoreGivingUpACommandGivesUpACommandStringWhole(t *testing.T) {
+	t.Parallel()
 	out, st := storeOperandRunAs(t, BadSubscriptAbandonsTheCommand, Diagnostics{},
 		storeOperandSrc, RouteCommandString)
 	if strings.Contains(out, "next=") {
@@ -132,6 +136,7 @@ func TestAStoreGivingUpACommandGivesUpACommandStringWhole(t *testing.T) {
 // sentence about the subscript is not written under the refusal: a shell that
 // was never told what to do here has not decided to complain.
 func TestAStoreThroughAnOperandRefusesAnUnspecifiedAxis(t *testing.T) {
+	t.Parallel()
 	out, _ := storeOperandRun(t, BadSubscriptUnspecified, Diagnostics{}, storeOperandSrc)
 	if !strings.Contains(out, "no dialect was chosen") {
 		t.Errorf("output %q is not a refusal naming the axis", out)
@@ -148,6 +153,7 @@ func TestAStoreThroughAnOperandRefusesAnUnspecifiedAxis(t *testing.T) {
 // sentence, where the other two write the sentence the language writes about
 // the same text anywhere else.
 func TestAStoreThroughAnOperandNamesTheBuiltinWhereTheDialectDoes(t *testing.T) {
+	t.Parallel()
 	out, _ := storeOperandRun(t, BadSubscriptReported,
 		Diagnostics{StoreOperandBadSubscript: "%[1]s: %[2]s"}, storeOperandSrc)
 	if !strings.Contains(out, "read: ") {

@@ -9,6 +9,7 @@ import "testing"
 // runs its expression once, so a step inside it steps once (#5659). Measured
 // 2026-10-03 on zsh 5.9.2 under -f.
 func TestAScalarsSubscriptIsEvaluatedOnce(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`i=1; s=abc; print ${s[++i]} $i`, "b 2\n"},
 		{`i=1; s=abc; print ${${s}[++i]} $i; x=${s[i++]}; print $x $i`, "b 2\nb 3\n"},

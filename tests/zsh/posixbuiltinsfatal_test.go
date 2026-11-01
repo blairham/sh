@@ -21,6 +21,7 @@ import "testing"
 // the two apart. What carries this rule is the status and whether the next
 // command runs.
 func TestPosixBuiltinsMakesASpecialBuiltinsFailureEndTheShell(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, wantOut string
 		wantStatus         int
@@ -67,6 +68,7 @@ func TestPosixBuiltinsMakesASpecialBuiltinsFailureEndTheShell(t *testing.T) {
 // bare `set >./no/x` does not, so **the prefix is what takes the specialness
 // away** and the rule is keyed on the builtin's kind rather than on the word.
 func TestWhatPosixBuiltinsDoesNotEnd(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a builtin that is not special", "print -r -- x 3< ./no/x\nprint -r -- after\n"},
 		{"true, likewise", "true 3< ./no/x\nprint -r -- after\n"},
@@ -111,6 +113,7 @@ func TestWhatPosixBuiltinsDoesNotEnd(t *testing.T) {
 //	emulate csh                          `after`, 0
 //	emulate csh; setopt posixbuiltins    the script ends, 1
 func TestTheOptionDecidesAndNotTheEmulation(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		wantEnded bool
@@ -140,6 +143,7 @@ func TestTheOptionDecidesAndNotTheEmulation(t *testing.T) {
 // the option on, so a rule that had been rewritten as "sh-ness" rather than
 // "the option" would still pass the sh and zsh rows and fail this one.
 func TestEveryEmulationStillSetsItThroughTheOption(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		mode      string
 		wantEnded bool

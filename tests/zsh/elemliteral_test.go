@@ -17,6 +17,7 @@ import (
 // one-element array and a subscript of 1, and "insert after the element"
 // agrees with everything except an empty literal.
 func TestAnArrayLiteralThroughASubscriptSplices(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The three rows the report was filed with.
 		{`i=1; a=(x y); a[$i]=(p q); print -r -- "[${a[@]}] n=$#a"`, "[p q y] n=3"},
@@ -66,6 +67,7 @@ func TestAnArrayLiteralThroughASubscriptSplices(t *testing.T) {
 // The two names a splice has nowhere to land in, worded apart from each other
 // and both without the subscript. Measured in the same run.
 func TestAnArrayLiteralThroughASubscriptNeedsAnArray(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`s=abc; s[2]=(p q); echo after`, "s: attempt to assign array value to non-array"},
 		{`s=""; s[1]=(p q); echo after`, "s: attempt to assign array value to non-array"},

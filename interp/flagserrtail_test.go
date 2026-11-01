@@ -13,6 +13,7 @@ import "testing"
 // parser's half is TestAFlagGroupErrorCarriesTheRestOfItsWord, and this is
 // what the report does with it.
 func TestAFlagGroupErrorQuotesTheRestOfTheWord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the closing quote of the region it stands in",

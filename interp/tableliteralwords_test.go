@@ -35,6 +35,7 @@ func runTableWords(t *testing.T, src string, refuse bool) (string, int) {
 }
 
 func TestBareWordsInATableLiteralAreAnAxis(t *testing.T) {
+	t.Parallel()
 	// Both halves of the axis over the same source, which is the only way to
 	// say that the refusal is a *choice*: the pairing column reads the same
 	// two words as one key and one value.
@@ -86,6 +87,7 @@ func TestBareWordsInATableLiteralAreAnAxis(t *testing.T) {
 // element that expands to nothing is still an element, so it is refused
 // although the pairing column has nothing to store for it.
 func TestOnlyAWrittenBareElementIsOne(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		status          int
@@ -120,6 +122,7 @@ func TestOnlyAWrittenBareElementIsOne(t *testing.T) {
 // pairing column stores the same two words as one key and one value, so the
 // row discriminates all three readings at once.
 func TestTheRefusingAnswerConvertsAPopulatedTable(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m=([k]=v); m=(x y); echo "st=$?"; echo "[${m[0]}][${m[1]}][n=${#m[@]}]"`
 	out, st := runTableWords(t, src, false)
 	if want := "st=0\n[][][n=1]\n"; out != want || st != 0 {
@@ -134,6 +137,7 @@ func TestTheRefusingAnswerConvertsAPopulatedTable(t *testing.T) {
 // And the cell next to it, which is the refusing column's own oddity: the
 // same replacing literal onto a table with **no** element complains.
 func TestAnEmptyTableRefusesTheLiteralAPopulatedOneTakes(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; m=(x y); echo after`
 	out, st := runTableWords(t, src, true)
 	if want := "sh: cannot append index array to associative array m\n"; out != want || st != 2 {

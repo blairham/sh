@@ -18,6 +18,7 @@ import (
 // assignment fires at all. `$*` goes the same way, which is why the axis is
 // about the list and not about one spelling (#1941).
 func TestWhetherAnEmptyPositionalListIsSet(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, isSet, isUnset string
 	}{
@@ -60,6 +61,7 @@ func TestWhetherAnEmptyPositionalListIsSet(t *testing.T) {
 // That refusal is #1541's and is reached by every dialect the moment the
 // operator fires; what this pins is that the *firing* is the axis's.
 func TestTheAssignmentOnAnEmptyPositionalListFollowsTheAxis(t *testing.T) {
+	t.Parallel()
 	const src = `set --; printf '<%s>' ${@=abc}; echo after`
 	sem := testSemantics()
 	sem.PositionalListWithNoneIsSet = Yes
@@ -83,6 +85,7 @@ func TestTheAssignmentOnAnEmptyPositionalListFollowsTheAxis(t *testing.T) {
 // that has no test, the colon forms, a list with something in it, and a
 // subscripted name that merely happens to be spelled `@`.
 func TestThePositionalListAxisIsAskedOnlyAtAColonlessTest(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		refused   bool

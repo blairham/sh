@@ -23,6 +23,7 @@ import (
 //	$ echo $?
 //	1
 func TestTheCompletionConditionsParseHere(t *testing.T) {
+	t.Parallel()
 	if !zsh.Dialect().CompletionConditions {
 		t.Error("this shell has `[[ -prefix ]]` and `[[ -suffix ]]` in the grammar")
 	}
@@ -46,6 +47,7 @@ func TestTheCompletionConditionsParseHere(t *testing.T) {
 // neither the operator nor the operand, and it is the same for all three
 // operand shapes.
 func TestACompletionConditionOutsideACompletionIsFatalHere(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`[[ -prefix : ]]; echo after`,
 		`[[ -prefix //(a|b)/ ]]; echo after`,
@@ -76,6 +78,7 @@ func TestACompletionConditionOutsideACompletionIsFatalHere(t *testing.T) {
 // operator and calls the `]]` an unexpected argument to it, which bash 5.3
 // does not.
 func TestACompletionConditionWithNoOperandIsAWordHere(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`[[ -prefix ]]; echo st=$?`,
 		`[[ -suffix ]]; echo st=$?`,

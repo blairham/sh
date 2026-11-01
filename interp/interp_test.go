@@ -58,6 +58,7 @@ func TestMain(m *testing.M) {
 // that is the part worth pinning: a fallback here would put a sentence in the
 // mouth of a shell that stays quiet.
 func TestSurvivableShiftSpeaksOnlyWhereTheDialectHasWords(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	sem.ShiftPastEndFatal = No
 	for _, tc := range []struct{ name, wording, want string }{
@@ -283,6 +284,7 @@ func runScript(
 // away, and it has to not be here. The second half is what a passing test
 // without this could never notice.
 func TestARelativeRedirectStaysInTheRunnersOwnDirectory(t *testing.T) {
+	t.Parallel()
 	const name = "written-by-a-relative-redirect"
 	var dir string
 	out, st := run(t, `echo content >`+name+`; cat `+name, func(r *Runner) {
@@ -315,6 +317,7 @@ func TestARelativeRedirectStaysInTheRunnersOwnDirectory(t *testing.T) {
 // real temporary directory that is one directory per substituting Runner,
 // forever; the helper registers the cleanup so no test has to remember.
 func TestTheHelperGivesTemporaryFilesSomewhereTemporary(t *testing.T) {
+	t.Parallel()
 	r := newTestRunner(t, &Runner{})
 	var tmp string
 	for _, kv := range r.Env {
@@ -342,6 +345,7 @@ func TestTheHelperGivesTemporaryFilesSomewhereTemporary(t *testing.T) {
 // sets its directories in the setup function that runs *after* the helper, so
 // none of them would notice the helper overriding what it was handed.
 func TestTheHelperSuppliesOnlyWhatTheTestDidNot(t *testing.T) {
+	t.Parallel()
 	mine, myTmp := t.TempDir(), t.TempDir()
 	r := newTestRunner(t, &Runner{Dir: mine, Env: append(testPATH(), "TMPDIR="+myTmp)})
 	if r.Dir != mine {
@@ -372,6 +376,7 @@ func TestTheHelperSuppliesOnlyWhatTheTestDidNot(t *testing.T) {
 // returning from `&` does, so without the wait this reads back `done` and
 // nothing else, every time, on every machine.
 func TestTheHelperReadsTheBufferOnlyOnceTheJobsHaveStoppedWriting(t *testing.T) {
+	t.Parallel()
 	// An external, because it is the gap: a builtin's `&` finishes inside the
 	// goroutine before the pid is settled, so the shell's own writers happen
 	// to be ordered already and only a real process shows the hole.
@@ -400,6 +405,7 @@ func TestTheHelperReadsTheBufferOnlyOnceTheJobsHaveStoppedWriting(t *testing.T) 
 // statement `go test -race` is what makes visible: with a bare bytes.Buffer
 // here the detector reports it, and CI runs the suite that way.
 func TestTheBufferIsSafeToReadWhileAJobASubshellStartedIsStillWriting(t *testing.T) {
+	t.Parallel()
 	for i := 0; i < 8; i++ {
 		out, st := run(t, `( /bin/sh -c 'echo from-the-subshells-job >&2' & ) ; echo done`, nil)
 		if st != 0 {
@@ -440,6 +446,7 @@ func TestTheHelpersExceptionLeavesTheJobRunning(t *testing.T) {
 }
 
 func TestFieldSplittingMatchesTheSpec(t *testing.T) {
+	t.Parallel()
 	// The rows here are the ones docs/spec/grammar/word-splitting.md measured,
 	// including the asymmetry a symmetric implementation gets wrong: a
 	// trailing separator is absorbed and a leading one is not.
@@ -463,6 +470,7 @@ func TestFieldSplittingMatchesTheSpec(t *testing.T) {
 }
 
 func TestColonExtendsTheTest(t *testing.T) {
+	t.Parallel()
 	// The one rule behind all four conditionals.
 	tests := []struct{ src, want string }{
 		// `unset` is a builtin this slice does not have; a fresh runner has
@@ -483,6 +491,7 @@ func TestColonExtendsTheTest(t *testing.T) {
 }
 
 func TestAssignHasASideEffectThatOutlives(t *testing.T) {
+	t.Parallel()
 	got, _ := run(t, `printf "[%s]" "${u:=V}"; printf "[%s]" "$u"`, nil)
 	if got != `[V][V]` {
 		t.Errorf("got %q, want [V][V]", got)
@@ -490,6 +499,7 @@ func TestAssignHasASideEffectThatOutlives(t *testing.T) {
 }
 
 func TestExitStatusAndAndOr(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		src    string
 		want   string
@@ -515,6 +525,7 @@ func TestExitStatusAndAndOr(t *testing.T) {
 }
 
 func TestCommandNotFoundIs127(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `definitely-not-a-command-xyz`, nil)
 	if st != 127 {
 		t.Errorf("status = %d, want 127 — the status every panel shell uses", st)
@@ -525,6 +536,7 @@ func TestCommandNotFoundIs127(t *testing.T) {
 }
 
 func TestGateRefusesAndTheShellCarriesOn(t *testing.T) {
+	t.Parallel()
 	// A denied command is a command that failed, not a broken shell, so the
 	// status is set and execution continues.
 	// External commands, deliberately: `true` and `echo` are builtins and do
@@ -579,6 +591,7 @@ func TestGateSeesRedirectionsToo(t *testing.T) {
 }
 
 func TestEventsDescribeWhatHappened(t *testing.T) {
+	t.Parallel()
 	// Only the exec's own events: resolving the command stats its path, and
 	// that probe is recorded as an access event of its own.
 	var kinds []EventKind
@@ -595,6 +608,7 @@ func TestEventsDescribeWhatHappened(t *testing.T) {
 }
 
 func TestEveryConstructTheParserProducesCanRun(t *testing.T) {
+	t.Parallel()
 	// This began as a list of what was refused — pipelines, subshells,
 	// groups, `if`, then `[[ ]]` and `(( ))`, then background commands — and
 	// it shrank to nothing. Inverted, it is worth more than it was: every
@@ -632,6 +646,7 @@ func TestEveryConstructTheParserProducesCanRun(t *testing.T) {
 }
 
 func TestPositionalParameters(t *testing.T) {
+	t.Parallel()
 	// The rows docs/spec/grammar/word-splitting.md measured for `"$@"` and
 	// `"$*"`, which are the only place quoting produces *more* than one field.
 	tests := []struct{ name, src, want string }{
@@ -654,6 +669,7 @@ func TestPositionalParameters(t *testing.T) {
 }
 
 func TestAtIsZeroFieldsAndStarIsOne(t *testing.T) {
+	t.Parallel()
 	// Why `set -- "$@"` is safe on an empty list and `set -- "$*"` is not.
 	if got, _ := run(t, `set --; set -- "$@"; echo $#`, nil); got != "0\n" {
 		t.Errorf(`"$@" with no parameters gave %q, want 0`, got)
@@ -664,6 +680,7 @@ func TestAtIsZeroFieldsAndStarIsOne(t *testing.T) {
 }
 
 func TestBuiltinsRunInThisShell(t *testing.T) {
+	t.Parallel()
 	// The reason they are builtins: a child process could not do this.
 	if got, _ := run(t, `set -- a b; shift; printf "[%s]" "$@"`, nil); got != "[b]" {
 		t.Errorf("shift gave %q", got)
@@ -677,6 +694,7 @@ func TestBuiltinsRunInThisShell(t *testing.T) {
 }
 
 func TestBuiltinsAreNotGated(t *testing.T) {
+	t.Parallel()
 	// The gate covers what leaves the process. A builtin does not, so gating
 	// it would be reporting an action that never happened.
 	var seen int
@@ -689,6 +707,7 @@ func TestBuiltinsAreNotGated(t *testing.T) {
 }
 
 func TestAssignmentPrefixIsAnAxisWithTwoSides(t *testing.T) {
+	t.Parallel()
 	// POSIX keeps an assignment prefixed to a special builtin; dash and
 	// ksh93 comply and bash and zsh do not. An axis is only pinned by
 	// testing both of its positions — asserting one is asserting a default.
@@ -711,6 +730,7 @@ func TestAssignmentPrefixIsAnAxisWithTwoSides(t *testing.T) {
 }
 
 func TestOnlyExportedVariablesReachTheEnvironment(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `x=private; export y=shared; env`, nil)
 	if strings.Contains(out, "x=private") {
 		t.Error("an unexported shell variable reached the environment")
@@ -724,6 +744,7 @@ func TestOnlyExportedVariablesReachTheEnvironment(t *testing.T) {
 // time hands the interpreter one chunk after another, and everything a chunk
 // established has to still be there for the next one.
 func TestRunPartLeavesTheShellOpen(t *testing.T) {
+	t.Parallel()
 	var out bytes.Buffer
 	s := testSemantics()
 	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Semantics: &s})
@@ -768,6 +789,7 @@ func TestFinishRunsTheExitTrapOnce(t *testing.T) {
 // TestExitedStopsTheCaller: `exit` in one chunk must stop the front end
 // reading another, or the rest of the script would run after it.
 func TestExitedStopsTheCaller(t *testing.T) {
+	t.Parallel()
 	var out bytes.Buffer
 	s := testSemantics()
 	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Semantics: &s})
@@ -791,6 +813,7 @@ func TestExitedStopsTheCaller(t *testing.T) {
 // The body was being run through the word lexer, so shell quoting applied to
 // it: `don't` arrived as `dont` and `\n` as `n`. Nothing reported it.
 func TestAHeredocBodyIsNotAWord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"quotes are content",
@@ -835,6 +858,7 @@ func TestAHeredocBodyIsNotAWord(t *testing.T) {
 // group swallowed into a word parses perfectly well and becomes a test for
 // non-emptiness, which is true where the grouped condition is false.
 func TestRegexModeEndsWithTheOperand(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`[[ abc =~ b && (a = z) ]] && echo y || echo n`, "n"},
 		{`[[ abc =~ b && (a = a) ]] && echo y || echo n`, "y"},
@@ -853,6 +877,7 @@ func TestRegexModeEndsWithTheOperand(t *testing.T) {
 // kinds of thing rather than two wordings of one. Which dash words are
 // options is a third question — see TestShiftOptionWordsAreThreeReadings.
 func TestShiftReadsALeadingDashTwoWays(t *testing.T) {
+	t.Parallel()
 	asOption := CoreSemantics()
 	asOption.ShiftOptionWords = ShiftOptionWordsNonNumeric
 	asOption.BadOptionToSpecialBuiltinFatal = No
@@ -880,6 +905,7 @@ func TestShiftReadsALeadingDashTwoWays(t *testing.T) {
 // TestABundleIsRefusedByItsFirstLetter, so `shift --help` is `-h` and not
 // `--help` — the dashes are stripped and the letter after them named.
 func TestABundleIsRefusedByItsFirstLetter(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	sem.ShiftOptionWords = ShiftOptionWordsNonNumeric
 	sem.BadOptionToSpecialBuiltinFatal = No
@@ -895,6 +921,7 @@ func TestABundleIsRefusedByItsFirstLetter(t *testing.T) {
 // TestAShiftCountCanBeAnExpression, where an unset name is zero — which is
 // why one shape of this shifts nothing and succeeds rather than failing.
 func TestAShiftCountCanBeAnExpression(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	sem.ShiftCountIsArithmetic = Yes
 	sem.ArrayBaseIsZero = Yes
@@ -917,6 +944,7 @@ func TestAShiftCountCanBeAnExpression(t *testing.T) {
 // ordinary `shift` takes: both readings agree on a number, so a shell with no
 // answers still shifts.
 func TestAPlainNumberAsksNothing(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	out, _ := run(t, `set -- a b c; shift 2; echo "[$*]"`, func(r *Runner) {
 		dg := Diagnostics{}
@@ -933,6 +961,7 @@ func TestAPlainNumberAsksNothing(t *testing.T) {
 // TestABadShiftOperandCanEndTheScript, under the rule a special builtin's
 // failure already gets — `shift` is one, and two of the four stop for it.
 func TestABadShiftOperandCanEndTheScript(t *testing.T) {
+	t.Parallel()
 	fatal := CoreSemantics()
 	fatal.ShiftOptionWords = ShiftOptionWordsNone
 	fatal.ShiftCountIsArithmetic = No
@@ -967,6 +996,7 @@ func TestABadShiftOperandCanEndTheScript(t *testing.T) {
 // the same word as a count, so the shell that "reads options" and the shell
 // that reads *every* dash word as one are different answers.
 func TestShiftOptionWordsAreThreeReadings(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		policy ShiftOptionWordPolicy
@@ -1016,6 +1046,7 @@ func TestShiftOptionWordsAreThreeReadings(t *testing.T) {
 // dash words are options: bash reads none of them as options and still honors
 // the marker, so a dialect answers the two separately.
 func TestShiftDoubleDashEndsTheOptions(t *testing.T) {
+	t.Parallel()
 	base := func() Semantics {
 		s := CoreSemantics()
 		s.ShiftOptionWords = ShiftOptionWordsAny
@@ -1066,6 +1097,7 @@ func TestShiftDoubleDashEndsTheOptions(t *testing.T) {
 // separately. The one dialect that answers No calls a negative count a word
 // that is not a number instead.
 func TestANegativeShiftCountIsOutOfRangeOrNotANumber(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name          string
 		outOfRange    Answer
@@ -1128,6 +1160,7 @@ func TestANegativeShiftCountIsOutOfRangeOrNotANumber(t *testing.T) {
 // all — which is also how a negative count reached a slice bound and
 // panicked. It was unanimous until BusyBox ash was measured refusing it.
 func TestAShiftCountMayCarryASign(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	sem.ShiftOptionWords = ShiftOptionWordsNone
 	sem.ShiftCountIsArithmetic = No
@@ -1146,6 +1179,7 @@ func TestAShiftCountMayCarryASign(t *testing.T) {
 // panic rather than a diagnostic — which is what `shift -1` was in two
 // dialects before the count was range-checked.
 func TestANegativeShiftCountNeverSlices(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	sem.ShiftOptionWords = ShiftOptionWordsNone
 	sem.ShiftCountIsArithmetic = Yes

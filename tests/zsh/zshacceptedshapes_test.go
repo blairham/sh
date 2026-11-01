@@ -33,6 +33,7 @@ import (
 // brace being an ordinary character in every column but this one. So this
 // preset stood alone against the whole panel on two of the five.
 func TestFiveShapesRealZshAcceptsRun(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"a dangling && in a substitution", `v=$(echo hi; echo x &&); print -r -- "v=[$v]"`, "v=[hi\nx]\n"},
 		{"a dangling || in a substitution", `v=$(echo hi; echo x ||); print -r -- "v=[$v]"`, "v=[hi\nx]\n"},
@@ -54,6 +55,7 @@ func TestFiveShapesRealZshAcceptsRun(t *testing.T) {
 // Same measurement run, same arrangement. Every `want` here is what zsh 5.9.2
 // printed.
 func TestTheFourCausesReachTheirNeighbors(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		// The and-or cause is about the closing delimiter, so the older
 		// substitution spelling takes it too, and an operand that is nothing
@@ -92,6 +94,7 @@ func TestTheFourCausesReachTheirNeighbors(t *testing.T) {
 // that stopped caring. Measured in the same run: every one of these is a parse
 // error at status 1 in zsh, as it was and is here.
 func TestTheNeighborsThatStayRefused(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src string }{
 		// The brace is text in an assignment, not behind any utility.
 		{"an operand that is not an assignment", `export -- a}; print ok`},
@@ -135,6 +138,7 @@ func TestTheNeighborsThatStayRefused(t *testing.T) {
 // asserting the route for both: what #3898 is about is that neither shape is
 // **accepted**, and a row that stopped refusing would fail either way.
 func TestASubstitutionBodyStillRefusesTheOtherOperators(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src string
 		atParse   bool
@@ -185,6 +189,7 @@ func TestASubstitutionBodyStillRefusesTheOtherOperators(t *testing.T) {
 // [syntax.Dialect.ShortBodyEndsOnAJoiningOperator], where the operator is
 // still refused where it stands.
 func TestWhereAShortBodyRefusalLands(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, token string }{
 		{`while & do :; done`, "&"},
 		{`until & do :; done`, "&"},

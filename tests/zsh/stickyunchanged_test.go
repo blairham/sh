@@ -28,6 +28,7 @@ func stickyPair(outer, inner string) string {
 }
 
 func TestAStickyEmulationInForceIsNotEnteredAgain(t *testing.T) {
+	t.Parallel()
 	const inSh = "emulate sh -c 'in_sh() { setopt alwayslastprompt; }'\n"
 	rows := []struct{ name, src, want string }{
 		{"sh calls sh", stickyPair("sh", "sh"), "on"},
@@ -67,6 +68,7 @@ func TestAStickyEmulationInForceIsNotEnteredAgain(t *testing.T) {
 // spellings are one name, but a redundant word does, and so does how many
 // times a name is written. A name keeps its count and its last direction.
 func TestTheStickyOptionWordsArePartOfTheEmulation(t *testing.T) {
+	t.Parallel()
 	rows := []struct{ name, outer, inner, want string }{
 		{"same -o", "sh -o nullglob", "sh -o nullglob", "on"},
 		{"order", "sh -o nullglob -o markdirs", "sh -o markdirs -o nullglob", "on"},
@@ -95,6 +97,7 @@ func TestTheStickyOptionWordsArePartOfTheEmulation(t *testing.T) {
 // and go back at the return (#5244). The `-o` direction, because `+o
 // nullglob` is off on the call whether or not it is applied.
 func TestAStickyCallAppliesItsOptionWords(t *testing.T) {
+	t.Parallel()
 	src := "ng() { if [[ -o nullglob ]]; then print ng-on; else print ng-off; fi; }\n" +
 		"sw() { if [[ -o shwordsplit ]]; then print sw-on; else print sw-off; fi; }\n" +
 		"emulate -R sh -o nullglob -c 'f() { ng; sw; }'\n" +
@@ -112,6 +115,7 @@ func TestAStickyCallAppliesItsOptionWords(t *testing.T) {
 // `alwayslastprompt` back: `off`. The control is the same plain definer run
 // at the top level, whose function is not sticky: `on`.
 func TestAFunctionDefinedUnderAStickyCallIsSticky(t *testing.T) {
+	t.Parallel()
 	const call = "unsetopt alwayslastprompt\n%s\nisalp\n"
 	rows := []struct{ name, src, want string }{
 		{

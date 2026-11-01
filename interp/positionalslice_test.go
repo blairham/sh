@@ -29,6 +29,7 @@ import (
 // `${a[@]:1}` on a three-element array drops one — the same counting over a
 // list that is one shorter.
 func TestASliceOfThePositionalParametersTakesTheParameters(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src, want, why string
 	}{
@@ -119,6 +120,7 @@ func TestASliceOfThePositionalParametersTakesTheParameters(t *testing.T) {
 // Counted through `set --` rather than `printf`, which runs its format once
 // whatever it is handed.
 func TestTheFieldCountOfAPositionalSlice(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src, want, why string
 	}{
@@ -173,6 +175,7 @@ func TestTheFieldCountOfAPositionalSlice(t *testing.T) {
 // `$0` itself rather than against a literal, because what `$0` holds depends on
 // how the shell was started.
 func TestOffsetZeroOfAPositionalSliceIsDollarZero(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src, want, why string
 	}{
@@ -207,6 +210,7 @@ func TestOffsetZeroOfAPositionalSliceIsDollarZero(t *testing.T) {
 // list of three is three fields — so a change that put `$0` where the elements
 // are fetched rather than where they are sliced would show up here.
 func TestDollarZeroIsNotInTheListForAnyOtherOperator(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src, want, why string
 	}{

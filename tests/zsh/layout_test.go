@@ -21,6 +21,7 @@ import (
 // is why each is a field on syntax.Layout and not a rule in the printer.
 // Measured on zsh 5.9.2 through `typeset -f`, 2026-09-12.
 func TestTheArrangementOfAListedBody(t *testing.T) {
+	t.Parallel()
 	l := zsh.FunctionLayout()
 	for _, tc := range []struct {
 		name, src, want, why string
@@ -93,6 +94,7 @@ func TestTheArrangementOfAListedBody(t *testing.T) {
 // question and the one the table above cannot ask: what changes is the
 // outermost node rather than how a block is arranged.
 func TestABodyThatIsNotABraceGroupIsListedAsOne(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 	}{

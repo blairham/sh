@@ -17,6 +17,7 @@ import (
 // the race detector sees the writes. Every run has to give the nine X real
 // zsh gives.
 func TestASharedPatternsScratchIsNeverHeldTwice(t *testing.T) {
+	t.Parallel()
 	e := &syntax.ParamExpr{All: true}
 	var wg sync.WaitGroup
 	for range 8 {

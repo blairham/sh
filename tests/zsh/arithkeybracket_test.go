@@ -21,6 +21,7 @@ import (
 // empty subscript — which is what identifies the mechanism rather than only
 // the outcome (#2581).
 func TestAnExpandedSubscriptIsReadAgainAsSyntax(t *testing.T) {
+	t.Parallel()
 	out, _ := answersRun(t, `typeset -A m; key='x],b['; m[$key]=1; (( m[$key]++ )); printf "[%s][%s]" "$?" "${m[$key]}"`)
 	if !strings.Contains(out, "not an identifier: b[]") {
 		t.Errorf("= %q, want it to name `b[]`", out)
@@ -37,6 +38,7 @@ func TestAnExpandedSubscriptIsReadAgainAsSyntax(t *testing.T) {
 // comes back out through the expansion route, which is what makes the
 // divergence above the arithmetic route alone.
 func TestTheSameKeyStoresAndReadsBack(t *testing.T) {
+	t.Parallel()
 	if out, st := answersRun(
 		t,
 		`typeset -A m; key='x],b['; m[$key]=9; printf "[%s]" "${m[$key]}"`,
@@ -49,6 +51,7 @@ func TestTheSameKeyStoresAndReadsBack(t *testing.T) {
 // The axis rather than the outcome, so a preset that stopped holding it fails
 // here rather than only in a conformance run.
 func TestTheRereadIsAnAxis(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().ArithSubscriptRereadsItsExpandedText; got != interp.Yes {
 		t.Errorf("ArithSubscriptRereadsItsExpandedText = %v, want yes", got)
 	}

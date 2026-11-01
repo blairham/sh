@@ -19,6 +19,7 @@ import "testing"
 // end — `listscroll` after `isearch` and `menuselect` after `main`. A shell
 // that appended them would pass a set comparison and fail this.
 func TestComplistCreatesTheKeymapsItCreatesInZsh(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `bindkey -l
 print -r -- "---"
 zmodload zsh/complist
@@ -36,6 +37,7 @@ bindkey -l`)
 // loaded rather than stored, and this is what says so: a shell that added the
 // names to a table when the module loaded would keep them here.
 func TestUnloadingComplistTakesItsKeymapsAway(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/complist
 zmodload -u zsh/complist
 print -r -- "unload=$?"
@@ -59,6 +61,7 @@ bindkey -l`)
 // measured in bindkey.go — so what is being pinned is that an unknown widget
 // in a module's keymap behaves as an unknown widget in any other.
 func TestTheModuleIsWhatMakesItsKeymapBindable(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `bindkey -M menuselect '^o' accept-and-infer-next-history
 print -r -- "before=$?"
 zmodload -i zsh/complist
@@ -81,6 +84,7 @@ bindkey -M menuselect '^o'`)
 // apart — which is what this case is for. A shell that went back to deciding
 // on the length of the list gives complist zsh/main's sentence and 1.
 func TestComplistSupportsFeaturesAndNamesNoneWhereMainSupportsNone(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/complist
 zmodload -lF zsh/complist
 print -r -- "complist=$?"
@@ -103,6 +107,7 @@ print -r -- "selectmain=$?"`)
 // both. Sorted here where zsh's association is in hash order, which is
 // zleparameter.go's own recorded choice and not this module's.
 func TestTheKeymapsParameterSeesTheModulesKeymaps(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zleparameter
 print -r -- "n=${#keymaps}"
 zmodload zsh/complist
@@ -126,6 +131,7 @@ print -r -- ${keymaps[(r)menuselect]} ${keymaps[(r)listscroll]}`)
 // `beginning-of-line` beside it, so the case cannot pass on a shell whose
 // `$widgets` answers 0 to everything.
 func TestComplistDoesNotClaimTheWidgetThisEditorCannotPerform(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zleparameter
 zmodload zsh/complist
 print -r -- "menu=${+widgets[menu-select]} bol=${+widgets[beginning-of-line]}"`)

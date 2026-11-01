@@ -182,6 +182,7 @@ print -r -- "blocked=$?"`)
 // `zsystem supports` with the name it meant to pass left empty gets an answer
 // no ordinary failure produces.
 func TestZsystemSupportsAnswersForWhatWasBuilt(t *testing.T) {
+	t.Parallel()
 	out, st, errs := runZshSplitWithSystem(t, t.TempDir(), `zsystem supports flock
 print -r -- "flock=$?"
 zsystem supports supports
@@ -218,6 +219,7 @@ print -r -- "two=$?"`)
 // than an inconsistency: the sentence about a file names the file and what it
 // was to be opened for, which is already more than `flock:` would add.
 func TestWhatZsystemRefuses(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st, errs := runZshSplitWithSystem(t, dir, `zsystem
 print -r -- "none=$?"

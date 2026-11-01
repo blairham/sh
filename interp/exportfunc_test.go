@@ -14,6 +14,7 @@ import (
 // way there is: an environment holds strings, so the source goes in and is
 // parsed again at the other end. Which is why this needs the printer.
 func TestAFunctionCanBeCarriedInTheEnvironment(t *testing.T) {
+	t.Parallel()
 	// With no arrangement asked for, which is what a runner told nothing
 	// gets: the core has no layout of its own and writes the body on one
 	// line. What shape it takes is the dialect's to say.
@@ -98,6 +99,7 @@ func TestAFunctionCanBeCarriedInTheEnvironment(t *testing.T) {
 // from one that has never heard of it — measured twice, because the first
 // reading looked like a wording per builtin and it is per option.
 func TestADialectCanRefuseTheFunctionOptionInItsOwnWords(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `export -f f`, func(r *Runner) {
 		sem := CoreSemantics()
 		sem.ExportCarriesFunctions = No
@@ -118,6 +120,7 @@ func TestADialectCanRefuseTheFunctionOptionInItsOwnWords(t *testing.T) {
 // The option is offered only where the dialect has it, and asked about only
 // where there is one to decide.
 func TestExportAsksAboutFOnlyWhenItIsThere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		refuses   bool
@@ -160,6 +163,7 @@ func carrying(t *testing.T, src string) string {
 // and a dialect without it sends `-n` down the ordinary unknown-option path
 // to collect its own refusal, fatal or not as that dialect says (#516).
 func TestExportOffersTheOffOptionOnlyWhereTheDialectHasIt(t *testing.T) {
+	t.Parallel()
 	t.Run("a dialect that has it", func(t *testing.T) {
 		// The script's own status is grep's, which is 1 for a count of
 		// nought — the interesting number is `export`'s, which the script
@@ -199,6 +203,7 @@ func TestExportOffersTheOffOptionOnlyWhereTheDialectHasIt(t *testing.T) {
 // an axis nobody chose rather than as the unknown option the standard makes
 // it.
 func TestThePosixPresetHasNoOffOption(t *testing.T) {
+	t.Parallel()
 	if got := PosixSemantics().ExportTakesTheAttributeOff; got != No {
 		t.Errorf("PosixSemantics().ExportTakesTheAttributeOff = %v, want No", got)
 	}
@@ -220,6 +225,7 @@ func TestThePosixPresetHasNoOffOption(t *testing.T) {
 // And asked about only where there is an `-n` to decide, so a dialect that
 // has not chosen can still export.
 func TestExportAsksAboutTheOffOptionOnlyWhenItIsThere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		refuses   bool

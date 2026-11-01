@@ -19,6 +19,7 @@ import (
 // opposite branch of every operator that separates them.
 
 func TestAProducedParameterCanBeAbsentUntilAPredicateSaysOtherwise(t *testing.T) {
+	t.Parallel()
 	const probe = `printf '[%s][%s][%s]' "$P" "${P-UNSET}" "${P+SET}"`
 	for _, w := range []struct {
 		name    string
@@ -43,6 +44,7 @@ func TestAProducedParameterCanBeAbsentUntilAPredicateSaysOtherwise(t *testing.T)
 // A producer with no predicate beside it is there from the moment it is
 // registered, which is what every other produced parameter in this tree is.
 func TestAProducedParameterWithNoPredicateIsAlwaysThere(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `printf '[%s][%s]' "${P-UNSET}" "${P+SET}"`, func(r *Runner) {
 		r.SetDynamic("P", func(*Runner) string { return "made" })
 	})
@@ -54,6 +56,7 @@ func TestAProducedParameterWithNoPredicateIsAlwaysThere(t *testing.T) {
 // And `set -u` sees the absence, which is the half a script relies on: the
 // option exists to stop exactly this read.
 func TestNounsetStopsForAnAbsentProducedParameter(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `set -u; printf '[%s]' "$P"; printf after`, func(r *Runner) {
 		sem := permissive()
 		r.Semantics = &sem
@@ -73,6 +76,7 @@ func TestNounsetStopsForAnAbsentProducedParameter(t *testing.T) {
 // one returns, and one dialect's call-depth parameter is unset in the first
 // state and set in the second.
 func TestHasEnteredAFunctionIsNotTheCallDepth(t *testing.T) {
+	t.Parallel()
 	const probe = `printf '[%s]' "$P"; f() { printf '[%s]' "$P"; }; f; printf '[%s]' "$P"`
 	out, st := run(t, probe, func(r *Runner) {
 		r.SetDynamic("P", func(rr *Runner) string {

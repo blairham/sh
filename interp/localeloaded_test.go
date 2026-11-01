@@ -34,6 +34,7 @@ func fakeLocales(asked *[]string) func(string, bool) (string, bool) {
 // #5503: a name the machine has no data for leaves the shell in the locale it
 // was in, and the encoding is the data's rather than the spelling's.
 func TestALocaleTheMachineCannotLoadLeavesTheOneInForce(t *testing.T) {
+	t.Parallel()
 	const x = `x=é; `
 	for _, tc := range []struct {
 		name, src, want string
@@ -67,6 +68,7 @@ func TestALocaleTheMachineCannotLoadLeavesTheOneInForce(t *testing.T) {
 // Without the hook the spelling decides, which is the library's reading: a
 // missing name is read as the codeset it names.
 func TestWithNoLocaleHookTheNameIsReadAsWritten(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `x=é; LC_ALL=xx_XX.UTF-8; echo ${#x}`, func(r *Runner) {
 		sem := *r.Semantics
 		sem.MultibyteEncodingIsHonored = Yes
@@ -79,6 +81,7 @@ func TestWithNoLocaleHookTheNameIsReadAsWritten(t *testing.T) {
 
 // The machine is asked once per name, not once per character.
 func TestALocaleIsLookedUpOncePerName(t *testing.T) {
+	t.Parallel()
 	var asked []string
 	run(t, `x=éé; LC_ALL=here.UTF-8; echo ${#x} ${#x} ${#x}; LC_ALL=xx; echo ${#x} ${#x}`, func(r *Runner) {
 		sem := *r.Semantics

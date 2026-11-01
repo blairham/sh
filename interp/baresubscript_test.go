@@ -43,6 +43,7 @@ const bareArray = "a=(xx yy zz)\n"
 // The axis, both ways, on the shape where the two answers and the two ways of
 // getting one of them wrong are four different strings.
 func TestABareSubscriptIsReadOrIsText(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name      string
 		subscript Answer
@@ -63,6 +64,7 @@ func TestABareSubscriptIsReadOrIsText(t *testing.T) {
 // The braced spelling is not this axis's to answer: the braces say where the
 // expansion ends, so there is nothing for a second reading to be.
 func TestABracedSubscriptIgnoresTheAxis(t *testing.T) {
+	t.Parallel()
 	for _, a := range []Answer{Yes, No} {
 		out, st := runBare(t, bareArray+`printf "[%s]" "${a[1]}"`, a)
 		if st != 0 || out != "[yy]" {
@@ -74,6 +76,7 @@ func TestABracedSubscriptIgnoresTheAxis(t *testing.T) {
 // Text, and the word's own text: what is written between the brackets is
 // expanded, and unquoted metacharacters are live for the glob stage.
 func TestBareSubscriptTextIsExpandedAndLive(t *testing.T) {
+	t.Parallel()
 	t.Run("an expansion between the brackets", func(t *testing.T) {
 		out, st := runBare(t, bareArray+"i=2\n"+`printf "[%s]" "$a[$i]"`, No)
 		if st != 0 || out != "[xx[2]]" {
@@ -98,6 +101,7 @@ func TestBareSubscriptTextIsExpandedAndLive(t *testing.T) {
 // the whole reason it is an axis. A body parsed once and run twice under two
 // answers gives two results.
 func TestTheAxisIsReadWhenTheWordExpands(t *testing.T) {
+	t.Parallel()
 	src := bareArray + `f() { printf "[%s]" "$a[1]"; }` + "\nf\nf"
 	// One body, parsed once, called twice, with the vector swapped between
 	// the two calls — which is what a run-time option does to it. The two
@@ -130,6 +134,7 @@ func TestTheAxisIsReadWhenTheWordExpands(t *testing.T) {
 // A grammar with the brace-less spelling and no answer is a gap, and it says
 // so out loud rather than picking a side.
 func TestABareSubscriptWithNoAnswerIsRefused(t *testing.T) {
+	t.Parallel()
 	out, st := runBare(t, bareArray+`printf "[%s]" "$a[1]"`, Unspecified)
 	if st != 2 || !strings.Contains(out, "no dialect was chosen") {
 		t.Errorf("= %q (status %d), want the unanswered-axis refusal at 2", out, st)

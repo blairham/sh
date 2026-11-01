@@ -43,6 +43,7 @@ import "testing"
 // claims: `%F{9}` is `\e[91m` under `TERM=xterm-256color` and `\e[39m` under
 // `TERM=xterm`, which reports eight. See the note on colorSequence.
 func TestWhatAColorCodeWrites(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		layer PromptColor
 		arg   string
@@ -239,6 +240,7 @@ func TestWhatAColorCodeWrites(t *testing.T) {
 
 // Where the code ends, which is what decides whether the text after it is text.
 func TestWhereACodesArgumentEnds(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, in   string
 		want       string
@@ -292,6 +294,7 @@ func TestWhereACodesArgumentEnds(t *testing.T) {
 // painted the empty argument, which colorIndex reads as nought: black, at
 // status 0, with nothing said.
 func TestACountInFrontOfAColorCodeIsTheIndex(t *testing.T) {
+	t.Parallel()
 	style := PromptStyle{
 		Escape:          '%',
 		NumericArgument: true,
@@ -341,6 +344,7 @@ func TestACountInFrontOfAColorCodeIsTheIndex(t *testing.T) {
 // code: `%30F` is an escape in front of `3`, which no table has, and the rest
 // is text. The count is read where the dialect says it is and nowhere else.
 func TestWithoutANumericArgumentTheDigitIsTheCode(t *testing.T) {
+	t.Parallel()
 	style := PromptStyle{
 		Escape: '%',
 		Colors: map[rune]PromptColor{'F': Foreground},
@@ -371,6 +375,7 @@ func TestWithoutANumericArgumentTheDigitIsTheCode(t *testing.T) {
 // foreground and not the background. A shell that skipped the code entirely
 // would pass every row above and fail those.
 func TestANegativeCountInFrontOfAColorIsNoColor(t *testing.T) {
+	t.Parallel()
 	style := PromptStyle{
 		Escape:          '%',
 		NumericArgument: true,

@@ -47,6 +47,7 @@ import (
 // named one lands — see printDuplicateNumber and #5551. This test asserted
 // the descriptor's own number for as long as that coincidence was unexamined.
 func TestPrintRefusesADescriptorOpenForReading(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ro.txt")
 	if err := os.WriteFile(path, []byte("abcdef\n"), 0o600); err != nil {
@@ -86,6 +87,7 @@ print "fd=$ro"`)
 // is `bad file number` and not a mode complaint. Measured as `zsh:print:1: bad
 // file number: 9` at 1 in that shell.
 func TestPrintStillRefusesADescriptorNothingIsOpenAt(t *testing.T) {
+	t.Parallel()
 	out, st, errs := runZshSplit(t, t.TempDir(), "print -u 9 x\nprint \"st=$?\"")
 	if out != "st=1\n" || st != 0 {
 		t.Errorf("print -u 9 = %q (status %d), want st=1", out, st)

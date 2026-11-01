@@ -43,6 +43,7 @@ func learnsBases(learns Answer) func(*Semantics) {
 // a `base#digits` spelling rather than a prefix, and the bare leading zero
 // the same expression can carry instead.
 func TestAnIntegerNameLearnsTheRadixInsideAnExpression(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -i a=1+0x1f; echo "1[$a]"
 typeset -i b=0x1f+1; echo "2[$b]"
 typeset -i c=1?0x10:2; echo "3[$c]"
@@ -69,6 +70,7 @@ typeset -i f=1+010; echo "6[$f]"`
 // beside the declaration: a two-step assignment, an append, and the re-read a
 // name already holding a value takes when the attribute arrives.
 func TestEveryIntegerRouteLearnsTheRadixInsideAnExpression(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -i a; a=1+0x1f; echo "1[$a]"
 typeset -i b=1; b+=1+0x1f; echo "2[$b]"
 c=1+0x10; typeset -i c; echo "3[$c]"`
@@ -91,6 +93,7 @@ c=1+0x10; typeset -i c; echo "3[$c]"`
 // literal is: a later plain number reads back in it, and a second expression
 // carrying a different radix does not take it over.
 func TestARadixLearnedInsideAnExpressionBelongsToTheName(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -i a; a=1+0x1f; a=5; echo "1[$a]"
 typeset -i b; b=1+0x1f; b=1+010; echo "2[$b]"`
 	out, errs, st := integerRun(t, src, learnsBases(Yes), Diagnostics{})
@@ -104,6 +107,7 @@ typeset -i b; b=1+0x1f; b=1+010; echo "2[$b]"`
 // path in front of the parse is there for. The value is right in every row
 // either way — the question is only what the name renders in afterwards.
 func TestAnExpressionWithNoRadixTeachesNoBase(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -i a=1+2; echo "1[$a]"
 typeset -i b=5; echo "2[$b]"
 typeset -i c=-7; echo "3[$c]"
@@ -121,6 +125,7 @@ typeset -i d; d=x+1; echo "4[$d]"`
 // A text that will not parse is still the evaluation's to report: the walk in
 // front of it says nothing and leaves the name alone.
 func TestAnUnparsableExpressionIsStillTheEvaluationsToReport(t *testing.T) {
+	t.Parallel()
 	out, errs, st := integerRun(t, `typeset -i a=0x1zz; echo "[$a]"`,
 		learnsBases(Yes), Diagnostics{})
 	if st == 0 || errs == "" || out != "" {

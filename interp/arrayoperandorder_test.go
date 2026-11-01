@@ -71,6 +71,7 @@ func operandOrderRunWith(t *testing.T, dir, src string, set func(*Semantics)) (o
 // it: without that row a shell that had stopped applying redirections
 // altogether would pass the assertion above it.
 func TestAnArrayOperandIsExpandedOutsideTheCommandsRedirections(t *testing.T) {
+	t.Parallel()
 	out, errOut := operandOrderRun(t, t.TempDir(),
 		"typeset a=($(echo VISIBLE >&2)) 2>/dev/null\n"+
 			"{ echo SWALLOWED >&2; } 2>/dev/null\n"+
@@ -89,6 +90,7 @@ func TestAnArrayOperandIsExpandedOutsideTheCommandsRedirections(t *testing.T) {
 // the name comes to hold — including the count, which is what says the list
 // was split rather than handed over whole.
 func TestAnArrayOperandStoresWhatItExpandedTo(t *testing.T) {
+	t.Parallel()
 	const src = "typeset a=($(echo one; echo two) $(echo three >&2)) 2>/dev/null\n" +
 		"{ echo SWALLOWED >&2; } 2>/dev/null\n" +
 		`printf "[%s]" "${a[@]}"` + "\n"
@@ -132,6 +134,7 @@ func TestAnArrayOperandIsExpandedExactlyOnce(t *testing.T) {
 // with the rest of them; it must still be, or a change that moved the array
 // list would read as a change to where operands are expanded in general.
 func TestAScalarOperandIsExpandedOutsideTheRedirectionsToo(t *testing.T) {
+	t.Parallel()
 	out, errOut := operandOrderRun(t, t.TempDir(),
 		"typeset s=$(echo VISIBLE >&2) 2>/dev/null\n"+
 			"{ echo SWALLOWED >&2; } 2>/dev/null\n"+
@@ -158,6 +161,7 @@ func TestAScalarOperandIsExpandedOutsideTheRedirectionsToo(t *testing.T) {
 // interp/prefixredirorder.go. The value is `[kept]` at both answers, which is
 // what this control is for.
 func TestABareArrayLiteralKeepsItsOwnExpansionPosition(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct {
 		order PrefixRedirectionOrder
 		errs  string

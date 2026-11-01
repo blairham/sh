@@ -27,6 +27,7 @@ import (
 // +fm '_*'` names the matching functions and writes no bodies. Refusing the
 // letter is what left every interactive startup without a dump (#1674).
 func TestTypesetPlusFMNamesTheMatchingFunctions(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `_b() { echo two; }
 _a() { echo one; }
 c() { echo three; }
@@ -40,6 +41,7 @@ typeset +fm '_*'`)
 // The same letter under the other sign of `f` writes the bodies, which is what
 // makes the row above a statement about the sign rather than about `-m`.
 func TestTypesetMinusFMWritesTheMatchingBodies(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `_a() { echo one; }
 c() { echo three; }
 typeset -fm '_*'`)
@@ -52,6 +54,7 @@ typeset -fm '_*'`)
 // Over parameters the two signs are two listings: the value under a minus, the
 // attributes and the bare name under a plus.
 func TestTypesetMatchingOverParameters(t *testing.T) {
+	t.Parallel()
 	// `q*` rather than `p*`: this shell's own `path`, `psvar` and
 	// `parameters` all begin with a p and a pattern reaches them, which is
 	// true of the shell being modeled too — measured, and the reason these
@@ -80,6 +83,7 @@ zz=9
 // attribute. The pair has to be tested together: one reading of the sign gives
 // both, and the wrong reading swaps them.
 func TestTypesetMatchingDeclaresUnderMinusAndListsUnderPlus(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `qa=1
 qb=2
 typeset -mx 'qa'
@@ -95,6 +99,7 @@ typeset -p qb`)
 // The letter reaches `declare` too, because they are one builtin under two
 // words in this shell.
 func TestDeclareSpellsTheMatchingLetter(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "qa=1\ndeclare +m 'q*'")
 	if out != "qa\n" || st != 0 {
 		t.Errorf("declare +m = %q (status %d), want %q", out, st, "qa\n")
@@ -106,6 +111,7 @@ func TestDeclareSpellsTheMatchingLetter(t *testing.T) {
 // a letter is on its way when the shell being modeled does not have it is the
 // worse of the two answers.
 func TestLocalHasNoMatchingLetter(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "f() { local -m 'q*'; }\nf")
 	if st == 0 || !strings.Contains(out, "bad option: -m") {
 		t.Errorf("local -m = %q (status %d), want the bad-option refusal", out, st)
@@ -119,6 +125,7 @@ func TestLocalHasNoMatchingLetter(t *testing.T) {
 // is what keeps the two statements from drifting apart: a letter named as
 // unimplemented *and* answered is a shell telling a script both things.
 func TestTheMatchingLetterIsNoLongerCalledMissing(t *testing.T) {
+	t.Parallel()
 	missing := diagTable(zsh.Diagnostics()).UnimplementedOptionLetters
 	for _, name := range []string{"typeset", "declare", "local"} {
 		if strings.ContainsRune(missing[name], 'm') {
@@ -141,6 +148,7 @@ func TestTheMatchingLetterIsNoLongerCalledMissing(t *testing.T) {
 // `+m` is what found them: it writes the words and no value, so a missing word
 // is the whole of a row rather than a detail at the front of one.
 func TestTypesetPlusMWritesTheMeasuredAttributeWords(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, decl, want string }{
 		{"a plain scalar", "qa=1", "qa\n"},
 		{"an integer", "typeset -i qa=1", "integer qa\n"},
@@ -193,6 +201,7 @@ func TestTypesetPlusMWritesTheMeasuredAttributeWords(t *testing.T) {
 // the *other* half, so either end reads as the pair. Measured on both halves,
 // alone and with another attribute in front of it.
 func TestTypesetPlusMNamesTheOtherHalfOfATie(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, decl, want string }{
 		{"both halves", "typeset -T QS qs", "array tied QS qs\ntied qs QS\n"},
 		{"a readonly tie", "typeset -rT QS qs", "array readonly tied QS qs\nreadonly tied qs QS\n"},
@@ -211,6 +220,7 @@ func TestTypesetPlusMNamesTheOtherHalfOfATie(t *testing.T) {
 // the *value* the name holds is the based text. The `-m` half is what a script
 // reads back, so the two are pinned together.
 func TestTypesetMatchingWritesABasedIntegerInDecimal(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"typeset -i16 qa=255\ntypeset -i8 qb=8\ntypeset -i16 qc=-255\n"+
 			"typeset -m 'q*'\necho $qa")
@@ -225,6 +235,7 @@ func TestTypesetMatchingWritesABasedIntegerInDecimal(t *testing.T) {
 // reading swaps them: `typeset -m +x` takes the attribute off every match and
 // `typeset +mx` lists the matches that carry it, unchanged.
 func TestTypesetMatchingReadsEachLettersSign(t *testing.T) {
+	t.Parallel()
 	src := "qa=1\ntypeset -x qa\n"
 	for _, tc := range []struct{ name, line, want string }{
 		{"a plus letter behind a minus m removes it", "typeset -m +x 'q*'", "typeset qa=1\n"},
@@ -244,6 +255,7 @@ func TestTypesetMatchingReadsEachLettersSign(t *testing.T) {
 // matching letter assigns nothing at all, which is why this is a row about the
 // pair rather than about `-p`.
 func TestTypesetMatchingUnderThePrintLetterStillAssigns(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "qa=1\nqb=2\nzz=3\ntypeset -pm 'q*'=9\ntypeset -p zz")
 	want := "typeset qa=9\ntypeset qb=9\ntypeset zz=3\n"
 	if out != want || st != 0 {

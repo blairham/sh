@@ -20,6 +20,7 @@ import (
 //
 // Measured 2026-09-07 against zsh 5.9.2 with a scratch HOME and `-f`.
 func TestADeclarationOperandThatIsNotAName(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset ':'; echo A`, "zsh:typeset:1: not valid in this context: :\n"},
@@ -52,6 +53,7 @@ func TestADeclarationOperandThatIsNotAName(t *testing.T) {
 // the strictness is a value and not a rule: `typeset 0` is no complaint at
 // all in this shell and is one in the other two.
 func TestADeclarationTakesASpecialParameter(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, src := range []string{`typeset 0`, `typeset '?'`, `typeset '#'`, `typeset -- -`} {
 		out, st := runZsh(t, dir, src)
@@ -73,6 +75,7 @@ func TestADeclarationTakesASpecialParameter(t *testing.T) {
 // through to the substrate's default wording, which is bash's sentence, and
 // nothing above would catch that for a builtin no test happened to cover.
 func TestTheDeclarationBadNameWordingsAreSet(t *testing.T) {
+	t.Parallel()
 	d := zsh.Diagnostics()
 	for _, b := range []string{"typeset", "declare", "integer"} {
 		if d.BuiltinBadName[b] != "not valid in this context: %[2]s" {

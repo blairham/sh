@@ -57,6 +57,7 @@ func topLevelMatch(t *testing.T, subject, value string, topLevel syntax.TopLevel
 }
 
 func TestATopLevelBarFromAValueIsAnAlternation(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, subject, value string
 		on, off              string
@@ -108,6 +109,7 @@ func TestATopLevelBarFromAValueIsAnAlternation(t *testing.T) {
 // text: the escaping is the only thing that still says where a character came
 // from by the time the matcher has the pattern.
 func TestAQuotedBarIsNotAnAlternation(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.PatternAlternation, d.PatternTopLevelAlternation = true, syntax.TopLevelAlternationFromAValue
 	sem := permissive()
@@ -147,6 +149,7 @@ func TestAQuotedBarIsNotAnAlternation(t *testing.T) {
 // Through the trim operator rather than through a `case`, because a `case`
 // arm's bar is the grammar's separator and never reaches the matcher at all.
 func TestAWrittenBarIsNotAnAlternation(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.PatternAlternation, d.PatternTopLevelAlternation = true, syntax.TopLevelAlternationFromAValue
 	sem := permissive()
@@ -202,6 +205,7 @@ func TestAWrittenBarIsNotAnAlternation(t *testing.T) {
 // Measured 2026-09-13 on the two shells that have them (#2528); the values are
 // named here rather than the shells, as everything under interp is.
 func TestTheOtherReadingTakesAWrittenBarToo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, fromAValue, wherever string }{
 		{
 			// The row the two readings split on, and the reason a bool
@@ -265,6 +269,7 @@ func TestTheOtherReadingTakesAWrittenBarToo(t *testing.T) {
 // value to two fields, so it is the bar that stops here and not the value
 // failing to be a pattern (#2528).
 func TestOnlyOneReadingReachesPathnameExpansion(t *testing.T) {
+	t.Parallel()
 	for _, r := range []struct {
 		name   string
 		v      syntax.TopLevelAlternation

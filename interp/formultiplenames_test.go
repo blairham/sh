@@ -30,6 +30,7 @@ func runManyNames(t *testing.T, src string) (string, int) {
 // The headline, and the shape a script walks a serialized key/value table
 // with: two names take two words a pass.
 func TestALoopWithTwoNamesTakesTwoWordsAPass(t *testing.T) {
+	t.Parallel()
 	out, st := runManyNames(t, `for key value ( a 1 b 2 ) { echo "$key=$value" }`)
 	if want := "a=1\nb=2\n"; out != want {
 		t.Errorf("out = %q, want %q", out, want)
@@ -41,6 +42,7 @@ func TestALoopWithTwoNamesTakesTwoWordsAPass(t *testing.T) {
 
 // The stride is the name count and not two: three names take three.
 func TestTheStrideIsTheNameCount(t *testing.T) {
+	t.Parallel()
 	out, st := runManyNames(t, `for a b c ( 1 2 3 4 5 6 ) { echo "[$a][$b][$c]" }`)
 	if want := "[1][2][3]\n[4][5][6]\n"; out != want {
 		t.Errorf("out = %q, want %q", out, want)
@@ -56,6 +58,7 @@ func TestTheStrideIsTheNameCount(t *testing.T) {
 // holding the previous pass's word, are the two wrong answers that look right
 // on a list whose length divides.
 func TestAShortLastPassLeavesTheRemainingNamesEmpty(t *testing.T) {
+	t.Parallel()
 	out, st := runManyNames(t,
 		`for a b ( 1 2 3 ) { echo "[${a-U}][${b-U}]" }; echo "after=[${a-U}][${b-U}]"`)
 	if want := "[1][2]\n[3][]\nafter=[3][]\n"; out != want {
@@ -70,6 +73,7 @@ func TestAShortLastPassLeavesTheRemainingNamesEmpty(t *testing.T) {
 // above could have been written past: "run a last short pass" must not mean
 // "run one pass over nothing".
 func TestAnEmptyListRunsTheBodyNoTimes(t *testing.T) {
+	t.Parallel()
 	out, st := runManyNames(t, `for a b ( ) { echo ran }; echo done`)
 	if want := "done\n"; out != want {
 		t.Errorf("out = %q, want %q", out, want)
@@ -82,6 +86,7 @@ func TestAnEmptyListRunsTheBodyNoTimes(t *testing.T) {
 // With no list at all the loop walks the positional parameters, in groups of
 // the same size — the absent list and the empty one stay different questions.
 func TestNoListWalksThePositionalParametersInGroups(t *testing.T) {
+	t.Parallel()
 	out, st := runManyNames(t, `set -- p q r s; for a b; do echo "[$a][$b]"; done`)
 	if want := "[p][q]\n[r][s]\n"; out != want {
 		t.Errorf("out = %q, want %q", out, want)
@@ -93,6 +98,7 @@ func TestNoListWalksThePositionalParametersInGroups(t *testing.T) {
 
 // The names keep their last values after the loop, exactly as one name does.
 func TestTheNamesKeepTheirLastValuesAfterTheLoop(t *testing.T) {
+	t.Parallel()
 	out, st := runManyNames(t, `for a b ( 1 2 3 4 ) { : }; echo "[$a][$b]"`)
 	if want := "[3][4]\n"; out != want {
 		t.Errorf("out = %q, want %q", out, want)
@@ -105,6 +111,7 @@ func TestTheNamesKeepTheirLastValuesAfterTheLoop(t *testing.T) {
 // The same name twice is not refused and not special: each is written in turn,
 // so the last one wins the pass. Measured `[2]` then `[4]` in zsh.
 func TestARepeatedNameTakesTheLastWordOfThePass(t *testing.T) {
+	t.Parallel()
 	out, st := runManyNames(t, `for a a ( 1 2 3 4 ) { echo "[$a]" }`)
 	if want := "[2]\n[4]\n"; out != want {
 		t.Errorf("out = %q, want %q", out, want)
@@ -117,6 +124,7 @@ func TestARepeatedNameTakesTheLastWordOfThePass(t *testing.T) {
 // `break` leaves the loop from a pass that bound several names, and the loop's
 // status is still the body's.
 func TestBreakLeavesALoopWithSeveralNames(t *testing.T) {
+	t.Parallel()
 	out, st := runManyNames(t, `for a b ( 1 2 3 4 ) { echo "[$a]"; break }; echo "st=$?"`)
 	if want := "[1]\nst=0\n"; out != want {
 		t.Errorf("out = %q, want %q", out, want)
@@ -131,6 +139,7 @@ func TestBreakLeavesALoopWithSeveralNames(t *testing.T) {
 // instead writes it once a pass however many names were bound, which is why
 // the two are not the same call repeated.
 func TestATraceWritesOneLinePerNameBound(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `set -x; for a b ( 1 2 3 4 ) { : }`,
 		func(d *syntax.Dialect) {
 			d.ForMultipleNames = true
@@ -152,6 +161,7 @@ func TestATraceWritesOneLinePerNameBound(t *testing.T) {
 // The header wording writes one line a pass and not one a name, so a dialect
 // that quotes the source does not repeat itself.
 func TestATraceThatQuotesTheHeaderWritesItOncePerPass(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `set -x; for a b ( 1 2 3 4 ) { : }`,
 		func(d *syntax.Dialect) {
 			d.ForMultipleNames = true

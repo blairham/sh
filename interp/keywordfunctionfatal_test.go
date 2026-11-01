@@ -12,6 +12,7 @@ import (
 // FatalErrorEndsAtAKeywordFunctionCall, both answers, over both definition
 // forms: only the keyword form with the answer yes is a boundary (#5508).
 func TestAFatalErrorEndsAtAKeywordCallOnlyWhereTheAxisSays(t *testing.T) {
+	t.Parallel()
 	const body = `{ : ${u?gone}; echo in; }; f; echo st=$?`
 	for _, c := range []struct {
 		name   string
@@ -42,6 +43,7 @@ func TestAFatalErrorEndsAtAKeywordCallOnlyWhereTheAxisSays(t *testing.T) {
 
 // A request to stop is not an error, and is not caught.
 func TestAnExitInAKeywordCallIsNotCaught(t *testing.T) {
+	t.Parallel()
 	s := permissive()
 	s.FatalErrorEndsAtAKeywordFunctionCall = Yes
 	out, st := run(t, `function f { exit 3; }; f; echo st=$?`, withSem(s))

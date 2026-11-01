@@ -35,6 +35,7 @@ func unexpectedIn(t *testing.T, src string, d Diagnostics) string {
 }
 
 func TestAnUnexpectedArithmeticCommandIsNamedByItsText(t *testing.T) {
+	t.Parallel()
 	d := Diagnostics{SyntaxUnexpected: "near `%[1]s'"}
 	got := unexpectedIn(t, "x=1\n(( 1 )) (( 2 ))", d)
 	if !strings.Contains(got, "near ` 2 '") {
@@ -48,6 +49,7 @@ func TestAnUnexpectedArithmeticCommandIsNamedByItsText(t *testing.T) {
 // The other value of the same question, which is what makes it the dialect's
 // answer rather than one spelling for everyone.
 func TestADialectMayNameTheOperatorThatOpenedIt(t *testing.T) {
+	t.Parallel()
 	d := Diagnostics{SyntaxUnexpected: "near `%[1]s'", SyntaxUnexpectedNamesTheOpener: true}
 	got := unexpectedIn(t, "x=1\n(( 1 )) (( 2 ))", d)
 	if !strings.Contains(got, "near `(('") {
@@ -58,6 +60,7 @@ func TestADialectMayNameTheOperatorThatOpenedIt(t *testing.T) {
 // And the flag reaches only the construct that has two spellings: an ordinary
 // token has no opener, so asking for one changes nothing.
 func TestNamingTheOpenerLeavesEveryOtherTokenAlone(t *testing.T) {
+	t.Parallel()
 	plain := Diagnostics{SyntaxUnexpected: "near `%[1]s'"}
 	opener := plain
 	opener.SyntaxUnexpectedNamesTheOpener = true

@@ -18,6 +18,7 @@ import (
 // attribute and `local -r` freezes the local; the caller's values come back
 // either way.
 func TestLocalReadsTheDialectsLetters(t *testing.T) {
+	t.Parallel()
 	src := "n=keep\nf() { local -i n; n=2+3; echo in=$n; }\nf\necho out=$n"
 	out, errs, _ := declRun(t, src, func(s *Semantics) { s.LocalOptions = "air" }, Diagnostics{})
 	if errs != "" {
@@ -47,6 +48,7 @@ func TestLocalReadsTheDialectsLetters(t *testing.T) {
 // declares a variable named `-r`, which the name rules then refuse — fatally
 // where the dialect says a declaration's bad name is fatal.
 func TestWithoutLettersALocalOptionIsAName(t *testing.T) {
+	t.Parallel()
 	src := "f() { local -r x=5; echo unreached; }\nf\necho after"
 	out, errs, st := declRun(t, src, func(s *Semantics) {
 		s.LocalOptions = ""
@@ -65,6 +67,7 @@ func TestWithoutLettersALocalOptionIsAName(t *testing.T) {
 // locals as clustered declarations, nothing at all, and the refusal of the
 // engine whose listing is its whole parameter table.
 func TestBareLocalLists(t *testing.T) {
+	t.Parallel()
 	src := "g() { local outer=1; f; }\nf() { local -i n=5; local x; local; }\ng"
 	out, errs, st := declRun(t, src, func(s *Semantics) {
 		s.LocalOptions = "air"

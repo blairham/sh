@@ -16,6 +16,7 @@ import (
 // 2026-09-07 on zsh 5.9.2 over a script file under `env -i` with a scratch
 // HOME, ZDOTDIR and HISTFILE; dash and all three bash columns refuse them.
 func TestThisShellStepsOverAnySeparator(t *testing.T) {
+	t.Parallel()
 	d := zsh.Dialect()
 	if d.SeparatorWhereACommandBelongs != syntax.AnySeparatorWhereACommandBelongs {
 		t.Errorf("zsh steps over any number of them, anywhere, got %v",
@@ -31,6 +32,7 @@ func TestThisShellStepsOverAnySeparator(t *testing.T) {
 // Running them, including the two shapes ksh93 refuses: a second separator,
 // and one after a bar.
 func TestTheSeparatorIsSteppedOverHere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, out string
 		want     int
@@ -78,6 +80,7 @@ func TestTheSeparatorIsSteppedOverHere(t *testing.T) {
 // succeeds in ksh93. `false || ;` is the shape that separates the two
 // readings, and this shell answers 1 where that one answers 0.
 func TestAnAbsentOperandKeepsTheLeftSideHere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		want int
@@ -103,6 +106,7 @@ func TestAnAbsentOperandKeepsTheLeftSideHere(t *testing.T) {
 // ksh93 stops at the newline and prints `two`, which is the third place the
 // two lenient shells part.
 func TestANewlineAfterTheSeparatorIsSteppedOverHere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, out string
 	}{
@@ -125,6 +129,7 @@ func TestANewlineAfterTheSeparatorIsSteppedOverHere(t *testing.T) {
 // grammar: the five compounds that have one all take it here and are refused
 // by dash and every bash column.
 func TestASeparatorAtTheHeadOfACompoundBodyHere(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"{ ; echo two; }",
 		"( ; echo two )",

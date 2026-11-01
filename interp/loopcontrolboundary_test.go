@@ -30,6 +30,7 @@ const (
 // TestFunctionCallIsALoopControlBoundary pins the axis by name: Yes leaves the
 // caller's loop running and No ends it.
 func TestFunctionCallIsALoopControlBoundary(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		boundary  Answer
 		src, want string
@@ -55,6 +56,7 @@ func TestFunctionCallIsALoopControlBoundary(t *testing.T) {
 // `break` with no loop, so the rest of the subshell runs; No lets it end the
 // subshell's own copy of the loop and nothing more.
 func TestSubshellIsALoopControlBoundary(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		boundary  Answer
 		src, want string
@@ -75,6 +77,7 @@ func TestSubshellIsALoopControlBoundary(t *testing.T) {
 // TestTheTwoBoundariesAreIndependent is why they are two fields: the panel
 // offers three of the four combinations, so no single field could express it.
 func TestTheTwoBoundariesAreIndependent(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		call, sub Answer
 		wantCall  string
@@ -103,6 +106,7 @@ func TestTheTwoBoundariesAreIndependent(t *testing.T) {
 // It is asserted with both left Unspecified, which is the state that makes an
 // unwanted question audible: `ask` writes a line naming the axis and refuses.
 func TestABoundaryIsAskedAboutOnlyWhereItDecides(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"f(){ for j in 1 2; do break; echo unreached; done; echo infunc; }; for i in 1; do f; done; echo after",
 		"for i in 1; do ( for j in 1 2; do break; echo unreached; done; echo insub ); done; echo after",

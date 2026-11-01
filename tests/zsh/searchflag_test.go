@@ -12,6 +12,7 @@ import "testing"
 // — and every assertion here is a *pair*, the flagged spelling beside the
 // unflagged one, because either alone is a value rather than a comparison.
 func TestTheSearchingFlagMakesASubstitutionNonGreedy(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `s=abab
 print -r -- "[${s/*b/_}][${(S)s/*b/_}]"
 print -r -- "[${s//*b/_}][${(S)s//*b/_}]"
@@ -35,6 +36,7 @@ print -r -- "[${v//a*c/X}][${(S)v//a*c/X}]"`)
 // `${(S)str%X*}` takes a single `X` from the *middle*, which is the thing a
 // suffix trim cannot do at all.
 func TestTheSearchingFlagMakesATrimASubstringSearch(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `str=aXbXc
 print -r -- "[${str#X*}][${(S)str#X*}]"
 print -r -- "[${str##X*}][${(S)str##X*}]"
@@ -57,6 +59,7 @@ print -r -- "[${(S)str#zz}][${(S)str#}]"`)
 // implementation that kept a split point instead of a span can answer the
 // trim and not the match once the piece comes from the middle.
 func TestTheSearchingAndMatchingFlagsCompose(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `str=aXbXc
 print -r -- "[${(S)str#X*}][${(SM)str#X*}]"
 print -r -- "[${(S)str##X*}][${(SM)str##X*}]"
@@ -80,6 +83,7 @@ print -r -- "[${(S@)a#A}][${(SM@)a#A}]"`)
 // pattern in it" would move it, and it is a whole-value test with no second
 // match to prefer.
 func TestTheSearchingFlagReachesOnlyThePatternOperators(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `str=aXbXc
 print -r -- "[${(S)str}][${(S)str:1}][${(S)str:-alt}]"
 print -r -- "[${(S)str:#a*}][${(S)#str}][${(S)str[(i)X]}]"
@@ -101,6 +105,7 @@ print -r -- "[${(S@)a:#f2*}]"`)
 // the arms were written in, because the match that starts closest to the end
 // wins over the arm that was written first.
 func TestTheSearchingFlagAndTheArmsOfAnAlternation(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `w=abc
 print -r -- "[${(S)w##(a|ab)}][${(S)w##(ab|a)}]"
 print -r -- "[${w%%(b|bc)}][${(S)w%%(b|bc)}][${(S)w%%(bc|b)}]"
@@ -125,6 +130,7 @@ print -r -- "[${(S)v%%(bc|cbc)}][${(S)v%%(cbc|bc)}]"`)
 // This was wrong here before `(S)` needed it: `${v//x#/-}` left `-a-b-c-`,
 // one replacement more than the shell makes.
 func TestAnEmptyMatchAtTheEndOfASubstitution(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `setopt extendedglob
 v=abc
 print -r -- "[${v//x#/-}][${v//c#/-}][${v//(#e)/-}]"
@@ -151,6 +157,7 @@ print -r -- "[${str//X#/-}][${(S)str//X#/-}]"`)
 // can hold consistently, so the row is measured and named here rather than
 // reproduced; every other spelling agrees and is asserted.
 func TestASearchingTrimReportsTheMatchItTook(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `setopt extendedglob
 probe() {
   w=aXbXc

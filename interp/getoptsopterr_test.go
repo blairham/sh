@@ -34,6 +34,7 @@ func opterrDiag() *Diagnostics {
 // The axis itself, over both complaints — a letter the string does not have
 // and a letter whose argument is missing.
 func TestGetoptsOptErrSilencesTheComplaintIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, msg string }{
 		{"a bad option", `set -- -z; getopts "a" o`, "illegal option -- z"},
 		{"a missing argument", `set -- -a; getopts "a:" o`, "option requires an argument -- a"},
@@ -66,6 +67,7 @@ func TestGetoptsOptErrSilencesTheComplaintIsAnAxis(t *testing.T) {
 // OPTARG are the same either way, so the two answers differ in the sentence
 // and in nothing a script can branch on.
 func TestGetoptsOptErrLeavesTheAnswerAlone(t *testing.T) {
+	t.Parallel()
 	const src = `OPTERR=0
 set -- -z rest
 getopts "a" o
@@ -85,6 +87,7 @@ echo "st=$? [$o] [${OPTARG-unset}] ind=$OPTIND"`
 // operands still writes its line with the parameter set to zero, which is the
 // one place the two could have been folded together and must not be.
 func TestGetoptsOptErrDoesNotReachTheUsageLine(t *testing.T) {
+	t.Parallel()
 	sem := opterrSem(Yes)
 	dg := opterrDiag()
 	dg.BuiltinUsage = map[string]string{"getopts": "usage: getopts optstring name [arg]"}
@@ -98,6 +101,7 @@ func TestGetoptsOptErrDoesNotReachTheUsageLine(t *testing.T) {
 // says the two mechanisms are separate: the leading colon reports through
 // OPTARG and the name, and the parameter only ever removed a sentence.
 func TestGetoptsOptErrLeavesTheSilentFormAlone(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{No, Yes} {
 		t.Run(answer.String(), func(t *testing.T) {
 			sem := opterrSem(answer)
@@ -114,6 +118,7 @@ func TestGetoptsOptErrLeavesTheSilentFormAlone(t *testing.T) {
 // optional sign, then decimal digits, stopping at the first byte that is not
 // one. Each row is a spelling measured on the shell that has the parameter.
 func TestGetoptsOptErrValueReading(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		value string
 		quiet bool
@@ -172,6 +177,7 @@ func TestGetoptsOptErrValueReading(t *testing.T) {
 // it through the same number read would silence it — zero being what an empty
 // string comes to.
 func TestGetoptsOptErrEmptyAndUnsetAreNotZero(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, prefix string }{
 		{"unset", "unset OPTERR\n"},
 		{"empty", "OPTERR=\n"},
@@ -192,6 +198,7 @@ func TestGetoptsOptErrEmptyAndUnsetAreNotZero(t *testing.T) {
 // script has set the parameter to a value that reads as zero. Every other
 // `getopts`, in every dialect, reaches no question at all.
 func TestGetoptsOptErrIsAskedOnlyWhereItReadsZero(t *testing.T) {
+	t.Parallel()
 	const axis = "OPTERR reading zero silencing the `getopts` complaint"
 	t.Run("set to zero", func(t *testing.T) {
 		sem := opterrSem(Unspecified)

@@ -19,6 +19,7 @@ import (
 // The answers themselves are TestEscapedPatternsAnswerAsTheMatcherDoes's;
 // this holds that the shortcut is the one giving them.
 func TestAnEscapedLiteralIsAnsweredWithoutTheMatcher(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	for _, c := range []struct {
 		reaches          string

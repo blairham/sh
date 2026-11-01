@@ -343,6 +343,7 @@ func TestACloneOwnsEveryScopeTable(t *testing.T) {
 // writing it, and no map-level check can see that. Every slot is seeded,
 // because a slot a cell never held cannot show whether it was copied.
 func TestACloneOwnsEveryCell(t *testing.T) {
+	t.Parallel()
 	parent := newTestRunner(t, &Runner{})
 	parent.varsPut("all", "v")
 	parent.arraysPut("all", ArrayOf(Element{Str: "x"}))
@@ -401,6 +402,7 @@ func TestACloneOwnsEveryCell(t *testing.T) {
 // unsets them must not carry an empty cell for each one into every subshell
 // it starts.
 func TestASparseStoreIsCompacted(t *testing.T) {
+	t.Parallel()
 	r := newTestRunner(t, &Runner{})
 	r.varsPut("keep", "k")
 	for i := range 2000 {
@@ -424,6 +426,7 @@ func TestASparseStoreIsCompacted(t *testing.T) {
 // attribute — `readonly x` with x unset — is a live cell, so compacting the
 // slab must keep it and the counts must say so (#6373).
 func TestACellHoldingOnlyAnAttributeIsKept(t *testing.T) {
+	t.Parallel()
 	r := newTestRunner(t, &Runner{})
 	r.attrSet("frozen", attrReadonly)
 	for i := range 2000 {
@@ -670,6 +673,7 @@ func TestACloneOwnsEveryTable(t *testing.T) {
 // hands out a shared table again. Asserted for one representative table
 // rather than all of them, because it is a property of maps.Clone.
 func TestACloneKeepsAnEmptyTableItsOwn(t *testing.T) {
+	t.Parallel()
 	parent := newTestRunner(t, &Runner{})
 	parent.removedShellOwn = map[string]bool{}
 	child := parent.clone()
@@ -684,6 +688,7 @@ func TestACloneKeepsAnEmptyTableItsOwn(t *testing.T) {
 // chain, so the comparison in TestAPlainParameterWordAnswersAsTheFullRoadDoes
 // is known to cover both halves.
 func TestTheStoresOneLookupReadDeclinesWhatTheChainAnswers(t *testing.T) {
+	t.Parallel()
 	r := newTestRunner(t, &Runner{})
 	r.varsPut("plain", "v")
 	if v, ok := r.storedScalarOnly("plain"); !ok || v != "v" {

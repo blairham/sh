@@ -41,6 +41,7 @@ import (
 // Through the front end with a script file, because runZsh runs without the
 // alias expansion a script gets and so cannot see any of this.
 func TestAnAliasAnywhereInAFunctionNameListIsRefused(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	refused := func(name string) string {
 		return "(eval):1: defining function based on alias `" + name + "'\n(eval):1: parse error near `()'\n"

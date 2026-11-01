@@ -16,6 +16,7 @@ import (
 // Reachable only through `${~p}` here, a pattern written in the source
 // having had its escapes spent by quote removal (#1407, #3271).
 func TestBracketEscapeAnswer(t *testing.T) {
+	t.Parallel()
 	if got, want := zsh.Semantics().BracketEscape, interp.BracketEscapeProtectsAndIsAMember; got != want {
 		t.Errorf("BracketEscape = %v, want %v", got, want)
 	}

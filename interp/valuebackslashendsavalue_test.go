@@ -27,6 +27,7 @@ import (
 // at all: with the backslash written as a literal there is nothing for the three
 // readings to differ about, and all three answered the same wrong word.
 func TestABackslashThatEndsAValueQuotesTheFieldsNextCharacter(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, name := range []string{"x*", `x\y`, "xy", "xz"} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {
@@ -81,6 +82,7 @@ func TestABackslashThatEndsAValueQuotesTheFieldsNextCharacter(t *testing.T) {
 // matches the directory whose name ends in a backslash and misses on the one
 // that does not, and the other does the reverse.
 func TestABackslashEndingAValueInFrontOfASeparatorStaysInItsPiece(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, d := range []string{`x\`, "y"} {
 		if err := os.MkdirAll(filepath.Join(dir, d), 0o700); err != nil {
@@ -134,6 +136,7 @@ func TestABackslashEndingAValueInFrontOfASeparatorStaysInItsPiece(t *testing.T) 
 // a separator **and** the piece it ends describes a name. Every other shape is
 // one word under both answers, which is nearly every word anybody writes.
 func TestTheValueBackslashPieceAxisIsNotAskedWhereBothAnswersAgree(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "tmp", "a", "b"), 0o700); err != nil {
 		t.Fatal(err)
@@ -179,6 +182,7 @@ func axisRunIn(t *testing.T, dir, src string, set func(*Semantics)) (string, int
 // pair behind would put a mark in every field that reads as data and take the
 // end-of-value backslash out of every field that has one, silently.
 func TestTheTwoValueBackslashMarksAgree(t *testing.T) {
+	t.Parallel()
 	if want := string(
 		[]byte{ValueBackslashMarkForTest, ValueBackslashMarkForTest},
 	); ValueBackslashRanOutOfValueForTest != want {
@@ -199,6 +203,7 @@ func TestTheTwoValueBackslashMarksAgree(t *testing.T) {
 // Asserted under all three readings, because the fix is about the *absence* of
 // something to quote and no reading has anything to quote here.
 func TestAValueBackslashBeforeSomethingAlreadyQuotedIsACharacter(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, name := range []string{"a*b", `a\*b`, `a\\*b`, "ab"} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {

@@ -38,6 +38,7 @@ func elementsFromZero(s *Semantics) {
 }
 
 func TestASubscriptOnAStringNamesACharacterAndUnsetTakesItOut(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ sub, want string }{
 		{"1", "st=0 [ello]\n"},
 		{"2", "st=0 [hllo]\n"},
@@ -54,6 +55,7 @@ func TestASubscriptOnAStringNamesACharacterAndUnsetTakesItOut(t *testing.T) {
 }
 
 func TestACharacterSubscriptOutOfReachChangesNothing(t *testing.T) {
+	t.Parallel()
 	// Past the end names no character; so does a negative reaching back
 	// before the first, and that one is *quiet* where the same reach with a
 	// non-negative subscript is refused.
@@ -67,6 +69,7 @@ func TestACharacterSubscriptOutOfReachChangesNothing(t *testing.T) {
 }
 
 func TestACharacterSubscriptBelowTheFirstIsRefused(t *testing.T) {
+	t.Parallel()
 	out, st := scalarUnsetRun(t, `a=hello; unset "a[0]"; echo "st=$? [${a-UNSET}]"`, characters)
 	if st != 0 || out != "sh: unset: [0]: bad array subscript\nst=1 [hello]\n" {
 		t.Errorf("got %q status %d, want the refusal and the string kept", out, st)
@@ -74,6 +77,7 @@ func TestACharacterSubscriptBelowTheFirstIsRefused(t *testing.T) {
 }
 
 func TestASubscriptNamingTheOneElementAScalarIsTakesTheNameAway(t *testing.T) {
+	t.Parallel()
 	// Not the value: the name, and its export attribute with it.
 	out, st := scalarUnsetRun(t,
 		`export a=hello; unset "a[0]"; echo "st=$? [${a-UNSET}]"; `+
@@ -94,6 +98,7 @@ func TestASubscriptNamingTheOneElementAScalarIsTakesTheNameAway(t *testing.T) {
 }
 
 func TestASubscriptNamingNoElementOfAScalarIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `a=hello; unset "a[2]"; echo "st=$? [${a-UNSET}]"`
 	out, st := scalarUnsetRun(t, src, func(s *Semantics) {
 		elementsFromZero(s)
@@ -112,6 +117,7 @@ func TestASubscriptNamingNoElementOfAScalarIsAnAxis(t *testing.T) {
 }
 
 func TestTheRefusalIsAboutTheNameAndNotTheSubscript(t *testing.T) {
+	t.Parallel()
 	// An array with a gap takes the same subscript without a word under
 	// either answer, so what the refusing shell objects to is the name not
 	// being an array — which is what its wording says.
@@ -129,6 +135,7 @@ func TestTheRefusalIsAboutTheNameAndNotTheSubscript(t *testing.T) {
 }
 
 func TestASubscriptOnANameHoldingNothingIsQuietUnderEveryReading(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		set  func(*Semantics)
@@ -148,6 +155,7 @@ func TestASubscriptOnANameHoldingNothingIsQuietUnderEveryReading(t *testing.T) {
 }
 
 func TestAnEmptyStringStillHasTheOneElementAScalarIs(t *testing.T) {
+	t.Parallel()
 	// No character to name, so the character reading leaves the name empty;
 	// the element reading still finds the element and takes the name away.
 	out, st := scalarUnsetRun(t, `a=; unset "a[1]"; echo "st=$? [${a-UNSET}]"`, characters)
@@ -161,6 +169,7 @@ func TestAnEmptyStringStillHasTheOneElementAScalarIs(t *testing.T) {
 }
 
 func TestACharacterSubscriptCountsCharactersAndNotBytes(t *testing.T) {
+	t.Parallel()
 	// The locale's, which is what interp/multibyte.go owns for every other
 	// reading of a string by position.
 	out, st := runGrammar(t, `a=héllo; unset "a[2]"; echo "[$a]"`, nil, func(r *Runner) {
@@ -177,6 +186,7 @@ func TestACharacterSubscriptCountsCharactersAndNotBytes(t *testing.T) {
 }
 
 func TestAnEmptyArrayIsStillAnArray(t *testing.T) {
+	t.Parallel()
 	// The scalar path is for a name the array table does not hold at all, not
 	// for one it holds empty: an array with no elements has no element for a
 	// subscript to name, and the *name* is not a string for a subscript to

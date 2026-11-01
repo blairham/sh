@@ -18,6 +18,7 @@ import (
 // held a "splitting an unquoted parameter expansion" refusal to stderr before
 // the exemption stopped asking.
 func TestUnanimousNoSplitContextsAskNoAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"an assignment's value",
@@ -71,6 +72,7 @@ func TestUnanimousNoSplitContextsAskNoAxis(t *testing.T) {
 // else. Having refused, it must not act on either reading: the command does
 // not run and no file appears.
 func TestARefusedRedirectionTargetNamesItsOwnAxis(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := run(t, `two="a b"; echo hi > $two`, func(r *Runner) {
 		sem := CoreSemantics()

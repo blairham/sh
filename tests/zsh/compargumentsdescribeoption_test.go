@@ -25,6 +25,7 @@ const describeOptionSpecs = `'-a[all]' '-f+[file]:fname:_files' ` +
 // TestCompargumentsLDescribesAnOptionsFirstArgument is `-L`, which was refused
 // as an invalid option — and `_arguments` printed that refusal over the line.
 func TestCompargumentsLDescribesAnOptionsFirstArgument(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, option, want string }{
 		{"an argument that attaches or follows", "-f", "0 fname|_files|option-f-1"},
 		{"one after an `=` only", "--color", "0 color|(never always)|option--color-1"},
@@ -52,6 +53,7 @@ func TestCompargumentsLDescribesAnOptionsFirstArgument(t *testing.T) {
 // them answers: one word fewer is `not enough arguments`, one more is `too
 // many arguments`, and either way nothing is assigned.
 func TestTheReadBackVerbsTakeAnExactCount(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, call, want string }{
 		{"-D with four", "-D a b c d", "1 too many arguments"},
 		{"-O with five", "-O a b c d e", "1 too many arguments"},
@@ -82,6 +84,7 @@ func TestTheReadBackVerbsTakeAnExactCount(t *testing.T) {
 // TestAReadBackVerbThatAnswersNonZeroAssignsNothing — the names keep the
 // caller's values. This emptied them.
 func TestAReadBackVerbThatAnswersNonZeroAssignsNothing(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, specs, line, call, want string }{
 		{
 			"-D with nothing to describe", describeOptionSpecs, "cmd -a",
@@ -114,6 +117,7 @@ func TestAReadBackVerbThatAnswersNonZeroAssignsNothing(t *testing.T) {
 // letter. The two forms whose argument attaches without an `=` are spent, as
 // before.
 func TestAnOptionWrittenWithItsEqualsIsOfferedBack(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ line, want string }{
 		{"cmd --color=", "-x:dir|-f:file|--color:col --opt:o -o:oo"},
 		{"cmd --color=al", "-x:dir|-f:file|--color:col --opt:o -o:oo"},
@@ -140,6 +144,7 @@ func TestAnOptionWrittenWithItsEqualsIsOfferedBack(t *testing.T) {
 // leaves `$PREFIX` for `$IPREFIX`, so the action's words are matched against
 // the argument alone. Without it `ls --color=<TAB>` listed nothing.
 func TestDescribingAnAttachedArgumentMovesTheOptionIntoIPREFIX(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ line, want string }{
 		{"cmd --color=", "--color=|"},
 		{"cmd --color=al", "--color=|al"},

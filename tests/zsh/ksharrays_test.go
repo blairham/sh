@@ -25,6 +25,7 @@ const kshArraysArray = "a=(xx yy zz)\n"
 //	setopt ksharrays; a=(xx yy zz); echo "$a[1]"      xx[1]
 //	                                echo "${a[1]}"    yy
 func TestKshArraysStopsAnUnbracedSubscriptBeingOne(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "setopt ksharrays\n"+kshArraysArray+`echo "$a[1]"`)
 	if st != 0 || strings.TrimSpace(out) != "xx[1]" {
 		t.Errorf("`$a[1]` under ksharrays = %q (status %d), want xx[1]", out, st)
@@ -40,6 +41,7 @@ func TestKshArraysStopsAnUnbracedSubscriptBeingOne(t *testing.T) {
 // The braced spelling is untouched: the braces settle where the expansion
 // ends without anything having to ask, so only the base moves.
 func TestKshArraysLeavesTheBracedSubscriptAlone(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"on", "setopt ksharrays\n" + kshArraysArray + `echo "${a[1]}"`, "yy"},
 		{"off", kshArraysArray + `echo "${a[1]}"`, "xx"},
@@ -58,6 +60,7 @@ func TestKshArraysLeavesTheBracedSubscriptAlone(t *testing.T) {
 // Every unbraced shape the grammar has, not only a name with a number in it.
 // Measured on zsh 5.9.2 with `a=(xxx yy zz)` and `set -- p q r`.
 func TestKshArraysReachesEveryUnbracedShape(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the whole-array subscript", `echo "$a[@]"`, "xxx[@]"},
 		{"a range", `echo "$a[1,2]"`, "xxx[1,2]"},
@@ -84,6 +87,7 @@ func TestKshArraysReachesEveryUnbracedShape(t *testing.T) {
 // stage — which is the whole point of the option for a script written for
 // another shell, where `$dir[0-9]*` is a pattern and never an element.
 func TestKshArraysBracketsAreTheWordsOwnText(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "xx1"), nil, 0o644); err != nil {
 		t.Fatal(err)
@@ -108,6 +112,7 @@ func TestKshArraysBracketsAreTheWordsOwnText(t *testing.T) {
 // under the option `$a[1]` on `a=(x y)` matches `x1`, which is the bracket
 // expression the two characters make, and does not match without it.
 func TestKshArraysBracketsReachAPattern(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a condition", `[[ x1 == $a[1] ]] && echo M || echo N`},
 		{"a case arm", `case x1 in $a[1]) echo M;; *) echo N;; esac`},
@@ -131,6 +136,7 @@ func TestKshArraysBracketsReachAPattern(t *testing.T) {
 // the caller's, `eval` takes the answer at the eval, and a sourced file takes
 // the answer at the call rather than at the source.
 func TestKshArraysIsAnsweredWhenTheWordExpands(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a body read without the option and called with it",
@@ -170,6 +176,7 @@ func TestKshArraysIsAnsweredWhenTheWordExpands(t *testing.T) {
 // The same across a `source`, which is the route a real rc file takes: the
 // file is read before the option moves and called after it.
 func TestKshArraysReachesASourcedBody(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	lib := filepath.Join(dir, "lib.zsh")
 	if err := os.WriteFile(lib, []byte(kshArraysArray+"f() { echo \"$a[1]\"; }\n"), 0o644); err != nil {
@@ -184,6 +191,7 @@ func TestKshArraysReachesASourcedBody(t *testing.T) {
 // `ksharrays` is one name over five axes, so the option has to move all five.
 // Measured on zsh 5.9.2 with `a=(xx yy zz)`.
 func TestKshArraysMovesEveryArrayAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, on, off string }{
 		{"the base", `echo "${a[1]}"`, "yy", "xx"},
 		{"a plain name's value", `echo "$a"`, "xx", "xx yy zz"},
@@ -208,6 +216,7 @@ func TestKshArraysMovesEveryArrayAxis(t *testing.T) {
 // there: the first value in the order the table yields, and not the one keyed
 // `0` that bash and ksh93 look for.
 func TestKshArraysReadsAKeyedTablesFirstValue(t *testing.T) {
+	t.Parallel()
 	const table = "typeset -A h\nh=(a 1 b 2)\n"
 	on, st := runZsh(t, t.TempDir(), "setopt ksharrays\n"+table+`echo "[$h][${#h}][$h[a]]"`)
 	if st != 0 || strings.TrimSpace(on) != "[1][1][1[a]]" {
@@ -235,6 +244,7 @@ func TestKshArraysReadsAKeyedTablesFirstValue(t *testing.T) {
 // reproduced — see docs/spec/semantics.md under KeyedTableOrder, and the
 // keys() comment in interp/assoc.go.
 func TestTheFirstValueIsTheFirstOfThisShellsOrder(t *testing.T) {
+	t.Parallel()
 	const table = "typeset -A h\nh[z]=1\nh[a]=2\nh[m]=3\n"
 	out, st := runZsh(t, t.TempDir(), "setopt ksharrays\n"+table+`echo "[$h]"`)
 	if got := strings.TrimSpace(out); st != 0 || got != "[2]" {
@@ -254,6 +264,7 @@ func TestTheFirstValueIsTheFirstOfThisShellsOrder(t *testing.T) {
 // the option's own name — a wrong answer here is a wrong answer for two
 // emulation modes at once, silently.
 func TestEmulationsCarryTheWholeOption(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"sh", "ksh"} {
 		t.Run(mode, func(t *testing.T) {
 			src := "emulate " + mode + "\n" + kshArraysArray +
@@ -283,6 +294,7 @@ func TestEmulationsCarryTheWholeOption(t *testing.T) {
 // TestKshArraysJoinsAScalarAppendAtTheBase. What this test is about is the
 // subscript, which the option leaves alone on either side of the `=`.
 func TestKshArraysLeavesAnAssignmentSubscriptAlone(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "setopt ksharrays\n"+kshArraysArray+
 		"a[1]=Q\n"+`echo "${a[@]}"`)
 	if st != 0 || strings.TrimSpace(out) != "xx Q zz" {
@@ -316,6 +328,7 @@ func TestKshArraysLeavesAnAssignmentSubscriptAlone(t *testing.T) {
 // day, bash 5.3.20, bash 3.2.57 and ksh93u+ 2012-08-01 all answer
 // `firstlast second` — which is what makes it this option's business.
 func TestKshArraysJoinsAScalarAppendAtTheBase(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, on, off string }{
 		{
 			"the listing",
@@ -363,6 +376,7 @@ func TestKshArraysJoinsAScalarAppendAtTheBase(t *testing.T) {
 // holding an array — `a+=last` over a name nothing declared is the ordinary
 // string append under the option exactly as it is without it.
 func TestKshArraysMovesOnlyTheBareScalarAppendOverAnArray(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the rule itself", "a=(first second)\na+=last\ntypeset -p a", "typeset -a a=( firstlast second )"},
 		{"a literal append", "a=(first second)\na+=(last)\ntypeset -p a", "typeset -a a=( first second last )"},
@@ -389,6 +403,7 @@ func TestKshArraysMovesOnlyTheBareScalarAppendOverAnArray(t *testing.T) {
 // the two scalars answer the same way without the option, and only the bare
 // append moves.
 func TestTheAppendsThatDoNotMoveAnswerTheSameWithoutTheOption(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a literal append", "a=(first second)\na+=(last)\ntypeset -p a", "typeset -a a=( first second last )"},
 		{"a subscripted append", "a=(first second)\na[2]+=last\ntypeset -p a", "typeset -a a=( first secondlast )"},
@@ -421,6 +436,7 @@ func TestTheAppendsThatDoNotMoveAnswerTheSameWithoutTheOption(t *testing.T) {
 // not remembered on the array either, since one built under the option grows
 // an element once the option has gone.
 func TestKshArraysAnswersTheAppendWhenTheAssignmentRuns(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"f() { a=(1 2); a+=x; typeset -p a }\nf\nsetopt ksharrays\nf")
 	if want := "typeset -g -a a=( 1 2 x )\ntypeset -g -a a=( 1x 2 )"; st != 0 || strings.TrimSpace(out) != want {
@@ -452,6 +468,7 @@ func TestKshArraysAnswersTheAppendWhenTheAssignmentRuns(t *testing.T) {
 // side — and the shape a real script reaches this in, since a function that
 // wants ksh arrays says so locally.
 func TestKshArraysAppendFollowsLocalOptions(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"a=(1 2)\nf() { setopt localoptions ksharrays; a+=x; }\nf\ntypeset -p a")
 	if want := "typeset -a a=( 1x 2 )"; st != 0 || strings.TrimSpace(out) != want {
@@ -468,6 +485,7 @@ func TestKshArraysAppendFollowsLocalOptions(t *testing.T) {
 // axes: `emulate sh` and `emulate ksh` are how scripts reach the option
 // without anybody typing `setopt`, and `emulate zsh` puts it back.
 func TestEmulationsCarryTheScalarAppend(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"sh", "ksh"} {
 		t.Run(mode, func(t *testing.T) {
 			out, st := runZsh(t, t.TempDir(),
@@ -506,6 +524,7 @@ func TestEmulationsCarryTheScalarAppend(t *testing.T) {
 // is not: both of those store the key `0` and keep the table, measured the
 // same day. See tests/ksh/scalarovertable_test.go (#4617).
 func TestKshArraysRefusesAScalarStoreOverATable(t *testing.T) {
+	t.Parallel()
 	const refusal = "h: attempt to set associative array to scalar"
 	for _, tc := range []struct{ name, src, off string }{
 		{"a plain assignment", "typeset -A h=(one 1)\nh=string\ntypeset -p h", "typeset h=string"},
@@ -534,6 +553,7 @@ func TestKshArraysRefusesAScalarStoreOverATable(t *testing.T) {
 // callers, which the emulations are what test: `emulate ksh` and `emulate sh`
 // both carry the refusal, and an `unsetopt` gives it back.
 func TestTheEmulationsCarryTheSeventhAxis(t *testing.T) {
+	t.Parallel()
 	const refusal = "h: attempt to set associative array to scalar"
 	for _, em := range []string{"emulate ksh", "emulate sh"} {
 		out, st := runZsh(t, t.TempDir(), em+"\ntypeset -A h=(one 1)\nh=string\nprint after")
@@ -567,6 +587,7 @@ func TestTheEmulationsCarryTheSeventhAxis(t *testing.T) {
 // replaced the name — which is exactly the state this test was written
 // against and watched fail.
 func TestKshArraysWritesTheBaseOverAnArrayForAPlainStore(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, on, off string }{
 		{
 			"a plain store, the listing",
@@ -645,6 +666,7 @@ func TestKshArraysWritesTheBaseOverAnArrayForAPlainStore(t *testing.T) {
 // is a plain store rather than a **declaration**: `typeset a=word` over an
 // array is `inconsistent type for assignment` in both columns.
 func TestKshArraysMovesOnlyTheBarePlainStoreOverAnArray(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the rule itself", "a=(first second)\na=word\ntypeset -p a", "typeset -a a=( word second )"},
 		{"the base written out", "a=(first second)\na[0]=word\ntypeset -p a", "typeset -a a=( word second )"},
@@ -675,6 +697,7 @@ func TestKshArraysMovesOnlyTheBarePlainStoreOverAnArray(t *testing.T) {
 // above are pairs rather than a column: only the first one moves, and the
 // other six answer the same way in both states.
 func TestThePlainStoresThatDoNotMoveAnswerTheSameWithoutTheOption(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the rule itself, unmoved", "a=(first second)\na=word\ntypeset -p a", "typeset a=word"},
 		{"the base written out", "a=(first second)\na[1]=word\ntypeset -p a", "typeset -a a=( word second )"},
@@ -699,6 +722,7 @@ func TestThePlainStoresThatDoNotMoveAnswerTheSameWithoutTheOption(t *testing.T) 
 // the name is holding and leaves the second element where it is, where
 // without the option each of them collapses the name to a scalar.
 func TestKshArraysPlainStoreReachesEveryScalarStore(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, on, off string }{
 		{"a for loop", "for a in x y; do :; done", "typeset -a a=( y second )", "typeset a=y"},
 		{"read", "read a <<< zz", "typeset -a a=( zz second )", "typeset a=zz"},
@@ -728,6 +752,7 @@ func TestKshArraysPlainStoreReachesEveryScalarStore(t *testing.T) {
 // and a function's `setopt localoptions ksharrays` reaches a store inside it
 // and not one after it returns.
 func TestTheEmulationsCarryTheEighthAxis(t *testing.T) {
+	t.Parallel()
 	const base = "a=(first second)\na=word\ntypeset -p a"
 	for _, em := range []string{"emulate ksh", "emulate sh"} {
 		out, st := runZsh(t, t.TempDir(), em+"\n"+base)

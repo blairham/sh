@@ -82,6 +82,7 @@ func TestAnOperandThisShellWillNotCompileIsRefused(t *testing.T) {
 // at all. The reference refuses it just the same, which is what makes this a
 // question about the pattern rather than about the match.
 func TestTheRefusalIsAboutCompilingAndNotAboutMatching(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 		status          int
@@ -119,6 +120,7 @@ func TestTheRefusalIsAboutCompilingAndNotAboutMatching(t *testing.T) {
 // characters rather than a bracket expression — measured, each is stripped and
 // reported at status 0.
 func TestAQuotedBracketIsNotAPattern(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"quoted", `v='[abc'; print -r -- ${v#"["}`, "abc\n"},
 		{"escaped", `v='[abc'; print -r -- ${v#\[}`, "abc\n"},
@@ -149,6 +151,7 @@ func TestAQuotedBracketIsNotAPattern(t *testing.T) {
 // `emulate sh` and `emulate ksh` are here for the same reason: both reach the
 // option without anybody typing `setopt`, and neither moves this surface.
 func TestTheOperandRefusalIsNotTheGlobbingOption(t *testing.T) {
+	t.Parallel()
 	for _, prefix := range []string{
 		"",
 		"unsetopt badpattern; ",
@@ -174,6 +177,7 @@ func TestTheOperandRefusalIsNotTheGlobbingOption(t *testing.T) {
 // ends the whole script, and an `eval` or a subshell contains it and leaves 1
 // behind.
 func TestHowFarTheOperandRefusalReaches(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	t.Run("an or-list does not catch it", func(t *testing.T) {
 		out, st := runZsh(t, dir, `v='[abc'; print -r -- ${v#[a} || print -r -- CAUGHT; print -r -- AFTER`)

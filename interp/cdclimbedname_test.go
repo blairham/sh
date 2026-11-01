@@ -18,6 +18,7 @@ import (
 // the directory, the rest as typed — and every other operand as written.
 // With the switch off every row is the operand, which is the control.
 func TestARefusedCdThatClimbsIsNamedWhereItClimbs(t *testing.T) {
+	t.Parallel()
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

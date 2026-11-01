@@ -11,6 +11,7 @@ import "testing"
 // Measured 2026-10-02 on zsh 5.9.2, `env -i PATH=/usr/bin:/bin
 // LC_ALL=en_US.UTF-8 zsh -fc 'x=…; print -n ${(#)x}' | od -tx1` (#5153).
 func TestTheCharacterCodeFlag(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ value, want string }{
 		{"65", "A"},
 		{"233", "\xc3\xa9"},
@@ -50,6 +51,7 @@ func TestTheCharacterCodeFlag(t *testing.T) {
 // Under the C locale the value is one byte: measured, 233 is 351 there and
 // 256 is NUL.
 func TestTheCharacterCodeFlagUnderTheCLocale(t *testing.T) {
+	t.Parallel()
 	out, _, errs := runZshUTF8(t, "LC_ALL=C; x=233; y=256; print -rn -- ${(#)x}${(#)y}")
 	if want := "\xe9\x00"; out != want || errs != "" {
 		t.Errorf("got %q, %q, want %q", out, errs, want)
@@ -58,6 +60,7 @@ func TestTheCharacterCodeFlagUnderTheCLocale(t *testing.T) {
 
 // Each element of an array is a word of its own.
 func TestTheCharacterCodeFlagOverAnArray(t *testing.T) {
+	t.Parallel()
 	out, _, errs := runZshUTF8(t, "a=(65 66 1+2); print -rn -- ${(#)a}")
 	if want := "A B \x03"; out != want || errs != "" {
 		t.Errorf("got %q, %q, want %q", out, errs, want)
@@ -68,6 +71,7 @@ func TestTheCharacterCodeFlagOverAnArray(t *testing.T) {
 // of an unquoted expansion: measured, `a=(65 '1+' 66); print ${(#)a}` writes
 // `A B` at 0 with nothing on standard error.
 func TestTheCharacterCodeFlagDropsAFailedElement(t *testing.T) {
+	t.Parallel()
 	out, st, errs := runZshUTF8(t, "a=(65 '1+' 66); print -rn -- ${(#)a}")
 	if out != "A B" || errs != "" || st != 0 {
 		t.Errorf("got %q, %q, %d, want %q at 0", out, errs, st, "A B")

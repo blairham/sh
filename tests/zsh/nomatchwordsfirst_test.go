@@ -11,6 +11,7 @@ import "testing"
 // under -fc and from a file, in a directory where nothing matches; every
 // `want` is that shell's output. See interp.Runner.holdPathnameRefusal.
 func TestNomatchRefusesAfterEveryWordIsExpanded(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a builtin's words",

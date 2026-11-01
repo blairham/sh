@@ -24,6 +24,7 @@ import "testing"
 // nothing, and a grid taken only before agrees with a shell that has no
 // notion of the state. Only a row that moves between the two says anything.
 func TestADeferredParameterListsAsUndefined(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			// #4923's case.
@@ -109,6 +110,7 @@ func TestADeferredParameterListsAsUndefined(t *testing.T) {
 // a letter, an attribute word for a command word, the `-p` form, and a
 // declaration that really does make the binding.
 func TestADeferredNameIsWrittenBackAsAnOperand(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the plus spelling writes the bare name",

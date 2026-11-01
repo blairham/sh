@@ -17,6 +17,7 @@ import (
 // The attribute is left exactly where it was — neither gained nor taken off —
 // which is the third answer and the one a two-valued axis could not express.
 func TestAPrefixAtABuiltinLeavesTheAttributeAloneHere(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().PrefixExportAtABuiltin; got != interp.PrefixExportAtABuiltinUnchanged {
 		t.Errorf("PrefixExportAtABuiltin = %v, want %v", got, interp.PrefixExportAtABuiltinUnchanged)
 	}
@@ -35,6 +36,7 @@ typeset -p c z`)
 // attribute went on, and it leaves with the command — value and attribute
 // both, which is what the unfrozen `b` and `y` below say.
 func TestADeclarationKeepsNoneOfItsPrefixHere(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().DeclarationPromotesThePrefixEntry; got != interp.No {
 		t.Errorf("DeclarationPromotesThePrefixEntry = %v, want No", got)
 	}

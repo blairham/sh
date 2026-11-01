@@ -138,6 +138,7 @@ func TestTheSelectionMovesBackAndForthOverAGatedParameter(t *testing.T) {
 // Measured in the same run: `errnos=(a b)` after a deselection, then
 // `+p:errnos`, is two sentences at status 2 in zsh 5.9.2 and here alike.
 func TestATakenNameStillRefusesToComeBack(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"zmodload zsh/system\nzmodload -F zsh/system -p:errnos\nerrnos=(a b)\n"+
 			"zmodload -F zsh/system +p:errnos\nprint st=$?")

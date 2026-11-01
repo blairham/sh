@@ -14,6 +14,7 @@ import "testing"
 // the expander rather than written. Both are still rules this function has,
 // and a rule nothing asserts is a rule that quietly changes.
 func TestSplittingATrailingQualifierList(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		field, pattern, list string
 		ok                   bool
@@ -62,6 +63,7 @@ func TestSplittingATrailingQualifierList(t *testing.T) {
 // whole question is a dialect's — in the four shells without bare groups a
 // `(` in a field never reaches a pattern at all.
 func TestAGroupIsAMetacharacterOnlyWhereItCloses(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		field                    string
 		patternGroup, wantIsMeta bool

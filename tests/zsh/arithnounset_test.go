@@ -18,6 +18,7 @@ import (
 // LC_ALL=C` from a script file, with `b` never set. The empty row is the
 // control that makes this about being unset (#3574).
 func TestTheOptionReachesEveryArithmeticReadOfAName(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`set -u; : $((b)); echo OK`,
 		`set -u; a=1; : $((a+b)); echo OK`,
@@ -46,6 +47,7 @@ func TestTheOptionReachesEveryArithmeticReadOfAName(t *testing.T) {
 // where the same refusal inside a word expansion stops the shell, as any
 // failed expression there does (#3574).
 func TestTheArithmeticNounsetRefusalIsTheExpressionsFailure(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src  string
 		want string
@@ -68,6 +70,7 @@ func TestTheArithmeticNounsetRefusalIsTheExpressionsFailure(t *testing.T) {
 
 // The two axes.
 func TestTheArithmeticNounsetAxes(t *testing.T) {
+	t.Parallel()
 	s := zsh.Semantics()
 	if got := s.ArithUnsetNameUnderNounsetIsRefused; got != interp.Yes {
 		t.Errorf("ArithUnsetNameUnderNounsetIsRefused = %v, want yes", got)

@@ -32,6 +32,7 @@ const scalarOverTableRefusal = "m: attempt to set associative array to scalar"
 // The two answers for each of the two spellings, which is the pair that says
 // the axis is keyed on the **name's kind** and not on the operator.
 func TestAScalarStoredOverATable(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, decl, store string
 		refused, taken    string
@@ -88,6 +89,7 @@ func TestAScalarStoredOverATable(t *testing.T) {
 // taken, and a rule written on a wider noun — "a compound name", "an
 // assignment to a declared name" — refuses one of them.
 func TestOnlyABareScalarStoreOverATableIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"an ordinary array, which is the pair that makes this its own axis",
@@ -135,6 +137,7 @@ func TestOnlyABareScalarStoreOverATableIsRefused(t *testing.T) {
 // reason both live at the store. Each of these sets a name by a route that is
 // not an assignment at all.
 func TestEveryScalarStoreOverATableIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src string }{
 		{"a for loop's variable", `typeset -A m=([k]=v); for m in x y; do :; done; echo after`},
 		{"read", "typeset -A m=([k]=v)\nread m <<'IN'\nx\nIN\necho after"},
@@ -157,6 +160,7 @@ func TestEveryScalarStoreOverATableIsRefused(t *testing.T) {
 // restore: a store that wrote the key first and complained second would list
 // the same table with one extra key in it.
 func TestARefusedScalarStoreOverATableWritesNothing(t *testing.T) {
+	t.Parallel()
 	out, st := run(t,
 		`typeset -A m=([k]=v); (m=x); printf '[%s][%s][%s]' "${#m[@]}" "${m[k]}" "${m[0]-ABSENT}"`,
 		withSem(scalarOverTableSem(Yes)))
@@ -173,6 +177,7 @@ func TestARefusedScalarStoreOverATableWritesNothing(t *testing.T) {
 // Runner.assign rather than from Runner.scalarOverCompound, and it is a
 // separate stop from the one above it.
 func TestAnUnansweredReplacingAnswerStopsTheTableAppend(t *testing.T) {
+	t.Parallel()
 	sem := scalarOverTableSem(No)
 	sem.ScalarAssignedOverACompoundReplacesTheName = Unspecified
 	out, _ := run(t, `typeset -A m=([k]=v); m+=x; typeset -p m`, withSem(sem))
@@ -187,6 +192,7 @@ func TestAnUnansweredReplacingAnswerStopsTheTableAppend(t *testing.T) {
 // The wording is the dialect's and the name is its one verb, so a dialect that
 // words it differently still says which variable.
 func TestTheRefusalTakesTheDialectsWording(t *testing.T) {
+	t.Parallel()
 	sem := scalarOverTableSem(Yes)
 	d := Diagnostics{ScalarStoredOverATable: "cannot make %s a scalar"}
 	out, st := run(t, `typeset -A m=([k]=v); m=x`, func(r *Runner) {
@@ -211,6 +217,7 @@ func TestTheRefusalTakesTheDialectsWording(t *testing.T) {
 // question after the first had failed, so the append spelling writes the same
 // complaint twice. Both are asserted below.
 func TestAnUnansweredScalarStoreOverATableSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`typeset -A m=([k]=v); m=x; typeset -p m`,
 		`typeset -A m=([k]=v); m+=x; typeset -p m`,

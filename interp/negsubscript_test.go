@@ -25,6 +25,7 @@ func baseVectors() []Semantics {
 // subscripts count from 1 included — so the base axis plays no part in it,
 // and a shell with no answers can still read one.
 func TestANegativeSubscriptCountsFromTheEnd(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `a=(one two three); printf "[%s]" "${a[-1]}" "${a[-2]}" "${a[-3]}"`,
 		withSem(CoreSemantics()))
 	if out != "[three][two][one]" {
@@ -42,6 +43,7 @@ func TestANegativeSubscriptCountsFromTheEnd(t *testing.T) {
 // two dialect answers move the positive subscript and leave the negative one
 // on the last element.
 func TestANegativeSubscriptIgnoresTheBase(t *testing.T) {
+	t.Parallel()
 	src := `a=(one two three); printf "%s %s" "${a[1]}" "${a[-1]}"`
 	if out, _ := run(t, src, withSem(baseVectors()[0])); out != "two three" {
 		t.Errorf("zero-based gave %q, want %q", out, "two three")
@@ -54,6 +56,7 @@ func TestANegativeSubscriptIgnoresTheBase(t *testing.T) {
 // `a[-1]=x` replaces the last element — unanimous, whichever number the first
 // element answers to.
 func TestAssigningThroughANegativeSubscript(t *testing.T) {
+	t.Parallel()
 	src := `a=(x y z); a[-1]=Q; a[-3]=P; echo "${a[@]}"`
 	for _, sem := range baseVectors() {
 		if out, _ := run(t, src, withSem(sem)); strings.TrimSpace(out) != "P y Q" {
@@ -66,6 +69,7 @@ func TestAssigningThroughANegativeSubscript(t *testing.T) {
 // element at all — the same nothing `${a[9]}` on three elements is — and
 // writing through one is refused rather than landing somewhere.
 func TestANegativeSubscriptOutOfRange(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `a=(x); printf "[%s]" "${a[-5]}"`, nil)
 	if out != "[]" || st != 0 {
 		t.Errorf("read gave %q status %d, want [] and 0", out, st)
@@ -89,6 +93,7 @@ func TestANegativeSubscriptOutOfRange(t *testing.T) {
 // The same reading inside arithmetic, where `a[-1]` needs no dollar sign: the
 // element is read and written back from the end, in both bases.
 func TestNegativeSubscriptsInArithmetic(t *testing.T) {
+	t.Parallel()
 	src := `a=(10 20 30); echo $((a[-1] + a[-3])); : $((a[-2] = a[-2] + 1)); echo "${a[-2]}"`
 	for _, sem := range baseVectors() {
 		out, _ := run(t, src, withSem(sem))
@@ -105,6 +110,7 @@ func TestNegativeSubscriptsInArithmetic(t *testing.T) {
 // `unset "a[-1]"` removes the last element — the same end-relative reading,
 // reached through the builtin.
 func TestUnsettingANegativeSubscript(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `a=(x y z); unset "a[-1]"; echo "[${a[@]}]"`)
 	if strings.TrimSpace(out) != "[x y]" {
 		t.Errorf("got %q, want the last element gone", strings.TrimSpace(out))
@@ -117,6 +123,7 @@ func TestUnsettingANegativeSubscript(t *testing.T) {
 // positions have to be the store's for the positive spelling too, or the loop
 // `${!a[@]}` exists for reads the wrong elements back.
 func TestNegativeCountsFromTheHighestSubscript(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `a=(x); a[5]=y; printf "[%s]" "${a[-1]}" "${a[-2]:-gap}" "${a[5]}" "${a[1]:-gap}"`)
 	if out != "[y][gap][y][gap]" {
 		t.Errorf("got %q, want positions counted by subscript", out)
@@ -130,6 +137,7 @@ func TestNegativeCountsFromTheHighestSubscript(t *testing.T) {
 // An associative subscript is a key, never a position: `-1` on a declared
 // name is the two characters, and nothing counts from any end.
 func TestAnAssociativeKeyIsNotANegativeSubscript(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `typeset -A m; m[x]=v; m[-1]=q; printf "[%s]" "${m[-1]}" "${m[x]}"`)
 	if out != "[q][v]" {
 		t.Errorf("got %q, want -1 stored and read as a key", out)

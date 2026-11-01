@@ -190,6 +190,7 @@ func TestAFullArithTreeCacheStartsAgain(t *testing.T) {
 // Shared by every runner in the process, so it is read and filled from
 // several goroutines at once; -race is the judge.
 func TestTheArithTreeCacheIsSharedSafely(t *testing.T) {
+	t.Parallel()
 	var wg sync.WaitGroup
 	for g := range 8 {
 		wg.Add(1)

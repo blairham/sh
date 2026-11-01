@@ -22,6 +22,7 @@ import (
 // Every dialect here ran it and assigned the element its output named
 // (#3047).
 func TestAnExpandedSubscriptRunsNothing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	ran := filepath.Join(dir, "ran")
 	src := `k='$(echo x > ran; echo 1)'; a=(9 8 7); a[$k]=V; printf "%s" "${a[*]}"`
@@ -38,6 +39,7 @@ func TestAnExpandedSubscriptRunsNothing(t *testing.T) {
 // over already expanded. `x=abcdef; w='$(echo 1)'; ${x:$w:2}` is the same
 // arithmetic failure in every shell measured.
 func TestAnExpandedRangeRunsNothing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	ran := filepath.Join(dir, "ran")
 	out := runIn(t, dir, `x=abcdef; w='$(echo x > ran; echo 1)'; printf "[%s]" "${x:$w:2}"`)
@@ -52,6 +54,7 @@ func TestAnExpandedRangeRunsNothing(t *testing.T) {
 // bash 3.2.57, zsh 5.9.2 and ksh93u+ — each is refused for wanting an
 // operand, and the element is left as it was.
 func TestAnExpandedSubscriptIsNotExpandedASecondTime(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, k string }{
 		{"a command substitution", `'$(echo 1)'`},
 		{"a backquoted run", "'`echo 1`'"},
@@ -78,6 +81,7 @@ func TestAnExpandedSubscriptIsNotExpandedASecondTime(t *testing.T) {
 // round of expansion, and that is the distinction the fix draws. `k='i'` and
 // `k='1+1'` each name an element in all four shells measured.
 func TestAnExpandedSubscriptIsStillAnExpression(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"arithmetic in the expanded text", `k='1+1'; a=(9 8 7 6); a[$k]=V; printf "%s" "${a[*]}"`, "9 8 V 6"},
 		{"a bare name", `i=2; k='i'; a=(9 8 7 6); a[$k]=V; printf "%s" "${a[*]}"`, "9 8 V 6"},
@@ -108,6 +112,7 @@ func TestAnExpandedSubscriptIsStillAnExpression(t *testing.T) {
 // second element. Reading these as results instead would have been the same
 // fault pointing the other way.
 func TestAReferenceSubscriptIsStillExpandedOnce(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"unset through a quoted operand",

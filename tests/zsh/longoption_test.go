@@ -91,6 +91,7 @@ func setLongOption(t *testing.T, word string) (string, int) {
 // the whole point of the route: a fresh shell would report the defaults
 // however faithfully the word had been read.
 func TestALongOptionWordIsAnyOptionName(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		word string
 		// listed is the spelling a bare `setopt` prints once the request has
@@ -145,6 +146,7 @@ func TestALongOptionWordIsAnyOptionName(t *testing.T) {
 // The state really moves, which a status of 0 and a listing row cannot say on
 // their own: an option recorded and not acted on would pass both.
 func TestALongOptionWordMovesTheState(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ word, src, want string }{
 		{"shwordsplit", `v="a b"; set -- $v; echo $#`, "2"},
 		{"noshwordsplit", `v="a b"; set -- $v; echo $#`, "1"},
@@ -173,6 +175,7 @@ func TestALongOptionWordMovesTheState(t *testing.T) {
 // and `no_no_glob` under a second `no` strip, `xtrace=1` under ksh93's
 // `=value`, and `no` under a strip that leaves nothing behind.
 func TestALongOptionWordThatIsNoNameIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, word := range []string{"zzznosuch", "nonoglob", "no_no_glob", "xtrace=1", "no", "Zzz_No"} {
 		t.Run(word, func(t *testing.T) {
 			said, st := setLongOption(t, word)
@@ -190,6 +193,7 @@ func TestALongOptionWordThatIsNoNameIsRefused(t *testing.T) {
 // The positional parameters are what part "swallowed" from "declined": an
 // option loop that merely stopped at the word would have left it as `$1`.
 func TestTheSetBuiltinDiscardsALongOptionWord(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`set --xtrace q; case $- in *x*) echo traced;; *) echo untraced;; esac; echo "[$*]"`, "untraced\n[q]\n"},
 		{`set --zzznosuch q; echo "$? [$*]"`, "0 [q]\n"},

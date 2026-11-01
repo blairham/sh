@@ -172,6 +172,7 @@ func TestTheEditedTextIsReadTheWayTheDialectReadsBorrowedText(t *testing.T) {
 // the axis is all it takes, and the whole text is then one entry because the
 // reader handed it over as one command's worth of lines.
 func TestTextTheDialectReadsWholeIsEchoedWholeAndRecordedWhole(t *testing.T) {
+	t.Parallel()
 	list := &fcList{entries: []string{"echo one"}}
 	fixture := filepath.Join(t.TempDir(), "edited")
 	if err := os.WriteFile(fixture, []byte("echo A\necho B\n"), 0o600); err != nil {
@@ -203,6 +204,7 @@ func TestTextTheDialectReadsWholeIsEchoedWholeAndRecordedWhole(t *testing.T) {
 // The assertion is on the listing and on the echo before the complaint, whose
 // wording is a dialect's and is asserted where that dialect is.
 func TestOnlyTheLinesTheReaderGotThroughAreEchoedAndRecorded(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, text, echoed string
 		want               []string

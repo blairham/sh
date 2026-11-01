@@ -30,6 +30,7 @@ import (
 const evalOnOneLine = "nl='\n'\n"
 
 func TestEvalTextContinuesTheCallersLinesIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		a    Answer
@@ -56,6 +57,7 @@ func TestEvalTextContinuesTheCallersLinesIsAnAxis(t *testing.T) {
 // The offset is the text's and does not outlive it: the line after the `eval`
 // is the file's own line under either answer, and so is a *later* `eval`.
 func TestTheEvalOffsetEndsWithTheText(t *testing.T) {
+	t.Parallel()
 	for _, a := range []Answer{Yes, No} {
 		src := evalOnOneLine + `eval "echo x"` + "\necho after=$LINENO\n"
 		out, _ := run(t, src, func(r *Runner) {
@@ -76,6 +78,7 @@ func TestTheEvalOffsetEndsWithTheText(t *testing.T) {
 // reported the *caller's* offset for the substitution case, which is the bug
 // the same field carries either way (#2462).
 func TestALineOffsetDoesNotReachAFunctionBody(t *testing.T) {
+	t.Parallel()
 	for _, a := range []Answer{Yes, No} {
 		src := "f() { echo \"in f L=$LINENO\"; }\n" + evalOnOneLine +
 			`eval "echo x${nl}f"` + "\nx=$(f); echo \"sub $x\"\n"
@@ -95,6 +98,7 @@ func TestALineOffsetDoesNotReachAFunctionBody(t *testing.T) {
 // offset reaches one — which is not what this did: with a `.` inside a
 // command substitution the file's first line read as the substitution's line.
 func TestNoLineOffsetReachesASourcedFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "inc.sh", "echo \"inc L=$LINENO\"\n")
 	src := "echo pad\necho pad\nx=$(. ./inc.sh); echo \"sub: $x\"\n. ./inc.sh\n"
@@ -120,6 +124,7 @@ func TestNoLineOffsetReachesASourcedFile(t *testing.T) {
 // borrowed the offset from whatever was in force at the *call* would answer
 // the first correctly and the second at the file's own numbering.
 func TestAFunctionDefinedInEvalsTextKeepsTheOffset(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		a    Answer
@@ -160,6 +165,7 @@ func TestAFunctionDefinedInEvalsTextKeepsTheOffset(t *testing.T) {
 // function again, and text that continues the caller's lines is in the
 // caller's numbering and keeps the offset.
 func TestLinenoInEvalsTextIsNotOffsetByTheFunctionAroundIt(t *testing.T) {
+	t.Parallel()
 	// The eval is on line 3 and its text is two lines, so the text's own
 	// numbering says 1 then 2, the function offset would take that to -2 and
 	// -1, and the caller's numbering says 0 then 1.
@@ -226,6 +232,7 @@ func TestLinenoInEvalsTextIsNotOffsetByTheFunctionAroundIt(t *testing.T) {
 // correctly and this one 4, and nothing in an arrangement where the two
 // agree could tell them apart.
 func TestTheEvalTextRuleEndsAtAFunctionCalledFromIt(t *testing.T) {
+	t.Parallel()
 	for _, a := range []Answer{Yes, No} {
 		src := evalOnOneLine + "g(){\necho G=$LINENO\n}\n" +
 			`f(){ eval "g"; }` + "\nf\n"

@@ -61,6 +61,7 @@ func schedRunner(t *testing.T, src string) (*interp.Runner, *bytes.Buffer, func(
 // schedules a command runs to the end, and the entry is there afterwards in
 // the exact line the real shell writes.
 func TestASchedEntryIsStoredAndSaidBack(t *testing.T) {
+	t.Parallel()
 	out, st := runSched(t, "sched +5 echo hi; echo st=$?\nsched\n")
 	if want := "st=0\n  1 Mon Sep  7 17:47:44 echo hi\n"; out != want || st != 0 {
 		t.Errorf("output = %q status %d, want %q at 0", out, st, want)
@@ -110,6 +111,7 @@ func TestTheTimeSpecifierIsThreeGrammars(t *testing.T) {
 // is a position in the listing and not an identity — which is what makes
 // `sched -1` mean "the next one".
 func TestTheListingIsSortedByTimeAndNumberedFromOne(t *testing.T) {
+	t.Parallel()
 	out, _ := runSched(t, "sched +5 echo hi; sched +3 echo b\nsched\n")
 	want := "  1 Mon Sep  7 17:47:42 echo b\n  2 Mon Sep  7 17:47:44 echo hi\n"
 	if out != want {
@@ -127,6 +129,7 @@ func TestTheListingIsSortedByTimeAndNumberedFromOne(t *testing.T) {
 // The command is the words joined by one space, and the quoting that produced
 // them is gone by the time this builtin sees them.
 func TestTheCommandIsTheWordsJoined(t *testing.T) {
+	t.Parallel()
 	out, _ := runSched(t, "sched +1 echo one   three\nsched +1 \"echo   a\"\nsched\n")
 	want := "  1 Mon Sep  7 17:47:40 echo one three\n  2 Mon Sep  7 17:47:40 echo   a\n"
 	if out != want {
@@ -143,6 +146,7 @@ func TestTheCommandIsTheWordsJoined(t *testing.T) {
 // `sched -N` deletes entry N, and takes the rest of the line with it — the
 // deletion wins over anything that looks like a time.
 func TestDeletingAnEntry(t *testing.T) {
+	t.Parallel()
 	out, _ := runSched(t, "sched +5 a; sched +3 b\nsched -1; echo st=$?\nsched\n")
 	want := "st=0\n  1 Mon Sep  7 17:47:44 a\n"
 	if out != want {
@@ -198,6 +202,7 @@ func TestTheScheduledEventsParameter(t *testing.T) {
 // The module loads because both of its features are here, which makes it the
 // second in the table that can say so.
 func TestTheSchedModuleLoads(t *testing.T) {
+	t.Parallel()
 	out, st := runSched(t, "zmodload zsh/sched; echo st=$?\nzmodload -lF zsh/sched\n")
 	want := "st=0\n+b:sched\n+p:zsh_scheduled_events\n"
 	if out != want || st != 0 {
@@ -242,6 +247,7 @@ func TestAnElapsedEntryRunsAndLeavesTheTable(t *testing.T) {
 
 // Everything already due runs in one pass, in time order.
 func TestEverythingDueRunsInOnePassInOrder(t *testing.T) {
+	t.Parallel()
 	r, out, advance := schedRunner(t, "sched +5 echo second\nsched +2 echo first\n")
 	advance(10 * time.Second)
 	out.Reset()
@@ -255,6 +261,7 @@ func TestEverythingDueRunsInOnePassInOrder(t *testing.T) {
 // has, and the second one must not run in the same pass — its time has not
 // come, and the pass that ran the first must not have removed it either.
 func TestAnEntryThatSchedulesAnotherKeepsIt(t *testing.T) {
+	t.Parallel()
 	r, out, advance := schedRunner(t,
 		"tick() { echo tick; sched +60 tick; }\nsched +1 tick\n")
 	advance(2 * time.Second)

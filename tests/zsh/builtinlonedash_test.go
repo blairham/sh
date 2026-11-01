@@ -24,6 +24,7 @@ import (
 // never asked the axis at all, while `print` in the same shell ate the word —
 // which is what made the gap visible (#5026).
 func TestEchoReadsALoneDashAsTheEndOfItsOptions(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`echo - hi`, "hi\n"},
 		// The discriminating row: a reading where the word is merely
@@ -66,6 +67,7 @@ func TestEchoReadsALoneDashAsTheEndOfItsOptions(t *testing.T) {
 // `unset - v` unsets under either one. An option word behind the dash is what
 // tells them apart, and it moves every builtin that has one.
 func TestALoneDashEndsABuiltinsOptionsRatherThanBeingSkipped(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"v=1\nunset - -v v\n", "unset:2: -v: invalid parameter name"},
 		{"read - -r x\n", "not an identifier: -r"},

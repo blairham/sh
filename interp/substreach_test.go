@@ -104,6 +104,7 @@ func reachReadings() []struct {
 // the pattern the way the matcher does rather than more loosely: a set that
 // agreed only by being wide would still be safe and would buy nothing.
 func TestTheReachSetHoldsEveryEndTheMatcherAccepts(t *testing.T) {
+	t.Parallel()
 	read := 0
 	for _, rd := range reachReadings() {
 		for _, tc := range append(append(endSetCases, spanCases...), edgeCases...) {
@@ -155,6 +156,7 @@ func TestTheReachSetHoldsEveryEndTheMatcherAccepts(t *testing.T) {
 // The patterns it exists for must be ones it reads, and the constructs it
 // does not reason about must be ones it refuses rather than guesses at.
 func TestTheReachSetReadsWhatItClaimsAndRefusesTheRest(t *testing.T) {
+	t.Parallel()
 	o := spanOptsForTest()
 	for _, p := range []string{
 		benchPattern, "a*b", "(a|ab)c", "[^}]##", "+(a)b", "?(a)b", "*(ab)", "(#b)(a|ab)*", "x#",

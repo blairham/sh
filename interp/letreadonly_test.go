@@ -21,6 +21,7 @@ import (
 // different dialect answers that Yes. `let` takes neither, so both are moved
 // to their fatal value here and the line after it still runs (#3470).
 func TestALetRefusedByAFreezeEndsNoScript(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{
 		"a builtin's refusal is fatal", "an arithmetic command's failure is fatal", "both",
 	} {

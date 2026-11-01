@@ -20,6 +20,7 @@ import (
 // An **array** is not a string, so the last row is the ordinary element write
 // and must stay that way.
 func TestWritingThroughALineSubscript(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const v = `v=$'aa\nbb\ncc'; `
 	for _, tc := range []struct{ name, src, want string }{

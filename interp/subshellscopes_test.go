@@ -33,6 +33,7 @@ import (
 // caller's frame has nowhere else to come from — and the caller's return then
 // puts it back, undoing an assignment made after the subshell finished.
 func TestASubshellsLocalDoesNotShadowInTheCaller(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The subject. `q=setbyg` happens *after* the subshell, so a save
 		// taken in the caller's frame is a value the return reverts to.
@@ -106,6 +107,7 @@ func TestASubshellsLocalDoesNotShadowInTheCaller(t *testing.T) {
 // one; what is asserted is which value each side saw and that the global
 // outside is neither.
 func TestTwoPipelineElementsDeclaringLocalsDoNotShareAScope(t *testing.T) {
+	t.Parallel()
 	got, st := run(t, `
 warm()  { local w=1; }
 left()  { local x=L; echo "$x"; }
@@ -158,6 +160,7 @@ echo "[$x]"
 // Named by the axis rather than by a shell, which is the rule for a test
 // under interp. Two panel members answer Yes to it.
 func TestTheLastPipelineElementInTheCurrentShellDoesNotShareAScope(t *testing.T) {
+	t.Parallel()
 	got, st := run(t, `
 f() { local x=1; echo "$x"; }
 i=0
@@ -181,6 +184,7 @@ echo survived
 // the nesting is broken, because the inner pipeline's elements are cloned
 // from a runner that was already sharing.
 func TestANestedPipelineDoesNotShareAScope(t *testing.T) {
+	t.Parallel()
 	got, st := run(t, `
 warm() { local w=1; }
 f()    { local x=1; echo "$x"; }

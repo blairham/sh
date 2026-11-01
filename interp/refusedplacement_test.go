@@ -15,6 +15,7 @@ import (
 // the name over first, No places nothing and leaves a name that held an array
 // holding it. See Semantics.RefusedPlacementKeepsWhatTheLiteralPlaced (#6852).
 func TestARefusedPlacementAsksWhetherTheLiteralKeepsWhatItPlaced(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -42,6 +43,7 @@ func TestARefusedPlacementAsksWhetherTheLiteralKeepsWhatItPlaced(t *testing.T) {
 // The question is put only once a placement has been refused, so a literal
 // that places asks nothing and a vector that leaves it open still runs one.
 func TestALiteralThatPlacesAsksNothingAboutARefusal(t *testing.T) {
+	t.Parallel()
 	src := "b=(7)\nb=(1 [3]=x 4)\n" + `echo "${b[*]}"` + "\n"
 	out, st := runGrammar(t, src, nil, func(r *Runner) {
 		giveUpLineSemantics(r)

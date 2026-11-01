@@ -32,6 +32,7 @@ func numericSem(a Answer) Semantics {
 // The two spellings, both ways round. Each prints the letter, OPTARG and
 // OPTIND, so a wrong answer is visible in whichever of the three moved.
 func TestGetoptsNumericArgumentTypeAxis(t *testing.T) {
+	t.Parallel()
 	// WORDS is the placeholder, because the snippet is full of printf verbs
 	// and a %s substituted into it would land in the first of them.
 	const src = `set -- WORDS
@@ -80,6 +81,7 @@ printf ' end=%s\n' "$OPTIND"`
 // builtin rather than of the function, so the rule is pinned where a script
 // can see it.
 func TestGetoptsNumericArgumentIsANumeralAndNotAnExpression(t *testing.T) {
+	t.Parallel()
 	// Taken: a sign, a radix prefix, a named base, leading blanks, and a
 	// leading zero that is no octal escape hatch. The empty word and a word
 	// of blanks are taken too — nothing is left over, which is the whole of
@@ -115,6 +117,7 @@ func TestGetoptsNumericArgumentIsANumeralAndNotAnExpression(t *testing.T) {
 // Silent mode reports the argument failure as `:`, the way a missing string
 // argument is reported, rather than as the unknown-option `?`.
 func TestGetoptsNumericArgumentInSilentMode(t *testing.T) {
+	t.Parallel()
 	sem := numericSem(Yes)
 	for _, tc := range []struct{ name, words, want string }{
 		{"not a number", "-n abc", "[:][n]\n"},
@@ -135,6 +138,7 @@ func TestGetoptsNumericArgumentInSilentMode(t *testing.T) {
 // with no `#` where a marker goes runs on an unanswered axis without a word,
 // and one with a marker refuses.
 func TestGetoptsAsksTheNumericAxisOnlyWhereAMarkerIs(t *testing.T) {
+	t.Parallel()
 	sem := numericSem(Unspecified)
 	out, _ := run(t, `set -- -a val; getopts 'a:b' o; echo "[$o][$OPTARG]"`,
 		func(r *Runner) { r.Semantics = &sem })

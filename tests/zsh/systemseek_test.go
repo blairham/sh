@@ -35,6 +35,7 @@ func splitLines(text string) []string {
 // than by `systell`, which is the same shell answering a question about its
 // own bookkeeping.
 func TestSysseekMovesTheDescriptorFromEachOrigin(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZshWithSystem(t, dir, `print -n 'hello world' > f
 sysopen -r -u 7 f
@@ -69,6 +70,7 @@ print -r -- "from-end=[$tail]"`)
 // point: `-w bogus` and `-u bogus` are usage errors and say so, and a position
 // before the start of a file is not.
 func TestWhatSysseekRefuses(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st, errs := runZshSplitWithSystem(t, dir, `print -n 'hello world' > f
 sysopen -r -u 7 f
@@ -113,6 +115,7 @@ print -r -- "letter=$?"`)
 // A name and its number give the same sentence, which is what says the lookup
 // went through `$errnos` rather than through a table of its own.
 func TestSyserrorWritesThePlatformsSentence(t *testing.T) {
+	t.Parallel()
 	out, st, errs := runZshSplitWithSystem(t, t.TempDir(), `syserror 2
 print -r -- "number=$?"
 syserror ENOENT
@@ -146,6 +149,7 @@ print -r -- "lowercase=$?"`)
 // `errno 0` is what a shell passing the runtime's answer through would print,
 // and it is neither a sentence nor an admission that there is none.
 func TestSyserrorAnswersForTheNumbersWithNoName(t *testing.T) {
+	t.Parallel()
 	out, _, errs := runZshSplitWithSystem(t, t.TempDir(), `syserror 0
 syserror 9999
 print -r -- "st=$?"`)
@@ -175,6 +179,7 @@ print -r -- "st=$?"`)
 // A script that has put a number in `ERRNO` still gets that number's
 // sentence, which is byte-identical to zsh.
 func TestSyserrorWithNoOperandReportsTheLastNumber(t *testing.T) {
+	t.Parallel()
 	out, st, errs := runZshSplitWithSystem(t, t.TempDir(), `syserror 0
 syserror
 print -r -- "bare=$?"
@@ -212,6 +217,7 @@ print -r -- "set=$?"`)
 // builtin needs no such thing, which is the row that says the two read
 // different things.
 func TestAFailedCallLeavesItsNumber(t *testing.T) {
+	t.Parallel()
 	out, st, errs := runZshSplitWithSystem(t, t.TempDir(), `cd /no/such/directory 2>/dev/null
 syserror
 print -r -- "before=[$ERRNO]"

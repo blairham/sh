@@ -16,6 +16,7 @@ import (
 // the first line of what is written is compared: a second complaint after it
 // is #5608's.
 func TestANestedNameReferenceToAListInArithmeticIsABadSubstitution(t *testing.T) {
+	t.Parallel()
 	const setup = "x1=abc; v=(x1 x2); s=hello\n"
 	for _, tc := range []struct{ src, want string }{
 		{`echo $(( ${#${(P)v}} ))`, "zsh:2: bad substitution"},

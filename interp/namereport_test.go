@@ -23,6 +23,7 @@ import (
 // its trace uses — which is why the alphabet is TraceMetacharacters read
 // again rather than a second list.
 func TestANameReportQuotesTheOperandWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	meta := TraceMetacharacters{Anywhere: "*?[]{}~#", Leading: "="}
 	for _, c := range []struct {
 		operand, bare, quoted string
@@ -65,6 +66,7 @@ func TestANameReportQuotesTheOperandWhereTheDialectSaysSo(t *testing.T) {
 // Runner.SetAliasNotReported: the `type` family declines to speak for the
 // name while everything else about the alias stays exactly as it was.
 func TestAnAliasTheDialectDoesNotReportIsStillAnAlias(t *testing.T) {
+	t.Parallel()
 	hide := func(r *Runner) {
 		sem := permissive()
 		dg := Diagnostics{TypeNotFound: "type: %[1]s: not found"}
@@ -123,6 +125,7 @@ func TestAnAliasTheDialectDoesNotReportIsStillAnAlias(t *testing.T) {
 // forms and the bare-path forms cannot part company, which is what the rows
 // pairing `whence -v` with `whence` are for.
 func TestATypeSentenceWritesBackTheNameAndThePath(t *testing.T) {
+	t.Parallel()
 	meta := TraceMetacharacters{Anywhere: "*?[]{}~#", Leading: "="}
 	for _, c := range []struct {
 		name string

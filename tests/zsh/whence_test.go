@@ -35,6 +35,7 @@ func whenceDir(t *testing.T) (dir, tool string) {
 }
 
 func TestWhenceAnswersInFourShapes(t *testing.T) {
+	t.Parallel()
 	dir, tool := whenceDir(t)
 	const setup = "f() { :; }\nalias al='ls -l'\n"
 	for _, c := range []struct{ name, src, want string }{
@@ -83,6 +84,7 @@ func TestWhenceAnswersInFourShapes(t *testing.T) {
 // A function answers with its body under `-c` and `-f`, and with its name
 // otherwise. The two letters differ in nothing else here.
 func TestWhenceShowsAFunctionsBody(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"whence -c f", "whence -f f", "where f"} {
 		out, st := runZsh(t, t.TempDir(), "f() { :; }\n"+src+"\n")
 		if !strings.Contains(out, "f () {") || !strings.Contains(out, ":") {
@@ -98,6 +100,7 @@ func TestWhenceShowsAFunctionsBody(t *testing.T) {
 // the rest — on *standard output*, which is the difference from the other
 // shell with this builtin, and always 1.
 func TestWhenceMissesOnStandardOutput(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{"whence nosuchcmd431", ""},
 		{"whence -v nosuchcmd431", "nosuchcmd431 not found"},
@@ -122,6 +125,7 @@ func TestWhenceMissesOnStandardOutput(t *testing.T) {
 // builtin are nobody, and a builtin that also has a file answers with the
 // file.
 func TestWhencePSearchesPathAlone(t *testing.T) {
+	t.Parallel()
 	dir, tool := whenceDir(t)
 	out, st := runZsh(t, dir, "f() { :; }\nwhence -p f\n")
 	if strings.TrimSpace(out) != "" || st != 1 {
@@ -136,6 +140,7 @@ func TestWhencePSearchesPathAlone(t *testing.T) {
 // -a is every resolution rather than the first, alias included, and in the
 // order the shell resolves them.
 func TestWhenceAListsEveryResolution(t *testing.T) {
+	t.Parallel()
 	dir, tool := whenceDir(t)
 	out, st := runZsh(t, dir, "alias tool431='x'\ntool431() { :; }\nwhence -a tool431\n")
 	want := "x\ntool431\n" + tool
@@ -151,6 +156,7 @@ func TestWhenceAListsEveryResolution(t *testing.T) {
 // with this builtin prints a usage line and exits 2. Nothing is answered
 // after it.
 func TestWhenceRefusesAnUnknownLetter(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "whence -z echo\n")
 	if !strings.Contains(out, "bad option: -z") {
 		t.Errorf("output = %q, want the letter refused", out)
@@ -167,6 +173,7 @@ func TestWhenceRefusesAnUnknownLetter(t *testing.T) {
 // usage line at 2. The quiet answer is the trap: a script reading the status
 // sees a plain miss.
 func TestWhenceWithNoOperandIsASilentFailure(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "whence\n")
 	if strings.TrimSpace(out) != "" {
 		t.Errorf("output = %q, want silence", out)
@@ -179,6 +186,7 @@ func TestWhenceWithNoOperandIsASilentFailure(t *testing.T) {
 // `where` is `whence -ca`, and it is a name rather than a synonym with flags:
 // it parses no options at all.
 func TestWhereIsWhenceWithCAndA(t *testing.T) {
+	t.Parallel()
 	dir, tool := whenceDir(t)
 	out, st := runZsh(t, dir, "alias tool431='x'\nwhere tool431\n")
 	want := "tool431: aliased to x\n" + tool
@@ -204,6 +212,7 @@ func TestWhereIsWhenceWithCAndA(t *testing.T) {
 // A command with several operands answers for all of them and reports 1 if
 // any missed.
 func TestWhenceAnswersEveryOperand(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "whence echo nosuchcmd431 if\n")
 	if strings.TrimSpace(out) != "echo\nif" {
 		t.Errorf("output = %q, want the two that resolved", out)
@@ -243,6 +252,7 @@ func runZshSplit(t *testing.T, dir, src string) (out string, status int, errs st
 // The letters are the rule the three names share: a name stops offering what
 // its preset already decided. Measured against zsh 5.9.2, 2026-09-05.
 func TestWhichIsWhenceWithC(t *testing.T) {
+	t.Parallel()
 	dir, tool := whenceDir(t)
 	const setup = "f() { echo hi; }\nalias al='ls -l'\n"
 	for _, c := range []struct {
@@ -288,6 +298,7 @@ func TestWhichIsWhenceWithC(t *testing.T) {
 // `where` keeps the letters its own preset left, which is the half a blanket
 // refusal got wrong: `-v` is not on offer there and `-p` and `-w` are.
 func TestWhereKeepsTheLettersItsPresetLeft(t *testing.T) {
+	t.Parallel()
 	dir, tool := whenceDir(t)
 	for _, c := range []struct {
 		name, src, want string
@@ -310,6 +321,7 @@ func TestWhereKeepsTheLettersItsPresetLeft(t *testing.T) {
 
 // A bare `which` with no operand is the same silent 1 a bare `whence` is.
 func TestWhichWithNoOperandIsASilentFailure(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "which\n")
 	if out != "" || st != 1 {
 		t.Errorf("out %q status %d, want silence at 1", out, st)
@@ -323,6 +335,7 @@ func TestWhichWithNoOperandIsASilentFailure(t *testing.T) {
 // `whence -ap` and `whence -pa` are both two lines where `whence -p` is one.
 // The same composition the ksh dialect was missing (#3198).
 func TestWhencePathTakesAllWithIt(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	var paths []string
 	for _, sub := range []string{"d1", "d2"} {

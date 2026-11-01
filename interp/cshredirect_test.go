@@ -40,6 +40,7 @@ func cshRedir(dir string, form GreatAmpTargetForm, dg Diagnostics) func(*Runner)
 // The second stream is what makes it `&>` and not `>`, and is the half a
 // reading that only moved standard output would pass without.
 func TestGreatAmpTargetNamesAFileOpensItForBothStreams(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	src := `{ echo out; echo err >&2; } >&qq; printf "[%s]" "$?"`
 	out, st := run(t, src, cshRedir(dir, GreatAmpTargetNamesAFile, Diagnostics{}))
@@ -57,6 +58,7 @@ func TestGreatAmpTargetNamesAFileOpensItForBothStreams(t *testing.T) {
 // GreatAmpTargetIsADescriptor keeps `>&` a duplication and refuses the word,
 // leaving no file behind.
 func TestGreatAmpTargetIsADescriptorRefusesAName(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	dg := Diagnostics{DuplicationTargetIsNotADescriptor: "%[2]s: bad file unit number"}
 	out, st := run(t, `echo hi >&qq; printf "[%s]" "$?"`, cshRedir(dir, GreatAmpTargetIsADescriptor, dg))
@@ -78,6 +80,7 @@ func TestGreatAmpTargetIsADescriptorRefusesAName(t *testing.T) {
 // This is the difference a script reaches by writing `>&"${COPROC[1]}"` in a
 // shell with no such array, which is the whole reason it is a form.
 func TestAnEmptyGreatAmpTargetSplitsTheTwoFileForms(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		CannotCreate:           "%[2]s: %[1]s",
 		EmptyDuplicationTarget: "%[1]s: Bad file descriptor",
@@ -116,6 +119,7 @@ func TestAnEmptyGreatAmpTargetSplitsTheTwoFileForms(t *testing.T) {
 // `>&` is never a file" — which is bash's answer read as everybody's, and it
 // made our zsh refuse a line real zsh runs (#2494).
 func TestTheNumberedGreatAmpSplitsTheTwoFileForms(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{DuplicationTargetIsNotADescriptor: "%[2]s: ambiguous redirect"}
 	t.Run("refused where only the bare spelling opens a file", func(t *testing.T) {
 		dir := t.TempDir()
@@ -161,6 +165,7 @@ func TestTheNumberedGreatAmpSplitsTheTwoFileForms(t *testing.T) {
 // empty directory with a command writing `O` to standard output and `E` to
 // standard error.
 func TestTheNumberedGreatAmpAlsoTakesStandardError(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, wantOut, wantFile string
 		everyTarget                  Answer
@@ -196,6 +201,7 @@ func TestTheNumberedGreatAmpAlsoTakesStandardError(t *testing.T) {
 
 // And the reading side is never a file, whatever the form says about writing.
 func TestLessAmpIsNeverAFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	touch(t, dir, "qq")
 	dg := Diagnostics{DuplicationTargetIsNotADescriptor: "file number expected"}
@@ -214,6 +220,7 @@ func TestLessAmpIsNeverAFile(t *testing.T) {
 // A word that *is* a descriptor is nobody's question, so a vector that has
 // not answered the form still runs `>&2`.
 func TestTheGreatAmpFormIsAskedAboutOnlyWhenItMatters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		refuses   bool
@@ -239,6 +246,7 @@ func TestTheGreatAmpFormIsAskedAboutOnlyWhenItMatters(t *testing.T) {
 // An external command takes the same refusal and the script carries on, which
 // is what makes the boundary the command rather than the redirection.
 func TestABadDuplicationTargetEndsTheShellOnlyOnABuiltin(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		wantAfter bool
@@ -271,6 +279,7 @@ func TestABadDuplicationTargetEndsTheShellOnlyOnABuiltin(t *testing.T) {
 // Unanimous across the panel, so there is no axis: `>|` is the documented
 // override for `>` and there is no `>|&` anywhere to exempt this one.
 func TestNoclobberRefusesBothStreamsToOneFile(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"the ampersand spelling", `set -C; : > qq; true &>qq; printf "[%s]" "$?"`},
 		{"and the csh spelling", `set -C; : > qq; true >&qq; printf "[%s]" "$?"`},
@@ -291,6 +300,7 @@ func TestNoclobberRefusesBothStreamsToOneFile(t *testing.T) {
 // is the answer dash and BusyBox ash give — and it is not a parse refusal in
 // either, though both word it as one.
 func TestABadDuplicationTargetCanEndTheShellOnAnyCommand(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		wantStatus      int

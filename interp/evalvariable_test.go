@@ -15,6 +15,7 @@ import (
 
 // The text runs in the calling shell, and what it did is still there after.
 func TestTextFromAVariableRunsInTheCallingShell(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	sem := interp.PosixSemantics()
 	r := newTestRunner(t, &interp.Runner{Semantics: &sem, Stdout: &out, Stderr: &out}).SeedVars(map[string]string{})
@@ -37,6 +38,7 @@ func TestTextFromAVariableRunsInTheCallingShell(t *testing.T) {
 // of what a prompt hook is told, and a shell that cleared the status first
 // would answer "the last command succeeded" immediately after one did not.
 func TestTextFromAVariableIsShownTheCallersStatus(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	sem := interp.PosixSemantics()
 	r := newTestRunner(t, &interp.Runner{Semantics: &sem, Stdout: &out, Stderr: &out}).SeedVars(map[string]string{})
@@ -55,6 +57,7 @@ func TestTextFromAVariableIsShownTheCallersStatus(t *testing.T) {
 // The name is the person's only way back to the text. Measured, bash writes
 // `PROMPT_COMMAND: line N: syntax error …` for exactly this reason.
 func TestTextThatWillNotParseIsNamedByItsVariable(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	sem := interp.PosixSemantics()
 	sem.BuiltinSyntaxErrorFatal = interp.No
@@ -74,6 +77,7 @@ func TestTextThatWillNotParseIsNamedByItsVariable(t *testing.T) {
 // Text with nothing in it reports success, which is what an empty `eval` does
 // and is a different question from the one above.
 func TestTextFromAVariableWithNothingInItReportsSuccess(t *testing.T) {
+	t.Parallel()
 	sem := interp.PosixSemantics()
 	r := newTestRunner(t, &interp.Runner{Semantics: &sem}).SeedVars(map[string]string{})
 	r.SetExitStatus(5)
@@ -92,6 +96,7 @@ func TestTextFromAVariableWithNothingInItReportsSuccess(t *testing.T) {
 // tree reaches this, and a naming rule nothing reaches is one that quietly
 // stops being true.
 func TestAVariablesNameBeatsTheDialectsWordForEval(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	sem := interp.PosixSemantics()
 	sem.BuiltinSyntaxErrorFatal = interp.No

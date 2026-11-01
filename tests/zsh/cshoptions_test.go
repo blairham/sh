@@ -14,6 +14,7 @@ import (
 // and then it is the newline without the backslash. Measured 2026-10-02 on
 // zsh 5.9.2 from a script file (#5155).
 func TestCshJunkieQuotesRefusesAQuotedNewline(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"setopt cshjunkiequotes\neval \"print 'one\ntwo'\"\nprint after", "(eval):1: unmatched '\nafter\n"},
 		{"setopt cshjunkiequotes\neval 'print \"one\ntwo\"'\nprint after", "(eval):1: unmatched \"\nafter\n"},
@@ -35,6 +36,7 @@ func TestCshJunkieQuotesRefusesAQuotedNewline(t *testing.T) {
 // is deleted, and the word list is `no match` only where none of its patterns
 // matched. Measured 2026-10-02 on zsh 5.9.2 under `-fc` (#5155).
 func TestCshNullGlobJudgesTheWholeList(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, name := range []string{"tmpa", "tmpb"} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o644); err != nil {

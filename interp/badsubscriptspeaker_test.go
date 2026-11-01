@@ -25,6 +25,7 @@ import (
 // The location is kept where the dialect keeps it, at all three sites, and the
 // sentence is the language's either way.
 func TestABadSubscriptKeepsTheBuiltinsLocationWhereTheDialectDoes(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src string }{
 		{"unset", "a=(1 2 3)\nunset 'a[b c]'"},
 		{"a store", "a=(1 2 3)\n{ read 'a[b c]'; } <<EOF\nY\nEOF"},
@@ -59,6 +60,7 @@ func TestABadSubscriptKeepsTheBuiltinsLocationWhereTheDialectDoes(t *testing.T) 
 // column that keeps the location puts the name in the sentence. `typeset`
 // had no field to put it in at all, where `unset` and `read` had one each.
 func TestADeclarationsBadSubscriptNamesTheBuiltinItWasHandedTo(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, builtin, src string }{
 		{"typeset", "typeset", "a=(1 2 3)\ntypeset 'a[b c]'=v"},
 		{"readonly", "readonly", "a=(1 2 3)\nreadonly 'a[b c]'=v"},
@@ -76,6 +78,7 @@ func TestADeclarationsBadSubscriptNamesTheBuiltinItWasHandedTo(t *testing.T) {
 // Empty leaves the sentence to stand alone, which is what the two columns that
 // name nobody do — so the field is not a way of always writing a name.
 func TestADeclarationsBadSubscriptStandsAloneWhereTheDialectNamesNobody(t *testing.T) {
+	t.Parallel()
 	out, _ := speakerRun(t, Diagnostics{}, "a=(1 2 3)\ntypeset 'a[b c]'=v")
 	if strings.Contains(out, "typeset") {
 		t.Errorf("out %q names a builtin where the dialect names none", out)

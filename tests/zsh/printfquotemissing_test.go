@@ -10,6 +10,7 @@ import "testing"
 //
 // Measured 2026-10-02 on zsh 5.9.2 (#5153).
 func TestPrintfQuoteOfNoArgumentIsEmpty(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`printf '[%q]\n'`, "[]\n"},
 		{`printf '[%q]\n' ''`, "['']\n"},

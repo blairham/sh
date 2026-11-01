@@ -10,6 +10,7 @@ import "testing"
 // alike, `env -i PATH=/usr/bin:/bin LC_ALL=C`) with `PS4='[%_]'` and xtrace;
 // each row is the trace that shell wrote to standard error.
 func TestTheOpenStateFieldDrawsWhatACommandIsInside(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, c := range []struct{ name, src, want string }{
 		{"if, then", "if true; then true; fi", "[if]true\n[then]true\n"},

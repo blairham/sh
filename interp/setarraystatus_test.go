@@ -20,6 +20,7 @@ import (
 // diagnostic — or that ran only one route — cannot see this at all; the only
 // observable is the status the shell exits with.
 func TestSetArrayBadNameLeavesZeroFromACommandStringWhereAnswered(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		why     string
 		answer  Answer
@@ -54,6 +55,7 @@ func TestSetArrayBadNameLeavesZeroFromACommandStringWhereAnswered(t *testing.T) 
 // route. Each was measured from `-c` in the shell that answers yes and each
 // leaves 1.
 func TestOnlySetArraysBadNameTakesTheZero(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ why, src string }{
 		{"a bad option letter", "set -q\necho after\n"},
 		{"an unknown `set -o` name", "set -o zzznosuch\necho after\n"},
@@ -78,6 +80,7 @@ func TestOnlySetArraysBadNameTakesTheZero(t *testing.T) {
 // Found by mutation: dropping `r.ctl == controlExit` from the guard survived
 // every test in the tree.
 func TestTheZeroIsOnlyForARefusalThatEndedTheShell(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		why   string
 		fatal Answer

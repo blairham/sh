@@ -19,6 +19,7 @@ import (
 // script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with standard input
 // on the null device. Every row below is one of those runs.
 func TestTheDisowningOperatorIsNamedByItsPipeSpelling(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"; &!\n",
 		"; &|\n",
@@ -56,6 +57,7 @@ func TestTheDisowningOperatorIsNamedByItsPipeSpelling(t *testing.T) {
 // only thing parting the two readings, and dropping it turns every row here
 // into `&|`.
 func TestAWordSpelledLikeTheOperatorKeepsItsOwnSpelling(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"{ :; } '&!'\n", "parse error near `'&!''"},
 		{"{ :; } \"&!\"\n", "parse error near `\"&!\"'"},
@@ -88,6 +90,7 @@ func TestAWordSpelledLikeTheOperatorKeepsItsOwnSpelling(t *testing.T) {
 // token rather than a fold, and it is here because a row that already agrees
 // is what a table-shaped fix would have broken.
 func TestTheOtherPairedOperatorsKeepTheirSpelling(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"; ;|\n", "parse error near `;|'"},
 		{"; ;;&\n", "parse error near `;;'"},
@@ -111,6 +114,7 @@ func TestTheOtherPairedOperatorsKeepTheirSpelling(t *testing.T) {
 // the fold is how the token is *named when it is refused* and not a respelling
 // of the grammar. Both spellings parse to the same tree.
 func TestTheOperatorItselfIsUnmoved(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"true &!\n", "true &|\n", "echo x &! y\n"} {
 		if _, err := syntax.Parse(src, zsh.Dialect()); err != nil {
 			t.Errorf("%q: %v", src, err)

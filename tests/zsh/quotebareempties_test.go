@@ -12,6 +12,7 @@ import "testing"
 // `(q-)` and a prompt-escape flag beside it each quote every empty; and an
 // unquoted bare field is dropped where the split does not keep empty fields.
 func TestQuotingLeavesASplitsEmptyFieldsEmpty(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `show() { for x in "$@"; do printf '<%s>' "$x"; done; print; }
 IFS=:; u='a::b:'; d=':'; e=''
 show ${(@q)=u}

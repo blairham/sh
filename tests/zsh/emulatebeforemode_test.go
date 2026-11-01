@@ -17,6 +17,7 @@ import (
 // leave the emulation where it was. Measured on zsh 5.9.2, `-f`, 2026-09-30;
 // on main before this change every row but the controls differed.
 func TestEmulateBeforeTheModeWord(t *testing.T) {
+	t.Parallel()
 	rows := []struct{ name, src, want string }{
 		{"-o", "emulate -o nullglob zsh", "bad option: -o|st=1|zsh"},
 		{"-o with nothing after it", "emulate -o", "bad option: -o|st=1|zsh"},

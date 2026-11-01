@@ -53,6 +53,7 @@ func relativeHitRun(t *testing.T, root, src string, set func(*Semantics), diag D
 // row was measured against the shell holding that reading, and each answer
 // was written down before this shell gave it.
 func TestAHitFromARelativeEntryIsRemembered(t *testing.T) {
+	t.Parallel()
 	root := relativeHitTree(t)
 	none := func(*Semantics) {}
 	listed := Diagnostics{HashListing: HashListingNameEqualsPath}
@@ -124,6 +125,7 @@ func TestAHitFromARelativeEntryIsRemembered(t *testing.T) {
 // directory by a second spelling, by a link, and by a relative entry is
 // dropped, and the control — LookPathAll — keeps every one.
 func TestEachDirectoryIsListedOnce(t *testing.T) {
+	t.Parallel()
 	root := relativeHitTree(t)
 	r := newTestRunner(t, &Runner{Dir: root})
 	runPart(t, r, "PATH="+root+"/b2:"+root+"/b4:b2:"+root+"/b3/../b2:"+root+"/b3\n")
@@ -141,6 +143,7 @@ func TestEachDirectoryIsListedOnce(t *testing.T) {
 // reading searches again and remembers the new copy; the other keeps the
 // entry. And a search that finds nothing leaves the table as it was.
 func TestAnExplicitHashSearchesAgain(t *testing.T) {
+	t.Parallel()
 	root := relativeHitTree(t)
 	src := "PATH=" + root + "/b4:" + root + "/b3; hash -p " + root + "/b3/qq qq; hash qq; command -v qq; " +
 		"PATH=/nowhere; hash -p " + root + "/b3/qq qq; hash qq; command -v qq\n"

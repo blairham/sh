@@ -18,6 +18,7 @@ func onATerminal(src string) string { return "TERM=xterm-256color\n" + src }
 // wrote for the heading row. They were drawn literally until #6146, so a
 // format style's `%F{yellow}` stood over every block of every listing.
 func TestAnExplanationDrawsItsEscapes(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, call, want string }{
 		{
 			// The issue's own row: a format-style heading, `%n` as the count
@@ -64,6 +65,7 @@ func TestAnExplanationDrawsItsEscapes(t *testing.T) {
 // color back too. Measured row for row against `compadd -X`; the prompt's
 // answers are in the comment on interp.PromptStyle.RestoreLeavesColors.
 func TestAnExplanationRestoresNoColor(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ text, want string }{
 		{"%F{red}a%bz", "\x1b[31ma\x1b[0mz"},
 		{"%F{red}%By%f", "\x1b[31m\x1b[1my\x1b[39m"},
@@ -89,6 +91,7 @@ func TestAnExplanationRestoresNoColor(t *testing.T) {
 // when a later call fills the block. Measured: `compadd -X H -J g nomatch`
 // then `compadd -J g alfa` draws `alfa` with no heading over it.
 func TestAnExplanationWhoseCallAddedNothingIsNotDrawn(t *testing.T) {
+	t.Parallel()
 	got := drawn(completionCandidatesFor(t, widgetOf(
 		"compadd -J g -X 'unheard' -- zzz\ncompadd -J g -X 'heard' -- checkout\n",
 	), "git che"))

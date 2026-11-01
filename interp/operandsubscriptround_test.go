@@ -68,6 +68,7 @@ func roundAxes(unset, output, isSet Answer, stopped bool) func(*Runner) {
 // The three surfaces, each under its own axis, with the other two answered
 // the opposite way so that a row can only be moved by the axis it names.
 func TestABuiltinsOperandRoundsItsSubscriptByAxis(t *testing.T) {
+	t.Parallel()
 	const table = "typeset -A m; k='x y'; m[$k]=hello; "
 	for _, tc := range []struct {
 		name     string
@@ -145,6 +146,7 @@ func TestABuiltinsOperandRoundsItsSubscriptByAxis(t *testing.T) {
 // `unset` and the key would not be found — for a reason that has nothing to
 // do with the round.
 func TestAnOperandWithNothingToExpandIsTheSameElementEitherWay(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"unset", "typeset -A m; m[plain]=hello; unset 'm[plain]'; printf '[%s]'" + ` "${m[plain]-GONE}"`, "[GONE]"},
 		{"read", "typeset -A m; read 'm[plain]' <<<Z; printf '[%s]'" + ` "${m[plain]-U}"`, "[Z]"},
@@ -166,6 +168,7 @@ func TestAnOperandWithNothingToExpandIsTheSameElementEitherWay(t *testing.T) {
 // The switch withholds the round at all three surfaces at once, and a shell
 // that was never told about it rounds wherever its axes say.
 func TestASessionCanWithholdABuiltinsSecondRound(t *testing.T) {
+	t.Parallel()
 	const table = "typeset -A m; k='x y'; m[$k]=hello; "
 	for _, tc := range []struct{ name, src, rounding, withheld string }{
 		{"unset", table + `unset 'm[$k]'; printf '[%s]' "${m[$k]-GONE}"`, "[GONE]", "[hello]"},
@@ -198,6 +201,7 @@ func TestASessionCanWithholdABuiltinsSecondRound(t *testing.T) {
 // builds and is asserted where the whole vector is real — see
 // TestTheOptionLeavesTheNeighbouringSurfacesRounding in dialect/bash.
 func TestWithholdingTheRoundLeavesTheNeighbouringSurfacesAlone(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the is-set keyword",

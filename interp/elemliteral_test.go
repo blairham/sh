@@ -30,6 +30,7 @@ func runElemLiteral(t *testing.T, p SubscriptedArrayLiteralPolicy, src string) (
 // array on the other side — so a script that meant to replace one element
 // replaced everything and nothing said so.
 func TestASubscriptedArrayLiteralIsNotAWholeArrayAssignment(t *testing.T) {
+	t.Parallel()
 	// Splicing. The subscript is `-1` so that the row asks about the
 	// construct and not about the array base.
 	out, st := runElemLiteral(t, SubscriptedArrayLiteralSplices,
@@ -56,6 +57,7 @@ func TestASubscriptedArrayLiteralIsNotAWholeArrayAssignment(t *testing.T) {
 // two answers disagree about the array's length, its contents and the exit
 // status — there is no reading that is nearly right.
 func TestAnUnansweredSubscriptedArrayLiteralIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	out, _ := runElemLiteral(t, SubscriptedArrayLiteralUnspecified,
 		`a=(x y z); a[-1]=(p q); printf "[%s]" "${a[@]}"`)
 	if !strings.Contains(out, "a[i]=(p q)") {
@@ -72,6 +74,7 @@ func TestAnUnansweredSubscriptedArrayLiteralIsRefusedByName(t *testing.T) {
 // does for a scalar element: with one, the words join the element; without
 // one, they are added after the last.
 func TestASubscriptDecidesWhichLiteralAppend(t *testing.T) {
+	t.Parallel()
 	out, _ := runElemLiteral(t, SubscriptedArrayLiteralSplices,
 		`a=(x y); a+=(p); printf "[%s]" "${a[@]}"`)
 	if want := "[x][y][p]"; out != want {
@@ -88,6 +91,7 @@ func TestASubscriptDecidesWhichLiteralAppend(t *testing.T) {
 // element goes and the array is one shorter. It is the row a real plugin
 // writes, and the one that separates splicing from every reading that adds.
 func TestAnEmptyLiteralThroughASubscriptRemovesTheElement(t *testing.T) {
+	t.Parallel()
 	out, st := runElemLiteral(t, SubscriptedArrayLiteralSplices,
 		`a=(x y z); a[-2]=(); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
 	if want := "[x][z] n=2"; strings.TrimSpace(out) != want {

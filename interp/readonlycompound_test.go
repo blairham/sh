@@ -33,6 +33,7 @@ func readonlyCompoundRun(t *testing.T, src string, a Answer) (string, string, in
 // The headline, both ways: under Yes the listing carries the kind, under No
 // the name is frozen and its kind is not recorded.
 func TestReadonlyRecordingTheCompoundIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `f() { readonly -a a; typeset -p a; }; f`
 	out, errs, st := readonlyCompoundRun(t, src, Yes)
 	// The kind and no value, which is the shape the keyed half below has
@@ -50,6 +51,7 @@ func TestReadonlyRecordingTheCompoundIsAnAxis(t *testing.T) {
 
 // The keyed half moves with it, which is what makes this one question.
 func TestReadonlyRecordsTheTableToo(t *testing.T) {
+	t.Parallel()
 	const src = `f() { readonly -A m; typeset -p m; }; f`
 	out, _, _ := readonlyCompoundRun(t, src, Yes)
 	if want := "declare -Ar m\n"; out != want {
@@ -64,6 +66,7 @@ func TestReadonlyRecordsTheTableToo(t *testing.T) {
 // A `readonly` with no kind letter raises no question, so nothing is asked and
 // an unanswered axis is not a refusal.
 func TestReadonlyWithNoKindLetterAsksNothing(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `readonly r=1; typeset -p r`, func(s *Semantics) {
 		s.DeclareOptions = "aAgiprx"
 		s.ReadonlyRecordsTheCompoundAttribute = Unspecified
@@ -86,6 +89,7 @@ func TestReadonlyWithNoKindLetterAsksNothing(t *testing.T) {
 // carries beside it, and the mark does not replace it either — the elements
 // are the ones the command was given.
 func TestReadonlyWithAnArrayValueKeepsTheElements(t *testing.T) {
+	t.Parallel()
 	out, errs, st := readonlyCompoundRun(t, `readonly -a a=(p q); typeset -p a`, Yes)
 	if want := `declare -ar a=([0]="p" [1]="q")` + "\n"; out != want || st != 0 || errs != "" {
 		t.Errorf("got %q/%d stderr %q, want %q", out, st, errs, want)

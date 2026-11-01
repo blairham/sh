@@ -47,6 +47,7 @@ func TestAColonClosingAnOrdinaryWordsTildePrefixIsAThreeValuedAxis(t *testing.T)
 // And it is asked only where the two sets of closing bytes come to different
 // words, which is what keeps it away from every `~/…` anybody writes.
 func TestTheTildeColonAxisIsNotAskedWhereTheSetsAgree(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// A slash closes the prefix before the colon is reached.
 		{"a slash first", `printf '[%s]' ~/m:x`, "[/h/m:x]"},
@@ -79,6 +80,7 @@ func TestTheTildeColonAxisIsNotAskedWhereTheSetsAgree(t *testing.T) {
 // and real ksh93 keeps the characters, and this shell answered the home
 // directory with an `a` on the end.
 func TestATildePrefixIsTheWordsLeadingTextAndNotOneSpans(t *testing.T) {
+	t.Parallel()
 	ask := func(s *Semantics) {
 		s.TildeColonEndsAnOrdinaryWordsPrefix = TildeColonEndsNothing
 		s.BraceExpansion = Yes
@@ -104,6 +106,7 @@ func TestATildePrefixIsTheWordsLeadingTextAndNotOneSpans(t *testing.T) {
 // The prefix reaching across spans must not swallow what is past it, which is
 // the half a reading that only ever rewrote the first span could not get wrong.
 func TestAProducedTildePrefixLeavesTheRestOfTheWordAlone(t *testing.T) {
+	t.Parallel()
 	ask := func(s *Semantics) {
 		s.TildeColonEndsAnOrdinaryWordsPrefix = TildeColonEndsNothing
 		s.BraceExpansion = Yes

@@ -21,6 +21,7 @@ import "testing"
 // unexpanded it was measuring the width of a `${…}` nest rather than of the
 // characters a person sees (#2048).
 func TestTheDoubledPercentFlagExpandsUnderPromptSubst(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const body = `V=WORLD; s='a${V}b'; print -r -- "[${(%)s}] [${(%%)s}]"`
 
@@ -35,6 +36,7 @@ func TestTheDoubledPercentFlagExpandsUnderPromptSubst(t *testing.T) {
 // Command and arithmetic substitution travel with it — the option names all
 // three and the measurement took all three.
 func TestTheDoubledFlagRunsCommandAndArithmeticToo(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	src := `s='a$(echo C)-$((1+2))b'; print -r -- "[${(%%)s}]"`
 	if out, st := runZsh(t, dir, "setopt promptsubst; "+src); st != 0 || out != "[aC-3b]\n" {
@@ -45,6 +47,7 @@ func TestTheDoubledFlagRunsCommandAndArithmeticToo(t *testing.T) {
 // A third `%` adds nothing over the second, which is what says this is a
 // two-state question and not a count.
 func TestAThirdPercentAddsNothing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	src := `V=WORLD; s='a${V}b'; print -r -- "[${(%%%)s}]"`
 	if out, st := runZsh(t, dir, "setopt promptsubst; "+src); st != 0 || out != "[aWORLDb]\n" {
@@ -55,6 +58,7 @@ func TestAThirdPercentAddsNothing(t *testing.T) {
 // `print -P` expands always, subject to the same option — the builtin route
 // asks the doubled flag's question rather than the single one's.
 func TestPrintPExpandsUnderPromptSubst(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const src = `V=WORLD; print -P 'a${V}b'`
 	if out, st := runZsh(t, dir, "setopt promptsubst; "+src); st != 0 || out != "aWORLDb\n" {
@@ -69,6 +73,7 @@ func TestPrintPExpandsUnderPromptSubst(t *testing.T) {
 // either way — which is the control that says this change is about the
 // expansion pass and nothing else.
 func TestThePromptEscapesAreUnchangedByTheOption(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const src = `s='a%F{31}z%f b'; print -r -- "[${(%)s}][${(%%)s}]"`
 	on, st1 := runZsh(t, dir, "setopt promptsubst; "+src)

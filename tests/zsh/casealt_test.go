@@ -16,6 +16,7 @@ import "testing"
 // The rows are subjects rather than "it parsed", because what the newline
 // joined is the part parsing cannot say.
 func TestACasePatternListSpansANewlineInThisDialect(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	arm := func(subject string) string {
 		return "case " + subject + " in (a|\nb) printf m;; *) printf .;; esac"

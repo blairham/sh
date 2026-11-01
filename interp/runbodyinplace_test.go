@@ -24,6 +24,7 @@ import (
 // the same builtin either calls or runs in place, and everything else about
 // the two paths is identical.
 func TestABodyRunInPlaceOpensNoFrameOfItsOwn(t *testing.T) {
+	t.Parallel()
 	// The replacement body: it reports how deep it is and what its
 	// positional parameters are, then declares a local so that the scope can
 	// be checked to have unwound.
@@ -94,6 +95,7 @@ func TestABodyRunInPlaceOpensNoFrameOfItsOwn(t *testing.T) {
 // caller that has just resolved something is entitled to find out that it did
 // not resolve to a function.
 func TestABodyRunInPlaceReportsANameThatIsNotAFunction(t *testing.T) {
+	t.Parallel()
 	var ran bool
 	out, _ := run(t, "zzask\n", func(r *Runner) {
 		r.Register("zzask", func(rr *Runner, ctx context.Context, _ []string) int {

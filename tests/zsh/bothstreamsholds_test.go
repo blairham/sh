@@ -13,6 +13,7 @@ import (
 // opened held on the lowest free number until the last save it takes.
 // Measured 2026-10-15 and 2026-10-16 on zsh 5.9.2 under `-fc` (#6756).
 func TestBothStreamsOntoAFileHoldTheFileWhileTheyAreSaved(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`: &>/dev/null {v}</dev/null {w}</dev/null; echo $v $w`, "11 14\n"},
 		{`: >&/dev/null {v}</dev/null; echo $v`, "11\n"},
@@ -36,6 +37,7 @@ func TestBothStreamsOntoAFileHoldTheFileWhileTheyAreSaved(t *testing.T) {
 // name takes its number after the file's own, which is let go of before the
 // join. Measured 2026-10-27 on zsh 5.9.2 under `-fc` (#6756).
 func TestANamedBothStreamsRedirectionReachesStandardError(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`echo {v}&>|/dev/null {w}&>!/dev/null; echo "[$v][$w]"`, "\n[12][14]\n"},
 		{`: {v}&>/dev/null {w}</dev/null {u}</dev/null {x}</dev/null; echo $v $w $u $x`, "12 11 14 15\n"},

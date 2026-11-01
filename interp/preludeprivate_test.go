@@ -39,6 +39,7 @@ func answered(s *Semantics) {
 // TestAPrivatePreludeFunctionIsNotAName: the four questions a script has about
 // whether a name exists, all answering the same way.
 func TestAPrivatePreludeFunctionIsNotAName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, out, errs string
 		status         int
@@ -70,6 +71,7 @@ func TestAPrivatePreludeFunctionIsNotAName(t *testing.T) {
 // away. The presented functions are built out of the helpers, so a rule that
 // made the name unreachable would break the thing it is protecting.
 func TestAPrivatePreludeFunctionStillRuns(t *testing.T) {
+	t.Parallel()
 	out, errs, st := preludeListingRun(t, listingPrelude, "p\n__helper\n", answered)
 	if want := "helper\nhelper\n"; out != want || errs != "" || st != 0 {
 		t.Errorf("stdout %q stderr %q status %d, want %q and a silent 0", out, errs, st, want)
@@ -82,6 +84,7 @@ func TestAPrivatePreludeFunctionStillRuns(t *testing.T) {
 // declarations that moves a diagnostic's voice back to a script that
 // redefines a prelude function.
 func TestAScriptsOwnPrivateNameIsItsOwn(t *testing.T) {
+	t.Parallel()
 	out, errs, st := preludeListingRun(
 		t,
 		listingPrelude,

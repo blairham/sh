@@ -61,6 +61,7 @@ func runChainedSubscript(t *testing.T, src string) (string, int) {
 // A link that named one value hands the next one a string, which it counts by
 // character.
 func TestASubscriptBehindOneValueCountsCharacters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an element", `a=(one two three); printf "[%s]" "${a[1][2]}"`, "[n]"},
 		{"the first character", `a=(one two three); printf "[%s]" "${a[2][1]}"`, "[t]"},
@@ -89,6 +90,7 @@ func TestASubscriptBehindOneValueCountsCharacters(t *testing.T) {
 // `${${a[2,4]}[1]}` is `t`, because quoting joins what the inner expansion
 // came to before the subscript is read, and `${a[2,4][1]}` is `two`.
 func TestASubscriptBehindAListCountsElements(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"behind a range", `a=(one two three four five); printf "[%s]" "${a[2,4][1]}"`, "[two]"},
 		{"the second of them", `a=(one two three four five); printf "[%s]" "${a[2,4][2]}"`, "[three]"},
@@ -111,6 +113,7 @@ func TestASubscriptBehindAListCountsElements(t *testing.T) {
 // The rule applies as many times as it is written, and each link is decided
 // by the link before it rather than by how deep it is.
 func TestAChainIsNotLimitedToTwoSubscripts(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"element then character", `a=(one two three four five); printf "[%s]" "${a[2,4][2][3]}"`, "[r]"},
 		{"elements then an element", `a=(one two three four five); printf "[%s]" "${a[2,4][1,2][2]}"`, "[three]"},
@@ -129,6 +132,7 @@ func TestAChainIsNotLimitedToTwoSubscripts(t *testing.T) {
 // width, are questions about the *final* subscript. Asked of the first they
 // come out differently, which is what these assert.
 func TestAChainsShapeIsTheLastSubscripts(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a range behind a range is a list", `a=(one two three); set -- ${a[1,3][1,2]}; printf "n=%d" $#`, "n=2"},
 		{"an element behind a range is one field", `a=(one two three); set -- ${a[1,3][2]}; printf "n=%d" $#`, "n=1"},
@@ -150,6 +154,7 @@ func TestAChainsShapeIsTheLastSubscripts(t *testing.T) {
 // A link before the last that named nothing leaves the whole chain unset,
 // which is what the conditionals test.
 func TestAChainWhoseLinkNamedNothingIsUnset(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"no such element", `a=(x y); printf "[%s]" "${a[9][1]-none}"`, "[none]"},
 		{"no such key", `typeset -A m; m[k]=abc; printf "[%s]" "${m[zz][1]-none}"`, "[none]"},
@@ -175,6 +180,7 @@ func TestAChainWhoseLinkNamedNothingIsUnset(t *testing.T) {
 // `a=("x y" b); ${a[1][(w)2]}` is `y`, and `(w)q` is the first word, `q`
 // being 0 and the word clamped. Reading characters gave a space (#5152).
 func TestAChainReadsAStringsWords(t *testing.T) {
+	t.Parallel()
 	out, st := runChainedSubscript(t, `a=("x y" b); printf "[%s]" "${a[1][(w)2]}" "${a[1][(w)q]}" "${a[1][(f)1]}"`)
 	if want := "[y][x][x y]"; out != want || st != 0 {
 		t.Errorf("gave %q at %d, want %q at 0", out, st, want)
@@ -184,6 +190,7 @@ func TestAChainReadsAStringsWords(t *testing.T) {
 // A search over an *association* is not a source the rest of a chain reads,
 // and this refuses it by name rather than reading the matches as one.
 func TestAChainBehindAnAssociationSearchIsRefused(t *testing.T) {
+	t.Parallel()
 	out, st := runChainedSubscript(t, `typeset -A m; m[alpha]=1; m[beta]=2; printf "[%s]" "${m[(I)*][2]}"`)
 	const want = "${m[(I)*][2]}: a chain behind a search over an association is not implemented"
 	if !strings.Contains(out, want) {
@@ -197,6 +204,7 @@ func TestAChainBehindAnAssociationSearchIsRefused(t *testing.T) {
 // A chain on a nested expansion is the two constructs at once and is refused
 // by name, rather than answered with the last subscript alone.
 func TestAChainOnANestedExpansionIsRefused(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `a=(hello world); printf "[%s]" "${${a}[1][2]}"`,
 		func(d *syntax.Dialect) {
 			chainedSubscriptGrammar(d)

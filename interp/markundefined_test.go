@@ -43,6 +43,7 @@ func markRun(t *testing.T, src, letters string) (string, int) {
 // The headline: the same line is a marking under one answer and a listing
 // under the other, and nothing about the line itself says which.
 func TestTheLettersThatMarkAnUndefinedFunctionAreAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `f(){ :; }; typeset -fu f`
 	out, st := markRun(t, src, "uU")
 	if want := "marked [f] with [-u]\n"; out != want || st != 0 {
@@ -58,6 +59,7 @@ func TestTheLettersThatMarkAnUndefinedFunctionAreAnAxis(t *testing.T) {
 // excepted — which is what lets a dialect record one of them on the stub it
 // writes without this package knowing what any of them mean.
 func TestTheMarkingSeamIsHandedTheLettersAsWritten(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset -fu nm`, "marked [nm] with [-u]\n"},
 		{`typeset -fU nm`, "marked [nm] with [-U]\n"},
@@ -77,6 +79,7 @@ func TestTheMarkingSeamIsHandedTheLettersAsWritten(t *testing.T) {
 // not start one. The line is still a listing, which is the reading that says
 // the two roles are separate: `z` decorates a marking and cannot begin one.
 func TestADecoratingLetterAloneIsStillAListing(t *testing.T) {
+	t.Parallel()
 	out, st := markRun(t, `f(){ :; }; typeset -fz f`, "uU")
 	if !strings.HasPrefix(out, "f () ") || st != 0 {
 		t.Errorf("got %q/%d, want the body written out", out, st)
@@ -88,6 +91,7 @@ func TestADecoratingLetterAloneIsStillAListing(t *testing.T) {
 // names is a listing narrowed to the marked functions, and refusing the bare
 // word would have replaced a right answer with a complaint.
 func TestOnlyALineWithOperandsMarks(t *testing.T) {
+	t.Parallel()
 	out, st := markRun(t, `f(){ :; }; typeset -fu`, "uU")
 	if strings.Contains(out, "marked") || st != 0 {
 		t.Errorf("got %q/%d, want no marking", out, st)
@@ -106,6 +110,7 @@ func TestOnlyALineWithOperandsMarks(t *testing.T) {
 // afterwards, where the gated route left the line falling through to a
 // *listing* (#2192).
 func TestTheSignReachesTheHook(t *testing.T) {
+	t.Parallel()
 	out, st := markRun(t, `f(){ :; }; typeset +fu f`, "uU")
 	if want := "marked [f] with [+u]\n"; out != want || st != 0 {
 		t.Errorf("got %q/%d, want %q", out, st, want)
@@ -116,6 +121,7 @@ func TestTheSignReachesTheHook(t *testing.T) {
 // listing rather than a panic or a silence: the field says which lines are
 // not listings, and only the hook can make one into anything else.
 func TestNamingTheLettersWithoutTheSeamStillLists(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `f(){ :; }; typeset -fu f`, func(r *Runner) {
 		sem := CoreSemantics()
 		sem.DeclareOptions = "afgpruUz"

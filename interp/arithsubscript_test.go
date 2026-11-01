@@ -13,6 +13,7 @@ import (
 // `a[1]` written inside an expression is read as part of it, where `${a[1]}`
 // is substituted into it before it is read. Same element, two routes.
 func TestAnArrayElementInsideAnExpression(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`a=(3 4 5); echo $(( a[1] ))`, "4"},
 		{`a=(3 4 5); echo $(( a[1] + a[2] ))`, "9"},
@@ -43,6 +44,7 @@ func TestAnArrayElementInsideAnExpression(t *testing.T) {
 // The element counts from the dialect's base, the same one `${a[1]}` uses —
 // so the two routes to an element cannot disagree.
 func TestAnArithmeticSubscriptUsesTheDialectsBase(t *testing.T) {
+	t.Parallel()
 	base := func(a Answer) func(*Runner) {
 		return func(r *Runner) {
 			s := *r.Semantics

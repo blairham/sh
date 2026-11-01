@@ -37,6 +37,7 @@ func runTestBuiltin(t *testing.T, a Answer, src string) (string, int) {
 }
 
 func TestDoubleEqualIsAnOperatorOrIsNotAWordAtAll(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
 		answer Answer
@@ -74,6 +75,7 @@ func TestDoubleEqualIsAnOperatorOrIsNotAWordAtAll(t *testing.T) {
 // complaint — a malformed expression — is a consequence of the refusal rather
 // than anything the script did.
 func TestARefusedOperatorIsNotAlsoAMalformedExpression(t *testing.T) {
+	t.Parallel()
 	out, _ := runTestBuiltin(t, Unspecified, `test a == b`)
 	if n := strings.Count(out, "\n"); n != 1 {
 		t.Errorf("said %q (%d lines), want one", out, n)
@@ -87,6 +89,7 @@ func TestARefusedOperatorIsNotAlsoAMalformedExpression(t *testing.T) {
 // typed. The wordings carry it, so a fixed "test:" in them looks right until
 // the same expression is written the other way.
 func TestADiagnosticNamesTheWordThatWasTyped(t *testing.T) {
+	t.Parallel()
 	// Not the substrate's empty wordings, which name nothing at all: this is
 	// about a wording that does name the builtin, so it needs one.
 	dg := Diagnostics{

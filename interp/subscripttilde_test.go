@@ -38,6 +38,7 @@ func runSubscriptTilde(t *testing.T, src string, tilde Answer) string {
 // opening with an unquoted `~`: every other spelling is the same key either
 // way, and the rows for those are the guards below.
 func TestASubscriptsLeadingTildeIsExpanded(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, sub, expanded, taken string }{
 		{"a tilde and a path", "~/k", `[/h/k]="v"`, `["~/k"]="v"`},
 		{"a tilde alone", "~", `[/h]="v"`, `["~"]="v"`},
@@ -72,6 +73,7 @@ func TestASubscriptsLeadingTildeIsExpanded(t *testing.T) {
 // self-consistent rather than only surprising: the element stored under the
 // path is the element `${m[~/k]}` finds.
 func TestASubscriptsLeadingTildeIsExpandedOnARead(t *testing.T) {
+	t.Parallel()
 	src := `typeset -A m; m[/h/k]=stored; echo "[${m[~/k]}]"`
 	if got := runSubscriptTilde(t, src, Yes); got != "[stored]" {
 		t.Errorf("expanded: got %q, want %q", got, "[stored]")
@@ -87,6 +89,7 @@ func TestASubscriptsLeadingTildeIsExpandedOnARead(t *testing.T) {
 // names in a word. `printf -v` and `${!ref}` are two more of them and are
 // graded in dialect/bash, where the grammar has both.
 func TestAnOperandSubscriptsLeadingTildeIsExpanded(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, expanded, taken string }{
 		{
 			"unset",

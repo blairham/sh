@@ -38,6 +38,7 @@ func runScalarAppend(t *testing.T, sem Semantics, src string) (string, int) {
 }
 
 func TestAppendingAScalarToAnArrayKeepsTheArray(t *testing.T) {
+	t.Parallel()
 	const src = `a=(1 2); a+=x; printf "[%s]" "${a[@]}"; echo " keys=${!a[@]} n=${#a[@]}"`
 	for _, c := range []struct {
 		addsAnElement Answer
@@ -69,6 +70,7 @@ func TestAppendingAScalarToAnArrayKeepsTheArray(t *testing.T) {
 // here. The subscripts are printed because the values alone read the same
 // under either.
 func TestAppendingAScalarToASparseArrayJoinsTheBase(t *testing.T) {
+	t.Parallel()
 	out, _ := runScalarAppend(t, appendSem(No),
 		`a=([5]=q); a+=x; printf "[%s]" "${a[@]}"; echo " keys=${!a[@]} n=${#a[@]}"`)
 	if got := strings.TrimSpace(out); got != "[x][q] keys=0 5 n=2" {
@@ -80,6 +82,7 @@ func TestAppendingAScalarToASparseArrayJoinsTheBase(t *testing.T) {
 // appended array literal's first word goes — one rule about where the end of
 // an array is rather than two.
 func TestAppendingAScalarToASparseArrayAddsPastTheEnd(t *testing.T) {
+	t.Parallel()
 	out, _ := runScalarAppend(t, appendSem(Yes),
 		`a=([5]=q); a+=x; echo "keys=${!a[@]} n=${#a[@]}"`)
 	if got := strings.TrimSpace(out); got != "keys=5 6 n=2" {
@@ -95,6 +98,7 @@ func TestAppendingAScalarToASparseArrayAddsPastTheEnd(t *testing.T) {
 // no-op passes the joining side and fails only the other, and because the
 // brackets alone read the same either way — the count is what says which.
 func TestAppendingAnEmptyScalarToAnArray(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		addsAnElement Answer
 		want          string
@@ -113,6 +117,7 @@ func TestAppendingAnEmptyScalarToAnArray(t *testing.T) {
 // And an empty *element* is joined like any other, which is the same claim
 // from the other side: emptiness is never a special case on either half.
 func TestAppendingAScalarToAnEmptyFirstElement(t *testing.T) {
+	t.Parallel()
 	out, _ := runScalarAppend(t, appendSem(No),
 		`a=("" 2); a+=x; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
 	if got := strings.TrimSpace(out); got != "[x][2] n=2" {
@@ -126,6 +131,7 @@ func TestAppendingAScalarToAnEmptyFirstElement(t *testing.T) {
 // own words go through, which would leave `[1p][q][2]` here and `[p][q]` on
 // the other side of the axis.
 func TestAppendingAScalarWithASpaceToAnArray(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		addsAnElement Answer
 		want          string
@@ -149,6 +155,7 @@ func TestAppendingAScalarWithASpaceToAnArray(t *testing.T) {
 // one-element array prints exactly the same. The listing is what tells them
 // apart, and so does an assignment through a subscript afterwards.
 func TestAppendingAScalarToAnUnsetNameStaysAScalar(t *testing.T) {
+	t.Parallel()
 	for _, adds := range []Answer{No, Yes} {
 		out, _ := runScalarAppend(t, appendSem(adds), `unset a; a+=x; typeset -p a`)
 		if got := strings.TrimSpace(out); got != `declare -- a="x"` {
@@ -171,6 +178,7 @@ func TestAppendingAScalarToAnUnsetNameStaysAScalar(t *testing.T) {
 // set to the *adding* answer throughout, so a mutant that let `a=x` fall into
 // the `Append` branch would grow a third element and be caught on both rows.
 func TestAssigningAScalarOverAnArrayIsNotTheAppend(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		replaces Answer
 		want     string
@@ -196,6 +204,7 @@ func TestAssigningAScalarOverAnArrayIsNotTheAppend(t *testing.T) {
 // Here so that the two appends cannot be folded into one: they share a
 // spelling and the parentheses are the whole of what tells them apart.
 func TestAppendingAnArrayLiteralIsUnchangedByTheAxis(t *testing.T) {
+	t.Parallel()
 	for _, adds := range []Answer{No, Yes} {
 		out, _ := runScalarAppend(t, appendSem(adds),
 			`a=(1 2); a+=(3); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
@@ -208,6 +217,7 @@ func TestAppendingAnArrayLiteralIsUnchangedByTheAxis(t *testing.T) {
 // And so is a subscripted append, which reaches the element it names on both
 // sides.
 func TestAppendingThroughASubscriptIsUnchangedByTheAxis(t *testing.T) {
+	t.Parallel()
 	for _, adds := range []Answer{No, Yes} {
 		out, _ := runScalarAppend(t, appendSem(adds),
 			`a=(1 2); a[1]+=x; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
@@ -220,6 +230,7 @@ func TestAppendingThroughASubscriptIsUnchangedByTheAxis(t *testing.T) {
 // An unanswered dialect is refused by name rather than given one shell's
 // answer, and the array is left as it was.
 func TestAppendingAScalarToAnArrayRefusesAnUnansweredDialect(t *testing.T) {
+	t.Parallel()
 	out, _ := runScalarAppend(t, appendSem(Unspecified),
 		`a=(1 2); a+=x; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
 	if !strings.Contains(out, "a scalar appended to an array becoming a new element") {

@@ -31,6 +31,7 @@ func rememberedNames(yes Answer) func(*Semantics) {
 
 // TestUnaliasCountsANameAliasHasNamed is the dialect that remembers.
 func TestUnaliasCountsANameAliasHasNamed(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		// The issue's own row, and one past it: the name does not go when
 		// the value does, so the third removal succeeds as well.
@@ -135,6 +136,7 @@ func TestUnaliasCountsANameAliasHasNamed(t *testing.T) {
 // the other four columns give, which is what makes the suite above a
 // measurement of an axis rather than of a shell.
 func TestUnaliasForgetsANameEverywhereElse(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"a removed alias is gone",

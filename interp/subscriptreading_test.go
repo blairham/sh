@@ -32,6 +32,7 @@ func runReading(t *testing.T, zeroBased, comma, character Answer, src string) (s
 // answers are two different values with no diagnostic between them, which is
 // what makes it a conflict rather than a construct one grammar has.
 func TestASubscriptPairIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `a=(w x y z); printf "[%s]" "${a[1,3]}"`
 	if out, st := runReading(t, No, Yes, No, src); out != "[w x y]" || st != 0 {
 		t.Errorf("as a range = %q (status %d), want %q at 0", out, st, "[w x y]")
@@ -47,6 +48,7 @@ func TestASubscriptPairIsAnAxis(t *testing.T) {
 // what keeps `${a[2,2]}` and `${a[2]}` naming the same element under either
 // answer to the base.
 func TestARangeCountsFromTheBase(t *testing.T) {
+	t.Parallel()
 	const src = `a=(w x y z); printf "[%s]" "${a[1,2]}"`
 	if out, _ := runReading(t, No, Yes, No, src); out != "[w x]" {
 		t.Errorf("one-based = %q, want %q", out, "[w x]")
@@ -60,6 +62,7 @@ func TestARangeCountsFromTheBase(t *testing.T) {
 // element names it under either reading, so nothing has to be chosen — which
 // is what keeps a core that has chosen no dialect from refusing it.
 func TestAPairNamingOneElementAsksNothing(t *testing.T) {
+	t.Parallel()
 	out, st := runReading(t, No, Unspecified, No, `a=(w x y z); printf "[%s]" "${a[2,2]}"`)
 	if out != "[x]" || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, "[x]")
@@ -69,6 +72,7 @@ func TestAPairNamingOneElementAsksNothing(t *testing.T) {
 // And where they do differ, an unanswered axis is refused by name rather than
 // guessed at.
 func TestAPairThatDiffersRefusesAnUnansweredAxis(t *testing.T) {
+	t.Parallel()
 	out, st := runReading(t, No, Unspecified, No, `a=(w x y z); printf "[%s]" "${a[1,3]}"`)
 	want := "sh: `${a[1,3]}` naming a range rather than one subscript: " +
 		"the shells disagree here and no dialect was chosen\n"
@@ -83,6 +87,7 @@ func TestAPairThatDiffersRefusesAnUnansweredAxis(t *testing.T) {
 // A subscript on a plain string is either one of its characters or an element
 // of the one-element array a scalar reads as. Both answer, neither reports.
 func TestAScalarSubscriptIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `s=hello; printf "[%s][%s]" "${s[1]}" "${s[2]}"`
 	if out, st := runReading(t, No, No, Yes, src); out != "[h][e]" || st != 0 {
 		t.Errorf("as characters = %q (status %d), want %q at 0", out, st, "[h][e]")
@@ -101,6 +106,7 @@ func TestAScalarSubscriptIsAnAxis(t *testing.T) {
 // a one-element array's last element is its first. A plausible value with no
 // diagnostic near it.
 func TestANegativeSubscriptOnAStringNamesNothing(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`s=hello; printf "[%s]" "${s[-1]}"`,
 		`s=hello; printf "[%s]" "${s[-9]}"`,
@@ -119,6 +125,7 @@ func TestANegativeSubscriptOnAStringNamesNothing(t *testing.T) {
 // Asked only where the readings differ: a one-character string at the
 // subscript both readings answer to is itself either way.
 func TestAOneCharacterStringAsksNothing(t *testing.T) {
+	t.Parallel()
 	out, st := runReading(t, No, No, Unspecified, `s=h; printf "[%s]" "${s[1]}"`)
 	if out != "[h]" || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, "[h]")
@@ -132,6 +139,7 @@ func TestAOneCharacterStringAsksNothing(t *testing.T) {
 // An array is never read as characters, however short its elements are: the
 // axis is about a *scalar*, and an array holding one element is not one.
 func TestAnArrayIsNotReadAsCharacters(t *testing.T) {
+	t.Parallel()
 	out, st := runReading(t, No, No, Yes, `a=(hello); printf "[%s]" "${a[1]}"`)
 	if out != "[hello]" || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, "[hello]")
@@ -142,6 +150,7 @@ func TestAnArrayIsNotReadAsCharacters(t *testing.T) {
 // multibyte encoding, and a byte where it does not — the two halves of
 // MultibyteEncodingIsHonored, on the subscript that indexes them.
 func TestAStringSubscriptCountsCharacters(t *testing.T) {
+	t.Parallel()
 	out, st := runReading(t, No, Yes, Yes,
 		`LC_ALL=en_US.UTF-8; s=héllo; printf "[%s][%s]" "${s[2]}" "${s[2,3]}"`)
 	if out != "[é][él]" || st != 0 {
@@ -161,6 +170,7 @@ func TestAStringSubscriptCountsCharacters(t *testing.T) {
 // a subscript on them at all; every other special parameter is a value, and a
 // subscript reaches into it the way it reaches into any other string.
 func TestASubscriptOnTheSpecialParameters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the list", `set -- a b c; printf "[%s][%s]" "${@[1]}" "${*[3]}"`, "[a][c]"},
 		{"from the end", `set -- a b c; printf "[%s]" "${@[-1]}"`, "[c]"},
@@ -182,6 +192,7 @@ func TestASubscriptOnTheSpecialParameters(t *testing.T) {
 // it off the bracket is never consumed, and the leftover text is what makes
 // the expansion unreadable.
 func TestASubscriptOnASpecialParameterNeedsTheGrammar(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `set -- a b; printf "[%s]" "${@[1]}"; echo " ok"`, nil, nil)
 	if strings.Contains(out, "ok") {
 		t.Errorf("output %q ran on past the refusal", out)
@@ -195,6 +206,7 @@ func TestASubscriptOnASpecialParameterNeedsTheGrammar(t *testing.T) {
 // the other reading's answer everywhere else. Answering the second under the
 // first would be the silent kind of wrong: `${a[1,2,3]}` would be an element.
 func TestAThreePartSubscript(t *testing.T) {
+	t.Parallel()
 	const src = `a=(w x y z); printf "[%s]" "${a[1,2,3]}"; echo " ok"`
 	out, st := runReading(t, No, Yes, No, src)
 	if strings.Contains(out, "ok") || st == 0 {
@@ -207,6 +219,7 @@ func TestAThreePartSubscript(t *testing.T) {
 
 // A comma inside nesting is not the range's: `${a[f(1,2)]}` has one endpoint.
 func TestANestedCommaIsNotTheRange(t *testing.T) {
+	t.Parallel()
 	out, st := runReading(t, No, Yes, No, `a=(w x y z); printf "[%s]" "${a[(1,2)]}"`)
 	if out != "[x]" || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, "[x]")

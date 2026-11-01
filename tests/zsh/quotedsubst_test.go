@@ -13,6 +13,7 @@ import "testing"
 // `echo` cannot tell them apart: two fields `a` and `b` print as `a b` on one
 // line, and one field holding a newline prints as two lines.
 func TestAQuotedSubstitutionSplitsByLine(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{`printf "[%s]" ${(@f)"$(printf "a\nb")"}`, "[a][b]"},
@@ -41,6 +42,7 @@ func TestAQuotedSubstitutionSplitsByLine(t *testing.T) {
 // in the real shell, measured, and the refusal is what a script meeting one
 // should get rather than a plausible value.
 func TestAQuotedNonSubstitutionIsStillRefused(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, src := range []string{
 		`echo ${"abc"}`,

@@ -21,6 +21,7 @@ import (
 // four subscripts nobody had assigned. That is nobody's answer — one reading
 // gives two elements and the other five.
 func TestWhetherAGapIsElements(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		sparse Answer
@@ -42,6 +43,7 @@ func TestWhetherAGapIsElements(t *testing.T) {
 // side — and it had been doing nothing at all, because the subscript was read
 // as part of the name and a name that was never in the table was deleted.
 func TestUnsettingOneElement(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		sparse Answer
@@ -63,6 +65,7 @@ func TestUnsettingOneElement(t *testing.T) {
 // way, and that is almost every array there is — so refusing them all would
 // be refusing to have arrays.
 func TestTheGapQuestionIsAskedOnlyWhereThereIsOne(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		refuses   bool
@@ -96,6 +99,7 @@ func TestTheGapQuestionIsAskedOnlyWhereThereIsOne(t *testing.T) {
 // Appending goes after the highest subscript, not after the count: an array
 // with a gap in it has a longer reach than it has elements.
 func TestAppendingGoesAfterTheHighestSubscript(t *testing.T) {
+	t.Parallel()
 	out := arrays(t, `a=(x); a[5]=y; a+=(z); echo "${!a[@]}"`, Yes)
 	if strings.TrimSpace(out) != "0 5 6" {
 		t.Errorf("subscripts = %q, want the new element after the last", out)
@@ -106,6 +110,7 @@ func TestAppendingGoesAfterTheHighestSubscript(t *testing.T) {
 // subscripts were written in, which a list gave for free and a map has to be
 // asked for.
 func TestTheScalarViewIsTheLowestSubscript(t *testing.T) {
+	t.Parallel()
 	out := arrays(t, `a[5]=y; a[0]=x; echo "$a"`, Yes)
 	if strings.TrimSpace(out) != "x" {
 		t.Errorf("scalar = %q, want the lowest subscript's value", out)
@@ -115,6 +120,7 @@ func TestTheScalarViewIsTheLowestSubscript(t *testing.T) {
 // `unset a[i]` takes the subscript the *script* wrote, which is not the
 // position it is stored at wherever the dialect counts from one.
 func TestUnsettingUsesTheDialectsOwnSubscript(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `a=(p q r); unset "a[2]"; echo "[${a[@]}]"`, func(r *Runner) {
 		sem := CoreSemantics()
 		sem.IndirectionIsTheSubscriptFlag = No

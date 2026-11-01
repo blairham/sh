@@ -45,6 +45,7 @@ func saidBy(out string) string {
 }
 
 func TestARefusalReadFromTheSegmentsWordCounts(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src              string
 		counted, stopped string
@@ -112,6 +113,7 @@ func TestARefusalReadFromTheSegmentsWordCounts(t *testing.T) {
 // sentence the ordinary reading made, because the segment rule finds nothing
 // wrong with the shape of it.
 func TestCountingTheSegmentsWordsRefusesNothingOfItsOwn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src    string
 		want   string
@@ -142,6 +144,7 @@ func TestCountingTheSegmentsWordsRefusesNothingOfItsOwn(t *testing.T) {
 // which is what keeps the two-word form where it was for every column that
 // words the operator's places alike.
 func TestTheTwoWordSentenceFallsBackToTheUnaryOne(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, "test a b\n", func(r *Runner) {
 		r.Diagnostics = &Diagnostics{
 			TestUnaryExpected:                           "%[1]s: unknown operator",

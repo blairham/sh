@@ -13,6 +13,7 @@ import "testing"
 // (#5151, a chunk of D04parameter.ztst). Measured 2026-10-03 on zsh 5.9.2
 // under `-f`, in a directory holding `xay` and `xby`.
 func TestAFlaggedOperandKeepsItsTokens(t *testing.T) {
+	t.Parallel()
 	const setup = "print -n >xay; print -n >xby\n"
 	for _, tc := range []struct{ src, want string }{
 		{`print -l ${(U):-{b,c}} ${(qq):-{b,c}} ${(j:-:):-{b,c}}`, "B\nC\n'b'\n'c'\nb-c\n"},

@@ -23,6 +23,7 @@ import (
 // asked for, which is what makes a plain `alias -L` tell its global rows from
 // its regular ones.
 func TestListingAsDefinitions(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"both kinds at once",
@@ -46,6 +47,7 @@ func TestListingAsDefinitions(t *testing.T) {
 // kind rather than a modifier: two kind letters in one call is the same
 // refusal `-g` and `-s` already earned.
 func TestTheRegularKindIsAKind(t *testing.T) {
+	t.Parallel()
 	out, st := kindsRun(t, `alias -g G=x; alias r=y; alias -s t=z; alias -r`)
 	if out != "r='y'\n" || st != 0 {
 		t.Errorf("alias -r = %q (status %d), want %q at 0", out, st, "r='y'\n")
@@ -69,6 +71,7 @@ func TestTheRegularKindIsAKind(t *testing.T) {
 // serving both is still one question about the letter and not about the
 // builtin.
 func TestOperandsAsPatterns(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 		status          int
@@ -101,6 +104,7 @@ func TestOperandsAsPatterns(t *testing.T) {
 // are true, and `alias + -L` is what tells them apart — the `-L` is an
 // operand there, so nothing is listed and the status is 1.
 func TestThePlusWordsPrintNamesOnly(t *testing.T) {
+	t.Parallel()
 	const defs = `alias -g UP=x; alias cmd=y; alias -s t=z; `
 	for _, c := range []struct {
 		name, src, want string

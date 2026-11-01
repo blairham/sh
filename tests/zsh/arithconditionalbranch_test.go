@@ -18,6 +18,7 @@ import (
 // — the same assignment in the same position is taken — and the last two are
 // the plain conditional and a nested one, which must not move (#4680).
 func TestAConditionalBranchWillNotBeginWithAnAssignment(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		st              int

@@ -17,6 +17,7 @@ import (
 // `zsh: parse error near `\n'`, where the same three lines in a file are
 // `s.sh:3: parse error near `\n'`.
 func TestAParseFailureAtAPromptNamesNoLine(t *testing.T) {
+	t.Parallel()
 	_, err := syntax.Parse("if; then\necho three\n", zsh.Dialect())
 	if err == nil {
 		t.Fatal("the input parsed, want a refusal")

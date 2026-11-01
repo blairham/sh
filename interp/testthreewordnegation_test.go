@@ -80,6 +80,7 @@ var threeWordRows = []struct {
 }
 
 func TestThreeWordsLedByANegationReadItBeforeTheConnective(t *testing.T) {
+	t.Parallel()
 	for _, tc := range threeWordRows {
 		t.Run(tc.src, func(t *testing.T) {
 			out, st := run(t, tc.src, negateBeforeConnective(Yes))
@@ -93,6 +94,7 @@ func TestThreeWordsLedByANegationReadItBeforeTheConnective(t *testing.T) {
 // The other answer over the same rows, which is the mutation: the five that
 // are not controls move and the fifteen controls do not.
 func TestThreeWordsReadTheConnectiveBeforeALeadingNegation(t *testing.T) {
+	t.Parallel()
 	moved := 0
 	for _, tc := range threeWordRows {
 		out, st := run(t, tc.src, negateBeforeConnective(No))
@@ -122,6 +124,7 @@ func TestThreeWordsReadTheConnectiveBeforeALeadingNegation(t *testing.T) {
 // the four words are the refusal the three give, and with the connective read
 // first they are that guard negated.
 func TestTheFourWordFoldSeesWhatThisAxisMakesOfTheThreeWords(t *testing.T) {
+	t.Parallel()
 	both := func(neg, fold Answer) func(*Runner) {
 		return func(r *Runner) {
 			s := *r.Semantics

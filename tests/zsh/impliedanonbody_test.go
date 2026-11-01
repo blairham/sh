@@ -17,6 +17,7 @@ import "testing"
 // `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME and standard input
 // on the null device.
 func TestTheKeywordTakesTheNextCommandAsItsBody(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		// The three discriminators. Each holds the printed text fixed and
@@ -71,6 +72,7 @@ func TestTheKeywordTakesTheNextCommandAsItsBody(t *testing.T) {
 // and a read of it in the right is the pair — one call means the right half
 // sees the name and the line after does not.
 func TestTheImpliedBodyIsAWholeAndOrList(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -110,6 +112,7 @@ func TestTheImpliedBodyIsAWholeAndOrList(t *testing.T) {
 // that say the reach is bounded by the grammar rather than by the next
 // non-blank byte.
 func TestTheKeywordTakesNothingWhereItDidNotEndItsCommand(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{

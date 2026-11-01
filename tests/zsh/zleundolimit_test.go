@@ -13,6 +13,7 @@ import (
 // limit, takes an arithmetic assignment as the integer it is, hands what it
 // was given to the editor, and is gone outside the widget (#5898).
 func TestTheUndoLimitIsTheEditorsInteger(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `w() { print -r -- "was=$UNDO_LIMIT_NO t=${(t)UNDO_LIMIT_NO}"; UNDO_LIMIT_NO=1+2 }
 zle -N w
 `)

@@ -45,6 +45,7 @@ func nestedLiteralRun(t *testing.T, src string) (string, int) {
 // What the literal builds, read back through the listing that writes a nested
 // element, and the issue's own example alongside it.
 func TestANestedLiteralIsOneElementHoldingAnArray(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ why, src, want string }{
 		{
 			"the headline: two elements, each an array",
@@ -130,6 +131,7 @@ func TestANestedLiteralIsOneElementHoldingAnArray(t *testing.T) {
 // `${#a[@]}`, `${!a[@]}`, `${a[@]}` and `${a[1][0]}` answer the same either
 // way. What changes is the attribute a listing shows.
 func TestANestedElementAfterAPlainOneRetypesTheLiteral(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ why, src, want string }{
 		{
 			"a plain element in front of it",
@@ -185,6 +187,7 @@ func TestANestedElementAfterAPlainOneRetypesTheLiteral(t *testing.T) {
 // there a parenthesis is a value and nothing else: it goes under the key the
 // head named, and is refused anywhere else.
 func TestANestedLiteralUnderAKeyGoesWhereTheHeadSaid(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ why, src, want string }{
 		{"written against the head", `a=( [0]=(1 2) ); typeset -p a`, "typeset -A a=([0]=(1 2) )\n"},
 		{"a blank between them changes nothing", `a=( [0]= (1 2) ); typeset -p a`, "typeset -A a=([0]=(1 2) )\n"},

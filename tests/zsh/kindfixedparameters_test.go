@@ -15,6 +15,7 @@ import (
 // scratch `HOME` (#4834). The `after` that never arrives is half of what is
 // being pinned here — this engine took the line at 0 and carried on.
 func TestAKindLetterOverAShellParameterEndsTheShell(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `f() { typeset -i path; print "  st=$?" }
 f
 print after`)
@@ -33,6 +34,7 @@ print after`)
 // row because this refusal — unlike `private`'s — is not about taking a
 // scope.
 func TestEveryDeclarationWordRefusesTheKindLetter(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct{ src, want string }{
 		{"f() { local -A path }\nf", "f:local: path: can't change type of a special parameter\n"},
 		{"f() { declare -F path }\nf", "f:declare: path: can't change type of a special parameter\n"},
@@ -91,6 +93,7 @@ f1; f2; f3; f4; f5; f6`)
 // one. `unset` is the other control — the slot is there whether or not a
 // value is.
 func TestOnlyAHiddenShadowExemptsTheKindLetter(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `f1() { typeset -h -i path; print "  letterhere=$?" }
 f2() { typeset -h path; typeset -i path; print "  shadowalready=$?" }
 f1; f2`)
@@ -116,6 +119,7 @@ f1; f2`)
 // — a letter that slot takes — is the *scope* sentence at 1 with the script
 // carrying on, and `RANDOM` is in one table and not the other.
 func TestTheKindRefusalComesBeforeThePrivateOne(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `zmodload zsh/param/private
 f() { private -A path }
 f

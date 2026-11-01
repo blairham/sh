@@ -19,6 +19,7 @@ import (
 // TestTheReportingFlagsProjectTheSpan is the single-flag table: `str=aXbXc`,
 // where `(S)` puts the match on the `X` at the second character.
 func TestTheReportingFlagsProjectTheSpan(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `str=aXbXc
 print -r -- "[${(SB)str#X*}][${(SE)str#X*}][${(SN)str#X*}][${(SR)str#X*}][${(SM)str#X*}]"
 print -r -- "[${(B)str#X*}][${(E)str#X*}][${(N)str#X*}][${(R)str#X*}][${(M)str#X*}]"
@@ -48,6 +49,7 @@ print -r -- "[${(SB)str%X*}][${(B)str##a*X}][${(E)str##a*X}]"`)
 //
 // The last row fixes it outright — **M, R, B, E, N**.
 func TestTheReportingFlagsAccumulateInAFixedOrder(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `str=aXbXc
 print -r -- "[${(SBE)str#X*}][${(SBM)str#X*}][${(SBEM)str#X*}][${(SBMR)str#X*}]"
 print -r -- "[${(BER)str#X*}][${(RB)str#X*}][${(EB)str#X*}][${(BM)str#X*}]"
@@ -70,6 +72,7 @@ print -r -- "[${(SBENMR)str#X*}]"`)
 // harness's own environment has none, where both readings answer in bytes
 // and the row could not tell them apart.
 func TestTheReportedIndicesAreCharacters(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `export LC_ALL=en_US.UTF-8
 s="a日b日c"
 print -r -- "[${#s}][${(SB)s#日}][${(SE)s#日}][${(SN)s#日}]"`)
@@ -86,6 +89,7 @@ print -r -- "[${#s}][${(SB)s#日}][${(SE)s#日}][${(SN)s#日}]"`)
 // separator is a hard space rather than `$IFS[1]`, and a join flag does not
 // reach it either.
 func TestTheAccumulationIsOneWordAndNotAList(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `str=aXbXc
 printf '[%s]' ${(SBE)str#X*}; print
 IFS=-; printf '[%s]' "${(SBE)str#X*}"; print
@@ -101,6 +105,7 @@ a=(${(SBEM)str#X*}); print -r -- "${#a}"`)
 // a time, the way `(S)`'s boundary was, and every one of these is what it
 // would have been with no flag at all.
 func TestTheReportingFlagsDoNotReachTheOtherOperators(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `str=aXbXc
 print -r -- "[${(B)str}][${(B)str:1}][${(B)str:-alt}][${(B)str/X/Y}][${(B)#str}]"
 print -r -- "[${(N)str:1}][${(E)str}][${(R)str/X/Y}]"`)
@@ -113,6 +118,7 @@ print -r -- "[${(N)str:1}][${(E)str}][${(R)str/X/Y}]"`)
 // TestTheReportingFlagsReachEachElement — a whole-array trim reports per
 // element, which is the same distribution the operator already had.
 func TestTheReportingFlagsReachEachElement(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `arr=(aXb cXd)
 printf '[%s]' "${arr[@]#*X}"; print
 printf '[%s]' "${(B)arr[@]#*X}"; print
@@ -138,6 +144,7 @@ printf '[%s]' "${(BM)arr[@]#*X}"; print`)
 // `(M)` is not refused there: it was already carried over the exclusion and
 // is unchanged.
 func TestTheReportingFlagsAreRefusedOverAnElementOperator(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, src := range []string{
 		`str=aXbXc; print -r -- "${(B)str:#a*}"`,
@@ -170,6 +177,7 @@ func TestTheReportingFlagsAreRefusedOverAnElementOperator(t *testing.T) {
 // name beside a substitution, whose half of it is not built. Measured on zsh
 // 5.9.2: `${(SI:2:)str#X*}` on `aXbXc` is `aXbc` (#5151).
 func TestTheSearchFlagCountsMatchesAndIsRefusedBesideASubstitution(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `str=aXbXc; print -r -- "${(SI:2:)str#X*}"`)
 	if out != "aXbc\n" || st != 0 {
 		t.Errorf("(SI:2:) over a trim = %q (status %d), want aXbc at 0", out, st)

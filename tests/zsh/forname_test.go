@@ -25,6 +25,7 @@ import (
 // three separate answers, and a `Contains` check passes with any two of them
 // wrong.
 func TestALoopNamedByAnExpansionIsRefusedInThisShellsWords(t *testing.T) {
+	t.Parallel()
 	const src = "n=x\nfor $n in a b; do :; done\n"
 	const want = "s.sh:2: parse error near `$n'\n"
 	_, err := syntax.Parse(src, zsh.Dialect())
@@ -44,6 +45,7 @@ func TestALoopNamedByAnExpansionIsRefusedInThisShellsWords(t *testing.T) {
 // quoted back **as written** — the token's literal is `n` for the first three
 // of these and no shell in the panel says `n`.
 func TestTheNameIsNamedAsWritten(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, want string }{
 		{"$n", "parse error near `$n'"},
 		{"${n}", "parse error near `${n}'"},
@@ -65,6 +67,7 @@ func TestTheNameIsNamedAsWritten(t *testing.T) {
 // side: `for "i" in a b` is refused here where one shell in the panel removes
 // the quoting and binds `i`. The escape is refused with the quotes.
 func TestAQuotedLoopNameIsRefusedHere(t *testing.T) {
+	t.Parallel()
 	if zsh.Dialect().ForNameMayBeQuoted {
 		t.Error("this shell wants a loop name written plainly")
 	}

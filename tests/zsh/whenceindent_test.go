@@ -23,6 +23,7 @@ import "testing"
 // belong to the option. A grid of bare `-x` rows cannot see that, so the
 // attached and detached spellings are both here from the start.
 func TestTheIndentLetterBelongsToEveryNameThatPrintsABody(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const fn = "f(){ print hi }\n"
 	for _, tc := range []struct{ name, src, want string }{
@@ -60,6 +61,7 @@ func TestTheIndentLetterBelongsToEveryNameThatPrintsABody(t *testing.T) {
 // under all four names — which is the whole reason the reader is shared rather
 // than written again for the three that lacked it.
 func TestTheIndentLetterNeedsANumber(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const fn = "f(){ print hi }\n"
 	for _, tc := range []struct{ name, src, want string }{
@@ -97,6 +99,7 @@ func TestTheIndentLetterNeedsANumber(t *testing.T) {
 // body indented by a tab, in the reference and here. The second listing is the
 // whole of the test — the first is there to set the trap.
 func TestTheIndentDoesNotOutliveItsCommand(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const fn = "f(){ print hi }\n"
 	const two = "f () {\n  print hi\n}\n"

@@ -19,6 +19,7 @@ import (
 // the way one at the top of a pattern is. Both halves are measured, and the
 // pair of rows at the top is what separates them.
 func TestATildeFlavorGroupInsideAPatternGroup(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// **The pair.** The same subject and the same flavor, with and
 		// without a group around it, answer differently: at the top the
@@ -93,6 +94,7 @@ func TestATildeFlavorGroupInsideAPatternGroup(t *testing.T) {
 // matcher: the gate at the top of the walk has to see the field as a pattern.
 // A `@(` is a metacharacter, so that half was already there.
 func TestATildeFlavorGroupInsideAPatternGroupOnAGlob(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, n := range []string{"za", "zb", "zab"} {
 		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {
@@ -129,6 +131,7 @@ func TestATildeFlavorGroupInsideAPatternGroupOnAGlob(t *testing.T) {
 // was read at all: the pattern does not match and the value comes back
 // whole.
 func TestAFlavorInsideAPatternGroupIsLeftOutOfATrim(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The controls, and they are the reason the rows below are readable:
 		// an **ungrouped** mid-pattern flavor does reach a trim and a

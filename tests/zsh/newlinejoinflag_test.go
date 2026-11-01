@@ -15,6 +15,7 @@ import "testing"
 //
 // Measured on zsh 5.9.2, 2026-09-25. #4452.
 func TestTheNewlineJoinFlagInThisDialect(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The issue's two lines, verbatim. Both refused with status 1
 		// before the flag was carried.

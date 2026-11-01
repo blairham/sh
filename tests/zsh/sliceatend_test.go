@@ -12,6 +12,7 @@ import (
 // the list is still refused: there is nothing to slice, and the length is read
 // and held to the offset all the same. Measured 2026-10-03 on zsh 5.9.2.
 func TestANegativeLengthPastTheEndIsStillRefused(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, err string }{
 		{`a=(ax bx cx); print -r -- "[${a[@]:3:-1}]"; print after`, "substring expression: 2 < 3"},
 		{`b=(); print -r -- "[${b[@]:0:-1}]"; print after`, "substring expression: -1 < 0"},

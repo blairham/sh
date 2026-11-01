@@ -16,6 +16,7 @@ import (
 // 2026-10-27 on zsh 5.9.2 under -fc, in a directory holding one file `q`;
 // every `want` is that shell's output with both streams on one pipe.
 func TestThePathnameStageRunsAfterEveryWordIsExpanded(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a builtin's words",

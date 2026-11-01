@@ -24,6 +24,7 @@ import "testing"
 // row run only without it cannot show that the function still works. The
 // second column below is what makes the first one evidence.
 func TestAMathFunctionWaitsForItsModule(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		fn, arg, loaded string
 	}{
@@ -58,6 +59,7 @@ func TestAMathFunctionWaitsForItsModule(t *testing.T) {
 // The sentence is the one a name nobody registered gets, which is what says
 // the withdrawal is the right shape and not a third diagnostic.
 func TestAWithdrawnMathFunctionAnswersLikeAnUnknownOne(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	gated, _ := runZsh(t, dir, "print $(( sqrt(4) ))")
 	unknown, _ := runZsh(t, dir, "print $(( nosuchmf(1) ))")
@@ -78,6 +80,7 @@ func TestAWithdrawnMathFunctionAnswersLikeAnUnknownOne(t *testing.T) {
 // startup makes the load refuse with `not implemented yet` — the gate firing
 // at the very names the module is about to bring.
 func TestTheGateDoesNotCloseOnTheModuleThatOpensIt(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"zmodload zsh/mathfunc\nprint st=$?\nzmodload -e zsh/mathfunc\nprint e=$?")
 	if want := "st=0\ne=0\n"; out != want || st != 0 {
@@ -88,6 +91,7 @@ func TestTheGateDoesNotCloseOnTheModuleThatOpensIt(t *testing.T) {
 // An unload takes them back, which is #5025's rule reaching the third kind,
 // and a load after it brings them again.
 func TestUnloadingTheModuleTakesTheFunctionsBack(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"zmodload zsh/mathfunc\nzmodload -u zsh/mathfunc\nprint $(( sqrt(4) ))")
 	if want := "zsh:3: unknown function: sqrt\n"; out != want || st != 1 {
@@ -108,6 +112,7 @@ func TestUnloadingTheModuleTakesTheFunctionsBack(t *testing.T) {
 // installer keyed on the *module* would put every function back and could not
 // see the `-f:sqrt`.
 func TestANarrowedSelectionMovesOneFunction(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the one it named answers",
@@ -143,6 +148,7 @@ func TestANarrowedSelectionMovesOneFunction(t *testing.T) {
 // functions": a name a script registers with `functions -M` is not this
 // module's and is never withdrawn.
 func TestAScriptsOwnMathFunctionIsUntouched(t *testing.T) {
+	t.Parallel()
 	// The value is the reference's, measured rather than assumed: `mf(1)` is
 	// **1** in zsh 5.9.2 and here alike. An earlier draft asserted 9 — what
 	// the function writes to REPLY — and the row failed, which is the whole

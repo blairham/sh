@@ -26,6 +26,7 @@ import (
 // dialect packages hold the answers, and this asserts only that the knob reads
 // them.
 func TestPosixModeTakesBothSetRefusalAxesFromTheVector(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name                 string
 		ownName, ownLetter   Answer
@@ -83,6 +84,7 @@ func TestPosixModeTakesBothSetRefusalAxesFromTheVector(t *testing.T) {
 // the mode and the letter's case leaves the name alone, so a single field
 // standing in for both fails one half of every row.
 func TestARefusedSetOptionIsFatalInPosixModeOnlyWhereTheVectorSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		src    string
@@ -141,6 +143,7 @@ func TestARefusedSetOptionIsFatalInPosixModeOnlyWhereTheVectorSaysSo(t *testing.
 // move, and the shell that most needs that is the one with no POSIX mode at
 // all.
 func TestPosixModeStillMovesTheOtherAxesWhenTheSetRefusalsDecline(t *testing.T) {
+	t.Parallel()
 	s := permissive()
 	s.RedirectErrorOnSpecialBuiltinFatal = No
 	s.BadSetOptionNameFatal, s.BadSetOptionLetterFatal = No, Yes
@@ -165,6 +168,7 @@ func TestPosixModeStillMovesTheOtherAxesWhenTheSetRefusalsDecline(t *testing.T) 
 // per-axis all the same: a single remembered answer would put the name's back
 // where the letter's belongs for the one shell whose two differ.
 func TestLeavingPosixModeRestoresEachSetAxisSeparately(t *testing.T) {
+	t.Parallel()
 	s := permissive()
 	s.BadSetOptionNameFatal, s.BadSetOptionLetterFatal = No, Yes
 	s.BadSetOptionNameFatalInPosixMode, s.BadSetOptionLetterFatalInPosixMode = Yes, Yes

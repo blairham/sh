@@ -16,6 +16,7 @@ import (
 // which is what the keyword form did, at status 0, with no diagnostic
 // anywhere (#1256).
 func TestAFunctionNameMayHoldAnExpansion(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`w=foo; _p_${w}() { echo HI; }; _p_foo`, "HI"},
 		{`w=foo; _p_$w() { echo HI; }; _p_foo`, "HI"},

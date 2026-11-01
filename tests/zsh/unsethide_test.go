@@ -10,6 +10,7 @@ import "testing"
 // own parameter. Measured 2026-10-16 on zsh 5.9.2, `-f`, under `env -i
 // PATH=/usr/bin:/bin` (#6741).
 func TestUnsetDropsTheHideWord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`f(){ local -h v; unset v; v=x; echo ${(t)v}; }; f`, "scalar-local\n"},
 		{`f(){ local -h -a v; unset v; v=x; echo ${(t)v}; }; f`, "scalar-local\n"},
@@ -33,6 +34,7 @@ func TestUnsetDropsTheHideWord(t *testing.T) {
 // half, or a hidden local of one of the shell's own — leaves the outer pair
 // alone. Measured 2026-10-16 on zsh 5.9.2 (#6822).
 func TestUnsetOfADetachedTieHalfLeavesTheOtherHalf(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset -T FOO foo=(a b); f(){ local FOO=x; unset FOO; echo "[$foo]"; }; f; echo $foo`, "[a b]\na b\n"},
 		{`typeset -T FOO foo=(a b); f(){ local -h FOO=x; unset FOO; echo "[$foo]"; }; f; echo $foo`, "[a b]\na b\n"},

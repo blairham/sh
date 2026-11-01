@@ -10,6 +10,7 @@ import "testing"
 // Measured 2026-10-01 on zsh 5.9.2 under `-c`; each row is what that shell
 // wrote.
 func TestStrftimeZonesFlagsAndOperands(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, c := range []struct{ name, src, want string }{
 		{"an assigned TZ", "zmodload zsh/datetime; TZ=UTC; strftime %X 1200000001", "21:20:01\n"},

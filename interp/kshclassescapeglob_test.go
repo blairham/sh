@@ -26,6 +26,7 @@ import (
 // (`go version -m` says *not a Go executable*), `-c` under
 // `env -i PATH=/usr/bin:/bin` with a scratch `HOME`.
 func TestAKshClassEscapeSurvivesAFieldsQuoteRemoval(t *testing.T) {
+	t.Parallel()
 	full := t.TempDir()
 	for _, n := range []string{"a1b", "adb"} {
 		if err := os.WriteFile(filepath.Join(full, n), nil, 0o600); err != nil {

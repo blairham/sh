@@ -183,6 +183,7 @@ func TestTheHistoryTableNumbersFromWhatTheSizeHasDropped(t *testing.T) {
 }
 
 func TestALineTheReaderRecordsJoinsTheListTheHistoryTableViews(t *testing.T) {
+	t.Parallel()
 	// The other half of #4408, and a bug on its own: this dialect handed the
 	// Runner a history reader and **no adder**, so
 	// [interp.Runner.RecordHistoryEntry] — what a session calls for every

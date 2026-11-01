@@ -37,6 +37,7 @@ func cellsDrawn(candidates []repl.Candidate) string {
 }
 
 func TestCompaddFillersAndTheBlockTheyJoin(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, body, want string }{
 		{
 			// Under `-2`, a filler joins the names whatever its own letter.
@@ -91,6 +92,7 @@ func TestCompaddFillersAndTheBlockTheyJoin(t *testing.T) {
 // TestFillersAreCountedAndAnswerZero — `compadd -E2 -J g` answers 0 and
 // leaves `$compstate[nmatches]` at 2; `-E-1` is refused.
 func TestFillersAreCountedAndAnswerZero(t *testing.T) {
+	t.Parallel()
 	got := reported(t, `local out
 		compadd -E2 -J g; out+="st=$? n=$compstate[nmatches] "
 		compadd -E1 -J g -- aa; out+="st=$? n=$compstate[nmatches] "

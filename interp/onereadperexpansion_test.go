@@ -23,6 +23,7 @@ import (
 // with a scratch HOME and no startup files; every row was run against both
 // real shells and this one side by side and all three agreed (#3104).
 func TestASubscriptIsEvaluatedOncePerExpansion(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The row that was already right, and the reason the others are a
 		// finding rather than the shape of the engine: a plain read asks
@@ -74,6 +75,7 @@ func TestASubscriptIsEvaluatedOncePerExpansion(t *testing.T) {
 // The shape that would fail a hold nothing cleared, and the reason the clear
 // is at the top of expandAt rather than at the end of an expansion.
 func TestTheHoldDoesNotOutliveItsSpan(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a for loop advances every pass",

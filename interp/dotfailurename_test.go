@@ -52,6 +52,7 @@ func dotFailureRun(t *testing.T, dir, src string, names bool) string {
 // The flag in both directions, on the shape it is measured on: a `.` written
 // at the top level of the script the shell was given.
 func TestAFailedDotIsNamedAfterItsOperandOnlyWhenAsked(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, c := range []struct {
 		name  string
@@ -75,6 +76,7 @@ func TestAFailedDotIsNamedAfterItsOperandOnlyWhenAsked(t *testing.T) {
 // function, `eval` and a file the script sourced — which is what says this is
 // a rename rather than a rule about the message.
 func TestAFailedDotDoesNotTakeANameAnotherFrameHasPut(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	nested := filepath.Join(dir, "nest.sh")
 	if err := os.WriteFile(nested, []byte(". ./nope_zz\n"), 0o600); err != nil {
@@ -105,6 +107,7 @@ func TestAFailedDotDoesNotTakeANameAnotherFrameHasPut(t *testing.T) {
 // still the top level of the script, which is the control that says the gate
 // is the call stack rather than "the outermost statement".
 func TestAFailedDotInASubshellIsStillTheScriptsOwnLine(t *testing.T) {
+	t.Parallel()
 	out := dotFailureRun(t, t.TempDir(), "( . ./nope_zz )\n", true)
 	if !strings.HasPrefix(out, "./nope_zz:.:1:") {
 		t.Errorf("output = %q, want it to open %q", out, "./nope_zz:.:1:")
@@ -114,6 +117,7 @@ func TestAFailedDotInASubshellIsStillTheScriptsOwnLine(t *testing.T) {
 // The name moves in the diagnostic and nowhere else: `$0` on the next line is
 // the script's, measured on the reference.
 func TestAFailedDotLeavesDollarZeroAlone(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	f, err := syntax.Parse(". ./nope_zz\nprintf 'next=%s\\n' \"$0\"\n", syntax.Core())
 	if err != nil {

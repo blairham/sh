@@ -30,6 +30,7 @@ const oddPairRefusal = "bad set of key/value pairs for associative array"
 // it, which is what makes this an axis rather than a bug. We took it too, and
 // invented the key silently (#4594).
 func TestAnOddKeyedLiteralIsRefusedHere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a declaration's operand", "typeset -A h=(a 1 b)\nprintf reached"},
 		{"an assignment of its own", "typeset -A h\nh=(a 1 b)\nprintf reached"},
@@ -59,6 +60,7 @@ func TestAnOddKeyedLiteralIsRefusedHere(t *testing.T) {
 // Measured the same day: with `w=(a 1 b)`, `typeset -A h=($w)` is refused, and
 // with `w=(a 1 b 2)` it is a two-element table at status 0.
 func TestTheOddCountIsOverWhatTheElementsCameTo(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, "w=(a 1 b)\ntypeset -A h=($w)\nprintf reached")
 	if !strings.Contains(out, oddPairRefusal) || strings.Contains(out, "reached") || st != 1 {
 		t.Errorf("three fields from one element = %q status %d, want the refusal at 1", out, st)
@@ -79,6 +81,7 @@ func TestTheOddCountIsOverWhatTheElementsCameTo(t *testing.T) {
 // the fourth: the same three words over a name that is not a table are three
 // elements, so it is the target's kind and not the words.
 func TestTheEvenAndEmptyAndRepeatedLiteralsAreTakenHere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an even list", "typeset -A h=(a 1 b 2)\nprintf '[%s][%s]' \"$?\" \"${#h}\"", "[0][2]"},
 		{"an empty literal", "typeset -A h=()\nprintf '[%s][%s]' \"$?\" \"${#h}\"", "[0][0]"},
@@ -107,6 +110,7 @@ func TestTheEvenAndEmptyAndRepeatedLiteralsAreTakenHere(t *testing.T) {
 // same command declared is left declared, associative and empty rather than
 // unset, which is the declaration taking effect where the assignment did not.
 func TestARefusedPairingStoresNothingHere(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t,
 		"typeset -A h=(x 9)\neval 'h=(a 1 b)'\nprintf '[%s][%s][%s][%s]' \"$?\" \"${#h}\" \"${h[x]}\" \"${h[a]-ABSENT}\"")
 	if want := "[1][1][9][ABSENT]"; !strings.HasSuffix(out, want) || st != 0 {
@@ -122,6 +126,7 @@ func TestARefusedPairingStoresNothingHere(t *testing.T) {
 // names the file: measured, `f() { typeset -A h=(a 1 b) }; f; print after` is
 // `f: bad set of key/value pairs for associative array` with nothing after it.
 func TestAnOddKeyedLiteralInAFunctionEndsTheShell(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, "f() { typeset -A h=(a 1 b) }\nf\nprintf reached")
 	if !strings.HasPrefix(out, "f: "+oddPairRefusal) {
 		t.Errorf("= %q, want the function's name in front of the refusal", out)
@@ -134,6 +139,7 @@ func TestAnOddKeyedLiteralInAFunctionEndsTheShell(t *testing.T) {
 // The answer and the wording, pinned so that no preset here drifts off the
 // column they were measured from.
 func TestThePairingAnswerIsThisDialects(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().BareElementsInATableLiteralMustPairOff; got != interp.Yes {
 		t.Errorf("BareElementsInATableLiteralMustPairOff = %v, want Yes", got)
 	}

@@ -24,6 +24,7 @@ import (
 // and `functions -M mf sf` without the letter is the count complaint in both,
 // so that sentence exists here and this route did not reach it.
 func TestACountOperandIsRefusedBeforeTheStringArityRule(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, spec, want string }{
 		{"the issue's row", "-M -s mf sf", "-M: invalid min number of arguments: sf"},
 		{"a negative minimum", "-M -s mf -1", "-M: invalid min number of arguments: -1"},
@@ -69,6 +70,7 @@ func TestACountOperandIsRefusedBeforeTheStringArityRule(t *testing.T) {
 // both. Without the letter the pair is the maximum's complaint either way,
 // which is the control.
 func TestTheStringArityRuleIsAppliedPerOperand(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ spec, want string }{
 		{"-M -s mf 1 0", "-M: invalid max number of arguments: 0"},
 		{"-M -s mf 2 1", "-Ms: must take a single string argument"},
@@ -93,6 +95,7 @@ func TestTheStringArityRuleIsAppliedPerOperand(t *testing.T) {
 // listing rather than the status, because an operand read as the wrong number
 // is accepted either way and only what is registered says which number it was.
 func TestACountOperandIsReadInTheBaseItsSpellingAnnounces(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, operand, listed string
 	}{

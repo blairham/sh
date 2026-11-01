@@ -19,6 +19,7 @@ import "testing"
 // escapes in a word — including the forms the three disagree about. So the
 // decoder is the shell's own and there is no smaller one that would do.
 func TestAnAnsiCHeredocDelimiterEndsAtItsValue(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a tab", "while IFS= read -r l; do printf '%s\\n' \"$l\"; done <<$'E\\tOF'\nBODY\nE\tOF\necho DONE\n", "BODY\nDONE\n"},

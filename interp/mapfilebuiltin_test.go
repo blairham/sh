@@ -19,6 +19,7 @@ import (
 // in the calling shell, which is the builtin's whole reason to exist — the
 // `while read` loop it replaces loses its array to the pipeline's subshell.
 func TestMapfileReadsAStreamIntoAnArray(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 		status          int
@@ -113,6 +114,7 @@ func TestMapfileReadsAStreamIntoAnArray(t *testing.T) {
 // even without -t — measured by the length of what a NUL-delimited element
 // leaves behind.
 func TestMapfileTakesAnEmptyDelimiterAsNUL(t *testing.T) {
+	t.Parallel()
 	out, st := mapfileRun(t, `mapfile -d '' arr; echo "${arr[0]}${arr[1]}:${#arr[@]}"`,
 		func(r *Runner) { r.Stdin = strings.NewReader("a\x00b\x00") })
 	if !strings.Contains(out, "ab:2") {
@@ -126,6 +128,7 @@ func TestMapfileTakesAnEmptyDelimiterAsNUL(t *testing.T) {
 // -u resolves the number against the shell's own table, where `exec 3<file`
 // put it — the same table `read -u` reads.
 func TestMapfileReadsTheDescriptorUNames(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "f"), []byte("held\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -143,6 +146,7 @@ func TestMapfileReadsTheDescriptorUNames(t *testing.T) {
 // The refusals, each with its own wording and each at 1 — where an option the
 // builtin does not have at all is 2, through the shared reader.
 func TestMapfileRefusesWhatItCannotUse(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 		status          int
@@ -177,6 +181,7 @@ func TestMapfileRefusesWhatItCannotUse(t *testing.T) {
 // the element is assigned, and only on a multiple of the quantum, so a -C with
 // the default quantum of 5000 calls nothing at all on a short list.
 func TestMapfileCallsBackAsTheArrayFills(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 		status          int
@@ -270,6 +275,7 @@ printf '1\n' | { mapfile -t -O 1 -C cb -c 1 arr; }`,
 // The consequence is that the element has to be quoted on the way in. A line
 // holding a semicolon is data; joined raw it would be program.
 func TestMapfileCallbackIsSourceTextWithTheArgumentsAppended(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 	}{
@@ -318,6 +324,7 @@ func TestMapfileCallbackIsSourceTextWithTheArgumentsAppended(t *testing.T) {
 // no -C to call: writing the letter at all is what asks for it to be read.
 // The whole read is lost with it, which is the part a script notices.
 func TestMapfileRefusesAnInvalidCallbackQuantum(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`printf 'a\n' | { mapfile -t -C cb -c 0 arr; echo "st=$? n=${#arr[@]}"; }`,
 		`printf 'a\n' | { mapfile -t -c 0 arr; echo "st=$? n=${#arr[@]}"; }`,

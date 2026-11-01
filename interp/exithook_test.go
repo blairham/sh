@@ -56,6 +56,7 @@ func runToTheEnd(t *testing.T, r *Runner, src string) int {
 // The named function, then the list, in the order the list holds it — and each
 // of them is told the status the shell is leaving with.
 func TestTheExitHookFiresWithTheStatusTheShellIsLeavingWith(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r := exitHookRunner(t, &out)
 	status := runToTheEnd(t, r, `leaving() { echo "EXITMARK-NAMED st=$? n=$#"; }
@@ -91,6 +92,7 @@ exit 3
 // A hook that merely fails changes nothing: not the status the shell leaves
 // with, and not the status the item after it is told.
 func TestAFailingExitHookChangesNothing(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r := exitHookRunner(t, &out)
 	status := runToTheEnd(t, r, `leaving() { echo "EXITMARK-NAMED st=$?"; return 5; }
@@ -115,6 +117,7 @@ exit 4
 // it ended is the session; at this site the session is already over, so `exit`
 // has nothing left to end and only records a status. The last one wins.
 func TestAnExitInsideTheExitHookWinsAndStopsNothing(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r := exitHookRunner(t, &out)
 	status := runToTheEnd(t, r, `leaving() { echo EXITMARK-NAMED; exit 9; }
@@ -135,6 +138,7 @@ exit 4
 // A shell whose dialect names no exit hook runs nothing and says nothing, and
 // that is three of the four.
 func TestAShellWithNoExitHookRunsNothing(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	sem := PosixSemantics()
 	sem.HookListSuffix = "_list"
@@ -163,6 +167,7 @@ exit 4
 // a shell that came out of it already exited never ran its first command.
 // That is what shipped for the length of one build. #2111.
 func TestTheExitHookLeavesTheControlFlagAsItFoundIt(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r := exitHookRunner(t, &out)
 	runToTheEnd(t, r, `leaving() { echo EXITMARK-NAMED; }
@@ -180,6 +185,7 @@ echo body
 // fires there only when the subshell left through `exit`, and it is told the
 // status the subshell is leaving with.
 func TestTheExitHookFiresWhenASubshellExits(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r := exitHookRunner(t, &out)
 	runToTheEnd(t, r, `leaving() { echo "EXITMARK-HOOK st=$?"; }
@@ -196,6 +202,7 @@ echo out
 // subshell that runs off its end fires nothing, and neither does a command
 // substitution that calls `exit`. Only the end of the shell does.
 func TestTheExitHookDoesNotFireWhenASubshellFallsThrough(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r := exitHookRunner(t, &out)
 	runToTheEnd(t, r, `leaving() { echo EXITMARK-HOOK; }
@@ -217,6 +224,7 @@ echo out
 // rather than the test seeing it directly, and a tail of `:` would swallow it
 // and make this row pass for the wrong reason.
 func TestTheExitHookFiresWhenAPipelineElementExits(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r := exitHookRunner(t, &out)
 	runToTheEnd(t, r, `leaving() { echo EXITMARK-HOOK; }

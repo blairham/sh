@@ -26,6 +26,7 @@ import "testing"
 // Without this, "regexp-replace" cannot be written: a global search and
 // replace needs each match's *extent* and not only that there was one.
 func TestARegexMatchReportsWhatItMatched(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), regexCaptureProbe)
 	if out != regexCaptureWant || st != 0 {
 		t.Errorf("the capture parameters = %q (status %d), want %q", out, st, regexCaptureWant)

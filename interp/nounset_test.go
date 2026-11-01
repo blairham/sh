@@ -11,6 +11,7 @@ import (
 )
 
 func TestNounset(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		wantOut   string
@@ -58,6 +59,7 @@ func TestNounset(t *testing.T) {
 // other the script stops. Quiet either way, which is what makes it worth an
 // axis rather than a preference.
 func TestUnsetPositionalIsAllowedIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `set -u; echo "[$1]"; echo after`
 	allowed := permissive()
 	allowed.UnsetPositionalIsAllowed = Yes
@@ -82,6 +84,7 @@ func TestUnsetPositionalIsAllowedIsAnAxis(t *testing.T) {
 // out-of-range positional was reported as *set*, so the plain default form
 // never fired for it.
 func TestUnsetPositionalTakesADefault(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`echo "[${1-default}]"`, "[default]\n"},
 		{`echo "[${1:-default}]"`, "[default]\n"},
@@ -95,6 +98,7 @@ func TestUnsetPositionalTakesADefault(t *testing.T) {
 }
 
 func TestUnboundWordingIsTheDialects(t *testing.T) {
+	t.Parallel()
 	// The wording lives in the UnboundVariable field of Diagnostics, so
 	// withSem alone cannot see it. What each preset puts there is asserted
 	// in the dialect packages; this asserts the field is the one consulted.

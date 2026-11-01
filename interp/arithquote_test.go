@@ -23,6 +23,7 @@ func runQuoted(t *testing.T, p syntax.ArithDoubleQuotePolicy, src string) (strin
 }
 
 func TestADoubleQuoteInsideArithmeticEvaluates(t *testing.T) {
+	t.Parallel()
 	for _, p := range []syntax.ArithDoubleQuotePolicy{
 		syntax.ArithDoubleQuoteSkipped, syntax.ArithDoubleQuoteRemoved,
 	} {
@@ -41,6 +42,7 @@ func TestADoubleQuoteInsideArithmeticEvaluates(t *testing.T) {
 // other: the quote stands where a value belongs, so the expression wants an
 // operand.
 func TestARefusedDoubleQuoteIsAMissingOperand(t *testing.T) {
+	t.Parallel()
 	src := `echo $(( "1" + 1 )); echo after`
 	out, st := runQuoted(t, syntax.ArithDoubleQuoteRefused, src)
 	if !strings.Contains(out, "operand expected") || strings.Contains(out, "after") || st == 0 {
@@ -52,6 +54,7 @@ func TestARefusedDoubleQuoteIsAMissingOperand(t *testing.T) {
 // text, so two digits with a quote between them are one number. Skipped is not
 // that: the quote ends the token there and two operands run together.
 func TestAQuoteInsideATokenPartsTheTwoReadings(t *testing.T) {
+	t.Parallel()
 	src := `echo $(( 1"0" ))`
 	if out, st := runQuoted(t, syntax.ArithDoubleQuoteRemoved, src); out != "10\n" || st != 0 {
 		t.Errorf("%s removed = %q (status %d), want %q at 0", src, out, st, "10\n")
@@ -65,6 +68,7 @@ func TestAQuoteInsideATokenPartsTheTwoReadings(t *testing.T) {
 // The character constant is the code of the character between the quotes, and
 // the escapes are the ones `$'…'` decodes rather than a second table.
 func TestACharacterConstantIsACodePoint(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`printf "%s" $(( '1' + 1 ))`, "50"},
 		{`printf "%s" $(( 'a' ))`, "97"},
@@ -89,6 +93,7 @@ func TestACharacterConstantIsACodePoint(t *testing.T) {
 // Nothing about one quote character predicts the other: the constant is read
 // with the double quote refused, which is the pair one shell in the panel has.
 func TestTheTwoQuoteQuestionsAreIndependent(t *testing.T) {
+	t.Parallel()
 	src := `printf "[%s][%s]" "$(( 'a' ))" "$(( "1" + 1 ))"`
 	out, _ := runGrammar(t, src, func(d *syntax.Dialect) {
 		d.ArithCharacterConstant = true

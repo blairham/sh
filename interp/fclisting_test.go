@@ -52,6 +52,7 @@ func fcRun(t *testing.T, list *fcList, src string) (string, int) {
 // The list is read, which is the whole of #4009: the entries were there and
 // the builtin never looked at them.
 func TestFcListsWhatTheStoreSeamHandsOver(t *testing.T) {
+	t.Parallel()
 	list := &fcList{entries: []string{"alpha", "beta", "gamma"}}
 	out, st := fcRun(t, list, "fc -l")
 	if want := "1\t alpha\n2\t beta\n3\t gamma\n"; out != want || st != 0 {
@@ -62,6 +63,7 @@ func TestFcListsWhatTheStoreSeamHandsOver(t *testing.T) {
 // `-n` drops the number and `-r` turns the order around, and the two are
 // independent of each other.
 func TestFcListingDropsTheNumberAndReversesTheOrder(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{"fc -nl", "\t alpha\n\t beta\n\t gamma\n"},
 		{"fc -lr", "3\t gamma\n2\t beta\n1\t alpha\n"},
@@ -83,6 +85,7 @@ func TestFcListingDropsTheNumberAndReversesTheOrder(t *testing.T) {
 // complaint at all — a builtin that listed the whole list and said nothing
 // would pass a test that only looked for the refusal.
 func TestAnOperandCountingBackIsNotAnOption(t *testing.T) {
+	t.Parallel()
 	list := &fcList{entries: []string{"alpha", "beta", "gamma"}}
 	out, st := fcRun(t, list, "fc -l -2")
 	if want := "2\t beta\n3\t gamma\n"; out != want || st != 0 {
@@ -101,6 +104,7 @@ func TestAnOperandCountingBackIsNotAnOption(t *testing.T) {
 // together because each alone reads as a shell that could not tell an option
 // from an event.
 func TestADashWordThatIsNotANumberIsStillOptions(t *testing.T) {
+	t.Parallel()
 	out, st := fcCutRun(t, &fcList{entries: []string{"alpha"}}, "fc -l -2x", No)
 	if !strings.Contains(out, "invalid option") || st == 0 {
 		t.Errorf("out = %q status = %d, want a refusal at nonzero", out, st)
@@ -125,6 +129,7 @@ func fcCutRun(t *testing.T, list *fcList, src string, prefix Answer) (string, in
 // A range written backwards prints backwards, which is not the same question
 // as `-r` and is why the two are settled in that order.
 func TestARangeWrittenBackwardsPrintsBackwards(t *testing.T) {
+	t.Parallel()
 	list := &fcList{entries: []string{"alpha", "beta", "gamma", "delta"}}
 	out, _ := fcRun(t, list, "fc -l 3 1")
 	if want := "3\t gamma\n2\t beta\n1\t alpha\n"; out != want {
@@ -135,6 +140,7 @@ func TestARangeWrittenBackwardsPrintsBackwards(t *testing.T) {
 // A word that is not a number is the newest entry beginning with it, and one
 // no entry begins with is a refusal rather than an empty listing.
 func TestAWordOperandFindsTheNewestEntryBeginningWithIt(t *testing.T) {
+	t.Parallel()
 	list := &fcList{entries: []string{"beta one", "alpha", "beta two"}}
 	out, st := fcRun(t, list, "fc -l beta")
 	if want := "3\t beta two\n"; out != want || st != 0 {
@@ -150,6 +156,7 @@ func TestAWordOperandFindsTheNewestEntryBeginningWithIt(t *testing.T) {
 // The layout is the dialect's and the engine is not, which is the split this
 // file exists to hold: the same range, written two ways.
 func TestTheListingLayoutIsTheDialectsAndTheRangeIsNot(t *testing.T) {
+	t.Parallel()
 	list := &fcList{entries: []string{"alpha", "beta"}}
 	out, _ := run(t, "fc -l -1\nfc -nl -1", func(r *Runner) {
 		list.install(r)
@@ -167,6 +174,7 @@ func TestTheListingLayoutIsTheDialectsAndTheRangeIsNot(t *testing.T) {
 // list the newest entry is not an answer, and with no line in it the newest
 // entry is the only answer there is.
 func TestTheBuiltinsOwnLineEndsTheDefaultRange(t *testing.T) {
+	t.Parallel()
 	kept := &fcList{entries: []string{"alpha", "beta", "fc -l"}, own: true}
 	out, _ := fcRun(t, kept, "fc -l")
 	if want := "1\t alpha\n2\t beta\n"; out != want {
@@ -182,6 +190,7 @@ func TestTheBuiltinsOwnLineEndsTheDefaultRange(t *testing.T) {
 // `-s` runs an entry again, says which one on standard error, and puts it in
 // the list **in place of** the call — so the list grows by nothing.
 func TestRerunReplacesTheCallInTheList(t *testing.T) {
+	t.Parallel()
 	list := &fcList{entries: []string{"echo one", "fc -s"}, own: true}
 	out, st := fcRun(t, list, "fc -s")
 	if want := "echo one\none\n"; out != want || st != 0 {
@@ -194,6 +203,7 @@ func TestRerunReplacesTheCallInTheList(t *testing.T) {
 
 // `pat=rep` replaces every occurrence, and several apply in turn.
 func TestRerunSubstitutesEveryOccurrence(t *testing.T) {
+	t.Parallel()
 	list := &fcList{entries: []string{"echo aa ab"}}
 	out, _ := fcRun(t, list, "fc -s a=x b=y")
 	if want := "echo xx xy\nxx xy\n"; out != want {
@@ -203,6 +213,7 @@ func TestRerunSubstitutesEveryOccurrence(t *testing.T) {
 
 // `-e -` is `-s` written the way POSIX spells it, and reaches the same road.
 func TestTheEditorNamedDashIsTheRerun(t *testing.T) {
+	t.Parallel()
 	list := &fcList{entries: []string{"echo one"}}
 	out, _ := fcRun(t, list, "fc -e - -1")
 	if want := "echo one\none\n"; out != want {
@@ -213,6 +224,7 @@ func TestTheEditorNamedDashIsTheRerun(t *testing.T) {
 // An event that would be this very command is refused rather than run, which
 // is the one thing a re-runner must never get wrong.
 func TestRerunningItselfIsRefused(t *testing.T) {
+	t.Parallel()
 	list := &fcList{entries: []string{"echo one", "fc -s -0"}, own: true}
 	out, st := fcRun(t, list, "fc -s -0")
 	if want := "fc: no command found\n"; !strings.Contains(out, want) || st != 1 {
@@ -226,6 +238,7 @@ func TestRerunningItselfIsRefused(t *testing.T) {
 // A dialect with no list at all is unchanged: nothing is listed and nothing
 // is said, which is what a shell without the feature does anyway.
 func TestFcOnAShellWithNoListSaysNothing(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, "fc -l", nil)
 	if out != "" || st != 0 {
 		t.Errorf("out = %q status = %d, want silence at 0", out, st)
@@ -273,6 +286,7 @@ func fcFive() *fcList {
 // case here: an operand past the newest entry, paired with one inside the
 // list, is clamped and nothing is said.
 func TestAnEventOutOfRangeIsRefusedOrClamped(t *testing.T) {
+	t.Parallel()
 	const whole = "1\t alpha\n2\t beta\n3\t gamma\n4\t delta\n5\t epsilon\n"
 	for _, c := range []struct {
 		refuse Answer
@@ -310,6 +324,7 @@ func TestAnEventOutOfRangeIsRefusedOrClamped(t *testing.T) {
 // could not see the difference between "the whole list" and "one entry, and
 // the list happens to be one entry long".
 func TestARelativeOperandCountsFromTheEndOrFromNothing(t *testing.T) {
+	t.Parallel()
 	const whole = "1\t alpha\n2\t beta\n3\t gamma\n4\t delta\n5\t epsilon\n"
 	for _, c := range []struct {
 		ownEvent Answer
@@ -355,6 +370,7 @@ func TestARelativeOperandCountsFromTheEndOrFromNothing(t *testing.T) {
 // on — on seventeen or fewer both write all of them, which is what made the
 // difference invisible until a list was long enough to have a window.
 func TestTheDefaultRangeStartsWhereTheCountingDoes(t *testing.T) {
+	t.Parallel()
 	entries := make([]string, 18)
 	for i := range entries {
 		entries[i] = fmt.Sprintf("line %d", i+1)
@@ -382,6 +398,7 @@ func TestTheDefaultRangeStartsWhereTheCountingDoes(t *testing.T) {
 // the whole of it — a shell that reported one fixed event would pass on the
 // first row alone.
 func TestAnEmptyListIsRefusedFromTheOperandsThatMissedIt(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{"fc -l", "sh: fc: no such event: 1\n"},
 		{"fc -l -1", "sh: fc: no such event: 0\n"},
@@ -413,6 +430,7 @@ func TestAnEmptyListIsRefusedFromTheOperandsThatMissedIt(t *testing.T) {
 // refused what somebody wrote down would leave `fc -s` on a one-entry list
 // re-running the line it is on, which is the case the refusal exists for.
 func TestTheNewestEntryIsReachableOrIsTheCurrentLine(t *testing.T) {
+	t.Parallel()
 	const refusal = "sh: fc: the current history line would run itself again\n"
 	five := func() *fcList {
 		return &fcList{entries: []string{
@@ -471,6 +489,7 @@ func TestTheNewestEntryIsReachableOrIsTheCurrentLine(t *testing.T) {
 // threshold would read as a search that works, since `ay` is a perfectly
 // good answer to `a` until you know `az` was there too.
 func TestAWordOperandsSearchStopsAtTheCurrentLine(t *testing.T) {
+	t.Parallel()
 	entries := func() *fcList {
 		return &fcList{entries: []string{"ax", "bx", "ay", "by", "az"}}
 	}
@@ -532,6 +551,7 @@ func TestTheEditorRoadRefusesFirstAndClampsLastAtTheCurrentLine(t *testing.T) {
 // would leave `fc -l 2x` refused in the other and look right from either
 // side alone.
 func TestAnOperandsNumberIsReadWithOrWithoutWhatStandsInFrontOfIt(t *testing.T) {
+	t.Parallel()
 	const noCommand = "sh: fc: no command found\n"
 	for _, c := range []struct {
 		loose  Answer
@@ -590,6 +610,7 @@ func fcLooseRun(t *testing.T, list *fcList, src string, loose Answer) (string, i
 // `fc -l ”` against a listing could not tell "the empty word searched" from
 // "the empty word was ignored" on a short list.
 func TestAnEmptyOperandIsASearchAndNotAnAbsentOne(t *testing.T) {
+	t.Parallel()
 	const whole = "1\t alpha\n2\t beta\n3\t gamma\n4\t delta\n5\t epsilon\n"
 	for _, c := range []struct{ src, want string }{
 		// `first` written empty is the newest entry; absent it is the
@@ -619,6 +640,7 @@ func TestAnEmptyOperandIsASearchAndNotAnAbsentOne(t *testing.T) {
 // same bug for the same reason: an empty word and no word at all were one
 // state there too.
 func TestAnEmptyOperandUnderRerunIsASearch(t *testing.T) {
+	t.Parallel()
 	five := func() *fcList {
 		return &fcList{entries: []string{
 			"echo one", "echo two", "echo three", "echo four", "echo five",
@@ -653,6 +675,7 @@ func TestAnEmptyOperandUnderRerunIsASearch(t *testing.T) {
 // and a rule written on the two operands passes the first pair and fails the
 // second.
 func TestARangeThatWouldRunBackwardsIsRunOrRefused(t *testing.T) {
+	t.Parallel()
 	const refusal = "sh: fc: a range of history events cannot be run newest first\n"
 	five := func() *fcList {
 		return &fcList{entries: []string{": one", ": two", ": three", ": four", ": five"}}
@@ -715,6 +738,7 @@ func fcBackwardsRun(t *testing.T, list *fcList, src string, refuse Answer) (stri
 // tells it from the one beside it — `5 5` against `5 4` is the whole of why
 // the recursion check reads both ends rather than `first`.
 func TestTheEditorRoadsThreeRefusalsAreOrdered(t *testing.T) {
+	t.Parallel()
 	five := func() *fcList {
 		return &fcList{entries: []string{": one", ": two", ": three", ": four", ": five"}}
 	}

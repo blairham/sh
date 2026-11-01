@@ -15,6 +15,7 @@ import (
 // into a name nothing has exported and reads the child's environment back;
 // `x=9` is the control, exported under either answer.
 func TestAllexportMarksALoopOrGetoptsName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, store, as string }{
 		{"a for loop", `for w in 4; do :; done`, "w"},
 		{"a select loop", `select w in a; do break; done <<< 1 2>/dev/null`, "w"},
@@ -42,6 +43,7 @@ func TestAllexportMarksALoopOrGetoptsName(t *testing.T) {
 // them answering the other axis, so a mark that reached the two through the
 // name's question (or the reverse) fails here.
 func TestAllexportMarksGetoptsOwnParameters(t *testing.T) {
+	t.Parallel()
 	for _, own := range []Answer{Yes, No} {
 		for _, name := range []Answer{Yes, No} {
 			t.Run("own="+own.String()+"/name="+name.String(), func(t *testing.T) {
@@ -70,6 +72,7 @@ func TestAllexportMarksGetoptsOwnParameters(t *testing.T) {
 // their own there, so the operand is shown through the one builtin that does
 // not.)
 func TestAnOperandUnderAllexportAsksNothing(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `set -a; read r <<< 5; set +a; env | grep -E '^r='`, withSem(CoreSemantics()))
 	if st != 0 || out != "r=5\n" {
 		t.Errorf("out=%q st=%d, want r exported and nothing asked", out, st)
@@ -79,6 +82,7 @@ func TestAnOperandUnderAllexportAsksNothing(t *testing.T) {
 // And nothing is asked without `set -a`: a loop and `getopts` under
 // CoreSemantics run silently and export nothing.
 func TestAFilledNameWithoutAllexportAsksNothing(t *testing.T) {
+	t.Parallel()
 	out, st := run(
 		t,
 		`for f in 1; do :; done; getopts x: o -x6; echo $f $o $OPTARG; env | grep -E '^(f|o|OPTARG|OPTIND)='`,
@@ -94,6 +98,7 @@ func TestAFilledNameWithoutAllexportAsksNothing(t *testing.T) {
 // 2026-10-15, `declare -r p="1"` with no `x`. The builtin refuses before it
 // reaches the operand store, which is what keeps the mark away.
 func TestAFrozenOperandIsNotMarkedByAllexport(t *testing.T) {
+	t.Parallel()
 	out, _ := run(
 		t,
 		`readonly p=1; set -a; printf -v p %s 3 2>/dev/null; set +a; env | grep -E '^p='`,

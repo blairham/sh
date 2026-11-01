@@ -15,6 +15,7 @@ import (
 // nothing has exported and reads the child's environment back; `x=9` is the
 // control, exported under either answer.
 func TestAllexportMarksAnExpansionsAssignment(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, store, as string }{
 		{"a default assignment", `: ${w:=1}`, "w"},
 		{"an unset-only assignment", `: ${w=1}`, "w"},
@@ -43,6 +44,7 @@ func TestAllexportMarksAnExpansionsAssignment(t *testing.T) {
 // shells part: the same stores under CoreSemantics, which answers nothing about
 // it, run silently and export nothing.
 func TestAnExpansionsAssignmentWithoutAllexportAsksNothing(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `: ${w:=1}; : $(( m = 2 )); echo $w $m; env | grep -E '^(w|m)='`, withSem(CoreSemantics()))
 	if st != 1 || out != "1 2\n" {
 		t.Errorf("out=%q st=%d, want the values, nothing exported and no refusal", out, st)

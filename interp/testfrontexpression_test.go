@@ -154,6 +154,7 @@ var frontRows = []struct {
 }
 
 func TestOneExpressionIsReadOffTheFrontOfTheOperands(t *testing.T) {
+	t.Parallel()
 	for _, tc := range frontRows {
 		t.Run(tc.src, func(t *testing.T) {
 			out, st := run(t, tc.src, frontReader)
@@ -183,6 +184,7 @@ func TestOneExpressionIsReadOffTheFrontOfTheOperands(t *testing.T) {
 // what decides. A change to this reader that left the other one alone would
 // take this number to zero.
 func TestTheWholeListIsReadWithTheAxisTheOtherWay(t *testing.T) {
+	t.Parallel()
 	moved := 0
 	for _, tc := range frontRows {
 		out, st := run(t, tc.src, wholeList)
@@ -218,6 +220,7 @@ func TestTheWholeListIsReadWithTheAxisTheOtherWay(t *testing.T) {
 // more passing row; with it, the pair says the two readings genuinely differ
 // and which one the shell takes.
 func TestTheInnerReadingUnderTwoNegationsIsThePlainOneArgumentRule(t *testing.T) {
+	t.Parallel()
 	bareT := func(r *Runner) {
 		frontReader(r)
 		s := *r.Semantics

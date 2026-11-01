@@ -18,6 +18,7 @@ import (
 // The here-document rows are the route the parser does not see: an unquoted
 // body is read into words when it runs, through the same scanner.
 func TestALineContinuationInAParameterExpansionIsRemovedOnEveryRoute(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"in double quotes", "x=5; echo \"[${x\\\n}]\"", "[5]"},
 		{"unquoted", "x=5; echo [${x\\\n}]", "[5]"},

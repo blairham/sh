@@ -32,6 +32,7 @@ func exportGlobalRun(t *testing.T, src string, a Answer) (string, string, int) {
 // The headline, both ways: under Yes the name outlives the call, under No it
 // is an ordinary local and the caller sees nothing.
 func TestTheExportLetterDecidingTheScopeIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `f(){ typeset -x lxx=1; }; f; echo "[${lxx-UNSET}]"`
 	for _, w := range []struct {
 		answer Answer
@@ -47,6 +48,7 @@ func TestTheExportLetterDecidingTheScopeIsAnAxis(t *testing.T) {
 // `local` is exempt under either answer, which is what makes this a question
 // about the letter under the other words rather than about `-x`.
 func TestTheExportLetterUnderLocalIsAlwaysLocal(t *testing.T) {
+	t.Parallel()
 	const src = `f(){ local -x le=1; }; f; echo "[${le-UNSET}]"`
 	for _, a := range []Answer{Yes, No} {
 		out, errs, st := exportGlobalRun(t, src, a)
@@ -61,6 +63,7 @@ func TestTheExportLetterUnderLocalIsAlwaysLocal(t *testing.T) {
 // The exemption is the half a rule written as "the letter means -g" gets
 // wrong, and it is silent: the caller's value would be overwritten.
 func TestTheExportLetterLeavesANameAlreadyLocalAlone(t *testing.T) {
+	t.Parallel()
 	const src = `m=outer; f(){ local m=1; typeset -x m; echo "in=[$m]"; }; f; echo "out=[$m]"`
 	out, errs, st := exportGlobalRun(t, src, Yes)
 	if want := "in=[1]\nout=[outer]\n"; out != want || st != 0 || errs != "" {
@@ -71,6 +74,7 @@ func TestTheExportLetterLeavesANameAlreadyLocalAlone(t *testing.T) {
 // Outside a function there is no scope to reach past, so nothing is asked and
 // an unanswered axis is not a refusal.
 func TestTheExportLetterAsksNothingAtTheTopLevel(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -x v=1; echo "[$v]"`, func(s *Semantics) {
 		s.DeclareOptions = "aAgiprx"
 		s.DeclaredNameWithoutValueIsEmpty = Yes
@@ -97,6 +101,7 @@ func TestTheExportLetterAsksNothingAtTheTopLevel(t *testing.T) {
 // The letter without a value reaches the same decision, which is the spelling
 // a fix routed through the assignment would miss.
 func TestTheExportLetterWithNoValueDeclaresTheSameScope(t *testing.T) {
+	t.Parallel()
 	const src = `f(){ typeset -x u; }; f; echo "[${u-UNSET}]"`
 	out, errs, st := exportGlobalRun(t, src, Yes)
 	if out != "[]\n" || st != 0 || errs != "" {

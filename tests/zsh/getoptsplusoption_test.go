@@ -29,6 +29,7 @@ func zshGetoptsRun(t *testing.T, src string) string {
 
 // The scan, over the shapes the sign reaches.
 func TestGetoptsTakesAPlusPrefixedOption(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, params, spec, want string }{
 		{"a lone plus option", "set -- +a rest", "a", "[+a] ind=2\n"},
 		{"a cluster", "set -- +ab", "ab", "[+a][+b] ind=2\n"},
@@ -57,6 +58,7 @@ func TestGetoptsTakesAPlusPrefixedOption(t *testing.T) {
 // sign and the letter are two verbs rather than one string — which only a
 // word whose letter *is* a sign can show.
 func TestGetoptsPlusPrefixedOptionWording(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an unknown letter", "OPTIND=1\ngetopts 'a' o +z\n", "zsh:2: bad option: +z\n"},
 		{"a missing argument", "OPTIND=1\ngetopts 'a:' o +a\n", "zsh:2: argument expected after +a option\n"},

@@ -28,6 +28,7 @@ import (
 //
 // `%d`, which does no abbreviating, is read the same way.
 func TestAPromptReadsTheDirectoryTheShellIsIn(t *testing.T) {
+	t.Parallel()
 	if !zsh.PromptStyle().CwdIsTheShellsOwnDirectory {
 		t.Fatal("CwdIsTheShellsOwnDirectory is off, so a written PWD would move this prompt")
 	}

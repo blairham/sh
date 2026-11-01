@@ -14,6 +14,7 @@ import "testing"
 // underneath were measured against zsh 5.9.2 first, so a pair that agreed on
 // the wrong answer would have been caught before it was written down.
 func TestAnUnbracedSigilMeansItsBracedSpelling(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const setup = `v=hello; a=(x y z); p="a b"; set -- one two; `
 	for _, tc := range []struct {
@@ -52,6 +53,7 @@ func TestAnUnbracedSigilMeansItsBracedSpelling(t *testing.T) {
 // rather than compared as text — a joined answer and a split one print the
 // same characters and are not the same thing.
 func TestTheUnbracedSplitAndDistributeFlagsMakeFields(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -86,6 +88,7 @@ func TestTheUnbracedSplitAndDistributeFlagsMakeFields(t *testing.T) {
 // The three spellings of `$+` that are *not* an expansion, which is the half
 // a test asserting only that the flag works would miss. Each prints itself.
 func TestTheExistenceSigilNeedsANameOrADigit(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a special is not a target", `print -r -- "$+@"`, "$+@\n"},

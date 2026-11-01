@@ -40,6 +40,7 @@ import (
 // path and reads what it wrote, which is what an embedder does and what this
 // file does.
 func TestZshNamesItselfWhateverItWasInvokedAs(t *testing.T) {
+	t.Parallel()
 	if got := diagTable(zsh.Diagnostics()).SelfName; got != "zsh" {
 		t.Fatalf("SelfName = %q, want zsh", got)
 	}
@@ -67,6 +68,7 @@ func TestZshNamesItselfWhateverItWasInvokedAs(t *testing.T) {
 // TestZshStillReportsThePathInDollarZero, which is the half a shorter name
 // would have broken while every assertion above went on passing.
 func TestZshStillReportsThePathInDollarZero(t *testing.T) {
+	t.Parallel()
 	const invokedAs = "/usr/local/bin/zsh"
 	var out bytes.Buffer
 	sh := zshShell()
@@ -84,6 +86,7 @@ func TestZshStillReportsThePathInDollarZero(t *testing.T) {
 // own; a script keeps the one it was invoked with, which is what the binary
 // does and what the other three do too.
 func TestAScriptIsNamedByItsPathNotByTheShell(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "case.sh")
 	if err := os.WriteFile(path, []byte("nosuchcommand-xyz\n"), 0o600); err != nil {
 		t.Fatal(err)

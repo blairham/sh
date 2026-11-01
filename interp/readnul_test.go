@@ -25,6 +25,7 @@ func readNul(t *testing.T, p NulInAValuePolicy, src string) (string, int) {
 // the delimiter: `read -d` with an empty argument ends the record at it, which is a reading of the
 // option rather than of the byte.
 func TestAReadWithNoNulInItAsksNothing(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{"read -r v <<END\nplain\nEND\necho \"v=$v\"", "v=plain\n"},
 		{`printf 'a\0b\0' > f; read -r -d '' v < f; echo "v=$v"`, "v=a\n"},
@@ -39,6 +40,7 @@ func TestAReadWithNoNulInItAsksNothing(t *testing.T) {
 // **A NUL in the record is where the axis is asked**, and each answer does
 // what it says — the drop happening before a counted read counts.
 func TestANulInTheRecordIsWhereTheAxisIsAsked(t *testing.T) {
+	t.Parallel()
 	const src = `printf 'ab\0cd\n' > f; read -r v < f; echo "len=${#v}"; read -r -n 3 w < f; echo "w=$w"`
 	if out, _ := readNul(
 		t,

@@ -25,6 +25,7 @@ import (
 // `eval <quoted string>`, and the echoed line is the only context the caller
 // has (#1728).
 func TestBorrowedTextEchoesTheOffendingLine(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, inc, src, want string }{
 		{
 			"eval's string",
@@ -59,6 +60,7 @@ func TestBorrowedTextEchoesTheOffendingLine(t *testing.T) {
 // Without the answer there is no second line, which is three of the four
 // dialects: they print the complaint and stop.
 func TestWithoutThatAnswerBorrowedTextEchoesNothing(t *testing.T) {
+	t.Parallel()
 	got := borrowedRun(t, "", "eval 'if; then'\n", false)
 	if strings.Contains(got, "`if; then'") {
 		t.Errorf("said %q, want no echoed line", got)
@@ -72,6 +74,7 @@ func TestWithoutThatAnswerBorrowedTextEchoesNothing(t *testing.T) {
 // out has no offending line to point at, and the shell that writes one writes
 // none for it — measured, `eval 'echo "abc'` is one line in bash and not two.
 func TestInputThatRanOutIsNotEchoed(t *testing.T) {
+	t.Parallel()
 	got := borrowedRun(t, "", "eval 'echo \"abc'\n", true)
 	if strings.Count(got, "\n") != 1 {
 		t.Errorf("said %q, want one line", got)
@@ -93,6 +96,7 @@ func TestInputThatRanOutIsNotEchoed(t *testing.T) {
 // text's first line has to run and be checked for, since a probe that only
 // read the number could not tell the shift from the physical reading.
 func TestTheEchoedLineCarriesTheShiftedNumber(t *testing.T) {
+	t.Parallel()
 	src := ":\n:\n:\n:\neval 'echo one\nif; then'\n"
 	got := borrowedRunContinuing(t, src)
 	for _, want := range []string{

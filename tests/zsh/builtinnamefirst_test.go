@@ -10,6 +10,7 @@ import "testing"
 // filesystem. Measured 2026-10-02 on zsh 5.9.2 under `-f` in an empty
 // directory (#5377).
 func TestBuiltinLooksItsNameUpBeforeMatching(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"builtin -a nomatch*; echo st=$?", "zsh:1: no such builtin: -a\nst=1\n"},
 		{"builtin nosuch nomatch*; echo st=$?", "zsh:1: no such builtin: nosuch\nst=1\n"},

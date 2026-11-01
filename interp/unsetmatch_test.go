@@ -32,6 +32,7 @@ func unsetSem(letters string) Semantics {
 // patterns and removes every parameter whose *name* one matches. One shell's
 // alone, and a prompt theme clears its whole namespace with it.
 func TestUnsetMatchesNamesAgainstAPattern(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// Anchored at both ends of the name, like every other pattern here.
 		{`x=1 xy=2 z=3; unset -m "x*"; echo "[${x-gone}][${xy-gone}][${z-gone}]"`, "[gone][gone][3]\n"},
@@ -91,6 +92,7 @@ func TestUnsetMatchesNamesAgainstAPattern(t *testing.T) {
 // substrate. Measured 2026-09-05: `-v` and `-f` are unanimous, `-n` is bash
 // 5.3's and ksh93's, and `-m` is zsh's alone.
 func TestUnsetsLettersAreTheDialects(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		letters, src, want string
 		gone               bool
@@ -145,6 +147,7 @@ func TestUnsetsLettersAreTheDialects(t *testing.T) {
 // it; and at the top level, where there is no scope and the answer is false
 // rather than an error.
 func TestAtFunctionReturnRunsWhenTheCallUnwinds(t *testing.T) {
+	t.Parallel()
 	var marks []string
 	var insideOK, outsideOK bool
 	out, st := run(t, "f() { mark one; mark two; echo in; }\nmark\nf\necho after", func(r *Runner) {

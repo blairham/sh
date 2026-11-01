@@ -30,6 +30,7 @@ import (
 // be able to produce one. See
 // interp.Semantics.ArrivedSubscriptIsAQuotingContext (#3871).
 func TestTheArrivedSubscriptQuotingIsAnswered(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().ArrivedSubscriptIsAQuotingContext; got != interp.No {
 		t.Errorf("ArrivedSubscriptIsAQuotingContext = %v, want no", got)
 	}
@@ -43,6 +44,7 @@ func TestTheArrivedSubscriptQuotingIsAnswered(t *testing.T) {
 // The key each route reaches, which must be the same one under either answer
 // here — the claim the pin above stands on.
 func TestBothRoutesReachTheSameKeyHere(t *testing.T) {
+	t.Parallel()
 	const read = `; printf "[%s][%s]" "${a[k]}" "${a[$q]}"`
 	const quoted = `typeset -A a; a[k]=1; q='"k"'; a[$q]=2; `
 	for _, tc := range []struct{ name, src string }{

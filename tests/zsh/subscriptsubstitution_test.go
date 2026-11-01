@@ -26,6 +26,7 @@ import "testing"
 // so every prompt drew the literal text `[left31]` where the prompt character
 // belonged (#2048).
 func TestASubscriptHoldingASubstitutionIsStillASubscript(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name string

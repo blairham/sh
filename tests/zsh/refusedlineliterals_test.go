@@ -14,6 +14,7 @@ import (
 // Semantics.RefusedDeclarationKeepsItsArrayLiterals, which bash answers the
 // other way.
 func TestARefusedLetterTakesTheArrayLiteralsWithIt(t *testing.T) {
+	t.Parallel()
 	out, _ := answersRun(t, `typeset -Q a=(1) 2>/dev/null; echo "st=$? [${a-unset}]"`)
 	if !strings.HasSuffix(out, "st=1 [unset]\n") {
 		t.Errorf("= %q, want it to end %q", out, "st=1 [unset]\n")

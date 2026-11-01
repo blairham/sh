@@ -48,6 +48,7 @@ func tailRun(t *testing.T, src string, tail interp.Answer) (string, int) {
 // The rows the issue is about, on the scalar path — which is the anchor, since
 // the list readings are built out of it.
 func TestATrailingSeparatorOpensAFieldOrIsAbsorbed(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, value, absorbed, opens string }{
 		{"one separator at the tail", `a:`, `1:[a]`, `2:[a][]`},
 		{"two at the tail", `a::`, `2:[a][]`, `3:[a][][]`},
@@ -84,6 +85,7 @@ func TestATrailingSeparatorOpensAFieldOrIsAbsorbed(t *testing.T) {
 // the last character would give `[a]` for the first row and answer the second
 // one correctly by accident.
 func TestTheTailIsTheRunAndNotTheLastByte(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, value, absorbed, opens string }{
 		{"a separator then whitespace", `a: `, `1:[a]`, `2:[a][]`},
 		{"whitespace then a separator", `a :`, `1:[a]`, `2:[a][]`},
@@ -109,6 +111,7 @@ func TestTheTailIsTheRunAndNotTheLastByte(t *testing.T) {
 // Left unanswered on purpose: an unanswered axis that is asked says so and
 // refuses, so the fields coming back at status 0 are the whole assertion.
 func TestAValueWithNoSeparatorAtTheTailNeverAsks(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a whitespace IFS", count + `v="a b"; f $v`, `2:[a][b]`},
 		{"whitespace at the tail", count + `v="a b "; f $v`, `2:[a][b]`},
@@ -135,6 +138,7 @@ func TestAValueWithNoSeparatorAtTheTailNeverAsks(t *testing.T) {
 // same claim: a dialect that never answered this must be told so rather than
 // handed one of the two readings.
 func TestAnUnansweredTailIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	out, _ := tailRun(t, count+`IFS=:; v="a:"; f $v`, interp.Unspecified)
 	if !strings.Contains(out, "a trailing IFS separator opening a field of its own") {
 		t.Errorf("got %q, want the axis refused by name", out)
@@ -153,6 +157,7 @@ func TestAnUnansweredTailIsRefusedByName(t *testing.T) {
 // bash's *join* produces for the same elements, which is why the second row
 // is here — no join can put a field after the last element.
 func TestTheTailReachesEachElementOfAList(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, absorbed, opens string }{
 		{
 			"an element ending in a separator",
@@ -183,6 +188,7 @@ func TestTheTailReachesEachElementOfAList(t *testing.T) {
 //
 // Left unanswered in every row, so an ask would announce itself.
 func TestTheEdgeKeepingSplitFlagDoesNotAskTheTail(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a separator at the tail", count + `IFS=:; v="a:"; f "${=v}"`, `2:[a][]`},
 		{"two at the tail", count + `IFS=:; v="a::"; f "${=v}"`, `3:[a][][]`},
@@ -209,6 +215,7 @@ func TestTheEdgeKeepingSplitFlagDoesNotAskTheTail(t *testing.T) {
 // The unquoted spelling of the same flag runs the ordinary rules, so it does
 // ask — the flag turns splitting on and the tail question is the splitter's.
 func TestTheUnquotedSplitFlagAsksTheTail(t *testing.T) {
+	t.Parallel()
 	const src = count + `IFS=:; v="a:"; f ${=v}`
 	for _, tc := range []struct {
 		tail interp.Answer
@@ -238,6 +245,7 @@ func TestTheUnquotedSplitFlagAsksTheTail(t *testing.T) {
 // question: `a\:` is the one element `a:` under either answer, because an
 // escaped separator is data and is not part of the closing run at all.
 func TestReadIntoAnArrayAsksTheTail(t *testing.T) {
+	t.Parallel()
 	readRun := func(t *testing.T, src string, tail interp.Answer) (string, int) {
 		t.Helper()
 		return runGrammar(t, src, func(d *syntax.Dialect) {
@@ -298,6 +306,7 @@ func TestReadIntoAnArrayAsksTheTail(t *testing.T) {
 // in five shells and `b:` in zsh, and it is the same fact as the array row
 // above seen through a different target.
 func TestReadIntoNamesAsksTheTailOnlyAtTheCount(t *testing.T) {
+	t.Parallel()
 	readRun := func(t *testing.T, src string, tail interp.Answer) (string, int) {
 		t.Helper()
 		return run(t, src, func(r *interp.Runner) {
@@ -374,6 +383,7 @@ func TestReadIntoNamesAsksTheTailOnlyAtTheCount(t *testing.T) {
 // The core leaves it unanswered, because five shells against one is a
 // disagreement and not a majority to be counted.
 func TestThePresetsAnswerTheTailAsMeasured(t *testing.T) {
+	t.Parallel()
 	if got := interp.PosixSemantics().TrailingSeparatorEndsAField; got != interp.No {
 		t.Errorf("PosixSemantics().TrailingSeparatorEndsAField = %v, want %v", got, interp.No)
 	}
@@ -394,6 +404,7 @@ func TestThePresetsAnswerTheTailAsMeasured(t *testing.T) {
 // without it this call site is unreachable with the tail answered yes, so
 // nothing would notice it going unasked.
 func TestARedirectionTargetReadAsFieldsAsksTheTail(t *testing.T) {
+	t.Parallel()
 	src := `IFS=:; v="a:"; echo hi > $v; echo "st=$?"`
 	target := func(t *testing.T, tail interp.Answer) (string, string) {
 		t.Helper()

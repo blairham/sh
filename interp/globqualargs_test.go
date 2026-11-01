@@ -62,6 +62,7 @@ func writeMode(t *testing.T, dir, name string, mode os.FileMode) {
 // spelling, because the spellings share an evaluator and the questions do
 // not.
 func TestTheAccessRightsQualifier(t *testing.T) {
+	t.Parallel()
 	dir := modeDir(t)
 	for _, tc := range []struct{ name, list, want string }{
 		// A number on its own is an exact comparison, and it compares as
@@ -126,6 +127,7 @@ func TestTheAccessRightsQualifier(t *testing.T) {
 // refusal that named a character instead would be a different shell's
 // message.
 func TestAnUnreadableModeSpecIsRefused(t *testing.T) {
+	t.Parallel()
 	dir := modeDir(t)
 	for _, list := range []string{
 		"f",           // nothing to delimit with
@@ -180,6 +182,7 @@ func ownerOf(t *testing.T, path string) (uid, gid uint32) {
 // running as root — none of which have the same uid, and the last of which
 // would make a hard-coded `u0` mean the opposite of what it means elsewhere.
 func TestTheOwnershipQualifiers(t *testing.T) {
+	t.Parallel()
 	dir := modeDir(t)
 	uid, gid := ownerOf(t, filepath.Join(dir, "m0644"))
 	all := "[m0000][m0600][m0644][m0664][m0666][m0700][m0755][m4755]"
@@ -336,6 +339,7 @@ func linkDir(t *testing.T) string {
 // `unknown file attribute: -` — is what said the character had been looked up
 // in the wrong table.
 func TestTheFollowToggleAsksAboutTheTarget(t *testing.T) {
+	t.Parallel()
 	dir := linkDir(t)
 	for _, tc := range []struct{ name, list, want string }{
 		{"everything, for the rows below to be read against", "N", "[d1][dangle][f1][la][ld]"},
@@ -391,6 +395,7 @@ func TestTheFollowToggleAsksAboutTheTarget(t *testing.T) {
 // matches by byte where that one collates, which is a difference of its own
 // and not one this test should be asserting either way.
 func TestAQualifierListMayEndInModifiers(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o755); err != nil {
 		t.Fatal(err)
@@ -510,6 +515,7 @@ func linksOf(t *testing.T, path string) uint64 {
 // Every row is a measurement on zsh 5.9.2, 2026-09-11, against exactly the
 // directory linkCountDir builds.
 func TestTheLinkCountQualifier(t *testing.T) {
+	t.Parallel()
 	dir := linkCountDir(t)
 	all := "[dir1][dir2][f1][f1b][g1][lnk]"
 	for _, tc := range []struct{ name, list, want string }{
@@ -570,6 +576,7 @@ func TestTheLinkCountQualifier(t *testing.T) {
 // `${(%):-$1%$y(l.1.0)}`, and a reader that globbed that text reached this
 // qualifier with `.1.0` behind it; zsh answers the same sentence.
 func TestALinkCountWithNoNumberIsRefused(t *testing.T) {
+	t.Parallel()
 	dir := linkCountDir(t)
 	for _, list := range []string{"l", "l+", "l-", "lx", "l 1", "Nl", "l.1.0"} {
 		t.Run(list, func(t *testing.T) {

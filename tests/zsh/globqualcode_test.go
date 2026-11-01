@@ -46,6 +46,7 @@ func globCodeFixture(t *testing.T) string {
 // `reply` as the word the file is reported as (#6612). Every row was measured
 // on zsh 5.9.2 under `-fc` in the fixture above; see interp/globqualcode.go.
 func TestAGlobQualifierRunsCodeForEachFile(t *testing.T) {
+	t.Parallel()
 	const all = "a b big c10 c9 d lnk\n"
 	for _, tc := range []struct{ src, out, errs string }{
 		// What the code is asked, and the delimiters it may be written in.
@@ -168,6 +169,7 @@ func TestAGlobQualifierRunsCodeForEachFile(t *testing.T) {
 // filesystem's; every row here was measured on zsh 5.9.2 under `-fc`. See
 // interp/globqualsort.go.
 func TestAGlobSortSpecifierSortsByWhatTheCodeLeaves(t *testing.T) {
+	t.Parallel()
 	const all = "a b big c10 c9 d lnk\n"
 	for _, tc := range []struct{ src, out, errs string }{
 		{`print *(oe:'REPLY=${REPLY[-1]}':)`, "c10 c9 a b d big lnk\n", ""},
@@ -227,6 +229,7 @@ func TestAGlobSortSpecifierSortsByWhatTheCodeLeaves(t *testing.T) {
 // The code sees the files in the directory's own order, the order `ls -f`
 // lists them in, and not in the order the matches are reported in.
 func TestAGlobQualifiersCodeRunsInTheDirectorysOrder(t *testing.T) {
+	t.Parallel()
 	dir := globCodeFixture(t)
 	f, err := os.Open(dir)
 	if err != nil {
@@ -252,6 +255,7 @@ func TestAGlobQualifiersCodeRunsInTheDirectorysOrder(t *testing.T) {
 // that counts the runs sorts the matches into that order; behind a leading
 // `oN` nothing is sorted at all.
 func TestAGlobSortSpecifiersCodeRunsInTheDirectorysOrder(t *testing.T) {
+	t.Parallel()
 	dir := globCodeFixture(t)
 	f, err := os.Open(dir)
 	if err != nil {
@@ -282,6 +286,7 @@ func TestAGlobSortSpecifiersCodeRunsInTheDirectorysOrder(t *testing.T) {
 // file it waits for the command instead; see TestAGlobQualifierRunsCodeForEachFile.
 // Measured on zsh 5.9.2 by `-c`, `-i -c`, a script file and standard input.
 func TestATopLevelReturnInGlobQualifierCodeEndsTheShell(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, out string
 		status   int
@@ -314,6 +319,7 @@ func TestATopLevelReturnInGlobQualifierCodeEndsTheShell(t *testing.T) {
 // has finished: the literal is stored and the command runs. Measured on zsh
 // 5.9.2; both used to be dropped.
 func TestControlFlowInGlobQualifierCodeLetsTheConstructFinish(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, out string }{
 		{`f() { x=( [ab](e:"return 3":) ); print inf; }; f; print after $? $#x`, "after 0 1\n"},
 		{`f() { x=( [ab](e:"return 3":) ) print in; print inf; }; f; print after $?`, "in\nafter 0\n"},
@@ -334,6 +340,7 @@ func TestControlFlowInGlobQualifierCodeLetsTheConstructFinish(t *testing.T) {
 // *(e:'return 3':); echo next` writes `X a b c10 c9 d lnk` — every name but
 // `big`, the first the directory lists there — and no `next`.
 func TestATopLevelReturnInGlobQualifierCodeAtAPromptWaitsForTheCommand(t *testing.T) {
+	t.Parallel()
 	src := `print X *(e:'return 3':); print next`
 	f, err := syntax.Parse(src, zsh.Dialect())
 	if err != nil {

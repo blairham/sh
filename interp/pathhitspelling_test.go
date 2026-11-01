@@ -42,6 +42,7 @@ func spellRun(t *testing.T, dir, path, src string, spelling PathHitSpelling) str
 // thing after the command has run as before it (#6044). This file names no
 // shell; the panel is on the axis.
 func TestAPathHitIsSpelledTheSameBeforeAndAfterItRuns(t *testing.T) {
+	t.Parallel()
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -83,6 +84,7 @@ func TestAPathHitIsSpelledTheSameBeforeAndAfterItRuns(t *testing.T) {
 // And an empty entry, which is the current directory: the bare name, `./`
 // and the name, or the directory itself.
 func TestAnEmptyPathEntryIsSpelledByTheAxis(t *testing.T) {
+	t.Parallel()
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

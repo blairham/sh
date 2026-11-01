@@ -20,6 +20,7 @@ import (
 
 // One operand compiles to `NAME.zwc` beside it.
 func TestZcompileWithOneOperandWritesTheNameWithZwc(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "a.zsh", "f(){ echo hi; }\n")
 
@@ -35,6 +36,7 @@ func TestZcompileWithOneOperandWritesTheNameWithZwc(t *testing.T) {
 // With more than one operand the **first** is the output, which is the whole
 // of how the two forms are told apart.
 func TestZcompileWithSeveralOperandsTakesTheFirstAsTheOutput(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "a.zsh", "f(){ echo one; }\n")
 	write(t, dir, "b.zsh", "g(){ echo two; }\n")
@@ -57,6 +59,7 @@ func TestZcompileWithSeveralOperandsTakesTheFirstAsTheOutput(t *testing.T) {
 // The product is mode 0444, as zsh's is, and compiling twice still works —
 // which it would not if the read-only mode were left in the way.
 func TestZcompileWritesAReadOnlyFileAndCanReplaceIt(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "a.zsh", "f(){ echo hi; }\n")
 
@@ -74,6 +77,7 @@ func TestZcompileWritesAReadOnlyFileAndCanReplaceIt(t *testing.T) {
 
 // The four refusals, each measured, each with zsh's own sentence and status.
 func TestZcompileRefusals(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "a.zsh", "f(){ echo hi; }\n")
 
@@ -98,6 +102,7 @@ func TestZcompileRefusals(t *testing.T) {
 // A file that does not parse is refused, and — measured — **nothing is
 // written**, not even for the operands that did parse before it.
 func TestZcompileWritesNothingWhenAnInputDoesNotParse(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "ok.zsh", "f(){ echo hi; }\n")
 	write(t, dir, "bad.zsh", "if then fi (((\n")
@@ -116,6 +121,7 @@ func TestZcompileWritesNothingWhenAnInputDoesNotParse(t *testing.T) {
 
 // `--` ends the options, so an output whose name begins with `-` is reachable.
 func TestZcompileStopsReadingOptionsAtDoubleDash(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "a.zsh", "f(){ echo hi; }\n")
 	if out, st := runZsh(t, dir, "zcompile -R -- o.zwc a.zsh && echo done"); st != 0 || out != "done\n" {
@@ -132,6 +138,7 @@ func TestZcompileStopsReadingOptionsAtDoubleDash(t *testing.T) {
 // fs.ErrPermission for a refusal by the sandbox *and* for one by the kernel,
 // and suppressed the message for both — so a real failure said nothing at all.
 func TestZcompileReportsAWriteItCouldNotMake(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "a.zsh", "f(){ echo hi; }\n")
 	ro := filepath.Join(dir, "ro")

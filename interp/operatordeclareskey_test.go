@@ -15,6 +15,7 @@ import (
 // colon-less test finds it set and neither assigns nor refuses; No leaves the
 // key unset for both operators to act on (#7187).
 func TestAnAssignOrErrorOperatorAsksWhetherItMakesTheKey(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; m[j]=1; echo "<${m[k]=x}>"; echo "[${m[k]-u}][${#m[@]}]"; echo "<${m[q]?e}>" "${#m[@]}"`
 	for _, tc := range []struct {
 		a      Answer
@@ -40,6 +41,7 @@ func TestAnAssignOrErrorOperatorAsksWhetherItMakesTheKey(t *testing.T) {
 // stored table: a key that is there, `:=`, `-` and `+` never raise it, so a
 // vector that leaves it open still runs them.
 func TestOnlyAMissingKeyUnderTheOperatorAsksWhetherItIsMade(t *testing.T) {
+	t.Parallel()
 	s := testSemantics()
 	s.AssignOrErrorOperatorDeclaresTheKey = Unspecified
 	const src = `typeset -A m; m[k]=1; : ${m[k]=x} ${m[k]?e} ${m[q]:=v} ${m[z]-d} ${m[y]+p}; echo "${m[k]} ${m[q]} ${#m[@]}"`

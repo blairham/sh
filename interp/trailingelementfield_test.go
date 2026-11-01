@@ -34,6 +34,7 @@ func trailingFieldRun(t *testing.T, src string, a Answer) (string, int) {
 // Semantics.TrailingElementWithNoFieldLeavesOne for the panel and
 // interp/trailingelementfield.go for the rule.
 func TestTheTrailingElementsFieldIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, setup, word, yes, no string }{
 		{"an empty element at the end", `IFS=:; set -- 2 ''`, `${@}`, `2[2][]`, `1[2]`},
 		{"a list of two empty elements", `IFS=:; set -- '' ''`, `${@}`, `1[]`, `0[]`},

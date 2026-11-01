@@ -28,6 +28,7 @@ import "testing"
 // appears in it dozens of times — so a prompt that measured its own width
 // through `${(%%)…}` was measuring text this had already corrupted (#2048).
 func TestANestedExpansionIsReadInTheQuotingAroundIt(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name string
@@ -103,6 +104,7 @@ func TestANestedExpansionIsReadInTheQuotingAroundIt(t *testing.T) {
 // `printf '[%s]' "${u:-"${w:-"X{039}"}z"}"` — and these rows are here because
 // this is the shell whose prompt is made of the shape.
 func TestABracedExpansionInAQuotedRunKeepsItsOwnQuotes(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name string

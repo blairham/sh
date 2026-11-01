@@ -66,6 +66,7 @@ func tildeGroupRun(t *testing.T, src string, glob Answer) (string, string, int) 
 // The separator the group inserts is a pattern and the words around it are
 // not, which is one string that neither of the two ordinary answers can be.
 func TestTheTildeGroupFlagMarksTheSeparatorAndNotTheValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The manual's own example, asked from both sides. `?` is an
 		// element, so the alternation matches it; `q` is not, so a `?`
@@ -148,6 +149,7 @@ func TestTheTildeGroupFlagMarksTheSeparatorAndNotTheValue(t *testing.T) {
 // The mark reaches the flags written *behind* the tilde, and the count is
 // parity — the same reading `${~~name}` has, arrived at independently.
 func TestTheTildeGroupFlagMarksOnlyWhatFollowsIt(t *testing.T) {
+	t.Parallel()
 	// One arm, one flag group substituted into it, so the rows differ in
 	// nothing but the thing they are about.
 	arm := func(flags string) string {
@@ -185,6 +187,7 @@ func TestTheTildeGroupFlagMarksOnlyWhatFollowsIt(t *testing.T) {
 // by then — which is also what the same group without the tilde answers, and
 // what `(u)` answers for the same reason.
 func TestTheTildeGroupFlagJoinsAfterQuotingAndBeforeOrdering(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the quoting flag runs over the words", `b=('a b' c); printf "[%s]" "${(~qj.|.)b}"`, `[a\ b|c]`},
 		{"and the tilde may stand behind it", `b=('a b' c); printf "[%s]" "${(q~j.|.)b}"`, `[a\ b|c]`},
@@ -214,6 +217,7 @@ func TestTheTildeGroupFlagJoinsAfterQuotingAndBeforeOrdering(t *testing.T) {
 // test reading the status alone passes on an implementation that ignored the
 // flag — which is the failure this flag was found by in the first place.
 func TestTheTildeGroupFlagIsRefusedWhereItCannotBeCarried(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"an operator would read the join back",
@@ -320,6 +324,7 @@ func TestTheTildeGroupFlagIsRefusedWhereItCannotBeCarried(t *testing.T) {
 // mechanism of its own: with the axis at Yes the element's star is live too,
 // which the same line at No refuses.
 func TestTheTildeGroupFlagExemptsNothingWhereEverythingIsAPattern(t *testing.T) {
+	t.Parallel()
 	const src = `b=('a*' 'x'); case zabc in (z(${(~j.|.)b})) printf hit;; *) printf miss;; esac`
 	if out, _, _ := tildeGroupRun(t, src, Yes); out != "hit" {
 		t.Errorf("globbing results: output = %q, want %q", out, "hit")

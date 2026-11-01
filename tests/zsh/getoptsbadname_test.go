@@ -29,6 +29,7 @@ import (
 // shell are `<file>:read:N:` and `<file>:printf:N:` —
 // Diagnostics.BadNameRefusalHidesTheBuiltin, which `set -A` already reaches.
 func TestABadGetoptsNameEndsTheScript(t *testing.T) {
+	t.Parallel()
 	out, st, err := preset.Combined(t, dialecttest.Base{Dir: t.TempDir()},
 		"echo A\ngetopts x 1bad -x\necho \"B st=$?\"")
 	if err != nil {
@@ -57,6 +58,7 @@ func TestABadGetoptsNameEndsTheScript(t *testing.T) {
 // brackets. A probe that asked only the `o[0]` spelling would have read this
 // column as a refusal and set the axis the other way.
 func TestTheGetoptsNameOperandMayNameAnElementHere(t *testing.T) {
+	t.Parallel()
 	out, _, err := preset.Combined(t, dialecttest.Base{Dir: t.TempDir()},
 		`a=(p q r); getopts x 'a[2]' -x; echo "st=$? a=[${a[*]}]"`)
 	if err != nil {

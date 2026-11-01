@@ -11,6 +11,7 @@ import "testing"
 // at all, and every other spelling answers as usual (#5604). Measured
 // 2026-10-03 on zsh 5.9.2 under `-f`.
 func TestAnIndirectionOfAnUndeclaredNameRefusesSomeOperators(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`print ${(P)nope-x}; print after`, "zsh:1: bad substitution\n"},
 		{`(print "<${(P)nope?x}>"); echo st=$?`, "zsh:1: bad substitution\nst=1\n"},

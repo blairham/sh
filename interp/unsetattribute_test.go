@@ -31,6 +31,7 @@ func withEveryAttributeLetter(s *Semantics) {
 // The integer attribute, which is the one that changes what an assignment
 // *means*: with it `n=3+4` is seven and without it four characters.
 func TestUnsetTakesTheIntegerAttributeAway(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -i n=5
 unset n
 n=3+4
@@ -45,6 +46,7 @@ echo "[$n]"`, withEveryAttributeLetter, Diagnostics{})
 // asked, and a per-letter clearing that forgot one would still pass a test
 // that only asked about the other — which is how a letter goes unexercised.
 func TestUnsetTakesEachCaseAttributeAway(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"upper", "typeset -u u=abc\nunset u\nu=def\necho \"[$u]\"", "[def]\n"},
 		{"lower", "typeset -l l=ABC\nunset l\nl=GHI\necho \"[$l]\"", "[GHI]\n"},
@@ -62,6 +64,7 @@ func TestUnsetTakesEachCaseAttributeAway(t *testing.T) {
 // The unique attribute, whose absence an append is what proves: with the
 // letter on, the second `2` never lands.
 func TestUnsetTakesTheUniqueAttributeAway(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -U a=(1 1 2)
 unset a
 a=(3 3 4)
@@ -76,6 +79,7 @@ echo "[${a[@]}] n=${#a[@]}"`, withEveryAttributeLetter, Diagnostics{})
 // The hiding attribute, which changes nothing about a read and only a
 // listing — so the only way to see it go is to list the name again.
 func TestUnsetTakesTheHidingAttributeAway(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -H h=hid
 typeset -p h
 unset h
@@ -97,6 +101,7 @@ typeset -p h`, func(s *Semantics) {
 // name takes a scalar, so the assignment is an assignment and not a
 // non-numeric subscript.
 func TestUnsetTakesTheTableAttributeAway(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -A m
 m[k]=v
 unset m
@@ -114,6 +119,7 @@ echo "[$m] st=$?"`, withEveryAttributeLetter, Diagnostics{})
 // the same either way, so a test that asked `$e` would pass against a shell
 // that still hands the name to everything it starts.
 func TestUnsetTakesTheExportAttributeAwayFromAChildsView(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunEnv(t, `typeset -x e=1
 unset e
 e=2
@@ -135,6 +141,7 @@ env`, withEveryAttributeLetter, Diagnostics{}, testPATH())
 // presence a later *write* can prove — every other letter would read the
 // same whether it survived or not.
 func TestUnsetOfAnElementLeavesTheAttributeStanding(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -U u=(1 2 3)
 unset 'u[1]'
 u+=(3)
@@ -154,6 +161,7 @@ echo "n=${#u[@]}"`, func(s *Semantics) {
 // name keeps its value *and* everything it was declared to be. Nothing is
 // cleared behind a refusal.
 func TestUnsetOfAReadonlyNameClearsNothing(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -ri r=5
 unset r
 echo "st=$?"
@@ -179,6 +187,7 @@ typeset -p r`, func(s *Semantics) {
 // back, and nothing lifted it — every read went on working, since a stored
 // value answers ahead of the mark, and a listing was told the name is gone.
 func TestANameAssignedAfterAnUnsetListsAgain(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a scalar", "typeset -i q=5\nunset q\nq=7\ntypeset -p q", "declare -- q=\"7\"\n"},
 		{"a scalar with no attribute at all", "p=1\nunset p\np=zz\ntypeset -p p", "declare -- p=\"zz\"\n"},

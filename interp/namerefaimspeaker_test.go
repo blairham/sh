@@ -27,6 +27,7 @@ import (
 // “((: `1': not a valid identifier“ where the same write through a builtin
 // is “read: `1': …“ and a bare assignment is unprefixed.
 func TestABadNamerefAimInsideAnArithmeticCommandNamesTheConstruct(t *testing.T) {
+	t.Parallel()
 	out, _ := aimSpeakerRunWith(t, Diagnostics{ArithErrorNamesTheConstruct: true},
 		"typeset -n r\n"+`(( r = 1 )); echo "st=$?"`)
 	if !strings.Contains(out, "((: `1': not a valid identifier") {
@@ -47,6 +48,7 @@ func TestABadNamerefAimInsideAnArithmeticCommandNamesTheConstruct(t *testing.T) 
 // The descriptor a `{name}>` stores is refused under the **command word** the
 // redirection belongs to, and a compound command has none.
 func TestARefusedDescriptorStoreNamesTheCommandItsRedirectionBelongsTo(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"a builtin", "typeset -n s\ntrue {s}>/dev/null", "true: `"},
 		{"a command word", "typeset -n s\n/nonexistent/x {s}>/dev/null", "/nonexistent/x: `"},
@@ -70,6 +72,7 @@ func TestARefusedDescriptorStoreNamesTheCommandItsRedirectionBelongsTo(t *testin
 // The **second** sentence, which follows whatever the store itself said and is
 // written for any refused store rather than for one of them.
 func TestARefusedDescriptorStoreWritesTheSecondSentence(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{CannotAssignFdToVariable: "FD %[1]s"}
 	for _, c := range []struct{ name, src string }{
 		// `true` rather than `exec`, whose *own* redirection failure is
@@ -108,6 +111,7 @@ func TestARefusedDescriptorStoreWritesTheSecondSentence(t *testing.T) {
 // A store that *succeeds* still stores, which is what keeps the failure path
 // above a check rather than a wall.
 func TestADescriptorStoreThatSucceedsStillRunsTheCommand(t *testing.T) {
+	t.Parallel()
 	out, _ := aimSpeakerRun(t, `{ echo z; } {s}>/dev/null; echo "st=$? s=[$s]"`)
 	if !strings.Contains(out, "st=0 s=[10]") {
 		t.Errorf("out %q, want the descriptor stored and the command run", out)

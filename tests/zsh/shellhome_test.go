@@ -39,6 +39,7 @@ import (
 // reachable at all — under `zsh` there is no shell without a `HOME` for that
 // axis to answer about — so the pair is asserted together, per mode.
 func TestTheEmulationDecidesWhetherAnAbsentHomeIsFilledIn(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().StartupFillsAnAbsentHome; got != interp.Yes {
 		t.Errorf("the preset answers %v, want interp.Yes", got)
 	}
@@ -94,6 +95,7 @@ func TestTheEmulationDecidesWhetherAnAbsentHomeIsFilledIn(t *testing.T) {
 //
 // See interp.Semantics.CdRemembersAHomeThatWasUnset.
 func TestCdRemembersAHomeThatWasUnset(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().CdRemembersAHomeThatWasUnset; got != interp.Yes {
 		t.Errorf("the preset answers %v, want interp.Yes", got)
 	}

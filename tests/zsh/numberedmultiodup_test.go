@@ -10,6 +10,7 @@ import "testing"
 // does. Measured 2026-10-02 on zsh 5.9.2 under `-f` (#5155), the shape
 // E01options' "multios with nullexec" row is written in.
 func TestNumberedDuplicationsJoinUnderMultios(t *testing.T) {
+	t.Parallel()
 	cases := []struct{ src, out, errs string }{
 		{"exec 3>&1 3>&2; print -u 3 x", "x\n", "x\n"},
 		{"print -u 3 x 3>&1 3>&2", "x\n", "x\n"},

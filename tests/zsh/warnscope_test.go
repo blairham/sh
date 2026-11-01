@@ -18,6 +18,7 @@ import (
 // either was wired, and in both states the assignment itself behaves the same
 // way — which is the whole reason these are lints (#4553, #4554).
 func TestWarnCreateGlobalNamesTheParameterAndTheFunction(t *testing.T) {
+	t.Parallel()
 	const src = "setopt warncreateglobal\nf() { gv=1 }\nf\nprint \"gv=$gv\"\n"
 	out, st, errs := runZshSplit(t, t.TempDir(), src)
 	if st != 0 {
@@ -32,6 +33,7 @@ func TestWarnCreateGlobalNamesTheParameterAndTheFunction(t *testing.T) {
 }
 
 func TestWarnNestedVarNamesTheParameterAndTheFunction(t *testing.T) {
+	t.Parallel()
 	const src = "setopt warnnestedvar\n" +
 		"outer() { local lv=1; inner; print \"lv=$lv\" }\ninner() { lv=2 }\nouter\n"
 	out, st, errs := runZshSplit(t, t.TempDir(), src)
@@ -50,6 +52,7 @@ func TestWarnNestedVarNamesTheParameterAndTheFunction(t *testing.T) {
 // the options off the same two scripts say nothing at all and compute exactly
 // what they computed with them on.
 func TestTheScopeLintsSayNothingWithTheOptionsOff(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, out string }{
 		{
 			"warncreateglobal",
@@ -76,6 +79,7 @@ func TestTheScopeLintsSayNothingWithTheOptionsOff(t *testing.T) {
 // The rows that say what each lint is *about*, which is a forgotten `local`
 // rather than every write a function makes.
 func TestTheScopeLintsSpareADeliberateGlobal(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, body string }{
 		{"typeset -g", "typeset -g tg=1"},
 		{"local", "local lv=1"},
@@ -96,6 +100,7 @@ func TestTheScopeLintsSpareADeliberateGlobal(t *testing.T) {
 // assignment creates the name and the second reaches it in the scope the
 // first put it in.
 func TestTheTwoScopeLintsAreComplementary(t *testing.T) {
+	t.Parallel()
 	const src = "setopt warncreateglobal warnnestedvar\nq() { gq=1; gq=2 }\nq\n"
 	_, st, errs := runZshSplit(t, t.TempDir(), src)
 	want := "q: scalar parameter gq created globally in function q\n" +
@@ -109,6 +114,7 @@ func TestTheTwoScopeLintsAreComplementary(t *testing.T) {
 // assignment is a `scalar` one, and a subshell is a shell of its own rather
 // than a continuation of the call that made it.
 func TestTheScopeLintsWordAndScopeTheirRows(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"an array literal",
@@ -142,6 +148,7 @@ func TestTheScopeLintsWordAndScopeTheirRows(t *testing.T) {
 
 // And both states are reported back on the surfaces a script reads.
 func TestTheScopeLintOptionsAreReportedBack(t *testing.T) {
+	t.Parallel()
 	const src = `[[ -o warncreateglobal ]] && print a=on || print a=off
 setopt warncreateglobal warnnestedvar
 print b=${options[warncreateglobal]} c=${options[warnnestedvar]}`

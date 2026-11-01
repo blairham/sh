@@ -48,6 +48,7 @@ func withDirs(t *testing.T, src string, seed func(d1, d2 string), setup func(*Ru
 }
 
 func TestARunCommandIsRemembered(t *testing.T) {
+	t.Parallel()
 	out, st := withDirs(t, `zzc; hash -t zzc | sed "s|.*/||"`,
 		func(d1, _ string) { hashable(t, d1, "zzc", "echo V1") },
 		func(r *Runner) {
@@ -65,6 +66,7 @@ func TestARunCommandIsRemembered(t *testing.T) {
 // probe said `type` and `command -v` leave the table alone, and so they do —
 // in bash. zsh, ksh93 and dash all hash what they were only asked about.
 func TestALookupRemembersThePathOrDoesNot(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name      string
 		remembers Answer
@@ -92,6 +94,7 @@ func TestALookupRemembersThePathOrDoesNot(t *testing.T) {
 // And the unanimous half beside it, which is what keeps the two apart: a
 // command that *runs* is hashed whatever the axis above says.
 func TestARunHashesWhateverALookupDoes(t *testing.T) {
+	t.Parallel()
 	out, st := withDirs(t, `zzc; hash | sed "s|.*/||"`,
 		func(d1, _ string) { hashable(t, d1, "zzc", ":") },
 		func(r *Runner) {
@@ -105,6 +108,7 @@ func TestARunHashesWhateverALookupDoes(t *testing.T) {
 }
 
 func TestTheHitCountIsOfLookupsAndNotOfRuns(t *testing.T) {
+	t.Parallel()
 	// Two runs and a `type` are three lookups the table answered; the
 	// listing itself walks nothing and does not count.
 	out, st := withDirs(t, `zzc; zzc; type zzc >/dev/null; hash | sed -n 2p | cut -f1 | tr -d " "`,
@@ -118,6 +122,7 @@ func TestTheHitCountIsOfLookupsAndNotOfRuns(t *testing.T) {
 }
 
 func TestTheListingHasAShapePerDialect(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		form HashListingForm
@@ -139,6 +144,7 @@ func TestTheListingHasAShapePerDialect(t *testing.T) {
 }
 
 func TestAssigningPathEmptiesTheTable(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"assigned", `zzc; PATH=$PATH; hash`},
 		{"unset", `zzc; unset PATH; hash`},
@@ -157,6 +163,7 @@ func TestAssigningPathEmptiesTheTable(t *testing.T) {
 }
 
 func TestAStaleEntryIsTrustedOrSearchedAgain(t *testing.T) {
+	t.Parallel()
 	// Two copies on PATH, the first hashed and then removed. That is the
 	// only arrangement that tells the readings apart: with one copy both
 	// answers fail and only the wording moves.
@@ -198,6 +205,7 @@ func TestAStaleEntryIsTrustedOrSearchedAgain(t *testing.T) {
 // remembered file has gone; here it is still perfectly good, and a shell that
 // only looks again when its entry has gone stale answers `V2` twice.
 func TestAHashedPathMayNotShadowAnEarlierDirectory(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		shadows Answer
@@ -234,6 +242,7 @@ func TestAHashedPathMayNotShadowAnEarlierDirectory(t *testing.T) {
 // entry names the copy that is now in front, which is what `hash` prints in
 // the shell this was measured on.
 func TestASearchThatBeatsTheHashRepointsTheEntry(t *testing.T) {
+	t.Parallel()
 	out, st := withDirs(t, `zzc; cp d2/zzc d1/zzc; zzc; hash | sed "s|$PWD/||"`,
 		func(d1, d2 string) {
 			hashable(t, d2, "zzc", "echo V2")
@@ -251,6 +260,7 @@ func TestASearchThatBeatsTheHashRepointsTheEntry(t *testing.T) {
 }
 
 func TestATrustedStaleEntryIsReportedAsItsPath(t *testing.T) {
+	t.Parallel()
 	// bash names the *remembered path* rather than the name, which is the
 	// sentence a command word with a slash in it gets — and 127 with it.
 	out, st := withDirs(t, `zzc; rm d1/zzc; zzc; echo "st=$?"`,
@@ -272,6 +282,7 @@ func TestATrustedStaleEntryIsReportedAsItsPath(t *testing.T) {
 }
 
 func TestASubshellOwnsWhatItHashes(t *testing.T) {
+	t.Parallel()
 	out, st := withDirs(t, `( zzc ); hash`,
 		func(d1, _ string) { hashable(t, d1, "zzc", ":") },
 		func(r *Runner) {
@@ -283,6 +294,7 @@ func TestASubshellOwnsWhatItHashes(t *testing.T) {
 }
 
 func TestHashForgetsOneNameOrAllOfThem(t *testing.T) {
+	t.Parallel()
 	out, st := withDirs(t, `zzc; hash -d zzc; echo "d=$?"; hash; hash -d zzc 2>/dev/null; echo "again=$?"`,
 		func(d1, _ string) { hashable(t, d1, "zzc", ":") },
 		func(r *Runner) {
@@ -297,6 +309,7 @@ func TestHashForgetsOneNameOrAllOfThem(t *testing.T) {
 }
 
 func TestHashPutsAPathThereByHandAndReadsItBack(t *testing.T) {
+	t.Parallel()
 	out, st := run(
 		t,
 		`hash -p "$PWD/d1/zzp" zzq; echo "p=$?"; zzq; hash -t zzq | sed "s|.*/||"; hash -l | sed "s|/[^ ]*/||"`,
@@ -315,6 +328,7 @@ func TestHashPutsAPathThereByHandAndReadsItBack(t *testing.T) {
 }
 
 func TestHashReportsThePathOfOneNameOrOfSeveral(t *testing.T) {
+	t.Parallel()
 	out, st := withDirs(t, `zzc; zzd; hash -t zzc | sed "s|.*/||"; hash -t zzc zzd | sed "s|/.*/||"`,
 		func(d1, _ string) {
 			hashable(t, d1, "zzc", ":")
@@ -338,6 +352,7 @@ func TestHashReportsThePathOfOneNameOrOfSeveral(t *testing.T) {
 // four letter axes were read on the way in — every one of those commands was
 // refused at 2 to settle a letter none of them spelled.
 func TestHashAsksNothingWhereThePanelAgrees(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`hash`, `hash -r`, `hash nosuchcmd-xyz`} {
 		t.Run(src, func(t *testing.T) {
 			out, _ := run(t, src, func(r *Runner) {
@@ -357,6 +372,7 @@ func TestHashAsksNothingWhereThePanelAgrees(t *testing.T) {
 // is refused by a shell with no dialect, rather than being answered by a
 // default nobody chose.
 func TestHashAsksWhereTheLetterIsSpelled(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `hash -t zzc`, func(r *Runner) {
 		sem := CoreSemantics()
 		r.Semantics = &sem
@@ -370,6 +386,7 @@ func TestHashAsksWhereTheLetterIsSpelled(t *testing.T) {
 // two questions that used to be modeled as one: whether the *automatic*
 // hashing stops, and whether the builtin itself closes with it.
 func TestCommandTrackingCanStopTheTable(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name           string
 		obeys, refuses Answer
@@ -410,6 +427,7 @@ func TestCommandTrackingCanStopTheTable(t *testing.T) {
 // option from the other side: it stops what a *run* puts in the table and
 // leaves `hash name` doing exactly what it says.
 func TestAnExplicitHashStillWorksWhileTrackingIsOff(t *testing.T) {
+	t.Parallel()
 	out, st := withDirs(t, `set +h; zzc; hash zzc; echo "n=$?"; hash | sed "s|.*/||"`,
 		func(d1, _ string) { hashable(t, d1, "zzc", ":") },
 		func(r *Runner) {
@@ -429,6 +447,7 @@ func TestAnExplicitHashStillWorksWhileTrackingIsOff(t *testing.T) {
 // **every external command**, so an axis read there unconditionally would
 // refuse every command a Runner with no dialect tried to start.
 func TestHashingIsAskedAboutOnlyWhenTheOptionMoved(t *testing.T) {
+	t.Parallel()
 	out, st := withDirs(t, `zzc; echo "st=$?"`,
 		func(d1, _ string) { hashable(t, d1, "zzc", "echo V1") },
 		func(r *Runner) {
@@ -446,6 +465,7 @@ func TestHashingIsAskedAboutOnlyWhenTheOptionMoved(t *testing.T) {
 // would put the entry back, in either order, while `hash -l ls` with no `-t`
 // prints nothing at all — an operand without `-t` is a name to hash.
 func TestTheReusableFormIsAShapeAndNotASecondAction(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"l then t", `zzc; hash -l -t zzc`, "builtin hash -p zzc zzc\n"},
 		{"t then l", `zzc; hash -t -l zzc`, "builtin hash -p zzc zzc\n"},

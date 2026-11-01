@@ -11,6 +11,7 @@ import "testing"
 // gives every character one column (#5151, a chunk of D04parameter.ztst).
 // Measured 2026-10-03 on zsh 5.9.2 under `-f` in a UTF-8 locale.
 func TestTheWidthFlagPadsInColumns(t *testing.T) {
+	t.Parallel()
 	const setup = "LC_ALL=en_US.UTF-8; w=日本語\n"
 	for _, tc := range []struct{ src, want string }{
 		{`print -r -- "[${(mr:1:)w}]" "[${(mr:3:)w}]" "[${(mr:5:)w}]" "[${(mr:7:)w}]"`, "[日] [日本] [日本語] [日本語 ]\n"},

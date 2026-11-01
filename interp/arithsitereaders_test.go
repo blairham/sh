@@ -31,6 +31,7 @@ func leadingZeroSemantics(letDecimal, storedDecimal Answer) Semantics {
 // so every numeral in it goes decimal, where a value's *leading* numeral is
 // rewritten and the rest stays octal. `1+010` is the probe that parts them.
 func TestLetHasAReaderOfItsOwnForALeadingZero(t *testing.T) {
+	t.Parallel()
 	const src = `let "x=010"; let "y=1+010"; echo "[$x][$y][$(( 010 ))]"`
 	if out, st := run(
 		t,
@@ -50,6 +51,7 @@ func TestLetHasAReaderOfItsOwnForALeadingZero(t *testing.T) {
 // turned the octal rule off for good would silently move every expression
 // after it.
 func TestLetsReaderDoesNotOutliveTheBuiltin(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `let "x=010"; echo "[$x][$(( 010 ))]"`, withSem(leadingZeroSemantics(Yes, Yes)))
 	if strings.TrimSpace(out) != "[10][8]" || st != 0 {
 		t.Errorf("got %q (status %d), want [10][8] at 0", out, st)
@@ -60,6 +62,7 @@ func TestLetsReaderDoesNotOutliveTheBuiltin(t *testing.T) {
 // fourth answer — a bare operand goes decimal and a numeral standing later in
 // an expression does not, which is the leading-numeral rule exactly.
 func TestAWordComparisonOperandReadsALeadingZeroLikeAStoredValue(t *testing.T) {
+	t.Parallel()
 	const src = `[[ 010 -eq 10 ]] && echo ten; [[ 010 -eq 8 ]] && echo eight; ` +
 		`[[ 1+010 -eq 9 ]] && echo nine; [[ 1+010 -eq 11 ]] && echo eleven`
 	out, _ := runGrammar(t, src,
@@ -83,6 +86,7 @@ func TestAWordComparisonOperandReadsALeadingZeroLikeAStoredValue(t *testing.T) {
 // **Whether** it declares, which is the axis. *Which* attribute it declares
 // is the value's to say, and is the test at the foot of this file.
 func TestAnArithmeticAssignmentDeclaresANumberOnlyWhenItCreatesTheName(t *testing.T) {
+	t.Parallel()
 	declaring := func(a Answer) Semantics {
 		s := testSemantics()
 		s.ArithmeticAssignmentDeclaresANumber = a
@@ -113,6 +117,7 @@ func TestAnArithmeticAssignmentDeclaresANumberOnlyWhenItCreatesTheName(t *testin
 // cannot carry it. Asserted through what a later plain assignment reads back,
 // which is where the base is visible rather than only listed.
 func TestAnArithmeticDeclarationTakesItsBaseFromTheExpression(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.ArithmeticAssignmentDeclaresANumber = Yes
 	sem.IntegerBaseComesFromTheValueAssigned = Yes
@@ -154,6 +159,7 @@ func TestAnArithmeticDeclarationTakesItsBaseFromTheExpression(t *testing.T) {
 // are read with no point written anywhere, so "a point was written" makes
 // them both integers and only one is.
 func TestAnArithmeticDeclarationTakesItsTypeFromTheValue(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.ArithmeticAssignmentDeclaresANumber = Yes
 	for _, c := range []struct{ name, src, want string }{

@@ -60,6 +60,7 @@ func runHome(t *testing.T, r *Runner, src string) {
 // what says the seed is the axis and not the hook — both have a database to
 // ask and only one of them asks it.
 func TestAShellSeedsAHomeTheEnvironmentDidNotGiveIt(t *testing.T) {
+	t.Parallel()
 	t.Run("the column that seeds", func(t *testing.T) {
 		r, errs := homeRunner(t, func(s *Semantics) { s.StartupFillsAnAbsentHome = Yes })
 		r.SeedHomeDirectory()
@@ -136,6 +137,7 @@ func TestAShellSeedsAHomeTheEnvironmentDidNotGiveIt(t *testing.T) {
 // It remembers *that* it had one and not which, so the destination is empty
 // rather than the old value — the `pwd` row is what says so.
 func TestCdRemembersAHomeThatWasUnset(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		remembers  Answer
@@ -185,6 +187,7 @@ func TestCdRemembersAHomeThatWasUnset(t *testing.T) {
 // which is the row the reference gives and is what a flag written at the
 // `unset` gets right for free.
 func TestASubshellsHomeDoesNotReachTheParent(t *testing.T) {
+	t.Parallel()
 	r, errs := homeRunner(t, func(s *Semantics) {
 		s.CdWithoutHomeIsAnError = Yes
 		s.CdEmptyHomeIsAnError = No

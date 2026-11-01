@@ -35,6 +35,7 @@ func runDepend(t *testing.T, src string) (string, int) {
 // same `zmodload` leaves one name behind rather than two, so the extra line
 // is the declaration's doing and not the listing's.
 func TestADeclaredDependencyIsLoadedWithTheModule(t *testing.T) {
+	t.Parallel()
 	out, st := runDepend(t, "zmodload -d zsh/datetime zsh/stat\nzmodload zsh/datetime\nprint l=$?\nzmodload")
 	want := "l=0\nzsh/datetime\nzsh/main\nzsh/stat\n"
 	if out != want || st != 0 {
@@ -48,6 +49,7 @@ func TestADeclaredDependencyIsLoadedWithTheModule(t *testing.T) {
 
 // And transitively: a dependency's own dependency comes too.
 func TestADependencyOfADependencyIsLoadedAsWell(t *testing.T) {
+	t.Parallel()
 	out, st := runDepend(t, "zmodload -d zsh/datetime zsh/stat\nzmodload -d zsh/stat zsh/zpty\n"+
 		"zmodload zsh/datetime\nprint l=$?\nzmodload")
 	want := "l=0\nzsh/datetime\nzsh/main\nzsh/stat\nzsh/zpty\n"
@@ -60,6 +62,7 @@ func TestADependencyOfADependencyIsLoadedAsWell(t *testing.T) {
 // half worth asserting: the status alone would pass for a shell that
 // complained and loaded the module anyway.
 func TestAFailedDependencyLeavesTheModuleUnloaded(t *testing.T) {
+	t.Parallel()
 	out, st := runDepend(t, "zmodload -d zsh/datetime zsh/nosuchmod\nzmodload zsh/datetime\nprint l=$?\nzmodload")
 	want := "zsh:2: failed to load module `zsh/nosuchmod': not implemented yet\nl=1\nzsh/main\n"
 	if out != want || st != 0 {
@@ -73,6 +76,7 @@ func TestAFailedDependencyLeavesTheModuleUnloaded(t *testing.T) {
 // measured, and they are the pair that says the loading is a walk in
 // declaration order rather than a set.
 func TestTheDependencyWalkStopsAtTheFirstFailure(t *testing.T) {
+	t.Parallel()
 	out, _ := runDepend(t, "zmodload -d zsh/datetime zsh/nosuchmod zsh/stat\n"+
 		"zmodload zsh/datetime\nzmodload")
 	want := "zsh:2: failed to load module `zsh/nosuchmod': not implemented yet\nzsh/main\n"
@@ -88,6 +92,7 @@ func TestTheDependencyWalkStopsAtTheFirstFailure(t *testing.T) {
 
 // A dependency already loaded is stepped over rather than loaded again.
 func TestADependencyAlreadyLoadedIsNotLoadedTwice(t *testing.T) {
+	t.Parallel()
 	out, st := runDepend(t, "zmodload zsh/stat\nzmodload -d zsh/datetime zsh/stat\n"+
 		"zmodload zsh/datetime\nprint l=$?\nzmodload")
 	want := "l=0\nzsh/datetime\nzsh/main\nzsh/stat\n"
@@ -105,6 +110,7 @@ func TestADependencyAlreadyLoadedIsNotLoadedTwice(t *testing.T) {
 // The `print never` is the assertion that matters: a shell that reported and
 // carried on would print it.
 func TestACircularDependencyEndsTheShell(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"a module depending on itself",
@@ -134,6 +140,7 @@ func TestACircularDependencyEndsTheShell(t *testing.T) {
 // Without these rows a change that ran the walk from every letter would pass
 // everything above.
 func TestTheDependencyWalkIsOnlyTheLoadPath(t *testing.T) {
+	t.Parallel()
 	out, st := runDepend(t, "zmodload -d zsh/datetime zsh/stat\nzmodload -e zsh/datetime\nprint e=$?\nzmodload")
 	if want := "e=1\nzsh/main\n"; out != want || st != 0 {
 		t.Errorf("-e = %q (status %d), want %q", out, st, want)
@@ -155,6 +162,7 @@ func TestTheDependencyWalkIsOnlyTheLoadPath(t *testing.T) {
 // keeps the two apart — a change that adopted the table would have to come
 // and edit it.
 func TestTheShippedDependencyTableIsNotAdopted(t *testing.T) {
+	t.Parallel()
 	out, st := runDepend(t, "zmodload -d\nprint d=$?\nzmodload zsh/zutil\nzmodload")
 	want := "d=0\nzsh/main\nzsh/zutil\n"
 	if out != want || st != 0 {

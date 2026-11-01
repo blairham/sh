@@ -37,6 +37,7 @@ func starStarDir(t *testing.T) string {
 // deepest row is the control that separates "zero levels missing" from "only
 // one level reached" — a component read as `*` answers `cx/ax` too.
 func TestStarStarSlashCrossesLevelsWithNoOption(t *testing.T) {
+	t.Parallel()
 	dir := starStarDir(t)
 	for _, tc := range []struct{ src, want string }{
 		{`print -r -- **/a*`, "ax cx/ax cx/dx/ax"},
@@ -63,6 +64,7 @@ func TestStarStarSlashCrossesLevelsWithNoOption(t *testing.T) {
 // crossing is two questions in the substrate rather than one flag: turning
 // `**/` on for this shell must not turn `**` into a recursive listing.
 func TestBareStarStarIsAnOrdinaryPattern(t *testing.T) {
+	t.Parallel()
 	dir := starStarDir(t)
 	for _, tc := range []struct{ src, want string }{
 		{`print -r -- **`, "ax bx cx"},
@@ -102,6 +104,7 @@ func TestBareStarStarIsAnOrdinaryPattern(t *testing.T) {
 // links`. It is not implemented, and the row below says so by measuring what
 // `**/` does instead.
 func TestStarStarSlashListsTheLevelsItWalked(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "r"), 0o750); err != nil {
 		t.Fatal(err)

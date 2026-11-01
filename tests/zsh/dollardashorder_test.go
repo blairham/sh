@@ -58,6 +58,7 @@ import (
 // The last row is what settles it — all ten digits in order, ahead of `X` and
 // `f` — and the middle one shows a letter taken back out leaving no gap.
 func TestDollarDashLetterOrder(t *testing.T) {
+	t.Parallel()
 	want := "0123456789" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ" + "abcdefghijklmnopqrstuvwxyz"
 	if got := zsh.Semantics().DollarDashLetterOrder; got != want {
 		t.Errorf("DollarDashLetterOrder = %q, want %q", got, want)
@@ -76,6 +77,7 @@ func TestDollarDashLetterOrder(t *testing.T) {
 //	set +X                    569
 //	set -T -Q -D -u -e …      569DGMQTXehpuwy
 func TestTheLettersThisShellSpellsItsOwnWay(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the letter writes the option", `set -T; [[ -o cdablevars ]]; echo "o=$? [$-]"`, "o=0 [569TX]"},
 		{"the name brings the letter", `set -o cdablevars; echo "[$-]"`, "[569TX]"},
@@ -95,6 +97,7 @@ func TestTheLettersThisShellSpellsItsOwnWay(t *testing.T) {
 
 // And the order as this shell writes it, against the startup letters `569X`.
 func TestDollarDashIsWrittenInThatOrder(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`set -f; set -u; set -e; echo "[$-]"`, "[569Xefu]"},
 		{`set -C; echo "[$-]"`, "[569CX]"},
@@ -129,6 +132,7 @@ func TestDollarDashIsWrittenInThatOrder(t *testing.T) {
 // the letter withdraws when the name does, on a route that never wrote it
 // (#1542). Globbing is untouched throughout, which is the row below.
 func TestTheFLetterStandsForTheStartupFiles(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the letter writes the name", `set -f; [[ -o norcs ]]; echo "rcs=$? [$-]"`, "rcs=0 [569Xf]"},
 		{"and takes it back", `set -f; set +f; [[ -o norcs ]]; echo "rcs=$? [$-]"`, "rcs=1 [569X]"},
@@ -151,6 +155,7 @@ func TestTheFLetterStandsForTheStartupFiles(t *testing.T) {
 // with `f` in `$-`, a pattern still matches. Five of the panel answer the
 // pattern back unexpanded here.
 func TestTheFLetterLeavesGlobbingAlone(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "zz.txt"), nil, 0o600); err != nil {
 		t.Fatal(err)

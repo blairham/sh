@@ -14,6 +14,7 @@ import (
 //
 // Every row is a measurement on zsh 5.9.2 (Homebrew, arm64), 2026-09-10.
 func TestThePatternQuotingFlag(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the pattern metacharacters are backslashed", `v='a b*c?d[e]'; printf "[%s]" "${(b)v}"`, `[a b\*c\?d\[e\]]`},
 		// The discriminating row against `(q)`, and the reason the two are
@@ -47,6 +48,7 @@ func TestThePatternQuotingFlag(t *testing.T) {
 // position mattering because `(q)`'s own table has two entries that are
 // special only at a value's start, and this one has none.
 func TestWhatThePatternQuotingFlagEscapes(t *testing.T) {
+	t.Parallel()
 	// Measured on zsh 5.9.2, 2026-09-10, over every byte from 1 to 127.
 	const escaped = "#()*<>?[\\]^|~"
 	// Everything else the printable range holds, plus the three whitespace
@@ -95,6 +97,7 @@ func dollarSingle(s string) string {
 //
 // The compositions are the measurements; the placement is what they fix.
 func TestWhereThePatternQuoteStepSits(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// An array is elementwise where the fields survive, and the join has
 		// already run where they do not — so the separator the group
@@ -145,6 +148,7 @@ func TestWhereThePatternQuoteStepSits(t *testing.T) {
 // live. Carrying it would hold the join back past the escape and leave the
 // bar live, which is the opposite answer.
 func TestTheMarkedSeparatorBesideThePatternQuoteFlag(t *testing.T) {
+	t.Parallel()
 	const src = `a=("x*y" "p"); printf "[%s]" "${(~bj.|.)a}"`
 	const want = "sh: ${(~bj.|.)a}: the (~) expansion flag is not implemented beside the (b) flag\n"
 	out, st := runGrammar(t, src, ordering, nil)

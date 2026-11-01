@@ -43,6 +43,7 @@ func runTry(t *testing.T, src string) (string, int) {
 // "whatever ran last wins", because a shell that got it wrong and a shell that
 // got it right differ only on the other diagonal.
 func TestACleanupHalfRunsAndDoesNotReplaceTheStatus(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, want string
 		status    int
@@ -82,6 +83,7 @@ func TestACleanupHalfRunsAndDoesNotReplaceTheStatus(t *testing.T) {
 // this row is what says it needs no clearing rather than that it was
 // forgotten.
 func TestAFailedExpansionInTheTryHalfStillRunsTheCleanup(t *testing.T) {
+	t.Parallel()
 	out, _ := runTry(t, `f(){ { for i in a $((1/0)) b; do echo $i; done; } always { echo "A$((1+1))"; }; }; f`)
 	// The complaint's wording is the dialect's; what is asserted here is that
 	// the loop stopped before its body and the cleanup half computed 1+1.
@@ -94,6 +96,7 @@ func TestAFailedExpansionInTheTryHalfStillRunsTheCleanup(t *testing.T) {
 // because there is nowhere else to write one: a redirection after the first
 // half ends it and makes the keyword a syntax error.
 func TestARedirectionOnATryAlwaysBlockReachesBothHalves(t *testing.T) {
+	t.Parallel()
 	out, st := runTry(t, `{ echo t; } always { echo a; } > /dev/null; echo done`)
 	if out != "done" || st != 0 {
 		t.Errorf("said %q status %d, want only `done`: the redirection reached neither half", out, st)
@@ -106,6 +109,7 @@ func TestARedirectionOnATryAlwaysBlockReachesBothHalves(t *testing.T) {
 // The `NOT-REACHED` after the construct is the load-bearing half: without it,
 // a shell that swallowed the return entirely would print the same two lines.
 func TestAReturnOutOfTheFirstHalfRunsTheSecondAndStillReturns(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, want string
 		status    int
@@ -140,6 +144,7 @@ func TestAReturnOutOfTheFirstHalfRunsTheSecondAndStillReturns(t *testing.T) {
 // shells end the script with the status given and bash refuses and carries on.
 // Answered the first way, which is the shell that has this construct.
 func TestATopLevelReturnSkipsTheCleanupHalf(t *testing.T) {
+	t.Parallel()
 	ends := testSemantics()
 	ends.ReturnOutsideAFunctionIsRefused = No
 	for _, tc := range []struct {
@@ -170,6 +175,7 @@ func TestATopLevelReturnSkipsTheCleanupHalf(t *testing.T) {
 // a top-level cleanup half run, and a lexical `exit` does not stop one inside a
 // function body from running.
 func TestAnExitRunsTheCleanupHalvesItUnwindsThrough(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, want string
 		status    int
@@ -219,6 +225,7 @@ func TestAnExitRunsTheCleanupHalvesItUnwindsThrough(t *testing.T) {
 // here, and predicts one pass for `break` in the first half against `continue`
 // in the second — which runs all three.
 func TestBreakAndContinueReachTheCleanupHalf(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, want string
 	}{
@@ -279,6 +286,7 @@ func TestBreakAndContinueReachTheCleanupHalf(t *testing.T) {
 // both simpler readings, since taking either half whole makes them a `break 2`
 // and stops both loops.
 func TestBothHalvesAskingALoopForSomethingTakeTheSecondHalvesCount(t *testing.T) {
+	t.Parallel()
 	const nested = `for i in 1 2; do for j in a b; do { echo t$i$j; %s; } always { echo A$i$j; %s; }; ` +
 		`echo body; done; echo inner$i; done; echo after`
 	for _, tc := range []struct{ try, always, want string }{
@@ -311,6 +319,7 @@ func TestBothHalvesAskingALoopForSomethingTakeTheSecondHalvesCount(t *testing.T)
 // these rows to be reachable at all, which is why the semantics vector is set
 // rather than left at the core's.
 func TestAnErrorConditionRunsTheCleanupHalfAndSurvivesIt(t *testing.T) {
+	t.Parallel()
 	fatal := testSemantics()
 	fatal.ReadonlyReassignmentFatal = Yes
 	// The status a reported-and-abandoned error leaves is an axis of its own,
@@ -347,6 +356,7 @@ func TestAnErrorConditionRunsTheCleanupHalfAndSurvivesIt(t *testing.T) {
 // cleared, and the first half's is re-raised behind it. The rows above are the
 // fatal shape of exactly these four claims.
 func TestASurvivableErrorRunsTheCleanupHalfTheSameWay(t *testing.T) {
+	t.Parallel()
 	abandons := testSemantics()
 	abandons.ReadonlyReassignmentFatal = No
 	for _, tc := range []struct {
@@ -395,6 +405,7 @@ func TestASurvivableErrorRunsTheCleanupHalfTheSameWay(t *testing.T) {
 // The `; echo SAME-LINE` is what tells the two apart. A give-up takes the
 // rest of the *line* with it; a `return` only leaves the function.
 func TestASurvivableErrorOutranksACleanupHalvesReturn(t *testing.T) {
+	t.Parallel()
 	abandons := testSemantics()
 	abandons.ReadonlyReassignmentFatal = No
 	src := `f(){ { readonly r=1; r=2; } always { return 4; }; }; f; echo SAME-LINE` + "\n" + `echo NEXT-LINE`
@@ -431,6 +442,7 @@ func stripComplaint(out string) string {
 // The top-level rows are the reason a probe has to enter a function: there
 // both answers agree, so a test written outside one grades nothing.
 func TestErrexitFiringSkipsACleanupHalfWhereAnExitRunsIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, want string
 		status    int
@@ -497,6 +509,7 @@ func runTryStatus(t *testing.T, src string) (string, int) {
 // What the pair reads, which is a question about *error conditions* and not
 // about the status.
 func TestTheAlwaysBlockParametersReportAnErrorCondition(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, want string
 		status    int
@@ -549,6 +562,7 @@ func TestTheAlwaysBlockParametersReportAnErrorCondition(t *testing.T) {
 // Writing the pair is how a script recovers from an error condition and how it
 // raises one, which is the half the parameters exist for.
 func TestWritingTheAlwaysBlockParametersDecidesTheOutcome(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, want string
 		status    int

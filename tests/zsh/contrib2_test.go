@@ -94,6 +94,7 @@ func listing(t *testing.T, dir string) []string {
 var listingEntry = regexp.MustCompile(`(?:^| )\./`)
 
 func TestZmvAnswersWhatZshAnswers(t *testing.T) {
+	t.Parallel()
 	for _, row := range contribRows(t, "zmv.tsv") {
 		t.Run(row[1], func(t *testing.T) {
 			dir := t.TempDir()
@@ -129,6 +130,7 @@ func TestZmvAnswersWhatZshAnswers(t *testing.T) {
 }
 
 func TestZargsAnswersWhatZshAnswers(t *testing.T) {
+	t.Parallel()
 	for _, row := range contribRows(t, "zargs.tsv") {
 		t.Run(row[0], func(t *testing.T) {
 			out, _ := runZshOnPath(
@@ -149,6 +151,7 @@ func TestZargsAnswersWhatZshAnswers(t *testing.T) {
 // removed and TERM=xterm, from a script file with standard input on the null
 // device — so the question between two meanings finds no terminal to ask on.
 func TestRunHelpAnswersWhatZshAnswers(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "bin")
 	help := filepath.Join(dir, "help")

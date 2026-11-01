@@ -14,6 +14,7 @@ import (
 // TestEnableHasNoDashN, which is the whole reason the core's `enable` could
 // not be reused: `-n` is what it means there and a bad option here.
 func TestEnableHasNoDashN(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "enable -n cd\n")
 	if !strings.Contains(out, "bad option: -n") {
 		t.Errorf("output = %q, want the option refused", out)
@@ -33,6 +34,7 @@ func TestEnableHasNoDashN(t *testing.T) {
 // the same builtin comes back, which is what makes this a pair rather than
 // an unregistration.
 func TestDisableSwitchesABuiltinOffAndEnableBringsItBack(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "disable cd\ndisable\n")
 	if strings.TrimSpace(out) != "cd" {
 		t.Errorf("output = %q, want the disabled name listed", out)
@@ -50,6 +52,7 @@ func TestDisableSwitchesABuiltinOffAndEnableBringsItBack(t *testing.T) {
 // TestAListingIsBareNames, one per line, with no `enable ` in front of them —
 // which is the other dialect's shape and would be wrong here.
 func TestAListingIsBareNames(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "enable\n")
 	if strings.Contains(out, "enable ") {
 		t.Errorf("output = %q, want bare names", out)
@@ -63,6 +66,7 @@ func TestAListingIsBareNames(t *testing.T) {
 // rather than calling it a command — which is what it is called in the
 // dialects that have no such builtin.
 func TestANameThatIsNotABuiltinIsAHashTableElement(t *testing.T) {
+	t.Parallel()
 	for _, word := range []string{"enable", "disable"} {
 		out, st := runZsh(t, t.TempDir(), word+" nosuchthing\n")
 		if !strings.Contains(out, "no such hash table element: nosuchthing") {
@@ -92,6 +96,7 @@ func TestANameThatIsNotABuiltinIsAHashTableElement(t *testing.T) {
 // So has `-r`, for the declaration words of the reserved-word table; the rest
 // of that table is refused by name — see TestDisableRSwitchesADeclarationWord.
 func TestATableThisShellDoesNotKeepIsSaidOutLoud(t *testing.T) {
+	t.Parallel()
 	for _, opt := range []string{"-a", "-m", "-s"} {
 		out, st := runZsh(t, t.TempDir(), "disable "+opt+" foo\n")
 		if !strings.Contains(out, "not implemented yet") {

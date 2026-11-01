@@ -19,6 +19,7 @@ import (
 // row does not depend on the machine's PATH; a stored association is the
 // control that worked before.
 func TestCompaddKeysReadAProducedAssociation(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, setup, table, want string }{
 		{"functions", "gaone() { :; }; gatwo() { :; }\n", "functions", "gaone gatwo"},
 		{"aliases", "alias gaone=x gatwo=y\n", "aliases", "gaone gatwo"},

@@ -55,6 +55,7 @@ func runSeam(t *testing.T, r *Runner, src string) {
 // not an array at all — and a builtin whose parse matched nothing has to leave
 // the first.
 func TestSetAssocDeclaresTheNameEvenWithNothingInIt(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.Register("fill", func(rr *Runner, _ context.Context, args []string) int {
@@ -79,6 +80,7 @@ func TestSetAssocDeclaresTheNameEvenWithNothingInIt(t *testing.T) {
 // the three characters here and would be the element at 2 in an indexed array.
 // This is the assertion that a seam reaching into the map directly would fail.
 func TestSetAssocGivesTheNameTheAssociativeAttribute(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.Register("fill", func(rr *Runner, _ context.Context, _ []string) int {
@@ -97,6 +99,7 @@ func TestSetAssocGivesTheNameTheAssociativeAttribute(t *testing.T) {
 // what to write, because a failure after that point would leave half a write
 // behind.
 func TestGetAssocIsACopyAndNotTheShellsOwnTable(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.Register("meddle", func(rr *Runner, _ context.Context, _ []string) int {
@@ -114,6 +117,7 @@ func TestGetAssocIsACopyAndNotTheShellsOwnTable(t *testing.T) {
 // ArithValue is the shell's own arithmetic and not a number parse: `1+1` is 2
 // and a bare name is the variable's value, an unset one being zero.
 func TestArithValueIsTheShellsOwnArithmetic(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.Register("value", func(rr *Runner, _ context.Context, args []string) int {
@@ -134,6 +138,7 @@ func TestArithValueIsTheShellsOwnArithmetic(t *testing.T) {
 // the script, so nothing after it runs and the caller is told before it writes
 // anything.
 func TestArithValueReportsAndStopsWhenAnExpressionWillNotEvaluate(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.Register("value", func(rr *Runner, _ context.Context, args []string) int {
@@ -166,6 +171,7 @@ func boolText(b bool) string {
 // is the point of writing it as read-mutate-read rather than as
 // mutate-then-read (#1060).
 func TestAProducedAssociationIsAViewAndNotASnapshot(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	table := map[string]string{"a": "1"}
@@ -199,6 +205,7 @@ printf '[%s][%s]' "${view[a]}" "${view[b]}"`)
 // shadow the producer for good — with nothing about the name's shape changing
 // and no diagnostic written. The writer is where an assignment goes instead.
 func TestAWriteToAProducedAssociationCannotShadowIt(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	table := map[string]string{"a": "1"}
@@ -237,6 +244,7 @@ printf '[%s][%s]' "${view[a]}" "${view[b]}"`)
 // producer, which is the same shadowing by a route that writes no element at
 // all.
 func TestDeclaringAProducedAssociationDoesNotShadowIt(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.SetDynamicAssoc("view", func(*Runner) AssocArray {
@@ -252,6 +260,7 @@ func TestDeclaringAProducedAssociationDoesNotShadowIt(t *testing.T) {
 // rules: the **first** PATH entry holding a name is the one it resolves to,
 // and a file that could not be run is not a command at all.
 func TestCommandsOnPathFollowsTheLookupsOwnRules(t *testing.T) {
+	t.Parallel()
 	first, second := t.TempDir(), t.TempDir()
 	// The same name in both, so the answer says which entry won.
 	for _, dir := range []string{first, second} {
@@ -287,6 +296,7 @@ func TestCommandsOnPathFollowsTheLookupsOwnRules(t *testing.T) {
 // reading the table, changing it and writing it back must not move the shell's
 // state halfway through deciding what to write.
 func TestAliasTableIsACopy(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.Register("meddle", func(rr *Runner, _ context.Context, _ []string) int {
@@ -311,6 +321,7 @@ func TestAliasTableIsACopy(t *testing.T) {
 // differently — and a producer that has simply not been given anything yet has
 // not stopped existing.
 func TestAProducerWithNothingToSayStillHasATable(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.SetDynamicAssoc("empty", func(*Runner) AssocArray { return nil })
@@ -333,6 +344,7 @@ func TestAProducerWithNothingToSayStillHasATable(t *testing.T) {
 // afterwards. That is the same answer `unset -f` gives it (#1082), reached
 // through the same predicate.
 func TestRemoveFunctionWillNotTakeAPreludeFunction(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.SourcingPrelude(true)
@@ -371,6 +383,7 @@ func TestRemoveFunctionWillNotTakeAPreludeFunction(t *testing.T) {
 // sentence and carried on would print the second `printf` and pass a test
 // that only compared the diagnostic.
 func TestAKeyAProducedAssociationDoesNotAnswerRefusesByName(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.SetDynamicAssoc("partial", func(*Runner) AssocArray { return AssocArray{"here": Scalar("yes")} })
@@ -398,6 +411,7 @@ printf '[%s]' "after"`)
 // shell would be worse than no guard: every caller that checks before reading
 // would stop at the check.
 func TestAskingAboutAKeyAProducedAssociationLacksIsAnswered(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.SetDynamicAssoc("partial", func(*Runner) AssocArray { return AssocArray{"here": Scalar("yes")} })
@@ -431,6 +445,7 @@ func TestAskingAboutAKeyAProducedAssociationLacksIsAnswered(t *testing.T) {
 // each of these could have reached it with `@`, `*` or the empty string
 // standing in for one.
 func TestTheWholeOfAPartialAssociationIsStillReadable(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.SetDynamicAssoc("partial", func(*Runner) AssocArray { return AssocArray{"here": Scalar("yes")} })
@@ -452,6 +467,7 @@ func TestTheWholeOfAPartialAssociationIsStillReadable(t *testing.T) {
 // the reason, so a refusal that fired for *every* produced association would
 // pass all of them.
 func TestAProducedAssociationWithoutTheReasonStillReadsEmpty(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.SetDynamicAssoc("plain", func(*Runner) AssocArray { return AssocArray{"here": Scalar("yes")} })
@@ -502,6 +518,7 @@ func TestAKeyedProducerAnswersWithoutBuildingTheTable(t *testing.T) {
 // because which one a read gets is what decides whether the default applies.
 // A keyed producer saying not-found is the table having no such key.
 func TestAKeyedProducerSayingNotFoundIsAnAbsentElement(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.SetDynamicAssoc("view", func(*Runner) AssocArray { return AssocArray{"here": Scalar("")} })
@@ -554,6 +571,7 @@ func TestTheWholeArraySpellingsStillBuildTheTable(t *testing.T) {
 // where the key is looked up must not move where it is refused — see
 // absentparam.go.
 func TestAKeyedProducerStillRefusesAnAbsentElementByName(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.SetDynamicAssoc("view", func(*Runner) AssocArray { return AssocArray{"here": Scalar("yes")} })
@@ -583,6 +601,7 @@ func TestAKeyedProducerStillRefusesAnAbsentElementByName(t *testing.T) {
 // keyed producer that answered anyway would leave `${m[k]}` reading past a
 // write that `${(k)m}` could still see.
 func TestAStoredTableShadowsTheKeyedProducerToo(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.SetDynamicAssoc("view", func(*Runner) AssocArray { return AssocArray{"a": Scalar("produced")} })
@@ -685,6 +704,7 @@ ask nosuchname a`)
 // replace: one yields the assigned elements, the other walks the whole
 // extent and pads the gap with empties.
 func TestASparseArrayReadsTheSameUnderTheDenseShortcut(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		sparse Answer
@@ -710,6 +730,7 @@ func TestASparseArrayReadsTheSameUnderTheDenseShortcut(t *testing.T) {
 
 // And a dense one is unchanged, which is the case the shortcut does claim.
 func TestADenseArrayReadsTheSameUnderTheDenseShortcut(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	runSeam(t, r, "a=(x y z)\nprintf '[%s]' \"${a[@]}\"")
@@ -726,6 +747,7 @@ func TestADenseArrayReadsTheSameUnderTheDenseShortcut(t *testing.T) {
 // one that landed in a stored table: a stored table would hand the literal's
 // own bytes straight back.
 func TestAWholeTableLiteralGoesThroughTheWriter(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	table := map[string]string{"a": "1"}
@@ -748,6 +770,7 @@ printf '[%s][%s][%s]' "${view[a]}" "${view[b]}" "${view[c]}"`)
 // everything, or nothing, would pass one of them and fail the other, where
 // either alone would read as correct.
 func TestAnEmptiedProducedAssociationLosesItsOldKeys(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	table := map[string]string{"a": "1"}
@@ -773,6 +796,7 @@ printf '[%s]' "${view[b]}"`)
 // nowhere for the elements to go, and a stored table left in front of the
 // producer is the shadowing the two tests above are about.
 func TestAWholeTableLiteralIsRefusedWithoutAWriter(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.SetDynamicAssoc("view", func(*Runner) AssocArray { return AssocArray{"a": Scalar("1")} })

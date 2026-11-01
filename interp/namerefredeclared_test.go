@@ -46,6 +46,7 @@ func runNamerefRedeclared(t *testing.T, src string) (string, int) {
 }
 
 func TestADeclarationThroughAReferenceMakesTheTargetsBinding(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the value is the target's, and goes away with the call",
@@ -101,6 +102,7 @@ echo "out=[${g-U}]"`,
 // again, and a word that makes no local binding is not a redeclaration at
 // all.
 func TestTheReferenceIsStillFollowedWhereNoBindingIsMade(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a plain assignment goes through the reference",
@@ -143,6 +145,7 @@ echo "out=[${g-U}]"`,
 // attribute, and the row is here so that a change to either mechanism cannot
 // take the other's answer with it.
 func TestACalleesDeclarationOverACallersReferenceIsTheFreshCell(t *testing.T) {
+	t.Parallel()
 	out, st := runNamerefRedeclared(t, `outer() { local -n v=g; inner; echo "outer=[${v-U}]"; }
 inner() { local v=4; echo "inner=[${v-U}]"; }
 outer
@@ -156,6 +159,7 @@ echo "out=[${g-U}]"`)
 // target rather than replacing it: a listing that stopped writing the row
 // would be the same size of error in the other direction.
 func TestTheRedeclaredReferenceIsStillListed(t *testing.T) {
+	t.Parallel()
 	out, _ := runNamerefRedeclared(t, `g=SEED
 f() { local -n v=g; local v=4; typeset -p v; }
 f`)

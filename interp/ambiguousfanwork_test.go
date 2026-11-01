@@ -48,6 +48,7 @@ func refusingFanSemantics(t *testing.T) func(*Runner) {
 }
 
 func TestARefusedFanRunsTheWordTwicePerName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		target string
 		runs   int
@@ -72,6 +73,7 @@ func TestARefusedFanRunsTheWordTwicePerName(t *testing.T) {
 // walk is made unconditionally: one name is not refused, so the target opens
 // and the word runs once.
 func TestAFanOfOneNameIsNotRefusedAndRunsOnce(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, ": > {x}"+tickSubst+"\n", refusingFanSemantics(t))
 	if n := countTicks(out); n != 1 || st != 0 {
 		t.Errorf("out = %q status %d: %d runs, want 1 at status 0", out, st, n)
@@ -85,6 +87,7 @@ func TestAFanOfOneNameIsNotRefusedAndRunsOnce(t *testing.T) {
 // failed expansion is **one** sentence, and a second walk would write the same
 // complaint twice.
 func TestARefusedFanWithAFailedValueIsOneSentence(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, ": > {x,y}$((1/0))\n", refusingFanSemantics(t))
 	if n := strings.Count(out, "division"); n != 1 {
 		t.Errorf("out = %q: %d sentences, want 1", out, n)
@@ -98,6 +101,7 @@ func TestARefusedFanWithAFailedValueIsOneSentence(t *testing.T) {
 // opens the files rather than refusing them, and walks the fan once — so the
 // second walk is the refusal's and not the fan's.
 func TestAFanTheReadingAcceptsIsWalkedOnce(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, ": > {x,y}"+tickSubst+"\n", fanSemantics(t, Yes))
 	if n := countTicks(out); n != 2 || st != 0 {
 		t.Errorf("out = %q status %d: %d runs, want 2 at status 0", out, st, n)

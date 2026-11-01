@@ -15,6 +15,7 @@ import (
 // over a typed name whose value evaluates puts no question, so a vector that
 // answers neither runs it.
 func TestATypedValueThatEvaluatesAsksNothing(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `typeset -i n; read n <<E
 3+4
 E
@@ -46,6 +47,7 @@ echo "[$n]"; getopts x n -x; echo "[$n]"`, func(r *Runner) {
 // that will not evaluate reaches each axis, and each answer does what it
 // says.
 func TestATypedValueFailureIsAskedWhereItHappens(t *testing.T) {
+	t.Parallel()
 	const readSrc = "typeset -i n=5; read n m <<E\n1+ b\nE\necho \"[$?] [$n] [$m]\"; echo after"
 	for _, tc := range []struct {
 		name   string

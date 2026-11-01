@@ -29,6 +29,7 @@ func replacementQuoting(a Answer) func(*Runner) {
 // backslash and a leading tilde are the three; the rows after them are the
 // ones both readings answer alike, which is why they never reach the axis.
 func TestAQuotedReplacementOperandAnswersByAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, word, enclosed string }{
 		{
 			"a parameter between two quotes",
@@ -70,6 +71,7 @@ func TestAQuotedReplacementOperandAnswersByAxis(t *testing.T) {
 // answer at all, every one of these still produces its value. An axis reached
 // on the common path would refuse them by name.
 func TestAReplacementOperandThatCannotDifferNeverAsks(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an ordinary replacement", `s=xay; printf "[%s]" "${s/a/b}"`, `[xby]`},
 		{"a parameter in one", `s=xay; v=VAL; printf "[%s]" "${s/a/$v}"`, `[xVALy]`},
@@ -100,6 +102,7 @@ func TestAReplacementOperandThatCannotDifferNeverAsks(t *testing.T) {
 // answer this way too, and a refusal shaped differently from its neighbors
 // would be a second convention rather than a stricter one.
 func TestAQuotedReplacementOperandUnansweredIsRefused(t *testing.T) {
+	t.Parallel()
 	src := `s=xay; printf "[%s]" "${s/a/'q'}"; echo after`
 	out, _ := run(t, src, replacementQuoting(Unspecified))
 	if !strings.Contains(out, "a quote in a quoted replacement operand") ||
@@ -115,6 +118,7 @@ func TestAQuotedReplacementOperandUnansweredIsRefused(t *testing.T) {
 // two spellings of one rule is how a fix comes undone in the branch nobody
 // looks at.
 func TestTheElementReplacementTakesTheSameAxis(t *testing.T) {
+	t.Parallel()
 	src := `a=(xay); v=VAL; printf "[%s]" "${a[@]/a/'$v'}"`
 	if out, _ := run(t, src, replacementQuoting(No)); out != `[x$vy]` {
 		t.Errorf("no: %s = %q, want %q", src, out, `[x$vy]`)

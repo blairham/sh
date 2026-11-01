@@ -15,6 +15,7 @@ import (
 // arithmetic offset — and `i` names no modifier. Measured against zsh 5.9.2
 // (2026-09-05); the other three take the substring and answer `cd`.
 func TestARangeThatNamesAVariableIsRefused(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `x=abcdef; i=2; echo "[${x:i:2}]"; echo after`)
 	if !strings.Contains(out, "unrecognized modifier `i'") {
 		t.Errorf("got %q, want the modifier named", out)
@@ -26,6 +27,7 @@ func TestARangeThatNamesAVariableIsRefused(t *testing.T) {
 
 // The length is the same question, reached by a different call site.
 func TestALengthThatNamesAVariableIsRefusedToo(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `x=abcdef; i=2; echo "[${x:2:i}]"; echo after`)
 	if !strings.Contains(out, "unrecognized modifier `i'") || st == 0 {
 		t.Errorf("got %q (status %d), want the modifier named at a failure", out, st)
@@ -36,6 +38,7 @@ func TestALengthThatNamesAVariableIsRefusedToo(t *testing.T) {
 // `h` unset the arithmetic reading would answer from offset 0 and the case
 // would look like a disagreement about the whole string.
 func TestTheModifiersThisShellPerforms(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ mod, want string }{
 		{"h", "/tmp/Dir"},
 		{"t", "File.Txt"},
@@ -56,6 +59,7 @@ func TestTheModifiersThisShellPerforms(t *testing.T) {
 // An offset and then a modifier, which is what says the two readings are
 // segments of one range rather than alternatives.
 func TestAModifierMayFollowAnOffset(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `x=/tmp/Dir/File.Txt; t=3; echo "[${x:2:t}]"`)
 	if got := strings.TrimSpace(out); got != "[File.Txt]" || st != 0 {
 		t.Errorf("got %q (status %d), want %q", got, st, "[File.Txt]")
@@ -66,6 +70,7 @@ func TestAModifierMayFollowAnOffset(t *testing.T) {
 // everywhere else — an underscore, a leading space, a parenthesis, an
 // expansion that already happened, and a quoted letter.
 func TestARangeThatDoesNotBeginWithALetterIsAnOffset(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`x=abcdef; _q=1; echo "[${x:_q:2}]"`,
 		`x=abcdef; i=1; echo "[${x: i:2}]"`,
@@ -83,6 +88,7 @@ func TestARangeThatDoesNotBeginWithALetterIsAnOffset(t *testing.T) {
 // A good modifier with something after it in the same segment is refused with
 // nothing named, where an unknown letter is named. Two shapes of one sentence.
 func TestALeftoverAfterAModifierIsRefusedWithoutAName(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `x=/tmp/a.b; echo "[${x:ha}]"; echo after`)
 	if !strings.Contains(out, "unrecognized modifier") || strings.Contains(out, "`") {
 		t.Errorf("got %q, want the complaint with nothing named", out)
@@ -101,6 +107,7 @@ func TestALeftoverAfterAModifierIsRefusedWithoutAName(t *testing.T) {
 // slash is never searched for. The cases that *do* need the disk get a
 // directory from the framework and compare against a path built from it.
 func TestTheModifiersThatNeedTheWorldArePerformed(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a", `x=/x/y/../z/.; echo "[${x:a}]"`, "[/x/z]\n"},
 		{"a leaves an empty value empty", `x=; echo "[${x:a}]"`, "[]\n"},
@@ -134,6 +141,7 @@ func TestTheModifiersThatNeedTheWorldArePerformed(t *testing.T) {
 // link the two of them are given. The directory comes from the framework, so
 // the expectation is built rather than written down.
 func TestAModifierResolvesAgainstTheDiskItIsGiven(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "real", "sub"), 0o700); err != nil {
 		t.Fatalf("making the tree: %v", err)
@@ -189,6 +197,7 @@ w=`+filepath.Join(dir, "dangling")+`; echo "[${w:A}]"`)
 // *sub*directory is the only shape that shows it: `link2/..` is the link's
 // parent by name and the parent of what it points at on the disk.
 func TestResolvedAndRealPathPartOverDotDot(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "real", "sub"), 0o700); err != nil {
 		t.Fatalf("making the tree: %v", err)
@@ -224,6 +233,7 @@ echo "[${x:A}][${x:P}][${y:A}]"`)
 // `mycmd` sitting in the current directory. Measured both ways in the same
 // shell, which is what makes it a rule about `:c` rather than about PATH.
 func TestACommandModifierWithAnEmptyPathFindsNothing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "mycmd"), []byte("#!/bin/sh\necho ran\n"), 0o700); err != nil {
 		t.Fatalf("writing the command: %v", err)
@@ -241,6 +251,7 @@ echo "[${x:c}]"`)
 // file of that name — both measured, and both the opposite of what a reader
 // would guess from the name.
 func TestACommandModifierSearchesPathAndNothingElse(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "mycmd"), []byte("#!/bin/sh\n:\n"), 0o700); err != nil {
 		t.Fatalf("writing the command: %v", err)
@@ -257,6 +268,7 @@ z=nosuchcommand12345; echo "[${z:c}]"`)
 // A count after `h` or `t` counts separators — from the left and from the
 // right — rather than repeating the modifier, which is what it looks like.
 func TestACountCountsSeparators(t *testing.T) {
+	t.Parallel()
 	want := "[/][/a][/a/b][/a/b/c/d/e][d/e][a/b/c/d/e][/a/b/c/d/e]\n"
 	out, st := runZsh(t, t.TempDir(),
 		`x=/a/b/c/d/e; echo "[${x:h1}][${x:h2}][${x:h3}][${x:h9}][${x:t2}][${x:t5}][${x:t9}]"`)
@@ -273,6 +285,7 @@ func TestACountCountsSeparators(t *testing.T) {
 
 // The substitution is remembered for the shell, not for the parameter.
 func TestASubstitutionIsRememberedAcrossParameters(t *testing.T) {
+	t.Parallel()
 	got, status := runZsh(t, t.TempDir(),
 		`x=aXbXc; y=aXd; z=aXbXc; echo "[${x:s/X/-/}][${y:s//+/}][${z:&}]"`)
 	// The third is `a+bXc` and not `a-bXc`, which is the sharp end of the
@@ -299,6 +312,7 @@ func TestASubstitutionIsRememberedAcrossParameters(t *testing.T) {
 // The refusal names one byte. `${x:zz}` is a complaint about `z`; naming `zz`
 // would say the pair is the modifier that is missing.
 func TestAnUnrecognizedModifierNamesOneByte(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`x=/tmp/a.b; echo "[${x:zz}]"`, "zsh:1: unrecognized modifier `z'\n"},
 		{`x=/tmp/a.b; echo "[${x:iq}]"`, "zsh:1: unrecognized modifier `i'\n"},
@@ -320,6 +334,7 @@ func TestAnUnrecognizedModifierNamesOneByte(t *testing.T) {
 // split on its own: a range is split once, so `5:t` arrived whole and reached
 // the evaluator as an expression.
 func TestAModifierMayFollowBothAnOffsetAndALength(t *testing.T) {
+	t.Parallel()
 	want := "[D][BCDEF][File.Txt.gz][mp]\n"
 	out, st := runZsh(t, t.TempDir(),
 		`x=/tmp/Dir/File.Txt.gz; y=abcdefgh; echo "[${x:1:5:t}][${y:1:5:u}][${x:2:t}][${x:2:2}]"`)

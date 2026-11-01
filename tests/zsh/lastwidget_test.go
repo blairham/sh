@@ -14,6 +14,7 @@ import (
 // called with `zle` — unless the call said `-f nolast`. Measured 2026-10-02 on
 // zsh 5.9.2 through a pseudo-terminal; see lastWidgetName.
 func TestLastWidgetIsTheWidgetBefore(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `
 		f() {
 			print -r -- "L0=$LASTWIDGET T=${(t)LASTWIDGET}"
@@ -51,6 +52,7 @@ func TestLastWidgetIsTheWidgetBefore(t *testing.T) {
 
 // A flag that is not `nolast` is refused by name.
 func TestAWidgetCallFlagOtherThanNolastIsRefused(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `
 		f() { zle g -f bogus y; print -r -- "st=$?"; }
 		zle -N f

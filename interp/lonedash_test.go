@@ -20,6 +20,7 @@ import (
 // `unalias -` is where the difference shows, because a shell that eats the
 // dash is then left with nothing to unalias.
 func TestALoneDashIsAnOperandOrAnOption(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
 		option Answer
@@ -42,6 +43,7 @@ func TestALoneDashIsAnOperandOrAnOption(t *testing.T) {
 
 // Only a dash *on its own*, and only where the options are still being read.
 func TestOnlyADashOnItsOwn(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		// `--` ends the options, so the dash after it is an operand even in
 		// the dialect that would otherwise eat one.
@@ -62,6 +64,7 @@ func TestOnlyADashOnItsOwn(t *testing.T) {
 // A shell with no answer refuses rather than guessing, because the two
 // answers give the builtin different operands.
 func TestALoneDashWithNoAnswerIsRefused(t *testing.T) {
+	t.Parallel()
 	out, st := loneDashRun2(t, "unalias -\n", Unspecified)
 	if !strings.Contains(out, "lone `-`") || !strings.Contains(out, "disagree") {
 		t.Errorf("said %q, want the axis named", out)
@@ -130,6 +133,7 @@ func loneDashRun2(t *testing.T, src string, option Answer) (string, int) {
 //	unalias - -m 'x*'        no such hash table element: -m, then x*
 //	alias a=b; alias - -L    1, and silent — exactly as `alias -- -L` is
 func TestALoneDashEndsTheOptionsRatherThanBeingSkipped(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, ended string }{
 		{
 			// The letter behind the dash is a *pattern* option to this
@@ -190,6 +194,7 @@ func loneDashPatternRun(t *testing.T, src string, option Answer) string {
 // merely *dropped* would print `hi` with no newline, having read the `-n`
 // behind it.
 func TestEchoReadsALoneDashAsTheEndOfItsOptions(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, option, operand string }{
 		{"the word is eaten", `echo - hi`, "hi\n", "- hi\n"},
 		{"and the options end there", `echo - -n hi`, "-n hi\n", "- -n hi\n"},

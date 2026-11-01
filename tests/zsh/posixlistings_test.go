@@ -46,6 +46,7 @@ fn
 // `readonly name=value`, and only for scalars, under POSIX_BUILTINS. Same
 // shell, same day.
 func TestReadonlyListsInTheStandardsFormUnderPosixBuiltins(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`setopt posixbuiltins typesettounset; readonly foo=bar novalue; readonly -p`, "readonly foo=bar\nreadonly novalue\n"},
 		{`setopt posixbuiltins; readonly -i n=3; readonly -x e=3; readonly q='a b'; readonly -p`, "readonly e=3\nreadonly n=3\nreadonly q='a b'\n"},
@@ -63,6 +64,7 @@ func TestReadonlyListsInTheStandardsFormUnderPosixBuiltins(t *testing.T) {
 
 // TestTypesetPrintTakesALayoutNumber is `typeset -p1`. Same shell, same day.
 func TestTypesetPrintTakesALayoutNumber(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=("&" sand '""' "" plugh); typeset -p1 a`, "typeset -a a=(\n  '&'\n  sand\n  '\"\"'\n  ''\n  plugh\n)\n"},
 		{`typeset -A h=(k v "a b" c); typeset -p1 h`, "typeset -A h=(\n  ['a b']=c\n  [k]=v\n)\n"},

@@ -36,6 +36,7 @@ func redirRun(t *testing.T, dir string, dg Diagnostics, src string) (string, int
 // verb, two of them do not; two distinguish opening from creating, two do not;
 // one puts the reason first.
 func TestARedirectFailureIsWordedFourWays(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "d"), 0o755); err != nil {
 		t.Fatal(err)
@@ -119,6 +120,7 @@ func (o writerOnly) Write(p []byte) (int, error) { return o.w.Write(p) }
 // raise it, which is one dialect's spelling of it and nobody else's. The
 // substrate capitalizes what the C string capitalizes.
 func TestADupOfAnUnopenedDescriptorQuotesTheReasonTheDialectsWay(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, c := range []struct {
 		name string
@@ -154,6 +156,7 @@ func TestADupOfAnUnopenedDescriptorQuotesTheReasonTheDialectsWay(t *testing.T) {
 // which direction the file was being opened, where the operating system names
 // it once — one measured dialect wants exactly that.
 func TestADialectCanNameOneErrnoTwoWays(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	dg := Diagnostics{
 		CannotOpen: "cannot open %[1]s: %[2]s", CannotCreate: "cannot create %[1]s: %[2]s",
@@ -196,6 +199,7 @@ func TestADialectCanNameOneErrnoTwoWays(t *testing.T) {
 // RedirectFailureStatus carries a dialect's own number over the default 1,
 // and the failure does not stop the script either way.
 func TestARedirectFailureStatus(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, c := range []struct {
 		name string
@@ -222,6 +226,7 @@ func TestARedirectFailureStatus(t *testing.T) {
 // A redirect is set up before the command runs, so one that cannot be opened
 // means the command does not run at all.
 func TestAFailedRedirectDoesNotRunTheCommand(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, _ := redirRun(t, dir, Diagnostics{CannotOpen: "%[1]s: %[2]s"}, `echo reached < nope`)
 	if strings.Contains(out, "reached") {

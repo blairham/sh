@@ -47,6 +47,7 @@ func listRun(t *testing.T, src string, set func(*Semantics)) (string, string, in
 // one style, always quoted with the embedded quote doubled out in another,
 // `$'...'` in a third.
 func TestSetListsAssignmentsInTheDialectsQuoting(t *testing.T) {
+	t.Parallel()
 	src := "zz=plain\naa='has space'\nqq=\"quo'te\"\nset"
 	tests := []struct {
 		name  string
@@ -93,6 +94,7 @@ func TestSetListsAssignmentsInTheDialectsQuoting(t *testing.T) {
 // function after the variables, laid out the way the engine says functions
 // back; the other stops at the variables.
 func TestSetListingCanFollowWithTheFunctions(t *testing.T) {
+	t.Parallel()
 	src := "v=1\nmyfn() { echo hi; }\nset"
 	out, _, _ := listRun(t, src, func(s *Semantics) {
 		s.SetListing = SetListingAssignmentsThenFunctions
@@ -120,6 +122,7 @@ func TestSetListingCanFollowWithTheFunctions(t *testing.T) {
 // spaces where an export is spelled out, and dense with no padding otherwise.
 // Measured from `a=(x 'y z')` in all three.
 func TestSetListingSpellsArraysTheWayDeclareDoes(t *testing.T) {
+	t.Parallel()
 	src := "a=(x 'y z')\nset"
 	for _, tc := range []struct {
 		name string
@@ -156,6 +159,7 @@ func TestSetListingSpellsArraysTheWayDeclareDoes(t *testing.T) {
 // TestSetListingRefusals: no answer at all is refused as the unanswered
 // question it is.
 func TestSetListingRefusals(t *testing.T) {
+	t.Parallel()
 	_, errs, st := listRun(t, "set", func(s *Semantics) {
 		s.SetListing = SetListingUnspecified
 	})

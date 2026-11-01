@@ -17,6 +17,7 @@ import (
 // dialect's own words — down to whether a missing name gets the shell's name
 // in front of it.
 func TestTypeSaysWhatANameWouldRun(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		TypeKeyword:  "%[1]s is a reserved word",
 		TypeFunction: "%[1]s is a shell function",
@@ -57,6 +58,7 @@ func TestTypeSaysWhatANameWouldRun(t *testing.T) {
 // A name it cannot account for: four wordings, two statuses, and two of the
 // four print the line with nothing in front of it.
 func TestTypeReportsANameThatIsNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		dg         Diagnostics
@@ -84,6 +86,7 @@ func TestTypeReportsANameThatIsNothing(t *testing.T) {
 // every other message they print carries the shell's name. Asserted as the
 // whole line, because a prefix is exactly what a substring check cannot see.
 func TestTypeCanReportAMissingNameWithNoPrefix(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		unprefixed bool
@@ -111,6 +114,7 @@ func TestTypeCanReportAMissingNameWithNoPrefix(t *testing.T) {
 // `--` ends the options in three of the four, and is a name in the fourth,
 // which has no options for `type` at all.
 func TestTypeAndTheDoubleDash(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		ends  Answer
@@ -145,6 +149,7 @@ func TestTypeAndTheDoubleDash(t *testing.T) {
 // One name failing does not stop the rest, and the failure is what the whole
 // command reports.
 func TestTypeAnswersEveryNameAndReportsTheFailure(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `type cd nope ls`, func(r *Runner) {
 		sem := CoreSemantics()
 		dg := Diagnostics{TypeNotFound: "type: %[1]s: not found"}
@@ -164,6 +169,7 @@ func TestTypeAnswersEveryNameAndReportsTheFailure(t *testing.T) {
 // /usr/bin/umask and this shell will not run it, so `type` must not say where
 // it is. A script that asks before using it would be told yes and then fail.
 func TestTypeWillNotNameAReservedBuiltinOnPath(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	// `hash` rather than `alias`, which is a builtin now and would be named
 	// as one — correctly. The guard needs a name that is still reserved and
@@ -192,6 +198,7 @@ func TestTypeWillNotNameAReservedBuiltinOnPath(t *testing.T) {
 // is what the printer exists for: the tree is what the shell has by then, and
 // the spelling it was written with is gone.
 func TestTypeCanShowAFunctionsBody(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, "f(){ echo hi; }; type f", func(r *Runner) {
 		sem := CoreSemantics()
 		sem.TypePrintsFunctionBody = Yes
@@ -220,6 +227,7 @@ func TestTypeCanShowAFunctionsBody(t *testing.T) {
 // And the three that stop at the sentence print nothing after it, however
 // long the function is.
 func TestTypeCanStopAtTheSentence(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, "f(){ echo hi; echo there; }; type f", func(r *Runner) {
 		sem := CoreSemantics()
 		sem.TypePrintsFunctionBody = No
@@ -234,6 +242,7 @@ func TestTypeCanStopAtTheSentence(t *testing.T) {
 // made `type -t ls` answer about a name called `-t` and then about ls, which
 // is two wrong answers where one complaint was wanted.
 func TestTypeRefusesAnOptionItDoesNotHave(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `type -x ls`, func(r *Runner) {
 		s := *r.Semantics
 		s.TypeEndsOptionsWithDashDash = Yes
@@ -264,6 +273,7 @@ func TestTypeRefusesAnOptionItDoesNotHave(t *testing.T) {
 // a word to compare against rather than a sentence to parse. The word for an
 // external is `file` and never the path, which is what keeps it comparable.
 func TestTypeCanNameTheBareKind(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `f(){ :; }; type -t f; type -t cd; type -t if; type -t /bin/ls`,
 		func(r *Runner) {
 			sem := CoreSemantics()
@@ -282,6 +292,7 @@ func TestTypeCanNameTheBareKind(t *testing.T) {
 // The kind of nothing is silence: no line, no diagnostic, only the failing
 // status — which is the half a script branches on.
 func TestTypeKindOfNothingIsSilentFailure(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `type -t a-name-that-is-nothing`, func(r *Runner) {
 		sem := CoreSemantics()
 		sem.TypeEndsOptionsWithDashDash = Yes
@@ -299,6 +310,7 @@ func TestTypeKindOfNothingIsSilentFailure(t *testing.T) {
 // One name failing does not stop the rest under `-t` either, and the words
 // that are printed give no hint which name the failure was about.
 func TestTypeKindAnswersEveryNameAndReportsTheFailure(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `type -t nope cd`, func(r *Runner) {
 		sem := CoreSemantics()
 		sem.TypeEndsOptionsWithDashDash = Yes
@@ -317,6 +329,7 @@ func TestTypeKindAnswersEveryNameAndReportsTheFailure(t *testing.T) {
 // does not have, and it is refused rather than read as a name — in the
 // dialect's own words.
 func TestTypeRefusesTheKindLetterWhereTheDialectLacksIt(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `type -t cd`, func(r *Runner) {
 		sem := CoreSemantics()
 		sem.TypeEndsOptionsWithDashDash = Yes
@@ -341,6 +354,7 @@ func TestTypeRefusesTheKindLetterWhereTheDialectLacksIt(t *testing.T) {
 // refusal and in the usage line, while everything keyed by builtin stays
 // keyed by the invoked name.
 func TestBuiltinComplaintCanNameAnotherBuiltin(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `type -x cd`, func(r *Runner) {
 		sem := CoreSemantics()
 		sem.TypeEndsOptionsWithDashDash = Yes
@@ -373,6 +387,7 @@ func TestBuiltinComplaintCanNameAnotherBuiltin(t *testing.T) {
 // the same line prints the sentence, so a route that had simply stopped
 // working would fail the second half instead of passing the first.
 func TestTypeListingRefusesAnUnansweredSpecialBuiltin(t *testing.T) {
+	t.Parallel()
 	letters := func(a Answer) func(*Runner) {
 		return func(r *Runner) {
 			sem := CoreSemantics()

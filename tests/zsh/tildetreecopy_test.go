@@ -9,6 +9,7 @@ import "testing"
 // read `HOME` and the options as each call runs. Measured 2026-10-02 on zsh
 // 5.9.2 under `-f` (#5155).
 func TestATildeIsExpandedAfreshOnEveryCall(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{
 			"HOME=/h; f(){ print ~ x=~ }; f; HOME=/y; f; setopt magicequalsubst; f; unsetopt magicequalsubst; HOME=/z; f",

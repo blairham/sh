@@ -32,6 +32,7 @@ import (
 // (aarch64-apple-darwin25.4.0) — with `-f` and each snippet in a file of its
 // own, 2026-09-26. `go version -m` says *not a Go executable* for it.
 func TestRcQuotesReadsADoubledQuoteAsOneQuote(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, word, on, off string }{
 		// The issue's own reduction, and the shape that makes the rule
 		// visible without the word being nothing but quotes.
@@ -76,6 +77,7 @@ func TestRcQuotesReadsADoubledQuoteAsOneQuote(t *testing.T) {
 // quote is one quote" from "a quote inside a run is taken as text": a reading
 // of the second kind would swallow the last quote of `”'` and print a word.
 func TestRcQuotesLeavesAnOddNumberOfQuotesUnterminated(t *testing.T) {
+	t.Parallel()
 	for _, word := range []string{`'''`, `'''''`, `x'''y`} {
 		t.Run(word, func(t *testing.T) {
 			for _, setopt := range []string{"setopt rcquotes\n", "unsetopt rcquotes\n"} {
@@ -100,6 +102,7 @@ func TestRcQuotesLeavesAnOddNumberOfQuotesUnterminated(t *testing.T) {
 //
 // Measured on zsh 5.9.2, `-f`, 2026-09-26.
 func TestRcQuotesIsReadWhenTheWordIsLexed(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"a function defined on and called off",
@@ -146,6 +149,7 @@ func TestRcQuotesIsReadWhenTheWordIsLexed(t *testing.T) {
 //
 // Measured on zsh 5.9.2, `-f`, 2026-09-26.
 func TestRcQuotesReachesAnAliasBodyAtItsUse(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"defined with the option off and used with it on",
@@ -185,6 +189,7 @@ func TestRcQuotesReachesAnAliasBodyAtItsUse(t *testing.T) {
 // lines handed to `-c` — where `zsh -f -o rcquotes -c` on the word alone
 // prints `a'b`, because there the option moved before the read.
 func TestRcQuotesDoesNotReachTextAlreadyRead(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"the setopt and the word on one line", "setopt rcquotes; print -r -- 'a''b'\n", "ab\n"},
 		// The control beside it: the option really did move, so a word read
@@ -211,6 +216,7 @@ func TestRcQuotesDoesNotReachTextAlreadyRead(t *testing.T) {
 //
 // Measured on zsh 5.9.2, `-f`, 2026-09-26.
 func TestRcQuotesIsScopedAndReportedLikeAnOption(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"the option reports itself",
@@ -263,6 +269,7 @@ func TestRcQuotesIsScopedAndReportedLikeAnOption(t *testing.T) {
 //
 // Measured on zsh 5.9.2, `-f`, 2026-09-26.
 func TestNoEmulationTurnsRcQuotesOn(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"emulate sh  ; [[ -o rcquotes ]] || print 'sh: off'\n"+
 			"emulate ksh ; [[ -o rcquotes ]] || print 'ksh: off'\n"+

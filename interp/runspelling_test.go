@@ -21,6 +21,7 @@ import (
 // Semantics.PathHitFromTheCurrentDirectoryRunsBare, and the same `.` entry on
 // a second run, when the table answers rather than the search.
 func TestACommandIsStartedByTheSpellingItWasFoundBy(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	sub := filepath.Join(dir, "sub")
 	if err := os.MkdirAll(filepath.Join(sub, "deep"), 0o755); err != nil {

@@ -12,6 +12,7 @@ import "testing"
 // and the first without either miss — each iteration answered with the
 // first one's element. Measured on zsh 5.9.2: both rows as written here.
 func TestALoopsArithmeticReadsEachIterationsValues(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{
 			`arr=(a); for p in a b c; do (( ! $arr[(I)$p] )) && print -n "miss:$p "; done; echo`,

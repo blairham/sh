@@ -17,6 +17,7 @@ import (
 // Measured 2026-09-18 against zsh 5.9.2, `env -i` with LC_ALL=C over a script
 // file (#2991).
 func TestTheLogicalExclusiveOr(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"1 ^^ 1", "0"},
 		{"1 ^^ 0", "1"},
@@ -54,6 +55,7 @@ func TestTheLogicalExclusiveOr(t *testing.T) {
 // alone — there is nothing to short-circuit. Measured the same day: the
 // assignment in the right operand happens whichever way the left one went.
 func TestTheLogicalExclusiveOrEvaluatesBothOperands(t *testing.T) {
+	t.Parallel()
 	for _, left := range []string{"0", "1"} {
 		out, st := answersRun(t, `echo $(( `+left+` ^^ (y=9) )); echo y=$y`)
 		if !strings.Contains(out, "y=9") || st != 0 {
@@ -66,6 +68,7 @@ func TestTheLogicalExclusiveOrEvaluatesBothOperands(t *testing.T) {
 // here that assigns nothing: `x=5; $(( x ^^= 1 ))` writes 0 and leaves `x` at
 // 5, where `||=` and `&&=` in the same manual both store. Measured 2026-09-18.
 func TestTheLogicalExclusiveOrAssignmentStoresNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"x=5; echo $(( x ^^= 1 )); echo x=$x", "0\nx=5"},
 		{"x=0; echo $(( x ^^= 1 )); echo x=$x", "1\nx=0"},

@@ -18,6 +18,7 @@ import (
 // status; Diagnostics.NotADirectoryIsNotFound makes it a path that is not
 // there, for the command and for a redirection's reason.
 func TestAPathThroughAFileIsNotFoundWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "exe"), []byte("#!/bin/sh\necho ran\n"), 0o755); err != nil {
 		t.Fatal(err)

@@ -62,6 +62,7 @@ func runCount(t *testing.T, src string, tweak func(*Semantics)) (out, errOut str
 // unanimous in every column that has the directive, so they are asked on the
 // common path.
 func TestTheCountConversionStoresTheBytesOfItsPass(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -148,6 +149,7 @@ func TestTheCountConversionStoresTheBytesOfItsPass(t *testing.T) {
 // the ordinary bad-conversion refusal rather than being quietly dropped, and
 // the store must not happen.
 func TestTheCountConversionIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `printf 'ab%ncd' c; printf '[%s]' "$c"`
 	out, errOut, st := runCount(t, src, nil)
 	if want := "abcd[2]"; out != want {
@@ -174,6 +176,7 @@ func TestTheCountConversionIsAnAxis(t *testing.T) {
 // because it is unanimous — which is what makes this row about the empty one
 // rather than about the two together.
 func TestAnEmptyCountOperandIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `printf 'ab%ncd' ''; st=$?; printf '[%d]' "$st"`
 
 	out, errOut, st := runCount(t, src, nil)
@@ -201,6 +204,7 @@ func TestAnEmptyCountOperandIsAnAxis(t *testing.T) {
 // complained would pass a row that read only what was printed — which is the
 // shape #3515 had at `printf -v`.
 func TestABadCountNameIsRefused(t *testing.T) {
+	t.Parallel()
 	const src = `printf 'abc%nXYZ' '1bad'; st=$?; printf '[%d]' "$st"`
 
 	out, errOut, _ := runCount(t, src, nil)
@@ -236,6 +240,7 @@ func TestABadCountNameIsRefused(t *testing.T) {
 // is Yes in the dialect that refuses this route, so a fix reading it would
 // have filled the element there.
 func TestACountOperandsSubscriptIsItsOwnGate(t *testing.T) {
+	t.Parallel()
 	const src = `arr=(x y z); printf 'abcd%n' 'arr[2]'; printf '[%s]' "${arr[2]}"`
 
 	out, errOut, _ := runCount(t, src, func(s *Semantics) {
@@ -261,6 +266,7 @@ func TestACountOperandsSubscriptIsItsOwnGate(t *testing.T) {
 // rest of the format is a second axis — the same column answers it and the
 // bad-name one differently, which is why they are two fields.
 func TestAFrozenCountNameIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `ro=1; readonly ro; printf 'ab%ncd' ro; st=$?; printf '[%d][%s]' "$st" "$ro"`
 
 	out, errOut, _ := runCount(t, src, nil)
@@ -292,6 +298,7 @@ func TestAFrozenCountNameIsAnAxis(t *testing.T) {
 // anything agree about a new one — so a table without it would have been the
 // same question asked twice.
 func TestWhatTheCountConversionLeavesOnTheNameIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const fresh = `printf 'ab%n' m; m=1+1; printf '[%s]' "$m"`
 	const made = `q=plain; printf 'abc%n' q; q=2+2; printf '[%s]' "$q"`
 

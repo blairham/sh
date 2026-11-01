@@ -26,6 +26,7 @@ func runUnsetArraySpan(t *testing.T, p UnsetArraySpanPolicy, src string) (string
 // came back whole at status 0 — the silent kind of wrong, in the spelling a
 // script uses to start a list over.
 func TestUnsetOfEveryElementClearsWhereThatIsTheReading(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		p    UnsetArraySpanPolicy
@@ -55,6 +56,7 @@ func TestUnsetOfEveryElementClearsWhereThatIsTheReading(t *testing.T) {
 // holding a single empty string. A count cannot say it and a script that
 // resets a list and pushes onto it reads it on the first element.
 func TestUnsetOfEveryElementDecidesWhereAnAppendLands(t *testing.T) {
+	t.Parallel()
 	const src = `a=(p q); unset "a[@]"; a+=(z); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`
 	for _, c := range []struct {
 		p    UnsetArraySpanPolicy
@@ -74,6 +76,7 @@ func TestUnsetOfEveryElementDecidesWhereAnAppendLands(t *testing.T) {
 // it has none; making the span it names one empty string empties it, because a
 // scalar is one such span. Neither turns the name into an array.
 func TestUnsetOfEveryElementOfAScalar(t *testing.T) {
+	t.Parallel()
 	const src = `a=hello; unset "a[@]"; echo "st=$? [$a]"`
 	for _, c := range []struct {
 		p    UnsetArraySpanPolicy
@@ -95,6 +98,7 @@ func TestUnsetOfEveryElementOfAScalar(t *testing.T) {
 // asserted here because #648 left this column silent: the array survived, and
 // nothing said why.
 func TestUnsetOfEveryElementIsAnOrdinaryBadSubscript(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
 		giveUp BadSubscriptPolicy
@@ -137,6 +141,7 @@ func TestUnsetOfEveryElementIsAnOrdinaryBadSubscript(t *testing.T) {
 // nothing to complain about. The third has no such reading and reports the
 // subscript instead, which is its own test.
 func TestUnsetOfEveryElementOfANameThatHoldsNothing(t *testing.T) {
+	t.Parallel()
 	const src = `unset "a[@]"; echo "st=$? n=${#a[@]}"`
 	for _, p := range []UnsetArraySpanPolicy{
 		UnsetArraySpanRemovesTheElements,
@@ -155,6 +160,7 @@ func TestUnsetOfEveryElementOfANameThatHoldsNothing(t *testing.T) {
 // An array that is already empty has no span to replace, so the answer that
 // leaves one empty element does not invent one.
 func TestUnsetOfEveryElementOfAnEmptyArray(t *testing.T) {
+	t.Parallel()
 	const src = `a=(); unset "a[@]"; echo "n=${#a[@]}"`
 	for _, p := range []UnsetArraySpanPolicy{
 		UnsetArraySpanRemovesTheElements,
@@ -171,6 +177,7 @@ func TestUnsetOfEveryElementOfAnEmptyArray(t *testing.T) {
 // so both elements stay — under every answer, including the two that clear an
 // indexed array through the same spelling.
 func TestUnsetOfEveryElementIsAKeyWhereTheAttributeIsOn(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; m[k]=v; m[j]=w; unset "m[@]"; echo "n=${#m[@]}"`
 	for _, p := range []UnsetArraySpanPolicy{
 		UnsetArraySpanRemovesTheElements,
@@ -193,6 +200,7 @@ func TestUnsetOfEveryElementIsAKeyWhereTheAttributeIsOn(t *testing.T) {
 // a dense reading anyway, so the two answers are indistinguishable there and
 // the bug hid behind it.
 func TestUnsetOfOneElementFollowsTheSameAxis(t *testing.T) {
+	t.Parallel()
 	const src = `a=(p q r); unset "a[2]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`
 	for _, c := range []struct {
 		p    UnsetArraySpanPolicy
@@ -217,6 +225,7 @@ func TestUnsetOfOneElementFollowsTheSameAxis(t *testing.T) {
 // `[@]`: the removal reading is what a preset with no arrays of its own has
 // already committed to, so `unset a[2]` is answerable everywhere.
 func TestUnsetOfOneElementRefusesNothing(t *testing.T) {
+	t.Parallel()
 	out, st := runUnsetArraySpan(t, UnsetArraySpanUnspecified,
 		`a=(p q r); unset "a[2]"; echo "st=$?"`)
 	if strings.Contains(out, "no dialect was chosen") {
@@ -231,6 +240,7 @@ func TestUnsetOfOneElementRefusesNothing(t *testing.T) {
 // an element already there. One past the end has no span to replace and the
 // array does not grow.
 func TestUnsetOfOneElementPastTheEndLeavesTheArrayAlone(t *testing.T) {
+	t.Parallel()
 	const src = `a=(p q r); unset "a[9]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`
 	for _, p := range []UnsetArraySpanPolicy{
 		UnsetArraySpanRemovesTheElements,
@@ -248,6 +258,7 @@ func TestUnsetOfOneElementPastTheEndLeavesTheArrayAlone(t *testing.T) {
 // readings agree about what `-2` *names* and disagree about whether `unset`
 // acts on it.
 func TestUnsetOfOneElementFromTheEnd(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		sub             string
 		removes, blanks string
@@ -269,6 +280,7 @@ func TestUnsetOfOneElementFromTheEnd(t *testing.T) {
 // it does for `[@]`: a key is removed from the table and nothing is left
 // standing in its place.
 func TestUnsetOfOneKeyRemovesItUnderEveryAnswer(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; m[k]=v; m[j]=w; unset "m[k]"; echo "n=${#m[@]} [${m[k]}]"`
 	for _, p := range []UnsetArraySpanPolicy{
 		UnsetArraySpanUnspecified,
@@ -286,6 +298,7 @@ func TestUnsetOfOneKeyRemovesItUnderEveryAnswer(t *testing.T) {
 // the bug was that the spelling did nothing quietly, refusing it has to be
 // loud too.
 func TestUnsetOfEveryElementRefusesAnUnspecifiedAxis(t *testing.T) {
+	t.Parallel()
 	out, _ := runUnsetArraySpan(t, UnsetArraySpanUnspecified,
 		`a=(p q r); unset "a[@]"; echo "st=$? n=${#a[@]}"`)
 	if !strings.Contains(out, "no dialect was chosen") {

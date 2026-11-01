@@ -47,6 +47,7 @@ func collecting(events *[]Event) func(*Runner) {
 
 // TestAnAllowedOpenThroughALinkRecordsWhereItWent is #943 itself.
 func TestAnAllowedOpenThroughALinkRecordsWhereItWent(t *testing.T) {
+	t.Parallel()
 	object, link := linkFarm(t)
 	physical, err := filepath.EvalSymlinks(object)
 	if err != nil {
@@ -110,6 +111,7 @@ func TestAnAllowedOpenThroughALinkRecordsWhereItWent(t *testing.T) {
 // means anything: it is empty when the name was the object's own name, so a
 // consumer can read a non-empty value as news.
 func TestAnOrdinaryOpenResolvesNowhere(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	plain := filepath.Join(dir, "plain")
 	if err := os.WriteFile(plain, []byte("ordinary\n"), 0o600); err != nil {
@@ -142,6 +144,7 @@ func TestAnOrdinaryOpenResolvesNowhere(t *testing.T) {
 // beside the consultation, unlike its neighbors in fsgate.go — which is what
 // lets it say this at all, and is the only reason that file has two shapes.
 func TestAListingThroughALinkRecordsWhereItWent(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	real := filepath.Join(dir, "real")
 	if err := os.Mkdir(real, 0o755); err != nil {
@@ -189,6 +192,7 @@ func TestAListingThroughALinkRecordsWhereItWent(t *testing.T) {
 // operator's half, so filling it in makes the two records consistent with each
 // other and changes nothing the script can see.
 func TestTheScriptIsToldNothingMore(t *testing.T) {
+	t.Parallel()
 	object, link := linkFarm(t)
 	out, _ := run(t, "cat <"+link+" 2>&1", hidesSecrets(nil))
 	if strings.Contains(out, "secret") || strings.Contains(out, filepath.Base(object)) {

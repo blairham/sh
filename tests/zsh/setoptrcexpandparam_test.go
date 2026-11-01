@@ -27,6 +27,7 @@ import "testing"
 const rcWords = `f(){ printf "%d:" "$#"; printf "[%s]" "$@"; printf '\n'; }` + "\n"
 
 func TestRcExpandParamDistributesTheWordOverTheElements(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, on, off string }{
 		// The issue's own reduction.
 		{"the reduction", `a=(1 2); f x${a}y`, "2:[x1y][x2y]\n", "2:[x1][2y]\n"},
@@ -102,6 +103,7 @@ func TestRcExpandParamDistributesTheWordOverTheElements(t *testing.T) {
 //
 // Measured on zsh 5.9.2, 2026-09-25, `-f`.
 func TestRcExpandParamReachesAParameterExpansionAndNotAnyFields(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, on, off string }{
 		{
 			"a bare command substitution",
@@ -155,6 +157,7 @@ func TestRcExpandParamReachesAParameterExpansionAndNotAnyFields(t *testing.T) {
 //
 // Measured on zsh 5.9.2, 2026-09-25, `-f`.
 func TestRcExpandParamAndTheCaretFlagAreOneMechanism(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, on, off string }{
 		{"one caret", `a=(1 2); f x${^a}y`, "2:[x1y][x2y]\n", "2:[x1y][x2y]\n"},
 		{"two carets", `a=(1 2); f x${^^a}y`, "2:[x1][2y]\n", "2:[x1][2y]\n"},
@@ -202,6 +205,7 @@ func TestRcExpandParamAndTheCaretFlagAreOneMechanism(t *testing.T) {
 // Measured on zsh 5.9.2, 2026-09-25: the word inside the subshell is two and
 // the one after it is one.
 func TestRcExpandParamIsSubshellLocal(t *testing.T) {
+	t.Parallel()
 	const src = rcWords +
 		"a=(1 2)\n(setopt rcexpandparam; f x${a}y)\nf x${a}y\n"
 	const want = "2:[x1y][x2y]\n2:[x1][2y]\n"
@@ -219,6 +223,7 @@ func TestRcExpandParamIsSubshellLocal(t *testing.T) {
 // Measured on zsh 5.9.2, 2026-09-25, `-f` throughout. `-P` is the option
 // letter, which the table has carried all along.
 func TestRcExpandParamReportsItsState(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"off by default", "[[ -o rcexpandparam ]] && print on || print off\n", "off\n"},
 		{
@@ -288,6 +293,7 @@ func TestRcExpandParamReportsItsState(t *testing.T) {
 //
 // Measured on zsh 5.9.2, 2026-09-25, `-f`.
 func TestRcExpandParamIsReadWhenTheWordIsExpandedAndNotWhenItIsParsed(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"a body parsed with it off, called with it on",

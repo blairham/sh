@@ -31,6 +31,7 @@ func runNoclobber(t *testing.T, src string, dg interp.Diagnostics) (string, int,
 // character device is not a file anybody can overwrite, so the option has
 // nothing to refuse and `2>/dev/null` has to keep working.
 func TestNoclobberWritesToAFileThatIsNotRegular(t *testing.T) {
+	t.Parallel()
 	out, st, _ := runNoclobber(t, `set -C; echo probe > /dev/null; printf "[%s]" "$?"`, interp.Diagnostics{})
 	if out != "[0]" {
 		t.Errorf("out = %q, want the write to go through at status 0", out)
@@ -43,6 +44,7 @@ func TestNoclobberWritesToAFileThatIsNotRegular(t *testing.T) {
 // TestNoclobberStillRefusesARegularFile is the control, and the half that
 // must not be lost to the half above: the option exists for this case.
 func TestNoclobberStillRefusesARegularFile(t *testing.T) {
+	t.Parallel()
 	dg := interp.Diagnostics{NoclobberRefusal: "%[1]s: cannot overwrite existing file"}
 	out, _, dir := runNoclobber(t, `set -C; echo first > f; echo second > f`, dg)
 	if !strings.Contains(out, "cannot overwrite existing file") {
@@ -59,6 +61,7 @@ func TestNoclobberStillRefusesARegularFile(t *testing.T) {
 // rather than about paths — and a symlink to nothing is refused, because
 // there is no type to find.
 func TestNoclobberFollowsTheSymlinkRatherThanTheName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, target string
 		wantStatus   int
@@ -84,6 +87,7 @@ func TestNoclobberFollowsTheSymlinkRatherThanTheName(t *testing.T) {
 // directory is the portable one — is reported two ways, and the switch is a
 // wording rather than an axis: nothing about *what happens* differs.
 func TestNoclobberRefusalCoversAFailedOpenIsTheDialectsChoice(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		covers  bool
@@ -123,6 +127,7 @@ func TestNoclobberRefusalCoversAFailedOpenIsTheDialectsChoice(t *testing.T) {
 // one dialect's verb says so. Both answers here, because a wording asserted
 // in one direction cannot tell a switch from a constant.
 func TestNoclobberFallbackIsWordedAsAnOpen(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name     string
 		isAnOpen bool

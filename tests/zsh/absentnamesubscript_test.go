@@ -18,6 +18,7 @@ import "testing"
 // there sees two shells that both produce nothing. The boundary gives the
 // caller a status to read.
 func TestASubscriptThatWillNotEvaluateIsRefusedOnAnAbsentName(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `( : ${x[1+]} ); print "  sub=$?"
 v=$( : ${y[1+]} ); print "  cmdsub=$?"
 f(){ : ${z[1+]} }; ( f ); print "  func=$?"
@@ -40,6 +41,7 @@ eval ': ${w[1+]}'; print "  eval=$?"`)
 // declaration with no assignment, a scalar, an empty scalar — and only the
 // name nothing created ever diverged.
 func TestAnythingUnderTheNameAlreadyRefusedIt(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `( x=(a b);      : ${x[1+]} ); print "  c1=$?"
 ( x=();         : ${x[1+]} ); print "  c2=$?"
 ( typeset -a x; : ${x[1+]} ); print "  c3=$?"
@@ -63,6 +65,7 @@ func TestAnythingUnderTheNameAlreadyRefusedIt(t *testing.T) {
 // expands to nothing in both shells — so what this pins is that the new
 // refusal reaches only the expression that will not evaluate.
 func TestAWorkingSubscriptOnAnAbsentNameIsStillNothing(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `( : ${x[1]} );   print "  n1=$?"
 ( : ${x[-1]} );  print "  n2=$?"
 ( : ${x[@]} );   print "  n3=$?"

@@ -20,6 +20,7 @@ import (
 // the status is merely nonzero passes against the wrong nonzero value, which
 // is exactly what `f(){ r=3; false; return r; }` used to produce.
 func TestTheStatusOperandIsReadFourWays(t *testing.T) {
+	t.Parallel()
 	sem := func(p StatusArgumentPolicy) func(*Runner) {
 		s := permissive()
 		s.StatusArgument = p
@@ -108,6 +109,7 @@ func TestTheStatusOperandIsReadFourWays(t *testing.T) {
 // Without this the fix could take `return` with no operand away and nothing
 // would notice, because every other case here wants a number instead.
 func TestABareReturnStillHandsBackTheLastStatus(t *testing.T) {
+	t.Parallel()
 	for _, p := range []StatusArgumentPolicy{
 		StatusArgStrict, StatusArgNumeric, StatusArgLeadingDigits, StatusArgArithmetic,
 	} {
@@ -129,6 +131,7 @@ func TestABareReturnStillHandsBackTheLastStatus(t *testing.T) {
 // happened again: `exit r` sat at 0 under the zsh preset while `return r` was
 // being taught to answer 3.
 func TestExitAndReturnReadTheSameOperandTheSameWay(t *testing.T) {
+	t.Parallel()
 	for _, p := range []struct {
 		name string
 		pol  StatusArgumentPolicy
@@ -166,6 +169,7 @@ func TestExitAndReturnReadTheSameOperandTheSameWay(t *testing.T) {
 // plugin loading actually runs, and a fix that reached only a function body
 // would leave the real config exactly as broken.
 func TestASourcedFileReadsTheOperandLikeAFunctionBody(t *testing.T) {
+	t.Parallel()
 	s := permissive()
 	s.StatusArgument = StatusArgArithmetic
 	dir := t.TempDir()
@@ -181,6 +185,7 @@ func TestASourcedFileReadsTheOperandLikeAFunctionBody(t *testing.T) {
 // A refused operand still returns from the function: bash skips the rest of
 // the body and leaves 2 for the caller, and the script runs the next command.
 func TestARefusedReturnOperandStillLeavesTheFunction(t *testing.T) {
+	t.Parallel()
 	s := permissive()
 	s.StatusArgument = StatusArgNumeric
 	s.BadOptionToSpecialBuiltinFatal = No
@@ -204,6 +209,7 @@ func TestARefusedReturnOperandStillLeavesTheFunction(t *testing.T) {
 // the operand leniently never reach this at all, because neither refuses any
 // word.
 func TestARefusedReturnOperandEndsTheScriptOnlyWhereAFailedSpecialBuiltinDoes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		fatal Answer
@@ -239,6 +245,7 @@ func TestARefusedReturnOperandEndsTheScriptOnlyWhereAFailedSpecialBuiltinDoes(t 
 // called `sh` end the script there. Three of the four callers of this axis
 // had it already; `exit` was the fourth.
 func TestARefusedExitOperandEndsTheScriptOnlyWhereAFailedSpecialBuiltinDoes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		fatal Answer
@@ -273,6 +280,7 @@ func TestARefusedExitOperandEndsTheScriptOnlyWhereAFailedSpecialBuiltinDoes(t *t
 // A good operand still leaves, whatever the axis says — the control that
 // keeps the row above from reading as "`exit` no longer exits".
 func TestAGoodExitOperandStillEndsTheScript(t *testing.T) {
+	t.Parallel()
 	for _, fatal := range []Answer{Yes, No} {
 		s := permissive()
 		s.StatusArgument = StatusArgStrict
@@ -291,6 +299,7 @@ func TestAGoodExitOperandStillEndsTheScript(t *testing.T) {
 // complaint names `return` — not `exit`, which shares the axis and would send
 // a reader to the wrong line.
 func TestAnUnansweredStatusAxisNamesTheBuiltinThatAskedIt(t *testing.T) {
+	t.Parallel()
 	s := PosixSemantics()
 	s.StatusArgument = StatusArgUnspecified
 	out, _ := run(t, "f() { return abc; }\nf\necho \"st=$?\"\n", withSem(s))

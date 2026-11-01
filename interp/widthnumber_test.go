@@ -50,6 +50,7 @@ func widthNumberRun(t *testing.T, src string, p WidthNumberPrecedencePolicy) (st
 // `7    ` five, so the row says which number the name kept without the
 // listing style having to be in the question.
 func TestTwoWidthNumbersAreSettledBothWays(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		policy                         WidthNumberPrecedencePolicy
 		lz, zl, rz, zr, ll, rl, triple string
@@ -90,6 +91,7 @@ func TestTwoWidthNumbersAreSettledBothWays(t *testing.T) {
 // Asserted on the listing as well as on the value, because the value alone
 // cannot say which letter is carrying the width once both numbers are equal.
 func TestTheLetterAndTheNumberComeFromOppositeEnds(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct{ src, want string }{
 		{`typeset -R3 -L5 v=7; typeset -p v`, `declare -- v="7  "` + "\n"},
 		{`typeset -L3 -R5 v=7; typeset -p v`, `declare -- v="  7"` + "\n"},
@@ -110,6 +112,7 @@ func TestTheLetterAndTheNumberComeFromOppositeEnds(t *testing.T) {
 // already stored": `-L0 -L4` would then keep the zero and learn 2 from `ab`,
 // which is not what was measured.
 func TestAWrittenZeroNamesNoWidthUnderEitherAnswer(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		policy             WidthNumberPrecedencePolicy
 		zeroThen, thenZero string
@@ -143,6 +146,7 @@ func TestAWrittenZeroNamesNoWidthUnderEitherAnswer(t *testing.T) {
 // about neither; and a second *declaration* starts the question over, because
 // the rule is about one declaration's option words.
 func TestWhatTheFirstNumberAnswerDoesNotReach(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct{ name, src, want string }{
 		{"a bare letter takes the standing number", `typeset -L -Z5 v=7; printf "[%s]\n" "$v"`, "[7    ]\n"},
 		{"and in the other order", `typeset -Z5 -L v=7; printf "[%s]\n" "$v"`, "[7    ]\n"},
@@ -163,6 +167,7 @@ func TestWhatTheFirstNumberAnswerDoesNotReach(t *testing.T) {
 // and discards the rest of the word, so `typeset -LZ 5` writes one number and
 // there is nothing for either answer to choose between.
 func TestADiscardedLetterCarriesNoSecondNumber(t *testing.T) {
+	t.Parallel()
 	for _, policy := range []WidthNumberPrecedencePolicy{
 		WidthNumberFirstWrittenWins, WidthNumberLastWrittenWins,
 	} {
@@ -196,6 +201,7 @@ func TestADiscardedLetterCarriesNoSecondNumber(t *testing.T) {
 // Run through the float harness because a float attribute needs floating
 // point in the arithmetic to be given a value at all.
 func TestTheFirstNumberAnswerIsTheWidthLettersAlone(t *testing.T) {
+	t.Parallel()
 	src := `typeset -F5 -F3 v=1.5; printf "[%s]\n" "$v"`
 	out, errs, st := floatRun(t, src, func(s *Semantics) {
 		withFloatLetter(s)

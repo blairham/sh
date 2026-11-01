@@ -11,6 +11,7 @@ import "testing"
 // the option off the word is one field (#5151, a chunk of D04parameter.ztst).
 // Measured 2026-10-03 on zsh 5.9.2 under `-f`.
 func TestUnderShWordSplitAnOperandsBlanksSeparateIt(t *testing.T) {
+	t.Parallel()
 	const f = "f(){ printf '<%s>' \"$@\"; echo; }\n"
 	for _, tc := range []struct{ src, want string }{
 		{`setopt shwordsplit; f x${:- p }y x${:- p q }y`, "<x><p><y><x><p><q><y>\n"},

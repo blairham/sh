@@ -23,6 +23,7 @@ import "testing"
 // while leaving the attribute off would pass the value rows and fail the type
 // rows, so every word gets both.
 func TestLocalTiesTheTwoNames(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, word := range []string{"local", "typeset", "declare"} {
 		for _, tc := range []struct{ name, body, want string }{
@@ -52,6 +53,7 @@ func TestLocalTiesTheTwoNames(t *testing.T) {
 // and `local -T` with no operands wrote this word's own listing where the
 // reference writes the tie listing.
 func TestLocalCarriesTheLettersOtherShapes(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name, src, want string
@@ -101,6 +103,7 @@ func TestLocalCarriesTheLettersOtherShapes(t *testing.T) {
 // It was invisible while `local -T` did nothing at all, and the row that
 // shows it is the same one under `typeset`, which had it all along.
 func TestATieOverAnOuterNameStartsEmpty(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, word := range []string{"local", "typeset", "declare"} {
 		t.Run(word, func(t *testing.T) {
@@ -130,6 +133,7 @@ func TestATieOverAnOuterNameStartsEmpty(t *testing.T) {
 // which and the caller does — which is exactly the kind of thing a fold can
 // lose, so it has rows.
 func TestTheExportLetterReachesPastTheCallUnderTypesetAndNotLocal(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, word, want string }{
 		{"typeset reaches past it", "typeset", "[x:y] 1"},

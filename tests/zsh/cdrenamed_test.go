@@ -44,6 +44,7 @@ func renamedCdRow(t *testing.T, src string) (string, int) {
 // reads `…/e`. It is the last chunk of `B01cd.ztst` (#4653) and closing it
 // closes the file.
 func TestCdFromARenamedDirectory(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().CdDestinationIsNotThere; got != interp.CdDestinationNotThereEntersAndTakesTheKernelsName {
 		t.Fatalf("the preset answers %v, want interp.CdDestinationNotThereEntersAndTakesTheKernelsName", got)
 	}
@@ -59,6 +60,7 @@ func TestCdFromARenamedDirectory(t *testing.T) {
 // measured the same day, which is why it is asserted in every dialect and
 // answered by none.
 func TestARelativePathStillReachesARenamedDirectory(t *testing.T) {
+	t.Parallel()
 	out, _ := renamedCdRow(t, `echo hi > rel.txt`+"\n"+`ls ../e`+"\n")
 	if out != "rel.txt\ns\n" {
 		t.Errorf("after the rename the shell wrote %q, want rel.txt beside s in the renamed directory", out)
@@ -74,6 +76,7 @@ func TestARelativePathStillReachesARenamedDirectory(t *testing.T) {
 // it is what says this is about `-P` rather than about the shell losing its
 // name.
 func TestPwdPhysicalFollowsARenamedDirectory(t *testing.T) {
+	t.Parallel()
 	out, _ := renamedCdRow(t, `echo "pwd=${$(pwd)##*/} pwdP=${$(pwd -P)##*/}"`+"\n")
 	if out != "pwd=d pwdP=e\n" {
 		t.Errorf("after the rename the shell said %q, want %q", out, "pwd=d pwdP=e\n")
@@ -90,6 +93,7 @@ func TestPwdPhysicalFollowsARenamedDirectory(t *testing.T) {
 // instead, which is why the axis has three readings and not two. See
 // interp.Semantics.CdCancelsADotDot.
 func TestCdDotDotFollowsTheDirectoryAndNotTheName(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().CdCancelsADotDot; got != interp.CdDotDotLooksAtEveryCanceledComponent {
 		t.Fatalf("the preset answers %v, want interp.CdDotDotLooksAtEveryCanceledComponent", got)
 	}
@@ -117,6 +121,7 @@ func TestCdDotDotFollowsTheDirectoryAndNotTheName(t *testing.T) {
 // first. `cd real/..` in the same tree is 0, which is the control — the
 // refusal is about the component and not about the `..`.
 func TestCdLooksAtTheComponentADotDotCancels(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "real"), 0o755); err != nil {
 		t.Fatal(err)

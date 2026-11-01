@@ -20,6 +20,7 @@ import (
 // `sh-dialect-zsh-home-*` directory per run (measured: five over the package's
 // module cases).
 func TestTheModuleHelperLeavesNoHomeBehind(t *testing.T) {
+	t.Parallel()
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)

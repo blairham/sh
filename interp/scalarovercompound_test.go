@@ -31,6 +31,7 @@ func scalarOverCompoundSem(replaces Answer) Semantics {
 // command of its own — the one spelling that was already right, and the
 // baseline every other spelling below is compared against.
 func TestAScalarAssignedOverAnArray(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		replaces Answer
 		want     string
@@ -48,6 +49,7 @@ func TestAScalarAssignedOverAnArray(t *testing.T) {
 // The same question asked of a keyed table, which answers it the same way in
 // every column — one field and not two.
 func TestAScalarAssignedOverATable(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		replaces Answer
 		want     string
@@ -73,6 +75,7 @@ func TestAScalarAssignedOverATable(t *testing.T) {
 // fix applied at the end of the loop would leave every pass wrong and the last
 // line right.
 func TestAForLoopOverANameHoldingAnArray(t *testing.T) {
+	t.Parallel()
 	const src = `v=(a b c); for v in x y z; do printf "[%s]" "$v"; done; echo; typeset -p v`
 	for _, c := range []struct {
 		replaces Answer
@@ -92,6 +95,7 @@ func TestAForLoopOverANameHoldingAnArray(t *testing.T) {
 // attribute is not a lock, and the value replaces it or lands in it exactly as
 // it does for an array with something in it.
 func TestAScalarAssignedOverADeclaredEmptyArray(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		replaces Answer
 		want     string
@@ -119,6 +123,7 @@ func TestAScalarAssignedOverADeclaredEmptyArray(t *testing.T) {
 // The same place `a+=x` joins under its own axis's joining answer, which is
 // why the two read one arrayBase between them.
 func TestTheScalarLandsAtTheBaseOfASparseArray(t *testing.T) {
+	t.Parallel()
 	sem := scalarOverCompoundSem(No)
 	sem.DeclarationTakesASubscript = Yes
 	out, st := run(t, `a=(1 2); a[5]=q; unset "a[0]"; unset "a[1]"; a=x; typeset -p a`, withSem(sem))
@@ -142,6 +147,7 @@ func TestTheScalarLandsAtTheBaseOfASparseArray(t *testing.T) {
 // two readings part over what the command is shown and not over the
 // take-back.
 func TestAPrefixAssignmentGivesBackTheCompound(t *testing.T) {
+	t.Parallel()
 	for _, replaces := range []Answer{Yes, No} {
 		for _, fresh := range []Answer{Yes, No} {
 			sem := scalarOverCompoundSem(replaces)
@@ -165,6 +171,7 @@ func TestAPrefixAssignmentGivesBackTheCompound(t *testing.T) {
 // Both answers, because the exemption has to hold on both sides and the
 // recursion is only reachable from one of them.
 func TestAnElementWriteDoesNotDisturbTheArray(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		replaces Answer
 		want     string
@@ -185,6 +192,7 @@ func TestAnElementWriteDoesNotDisturbTheArray(t *testing.T) {
 // the array where it was: a store nobody could decide is a store that does not
 // happen.
 func TestAnUnansweredScalarOverACompoundIsRefused(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.ScalarAssignedOverACompoundReplacesTheName = Unspecified
 	out, _ := run(t, `a=(1 2); a=x; typeset -p a`, withSem(sem))

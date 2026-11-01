@@ -52,6 +52,7 @@ func runSplice(t *testing.T, sem Semantics, src string) (string, int) {
 }
 
 func TestASubscriptOnAStringReplacesTheSpanItNames(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ write, want string }{
 		// The value is not one character wide, and neither is the span: the
 		// string grows and shrinks with what goes in. A reading that
@@ -111,6 +112,7 @@ func TestASubscriptOnAStringReplacesTheSpanItNames(t *testing.T) {
 // after that is fixed. What the two readings do with the rest of the string is
 // the whole difference — one keeps it and one does not.
 func TestTheOtherReadingOfTheSameLineReachesAnElement(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ write, characters, elements string }{
 		{`v[1]=X`, "[Xbc] n=1", "[X] n=1"},
 		{`v[1]=XY`, "[XYbc] n=1", "[XY] n=1"},
@@ -135,6 +137,7 @@ func TestTheOtherReadingOfTheSameLineReachesAnElement(t *testing.T) {
 // so a suite that stopped at the value would pass with the bug in place; the
 // second write is what shows which of the two happened.
 func TestAStringSplicedAtASubscriptStaysAString(t *testing.T) {
+	t.Parallel()
 	const src = `v=z; v[1]=X; v[2]=Y` + spliceShape
 	out, st := runSplice(t, spliceSem(Yes), src)
 	if want := "[XY] n=1"; out != want || st != 0 {
@@ -151,6 +154,7 @@ func TestAStringSplicedAtASubscriptStaysAString(t *testing.T) {
 // a name nobody set becomes an array. The two lines differ only in whether
 // there is a name there at all.
 func TestOnlyANameAlreadyHoldingAStringSplices(t *testing.T) {
+	t.Parallel()
 	// A sparse array with one element joins and counts exactly as a
 	// one-character string does, so neither the joined list nor the count can
 	// tell `v=; v[2]=X` from `unset v; v[2]=X`. The two subscripts can: the
@@ -182,6 +186,7 @@ func TestOnlyANameAlreadyHoldingAStringSplices(t *testing.T) {
 // refusal with it, because which subscript is *below* the first is one
 // question. See ArrayBaseIsZero.
 func TestTheBaseDecidesWhichCharacterASubscriptNames(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		write, fromOne, fromZero string
 		refusedFromOne           bool
@@ -218,6 +223,7 @@ func TestTheBaseDecidesWhichCharacterASubscriptNames(t *testing.T) {
 // through a string: the script ends there rather than carrying on with the
 // character not written.
 func TestASubscriptBelowTheFirstCharacterIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, write := range []string{`v[0]=X`, `v[0,0]=X`} {
 		out, st := runSplice(t, spliceSem(Yes), `v=abc; `+write+`; echo reached`)
 		if st == 0 {
@@ -233,6 +239,7 @@ func TestASubscriptBelowTheFirstCharacterIsRefused(t *testing.T) {
 // store, so the spellings that reach it cannot disagree. Stated at the
 // assignment statement alone, the others would go on converting the string.
 func TestAStringIsSplicedThroughEveryWayOfWritingAnElement(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ write, want string }{
 		{`v[2]=X`, "[aXc] n=1"},
 		{`(( v[2] = 88 ))`, "[a88c] n=1"},
@@ -250,6 +257,7 @@ func TestAStringIsSplicedThroughEveryWayOfWritingAnElement(t *testing.T) {
 // element half of that is no dialect's question: every shell measured fills the
 // element for the array spelling.
 func TestReadStoresThroughASubscriptedOperand(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ start, operand, want string }{
 		{`v=xy;`, `v[2]`, "[xQ] n=1"},
 		{`v=xy;`, `v[${#v}+1]`, "[xyQ] n=1"},

@@ -29,6 +29,7 @@ func literalRegex() func(*Runner) {
 // metacharacter in the operand into a letter. Measured against bash 5.3.20 on
 // 2026-09-22: every `match` row below answered `no` before #4173.
 func TestAQuotedPortionOfARegexIsLiteralAndTheRestIsNot(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The anchors on either side of a quoted letter are still anchors.
 		{"anchors survive a quote", `[[ ab =~ ^"a"b$ ]] && echo match || echo no`, "match"},
@@ -66,6 +67,7 @@ func TestAQuotedPortionOfARegexIsLiteralAndTheRestIsNot(t *testing.T) {
 // `[[ ab =~ a|ab ]]` holds either way and the recorded match was `a`.
 // Measured against bash 5.3.20, 2026-09-22.
 func TestARegexMatchIsLeftmostLongest(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The expression is held in a parameter because a bare `|` in a
 		// condition operand is a token the core grammar does not take there,

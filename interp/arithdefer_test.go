@@ -24,6 +24,7 @@ import (
 // which is the weaker half: an implementation that read the file and then
 // raised the expression anyway at the top of the run would pass it.
 func TestAnExpressionInABranchThatNeverRunsIsNeverRead(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		src  string
@@ -82,6 +83,7 @@ func TestAnExpressionInABranchThatNeverRunsIsNeverRead(t *testing.T) {
 // to the run and not to the read. A test that only checked the complaint was
 // still there would pass for a program that raised it before anything ran.
 func TestTheExpressionIsRaisedWhenTheBranchRuns(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 		why             string

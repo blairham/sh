@@ -17,6 +17,7 @@ import "testing"
 // showing the same trim works without the group, so "not read" is the group
 // being left standing rather than the operator being broken.
 func TestWhichSurfacesReadATildeGlobGroup(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The controls: each trim works.
 		{"a prefix trim", `v=xab; echo "[${v#x}]"`, `[ab]`},
@@ -63,6 +64,7 @@ func TestWhichSurfacesReadATildeGlobGroup(t *testing.T) {
 // the pair that separates the two gates: a `%` trim reads a bracket class
 // under either and an escape class only under the group's.
 func TestTheClassEscapesFollowTheGroupAndNotTheWholeSubject(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// A bracket is a class under any reading, so this row moves for
 		// neither gate and is the control.

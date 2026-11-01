@@ -11,6 +11,7 @@ import "testing"
 // Measured on zsh 5.9.2 with no startup files: `!^#`, and `${(t)histchars}`
 // is `scalar-special`.
 func TestHistoryCharactersHaveZshsValue(t *testing.T) {
+	t.Parallel()
 	out, st := runZshPrelude(t, t.TempDir(),
 		`print -r -- "[$histchars] [${histchars[1]}] [${histchars[2]}] [${histchars[3]}] ${#histchars}"`)
 	want := "[!^#] [!] [^] [#] 3\n"
@@ -34,6 +35,7 @@ func TestHistoryCharactersHaveZshsValue(t *testing.T) {
 // which a test asserting only the value could not distinguish from a test
 // asserting nothing.
 func TestAnEmptyHistoryCharacterDoesNotTurnItsPatternIntoAStar(t *testing.T) {
+	t.Parallel()
 	out, st := runZshPrelude(t, t.TempDir(), `for w in echo hello '|' grep x '!!' '!$' '^a^b'; do
   if [[ $w = ${histchars[1]}* && -n ${w[2]} ]]; then
     print -rn -- "${w}:HIST "
@@ -56,6 +58,7 @@ print`)
 // both — the shape promptnames.go settled for `PROMPT` and `PS1`, and asserted
 // the same way, because a tie that holds until the first write is not a tie.
 func TestTheHistoryCharacterSpellingsAreOneParameter(t *testing.T) {
+	t.Parallel()
 	out, st := runZshPrelude(t, t.TempDir(), `print -r -- "[$histchars][$HISTCHARS]"
 histchars=@;  print -r -- "[$histchars][$HISTCHARS]"
 HISTCHARS='%&'; print -r -- "[$histchars][$HISTCHARS]"
@@ -70,6 +73,7 @@ histchars=;   print -r -- "[$histchars][$HISTCHARS]"`)
 // assignment, it is scoped by `local`, and the outer value is back when the
 // function returns. Measured the same way in zsh 5.9.2.
 func TestHistoryCharactersAreAnOrdinaryScalarToAScript(t *testing.T) {
+	t.Parallel()
 	out, st := runZshPrelude(t, t.TempDir(), `f() { local histchars=xyz; print -r -- "in:[$histchars]"; }
 f
 print -r -- "out:[$histchars]"`)

@@ -29,6 +29,7 @@ func answeringCountedReads(findsItsEnd, sticks Answer) func(*Runner) {
 // the same under both values, so it is the pipe at `exec`'s number that asks.
 // The other axis is held at no, so what follows the 1 is a plain read.
 func TestACountedReadOfAPipeAsksTheDialect(t *testing.T) {
+	t.Parallel()
 	const line = `printf 'abcdef\nxyz\n' | `
 	for _, tc := range []struct{ name, src, no, yes string }{
 		{
@@ -93,6 +94,7 @@ func TestACountedReadOfAPipeAsksTheDialect(t *testing.T) {
 // it, `-N`, a plain read and a short count at the end — answer the same
 // under both values.
 func TestACountedReadAtTheEndAsksTheDialect(t *testing.T) {
+	t.Parallel()
 	const stuck = `: >f; exec 3<f; read -r -n 4 -u3 l; echo 'a b' >>f; `
 	for _, tc := range []struct{ name, src, no, yes string }{
 		{
@@ -163,6 +165,7 @@ func TestACountedReadAtTheEndAsksTheDialect(t *testing.T) {
 // found at its end under a count, and the number stuck after it, so the line
 // is in the pipe and no read of 3 reaches it — but one of standard input does.
 func TestBothCountedReadAxesTogether(t *testing.T) {
+	t.Parallel()
 	src := `printf 'abcdef\nxyz\n' | { exec 3<&0; read -r -n 4 -u3 l; echo "st=$? l=[$l]"; ` +
 		`read -r -u3 m; echo "st=$? m=[$m]"; read -r m <&3; echo "st=$? m=[$m]"; }`
 	want := "st=1 l=[]\nst=0 m=[]\nst=0 m=[abcdef]\n"

@@ -24,6 +24,7 @@ import (
 // for the first can see — and they move together, which is what says the arm
 // decides rather than either scan.
 func TestARefusedCaseArmPatternLeavesNought(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src string
 		wantC     int
@@ -91,6 +92,7 @@ func TestARefusedCaseArmPatternLeavesNought(t *testing.T) {
 // `case` arm, where the caller is handed 1 and runs on just the same — so the
 // difference between the two rows is the number and nothing else.
 func TestTheCallerOfASubshellRunsOnFromARefusedCaseArm(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"a subshell", `( case '[a' in ([a) :;; esac ) 2>/dev/null; print "after=$?"; print "on"`, "after=0\non\n"},
 		{"a command substitution", `v=$( case '[a' in ([a) :;; esac ) 2>/dev/null; print "after=$?"; print "on"`, "after=0\non\n"},

@@ -37,6 +37,7 @@ func countedSurface(t *testing.T, src string) string {
 // `go version -m` says *not a Go executable* — each probe from `-c` under
 // `env -i PATH=/usr/bin:/bin`.
 func TestACountedGroupReachesEverySurface(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a case arm", `case aaa in {2,3}(a)) echo matches;; *) echo no;; esac`, `matches`},
 
@@ -93,6 +94,7 @@ func TestACountedGroupReachesEverySurface(t *testing.T) {
 // the only door a parenthesis has there; in an operand it has one of its
 // own, which `s=ab; ${s#a(b)}` being empty says with no brace in it at all.
 func TestABareGroupBehindACountIsTheSurfacesAnswer(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The operand: the group is read, so the pattern matches `{z,y}a`.
 		{"an operand reads the group", `s='{z,y}a'; echo "[${s#{z,y}(a)}]"`, `[]`},

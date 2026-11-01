@@ -77,6 +77,7 @@ func countAmbiguous(out string) int {
 // and not for the second, so a rule keyed on the count would get one of them
 // wrong — which is the shape this seam keeps producing.
 func TestAFailedTargetExpansionIsNotAnAmbiguousRedirect(t *testing.T) {
+	t.Parallel()
 	t.Run("no words, and nothing failed: ambiguous", func(t *testing.T) {
 		out, st := run(t, `e=; : > $e`+"\n"+`echo "after st=$?"`, ambiguousTargets(t.TempDir()))
 		if n := countAmbiguous(out); n != 1 {
@@ -102,6 +103,7 @@ func TestAFailedTargetExpansionIsNotAnAmbiguousRedirect(t *testing.T) {
 // ambiguous, and `$e$(( 1/0 ))` is two words that never got made because the
 // expansion failed first. The reference writes one line for the second.
 func TestAFailedTargetExpansionWinsOverAWrongWordCount(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -124,6 +126,7 @@ func TestAFailedTargetExpansionWinsOverAWrongWordCount(t *testing.T) {
 // Every failure kind the target's expansion can arrive at, because the rule is
 // about the failure and not about which one it was.
 func TestEveryFailedTargetExpansionKindIsOneDiagnostic(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"an arithmetic error", `: > $(( 1/0 ))`},
 		{"a parameter with a word of its own", `: > ${q?bad}`},
@@ -149,6 +152,7 @@ func TestEveryFailedTargetExpansionKindIsOneDiagnostic(t *testing.T) {
 // — its word is a *body*, which goes through another door entirely and was
 // right all along.
 func TestEveryRedirectionOperatorsFailedTargetIsOneDiagnostic(t *testing.T) {
+	t.Parallel()
 	for _, op := range []string{`>`, `>>`, `<`, `<>`, `2>`, `&>`} {
 		t.Run(op, func(t *testing.T) {
 			out, _ := run(t, `: `+op+` $(( 1/0 ))`, ambiguousTargets(t.TempDir()))
@@ -169,6 +173,7 @@ func TestEveryRedirectionOperatorsFailedTargetIsOneDiagnostic(t *testing.T) {
 // than assumed: the command does not run, the redirection is still refused,
 // and the next line still reads 1.
 func TestAFailedTargetExpansionKeepsItsReachAndStatus(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a special builtin", `: > $(( 1/0 ))`},
 		{"a regular builtin", `echo RAN > $(( 1/0 ))`},

@@ -38,6 +38,7 @@ import (
 // `typeset +f` is the function names, one bare name a line, with an operand
 // and without one alike.
 func TestTypesetPlusFNamesTheFunctions(t *testing.T) {
+	t.Parallel()
 	const src = "f() { echo x; }\ng() { :; }\n"
 	for _, c := range []struct{ name, line, want string }{
 		{"with no operand", "typeset +f", "f\ng\n"},
@@ -62,6 +63,7 @@ func TestTypesetPlusFNamesTheFunctions(t *testing.T) {
 // names printed — the same answer `typeset -f` gives, which is what makes the
 // two signs one builtin rather than two.
 func TestTypesetPlusFAnswersOneForANameItDoesNotHold(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "f() { :; }\ntypeset +f f nosuch g")
 	if out != "f\n" || st != 1 {
 		t.Errorf("typeset +f f nosuch g = %q (status %d), want %q at 1", out, st, "f\n")
@@ -73,6 +75,7 @@ func TestTypesetPlusFAnswersOneForANameItDoesNotHold(t *testing.T) {
 // lists as the two bare characters and a space under both spellings of the
 // names-only listing. A list of names is not a program that reads back.
 func TestANamesOnlyListingDoesNotQuoteTheName(t *testing.T) {
+	t.Parallel()
 	const src = "function \"a b\" { :; }\n"
 	for _, line := range []string{"typeset +f", "functions +"} {
 		out, st := runZsh(t, t.TempDir(), src+line)
@@ -92,6 +95,7 @@ func TestANamesOnlyListingDoesNotQuoteTheName(t *testing.T) {
 // and a sign on its own *is* an option word here. `functions +` names every
 // function where `functions -` writes them all out.
 func TestFunctionsTakesItsSignFromTheWord(t *testing.T) {
+	t.Parallel()
 	const src = "f() { echo x; }\n"
 	for _, c := range []struct{ name, line, want string }{
 		{"a plus names them", "functions +", "f\n"},
@@ -115,6 +119,7 @@ func TestFunctionsTakesItsSignFromTheWord(t *testing.T) {
 // between under `-m`: the value under a minus, the attribute words and the
 // bare name under a plus. A bare sign is the whole table.
 func TestABareSignIsTheWholeTablesListing(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().SignAloneIsAnOptionWord; got != interp.Yes {
 		t.Errorf("SignAloneIsAnOptionWord = %v, want Yes", got)
 	}
@@ -156,6 +161,7 @@ func TestABareSignIsTheWholeTablesListing(t *testing.T) {
 // under `-m`, over the whole table: the matching names alone, with no
 // attribute words in front of them.
 func TestAPlusSignedAttributeLetterFiltersTheWholeTable(t *testing.T) {
+	t.Parallel()
 	const src = "qa=1\nexport qb=2\ntypeset -i qc=3\ntypeset -r qd=4\n"
 	for _, c := range []struct {
 		name, line     string
@@ -195,6 +201,7 @@ func TestAPlusSignedAttributeLetterFiltersTheWholeTable(t *testing.T) {
 // side, and is what keeps `-g` from being read as "a letter, therefore a
 // filter that matches nothing".
 func TestTheGlobalLetterFiltersNothing(t *testing.T) {
+	t.Parallel()
 	const src = "qa=1\nexport qb=2\n"
 	for _, line := range []string{"typeset -g", "typeset +g"} {
 		out, st := runZsh(t, t.TempDir(), src+line)
@@ -220,6 +227,7 @@ func TestTheGlobalLetterFiltersNothing(t *testing.T) {
 // same rule: both halves of every tie, and the sign says whether the values
 // come with them.
 func TestTheTieListingTakesTheSign(t *testing.T) {
+	t.Parallel()
 	const src = "typeset -T SCA sca=(p q)\n"
 	out, st := runZsh(t, t.TempDir(), src+"typeset +T")
 	if st != 0 {
@@ -249,6 +257,7 @@ func TestTheTieListingTakesTheSign(t *testing.T) {
 // beginning `+zi-` reaching `typeset` is read as an option bundle and the
 // first letter of it is this one.
 func TestTheZLetterIsTypesetsAlone(t *testing.T) {
+	t.Parallel()
 	for _, line := range []string{"typeset -z", "typeset +z", "typeset -fz", "declare -z"} {
 		out, st := runZsh(t, t.TempDir(), line)
 		if out != "" || st != 0 {

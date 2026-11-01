@@ -17,6 +17,7 @@ import (
 // attribute on the name, and from then on a subscript is a string key where
 // the same text on an undeclared name is an arithmetic index.
 func TestAssociativeArrays(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ name, src, want string }{
 		{
 			"a string subscript stores and reads back",
@@ -114,6 +115,7 @@ func TestAssociativeArrays(t *testing.T) {
 // `${!m[@]}` is the keys, and it needs a grammar with indirection — the
 // strict core has none, because two of the panel reject the spelling.
 func TestIndirectSubscriptYieldsTheKeys(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"one key", `typeset -A m; m[k]=v; printf "%s" "${!m[@]}"`, "k"},
 		{
@@ -153,6 +155,7 @@ func TestIndirectSubscriptYieldsTheKeys(t *testing.T) {
 // unwinds with the value: the caller's name must not come back reading its
 // subscripts as strings.
 func TestALocalAssociativeArrayStaysInTheFunction(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"the elements stay inside", `f(){ typeset -A m; m[k]=v; }; f; echo "[${#m[@]}]"`, "[0]"},
 		{"visible while inside", `f(){ typeset -A m; m[k]=v; echo "[${m[k]}]"; }; f`, "[v]"},
@@ -180,6 +183,7 @@ func TestALocalAssociativeArrayStaysInTheFunction(t *testing.T) {
 // does — and the "one element" answer is the element whose key is `0`, not
 // the first key there is, because an associative array has no first.
 func TestAssocScalarFollowsTheArrayScalarAxis(t *testing.T) {
+	t.Parallel()
 	whole := testSemantics()
 	whole.ArrayScalarIsTheWholeArray = Yes
 	one := testSemantics()

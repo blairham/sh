@@ -39,6 +39,7 @@ func invocationRunner(t *testing.T, atInvocation Answer) (*Runner, *strings.Buil
 }
 
 func TestAnImmovableNameIsTakenAtAnInvocation(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name         string
 		atInvocation Answer
@@ -85,6 +86,7 @@ func TestAnImmovableNameIsTakenAtAnInvocation(t *testing.T) {
 // And the same name from inside a script, which is the half the grant above
 // could quietly take away. ApplyNamedOption is the seam a running shell uses.
 func TestAnImmovableNameIsStillRefusedToAScript(t *testing.T) {
+	t.Parallel()
 	for _, on := range []bool{true, false} {
 		r, _ := invocationRunner(t, Yes)
 		r.Interactive = false
@@ -103,6 +105,7 @@ func TestAnImmovableNameIsStillRefusedToAScript(t *testing.T) {
 // draws one, both at status 0, and its `set -o` listing names only
 // `interactive`.
 func TestTheNegativeInteractiveNameIsTheNameUpsideDown(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name      string
 		on        bool
@@ -129,6 +132,7 @@ func TestTheNegativeInteractiveNameIsTheNameUpsideDown(t *testing.T) {
 // It is refused to a script exactly as the name it negates is, which is one
 // fact with two spellings rather than a gap in the refusal.
 func TestTheNegativeInteractiveNameIsRefusedToAScript(t *testing.T) {
+	t.Parallel()
 	for _, on := range []bool{true, false} {
 		r, _ := invocationRunner(t, Yes)
 		r.Semantics.InteractiveOptionName = "interactive"
@@ -144,6 +148,7 @@ func TestTheNegativeInteractiveNameIsRefusedToAScript(t *testing.T) {
 // without this the resolution above would be a rule about the characters `no`
 // rather than a dialect's declaration.
 func TestTheNegativeNameNeedsDeclaring(t *testing.T) {
+	t.Parallel()
 	r, _ := invocationRunner(t, Yes)
 	r.Semantics.InteractiveOptionName = "interactive"
 	if got := r.SetNamedOption("nointeractive", true); got == 0 {

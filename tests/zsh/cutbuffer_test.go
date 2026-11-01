@@ -73,6 +73,7 @@ func (e *killingEditor) Perform(w repl.Widget, in repl.Line) (repl.Line, bool) {
 
 // Outside a widget there is no such parameter, measured: `${+CUTBUFFER}` is 0.
 func TestCutBufferIsNotThereOutsideAWidget(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "print -r -- ${+CUTBUFFER}\n")
 	if out != "0\n" {
 		t.Errorf("got %q, want 0", out)

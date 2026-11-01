@@ -15,6 +15,7 @@ import (
 // Semantics.DollarDashLetterOrder — the values here are made up, because
 // which real shell publishes which order is asserted in dialect/.
 func TestDollarDashTakesTheOrderTheDialectPublishes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		order string
@@ -56,6 +57,7 @@ func TestDollarDashTakesTheOrderTheDialectPublishes(t *testing.T) {
 // wrote a flag of its own would pass the first two rows and fail the third,
 // which reaches the name without ever writing the letter.
 func TestTheFLetterMovesTheOptionTheDialectNames(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		snippet string
@@ -87,6 +89,7 @@ func TestTheFLetterMovesTheOptionTheDialectNames(t *testing.T) {
 // globbing never reaches this; the one being guarded against is a dialect
 // that answers No to the globbing axis and has nothing else to say.
 func TestTheFLetterIsInertWhereTheDialectNamesNothing(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	sem.SetFTurnsOffGlobbing = No
 	out, st := run(t, `set -f; echo "st=$? [$-]"`, func(r *Runner) { r.Semantics = &sem })

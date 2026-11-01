@@ -29,6 +29,7 @@ const declSubSrc = "a=(1 2 3)\n" +
 // end stopped here — the same shape #3485 found one builtin over, at a site
 // #3485 did not cover.
 func TestADeclarationGivesUpAsMuchAsTheDialectDoes(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
 		giveUp BadSubscriptPolicy
@@ -79,6 +80,7 @@ func TestADeclarationGivesUpAsMuchAsTheDialectDoes(t *testing.T) {
 // Measured 2026-09-17 at every one of these in bash 5.3.20 and 3.2.57: none
 // of them reaches a second command and the line after each of them runs.
 func TestADeclarationGivingUpACommandUnwindsOutOfAConstruct(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src string }{
 		{"an && list", `typeset 'a[b c]'=v && echo yes || echo no`},
 		{"an if condition", `if typeset 'a[b c]'=v; then echo t; else echo f; fi`},
@@ -112,6 +114,7 @@ func TestADeclarationGivingUpACommandUnwindsOutOfAConstruct(t *testing.T) {
 // still completes: measured, `v=$( typeset 'a[b c]'=v; echo x )` leaves `v`
 // empty at 1 in bash and the script runs on.
 func TestADeclarationGivingUpACommandLeavesTheAssignmentAroundIt(t *testing.T) {
+	t.Parallel()
 	const src = "a=(1 2 3)\n" +
 		`v=$( typeset 'a[b c]'=q; echo x )` + "\n" +
 		`echo "assigned=$? v=[$v]"`
@@ -126,6 +129,7 @@ func TestADeclarationGivingUpACommandLeavesTheAssignmentAroundIt(t *testing.T) {
 // abandons can reach the question, so it is written on the constant rather
 // than asked as an axis of its own.
 func TestADeclarationGivingUpACommandGivesUpACommandStringWhole(t *testing.T) {
+	t.Parallel()
 	out, st := declSubRunAs(t, BadSubscriptAbandonsTheCommand, declSubSrc, RouteCommandString)
 	if strings.Contains(out, "next=") {
 		t.Errorf("output %q ran on past the failure", out)
@@ -140,6 +144,7 @@ func TestADeclarationGivingUpACommandGivesUpACommandStringWhole(t *testing.T) {
 // 'a[b c]'=v` inside a function gives up the function whole and the script
 // goes on.
 func TestALocalDeclarationGivesUpTheSameWay(t *testing.T) {
+	t.Parallel()
 	const src = "a=(1 2 3)\n" +
 		`f() { local 'a[b c]'=v; echo inside; }` + "\n" +
 		"f\n" +
@@ -161,6 +166,7 @@ func TestALocalDeclarationGivesUpTheSameWay(t *testing.T) {
 // builtins take a subscript at all — the axis is about the declaration and
 // not about which word spells it.
 func TestAFrozenOrExportedElementGivesUpTheSameWay(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"readonly", "export"} {
 		t.Run(name, func(t *testing.T) {
 			src := "a=(1 2 3)\n" + name + ` 'a[b c]'=v; echo "same=$?"` + "\n" +
@@ -184,6 +190,7 @@ func TestAFrozenOrExportedElementGivesUpTheSameWay(t *testing.T) {
 // sentence about the subscript is not written under the refusal: a shell that
 // was never told what to do here has not decided to complain about it.
 func TestADeclarationRefusesAnUnspecifiedBadSubscriptAxis(t *testing.T) {
+	t.Parallel()
 	out, _ := declSubRun(t, BadSubscriptUnspecified, declSubSrc)
 	if !strings.Contains(out, "no dialect was chosen") {
 		t.Errorf("output %q is not a refusal naming the axis", out)

@@ -37,6 +37,7 @@ import (
 // name a listing writes begins with a dot, whichever store put it there
 // (#5014).
 func TestNoEngineStoreReachesAListing(t *testing.T) {
+	t.Parallel()
 	// One listing per route, each writing the names it reached. Every route
 	// here wrote at least one `.zsh.` name before the fix, which is what
 	// makes a clean run evidence rather than an instrument with nothing in
@@ -78,6 +79,7 @@ print DONE
 // the same routes over an ordinary name write rows for it. Without this, a
 // walk whose `eval` had silently listed nothing would pass.
 func TestTheSameListingsDoReachAnOrdinaryName(t *testing.T) {
+	t.Parallel()
 	const src = `zmodload zsh/parameter
 typeset -g dotless=v
 for route in 'typeset' 'typeset -p' 'typeset +' 'typeset -g' 'set' 'declare' \
@@ -110,6 +112,7 @@ done
 // the guard taken back out answers 1 again, so the row is this guard's and
 // not the prefix's spelling.
 func TestUnsetByPatternDoesNotReachTheEngineState(t *testing.T) {
+	t.Parallel()
 	const src = "zmodload zsh/langinfo\n" +
 		"unset -m '.zsh*'\n" +
 		"zmodload -e zsh/langinfo; print \"e=$?\"\n" +
@@ -126,6 +129,7 @@ func TestUnsetByPatternDoesNotReachTheEngineState(t *testing.T) {
 // The read was already shut and stays shut: a name under the prefix is not a
 // parameter a script can ask for, in either shell.
 func TestAnEngineStoreIsStillNoNameToRead(t *testing.T) {
+	t.Parallel()
 	script := zshScriptFileAt(t, "zmodload zsh/langinfo\nprint -r -- \"${.zsh.zmodload}\"\n")
 	var out, errs bytes.Buffer
 	code := driver.MainArgs(zshWriting(&out, &errs), []string{"zsh", "-f", script})
@@ -147,6 +151,7 @@ func TestAnEngineStoreIsStillNoNameToRead(t *testing.T) {
 // such variable: .zsh.zstyle` at status 1, and an ordinary name beside it is
 // still written — which is the control that says the listing ran (#6427).
 func TestAnEngineStoreNamedByAnOperandIsNoSuchVariable(t *testing.T) {
+	t.Parallel()
 	for _, form := range []string{
 		"typeset -p", "typeset +p", "declare -p", "export -p", "readonly -p",
 		"f() { local -p \"$@\"; }; f",

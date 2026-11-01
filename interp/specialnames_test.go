@@ -30,6 +30,7 @@ var filteredTables = map[string]bool{
 // registered with before — so the name is recorded already — and is listed as
 // such rather than left out of the walk.
 func TestEveryWriteIntoAFilteredTableRecordsTheName(t *testing.T) {
+	t.Parallel()
 	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)

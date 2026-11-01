@@ -47,6 +47,7 @@ func replacementDir(t *testing.T) string {
 // replacement stops globbing there for a reason that has nothing to do with
 // the replacement — every row written that way passes with the fault in place.
 func TestAReplacementIsLiteralText(t *testing.T) {
+	t.Parallel()
 	dir := replacementDir(t)
 	for _, tc := range []struct{ src, want string }{
 		{`x=abcd; printf "[%s]" "${x//b/*}"`, `[a*cd]`},
@@ -78,6 +79,7 @@ func TestAReplacementIsLiteralText(t *testing.T) {
 // listing being substituted here, which is the shape a second copy of a rule
 // has produced in this tree before.
 func TestAReplacementIsLiteralTextForEveryElement(t *testing.T) {
+	t.Parallel()
 	dir := replacementDir(t)
 	src := `a=(ab cb); b=("${a[@]//b/*}"); printf "[%s]" "${b[0]}" "${b[1]}"`
 	out, st := run(t, src, inDir(dir))

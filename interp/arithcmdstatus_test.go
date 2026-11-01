@@ -31,6 +31,7 @@ import (
 // so a status hung on arithmetic failure rather than on the construct would
 // move this line too.
 func TestTheStatusAFailedArithmeticCommandLeaves(t *testing.T) {
+	t.Parallel()
 	const src = `(( 1+ )); echo "parse=$?"
 (( 1/0 )); echo "eval=$?"
 let "1+"; echo "let=$?"
@@ -65,6 +66,7 @@ let "1+"; echo "let=$?"
 // and the refusal is reached only by a failing expression: an arithmetic
 // command that evaluates cleanly never asks.
 func TestAnUnansweredArithmeticCommandStatusIsRefused(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	sem.ArithCommandErrorStatusIsTwo = Unspecified
 	out, st := run(t, `(( 2 )); echo "ok=$?"`, func(r *Runner) { r.Semantics = &sem })

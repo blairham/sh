@@ -27,6 +27,7 @@ func rematch(name string) func(*Runner) {
 // What the record holds: element 0 is the whole match and the rest are the
 // groups, in order — reading them back is the idiom `=~` exists for.
 func TestTheRegexMatchRecordsCaptures(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"whole match and groups", `[[ abcd =~ (b)(c) ]]; echo "[${M[0]}|${M[1]}|${M[2]}]"`, "[bc|b|c]"},
 		{"no groups is one element", `[[ abcd =~ b.d ]]; echo "n=${#M[@]} [${M[0]}]"`, "n=1 [bcd]"},
@@ -58,6 +59,7 @@ func TestTheRegexMatchRecordsCaptures(t *testing.T) {
 // Without a dialect to name it, there is no record at all — nothing could
 // read one, so nothing is kept.
 func TestNoNameMeansNoRegexRecord(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `[[ abcd =~ (b)(c) ]]; echo "st=$? [${M[@]}]"`, nil)
 	if strings.TrimSpace(out) != "st=0 []" {
 		t.Errorf("got %q, want an ordinary absent variable", out)
@@ -79,6 +81,7 @@ func reporting(r *Runner) { r.SetRegexCaptureReport() }
 // exactly that reason, so a vector that counts from one moves the elements
 // and the numbers together. No shell is named here; the base is the axis.
 func TestARegexMatchCanReportThroughTheReportingParameters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"whole match and positions", `[[ abcd =~ b(c) ]]; echo "[$MATCH] $MBEGIN $MEND"`, "[bc] 1 2"},
 		{"groups alone, with their positions", `[[ abcd =~ b(c) ]]
@@ -114,6 +117,7 @@ echo "st=$? [$MATCH] [${match[0]}] $MBEGIN"`, "st=1 [a] [a] 0"},
 // Unasked, nothing is written — so a vector without the reporting parameters
 // keeps a `$MATCH` a script put there for its own reasons.
 func TestWithoutTheReportARegexMatchWritesNothing(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `MATCH=mine; match=(mine)
 [[ abcd =~ b(c) ]]
 echo "st=$? [$MATCH] [${match[0]}] [${MBEGIN-UNSET}]"`, nil)
@@ -132,6 +136,7 @@ echo "st=$? [$MATCH] [${match[0]}] [${MBEGIN-UNSET}]"`, nil)
 // instead would turn both of them into matches. Measured 2026-09-20 across
 // every column of the panel, which agrees with itself on all six. #3892.
 func TestARegexReadsANewlineAsOrdinaryGround(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a dot spans a newline", `[[ $'a\nb' =~ a.b ]] && echo Y || echo N`, "Y"},
 		{"and a dot between anchors spans one", `[[ $'a\nb' =~ ^a.b$ ]] && echo Y || echo N`, "Y"},
@@ -160,6 +165,7 @@ func TestARegexReadsANewlineAsOrdinaryGround(t *testing.T) {
 // record, so the span over a newline is the same defect read through the
 // record rather than a second one.
 func TestARegexCaptureSpansANewline(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `[[ $'a\nb' =~ (a.b) ]]; printf '[%s]\n' "${M[1]}"`, rematch("M"))
 	if got := strings.TrimSpace(out); got != "[a\nb]" {
 		t.Errorf("got %q, want %q", got, "[a\nb]")
@@ -171,6 +177,7 @@ func TestARegexCaptureSpansANewline(t *testing.T) {
 // Both halves are asserted: a folded match still spans the newline, and a
 // fold that reached no further than before would fail the first row here.
 func TestAFoldedRegexStillSpansANewline(t *testing.T) {
+	t.Parallel()
 	foldingRegex := func(r *Runner) { r.SetMatchOption(RegexFoldsCase, true) }
 	for _, tc := range []struct{ name, src, want string }{
 		{"the fold survives the flag", `[[ ABC =~ ^abc$ ]] && echo Y || echo N`, "Y"},

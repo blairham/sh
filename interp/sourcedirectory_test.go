@@ -36,6 +36,7 @@ func directorySemantics(t *testing.T, isError Answer) Semantics {
 // diagnostic: the directory is opened, yields no commands, and that is an
 // empty script rather than a failure.
 func TestADirectoryOperandCanBeNoErrorAtAll(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o755); err != nil {
 		t.Fatal(err)
@@ -58,6 +59,7 @@ func TestADirectoryOperandCanBeNoErrorAtAll(t *testing.T) {
 // status as well as the sentence: reporting the right words at 127 was half
 // of what was wrong.
 func TestADirectoryOperandCanBeAnError(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o755); err != nil {
 		t.Fatal(err)
@@ -83,6 +85,7 @@ func TestADirectoryOperandCanBeAnError(t *testing.T) {
 // the reason. A dialect that leaves the field empty keeps the one sentence it
 // already had, which is what the test above measures.
 func TestADirectoryOperandCanUseAWordingOfItsOwn(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o755); err != nil {
 		t.Fatal(err)
@@ -107,6 +110,7 @@ func TestADirectoryOperandCanUseAWordingOfItsOwn(t *testing.T) {
 // directory success — so a shell that answered "it is a directory" here would
 // report success for a directory it could not open at all.
 func TestADirectoryTheShellCannotOpenIsNotADirectoryQuestion(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("root opens a mode-000 directory, so there is no denial to measure")
 	}

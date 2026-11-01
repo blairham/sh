@@ -10,6 +10,7 @@ import "testing"
 // inside quotes. Every row measured on zsh 5.9.2 (/opt/homebrew/bin/zsh,
 // -f, LC_ALL=C), 2026-10-01; `show` prints the count and then each word.
 func TestANestedSplitKeepsItsEmptyFieldsAsZshDoes(t *testing.T) {
+	t.Parallel()
 	const pre = `IFS=:; u=a::b:; b=(x "" y)
 show() { printf '%s:' $#; for x in "$@"; do printf '<%s>' "$x"; done; print; }
 `
@@ -56,6 +57,7 @@ show() { printf '%s:' $#; for x in "$@"; do printf '<%s>' "$x"; done; print; }
 // and anything that rewrites the words on the way out puts it back first.
 // Same shell, same day.
 func TestANestedEmptyElementSortsAsZshDoes(t *testing.T) {
+	t.Parallel()
 	const pre = `b=(x "" y)
 show() { printf '%s:' $#; for x in "$@"; do printf '<%s>' "$x"; done; print; }
 `

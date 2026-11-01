@@ -37,6 +37,7 @@ func runWidthFlag(t *testing.T, src string) (string, int) {
 // is an `e` and a combining acute, and `a` and `s` are the arrays the other
 // length flags are measured on.
 func TestTheWidthFlagMeasuresColumnsRatherThanCharacters(t *testing.T) {
+	t.Parallel()
 	const setup = "w=日本; c=e\u0301; a=(日 de f); s='a b  c'; " +
 		`b=$'\x01'; e=$'\x1b[31m'; `
 	for _, tc := range []struct{ name, src, want string }{
@@ -90,6 +91,7 @@ func TestTheWidthFlagMeasuresColumnsRatherThanCharacters(t *testing.T) {
 // is what `${#…}` answers there. A flag that reached the width table anyway
 // would answer 4 for a value the same shell calls six units long.
 func TestTheWidthFlagCountsBytesWhereALengthDoes(t *testing.T) {
+	t.Parallel()
 	const src = `w=日本; printf "[%s][%s]" "${#w}" "${(m)#w}"`
 	for _, tc := range []struct {
 		name   string
@@ -119,6 +121,7 @@ func TestTheWidthFlagCountsBytesWhereALengthDoes(t *testing.T) {
 // that is all ASCII a column is a character, so these fields are the plain
 // padding's. See interp/padflags.go, columnPadding, for the wide rows.
 func TestTheWidthFlagBesideAPaddingFlagPadsAsWritten(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"on the left", `v=x; printf "[%s]" "${(ml:4::x:)v}"`, "[xxxx]"},
 		{"on the right", `v=x; printf "[%s]" "${(mr:4::x:)v}"`, "[xxxx]"},

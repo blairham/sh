@@ -12,6 +12,7 @@ import (
 // The C library's buffer is the platform's: measured 2026-10-07 through dash
 // 0.5.12's reads, 1024 bytes on macOS and 8192 in Debian (#6322, #6329).
 func TestTheCBufferIsThePlatforms(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		goos string
 		size interp.ReadSize

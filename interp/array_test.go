@@ -11,6 +11,7 @@ import (
 )
 
 func TestArrays(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ name, src, want string }{
 		{"assignment and subscript", `a=(1 2 3); printf "%s" "${a[0]}${a[2]}"`, "13"},
 		{"count", `a=(1 2 3); printf "%s" "${#a[@]}"`, "3"},
@@ -44,6 +45,7 @@ func TestArrays(t *testing.T) {
 }
 
 func TestQuotedArrayKeepsOneFieldPerElement(t *testing.T) {
+	t.Parallel()
 	// The reason a subscript can produce several fields: joining them would
 	// lose an element containing a space, exactly as it would for `"$@"`.
 	if got, _ := run(t, `a=("x y" z); printf "[%s]" "${a[@]}"`, nil); got != "[x y][z]" {
@@ -56,6 +58,7 @@ func TestQuotedArrayKeepsOneFieldPerElement(t *testing.T) {
 }
 
 func TestArrayBaseIsAnAxis(t *testing.T) {
+	t.Parallel()
 	// ArrayBaseIsZero — measured on both sides, and the reason a subscript
 	// cannot be used as a slice offset without asking. Which preset gives
 	// which answer is the dialect packages' claim.
@@ -73,6 +76,7 @@ func TestArrayBaseIsAnAxis(t *testing.T) {
 }
 
 func TestEmptyArrayIsNotAFunctionDefinition(t *testing.T) {
+	t.Parallel()
 	// `a=()` and `f()` both put a parenthesis pair after a word. A function
 	// name is a name and cannot contain `=`, which is what tells them apart —
 	// without it the empty array was read as defining a function called `a=`.
@@ -92,6 +96,7 @@ func TestEmptyArrayIsNotAFunctionDefinition(t *testing.T) {
 // — the array outlived the function, because `local` had saved a scalar of
 // that name and nothing had saved the array.
 func TestALocalArrayStaysInTheFunction(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"set as an operand", `f(){ local a=(x y); }; f; echo "[${a[1]}]"`, "[]"},
 		{"set after declaring", `f(){ local a; a=(x y); }; f; echo "[${a[1]}]"`, "[]"},
@@ -120,6 +125,7 @@ func TestALocalArrayStaysInTheFunction(t *testing.T) {
 // `readonly a=(x)` sets the array before it locks the name, because locking it
 // first would refuse the very assignment the command was given.
 func TestReadonlyTakesItsArrayBeforeLocking(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `readonly a=(p q); echo "[${a[1]}]"`, nil)
 	if strings.TrimSpace(out) != "[q]" {
 		t.Errorf("said %q, want [q]", strings.TrimSpace(out))
@@ -131,6 +137,7 @@ func TestReadonlyTakesItsArrayBeforeLocking(t *testing.T) {
 // sets the scalar to the empty string and `$a` reads empty instead of the
 // first element.
 func TestAnOperandIsNotAPrefixAssignment(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src string }{
 		{"readonly", `readonly a=(p q); echo "[$a]"`},
 		{"export", `export a=(p q); echo "[$a]"`},
@@ -152,6 +159,7 @@ func TestAnOperandIsNotAPrefixAssignment(t *testing.T) {
 // Reachable only once the parser stopped ending a subscript at the last `]` in
 // the word; before that this was a syntax error, so the joining went unseen.
 func TestASubstitutedWordKeepsItsFields(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		// The word is what it came to, and the word has fields of its own.
 		{"alternate, nested", `a=(x y); printf "[%s]" "${a[@]+${a[@]}}"`, "[x][y]"},

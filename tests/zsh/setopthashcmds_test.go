@@ -26,6 +26,7 @@ import (
 // by default is written `no…` and reported `off`. This shell wrote `hashcmds
 // off` — the same word for the opposite state — which is #4533.
 func TestHashCmdsIsOnBeforeAnythingMovesIt(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	// No external command is reachable here — the helper puts the temporary
 	// directory alone on PATH — so the rows are picked out with the shell's
@@ -74,6 +75,7 @@ set -o   | row seto
 // with it off, nothing is hashed. So the option is wired to something real,
 // and the default it started from was the only thing wrong.
 func TestTheHashCmdsReportMovesAndTheHashingDoesNot(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, prefix, wantReport, wantHash string
 	}{
@@ -112,6 +114,7 @@ _=%q
 // case where the table entry and the backing state have to agree rather than
 // merely both be readable.
 func TestTheStrictResetPutsHashCmdsBackAndTheBareOneDoesNot(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"strict", "unsetopt hashcmds\nemulate -R zsh\n", "on"},
 		{"bare", "unsetopt hashcmds\nemulate zsh\n", "off"},

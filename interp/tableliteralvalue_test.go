@@ -18,6 +18,7 @@ import (
 // it. The table's **count** is the assertion rather than any one key, because
 // the count is the thing the two readings cannot both produce.
 func TestAKeyedLiteralsBareElementsFollowTheAxis(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m=($k $v); printf "[%s][%s]" "${#m[@]}" "${m[$k]}"`
 	const prelude = `k='1 2'; v='3 4 5'; `
 	for _, tc := range []struct {
@@ -41,6 +42,7 @@ func TestAKeyedLiteralsBareElementsFollowTheAxis(t *testing.T) {
 // split still answers the other way, which is why the axis is about being an
 // assignment's value and not about splitting.
 func TestAKeyedLiteralsBareElementIsNotGlobbedOrDropped(t *testing.T) {
+	t.Parallel()
 	out, st := runKeyedLiteral(t, Yes, `typeset -A m=(a '*'); printf "[%s]" "${m[a]}"`)
 	if want := "[*]"; out != want || st != 0 {
 		t.Errorf("the star = %q status %d, want %q at 0", out, st, want)
@@ -58,6 +60,7 @@ func TestAKeyedLiteralsBareElementIsNotGlobbedOrDropped(t *testing.T) {
 // And an indexed literal never puts the question, which is the control: the
 // axis is on and `a=($k)` is still two elements.
 func TestAnIndexedLiteralDoesNotAskTheKeyedLiteralsQuestion(t *testing.T) {
+	t.Parallel()
 	out, st := runKeyedLiteral(t, Yes, `k='1 2'; a=($k); printf "[%s]" "${#a[@]}"`)
 	if want := "[2]"; out != want || st != 0 {
 		t.Errorf("= %q status %d, want %q at 0", out, st, want)

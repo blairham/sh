@@ -32,6 +32,7 @@ import (
 // footnote: it already answered `empty` before this, so the name's reading of
 // itself and the view behind it disagreed.
 func TestUnsettingAProducedTableLeavesTheAliasesStanding(t *testing.T) {
+	t.Parallel()
 	const src = `alias ex=echo
 unset aliases
 alias ex
@@ -49,6 +50,7 @@ print -r -- "param=[$aliases[foo]] t=[${(t)aliases}] keys=[${(k)aliases}]"`
 // to unset by accident, and the row that says this is about produced tables
 // rather than about aliases.
 func TestUnsettingTheFunctionTableLeavesTheFunctionsCallable(t *testing.T) {
+	t.Parallel()
 	const src = `g() { print inG; }
 unset functions
 g
@@ -68,6 +70,7 @@ print -r -- "t=[${(t)functions}] v=[$functions[h]]"`
 // This is the store half of #4764, and the row #4639's refusal correctly does
 // not reach — a name the script has taken away is not holding a table.
 func TestAStoreOverAnUnsetProducedTableIsAnOrdinaryScalar(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"aliases",
@@ -93,6 +96,7 @@ func TestAStoreOverAnUnsetProducedTableIsAnOrdinaryScalar(t *testing.T) {
 // answers, and a scalar store over it is refused. Without this a producer
 // that had never been registered would pass every row.
 func TestTheProducedTableAnswersUntilItIsUnset(t *testing.T) {
+	t.Parallel()
 	const src = `alias ex=echo
 print -r -- "param=[$aliases[ex]] assoc=${${(t)aliases}%%-*}"
 aliases=string

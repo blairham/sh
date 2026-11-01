@@ -20,6 +20,7 @@ import (
 // expression with a parenthesis in it": once a group has closed, the leftover
 // word is named exactly as it is under the other answer.
 func TestAFailureInsideAnUnclosedGroupCanBeTheParen(t *testing.T) {
+	t.Parallel()
 	run := func(src string, on Answer) string {
 		t.Helper()
 		out, st := optRun(t, func(s *Semantics) {

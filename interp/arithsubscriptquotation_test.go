@@ -66,6 +66,7 @@ func quotedKeyAxis(a Answer, stopped bool) func(*Runner) {
 const quotedKeyTable = `typeset -A a; k="q'r"; a[$k]=4; `
 
 func TestAnArithmeticSubscriptsUnclosedQuotationIsRefusedByAxis(t *testing.T) {
+	t.Parallel()
 	const src = quotedKeyTable + `let "++a[$k]"; printf '[%s]' "${a[$k]}"`
 	refusing, st := runGrammar(t, src, quotedKeyGrammar, quotedKeyAxis(Yes, false))
 	if st != 0 {
@@ -93,6 +94,7 @@ func TestAnArithmeticSubscriptsUnclosedQuotationIsRefusedByAxis(t *testing.T) {
 // The assignment spelling of the same operand, which is a second route to
 // the same store.
 func TestAnUnclosedQuotationIsRefusedThroughAnAssignmentToo(t *testing.T) {
+	t.Parallel()
 	const src = quotedKeyTable + `let "a[$k] += 1"; printf '[%s]' "${a[$k]}"`
 	refusing, _ := runGrammar(t, src, quotedKeyGrammar, quotedKeyAxis(Yes, false))
 	if !strings.Contains(refusing, "a[q'r]: bad array subscript") || !strings.Contains(refusing, "[4]") {
@@ -117,6 +119,7 @@ func TestAnUnclosedQuotationIsRefusedThroughAnAssignmentToo(t *testing.T) {
 // says the rows above turn on the apostrophe rather than on the operand
 // having been expanded at all.
 func TestASubscriptWithNoUnclosedQuotationIsTheSameElementEitherWay(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"arithmetic expanding the key itself",
@@ -145,6 +148,7 @@ func TestASubscriptWithNoUnclosedQuotationIsTheSameElementEitherWay(t *testing.T
 // the refusing dialect, and a dialect that reads the key was never refusing
 // for the switch to move.
 func TestASessionCanWithholdTheArithmeticSubscriptsRefusal(t *testing.T) {
+	t.Parallel()
 	const src = quotedKeyTable + `let "++a[$k]"; printf '[%s]' "${a[$k]}"`
 	withheld, st := runGrammar(t, src, quotedKeyGrammar, quotedKeyAxis(Yes, true))
 	if withheld != "[5]" || st != 0 {
@@ -158,6 +162,7 @@ func TestASessionCanWithholdTheArithmeticSubscriptsRefusal(t *testing.T) {
 // An axis nothing has answered is a refusal by name rather than a guess at
 // which of the two readings was wanted.
 func TestAnUnansweredArithmeticSubscriptQuotationIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	const src = quotedKeyTable + `let "++a[$k]"; printf '[%s]' "${a[$k]}"`
 	out, _ := runGrammar(t, src, quotedKeyGrammar, quotedKeyAxis(Unspecified, false))
 	if !strings.Contains(out, "quotation never closes") {
@@ -178,6 +183,7 @@ func TestAnUnansweredArithmeticSubscriptQuotationIsRefusedByName(t *testing.T) {
 // letoperandsubscriptquoting_test.go — and neither reading is moved by this
 // axis in either direction.
 func TestAQuotationTheKeyClosesIsNotRefused(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A a; k="q'r'z"; a[$k]=4; let "++a[$k]"; printf 'done'`
 	for _, a := range []Answer{Yes, No} {
 		out, st := runGrammar(t, src, quotedKeyGrammar, quotedKeyAxis(a, false))

@@ -15,6 +15,7 @@ import "testing"
 // the two written orders of the same two arms — because a single value says
 // nothing about a search order.
 func TestASubstitutionTakesTheArmThatWasWrittenFirst(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `x=abc
 print -r -- "[${x/(a|ab)/X}][${x/(ab|a)/X}]"
 print -r -- "[${x//(a|ab)/X}][${x//(ab|a)/X}]"
@@ -36,6 +37,7 @@ print -r -- "[${y//(a|ab)/X}][${y//(ab|a)/X}]"`)
 // up: the scan has to step over the unit the empty match did not take and
 // carry on, so the answer is one replacement per character and not a loop.
 func TestAnEmptyArmInASubstitution(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `x=abc
 print -r -- "[${x/(|a)/X}][${x/(a|)/X}]"
 print -r -- "[${x//(|a)/X}][${x//(a|)/X}]"
@@ -55,6 +57,7 @@ print -r -- "[${x/(|ab)/X}][${x//(|ab)/X}]"`)
 // which is what says the question is about the shape of the match rather than
 // about the operator's name.
 func TestTheSubstitutionsWithNoArmToChoose(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `x=abc
 print -r -- "[${x/%(c|bc)/X}][${x/%(bc|c)/X}]"
 print -r -- "[${(S)x//(a|ab)/X}][${(S)x//(ab|a)/X}]"
@@ -74,6 +77,7 @@ print -r -- "[${x//a*b/X}][${x/(a|ab)c/X}]"`)
 // the edge — so a fix that moved the edge and left the report behind would
 // replace `Xbc` correctly while `$match[1]` still said `ab`.
 func TestASubstitutionReportsTheArmItTook(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `setopt extendedglob
 x=abc
 print -r -- "[${x/(#b)(a|ab)/[$match[1]]}]"

@@ -15,6 +15,7 @@ import "testing"
 // the other — so there is nothing here that AliasQuoting does not already
 // say, only whether it is asked (#2579).
 func TestAListingQuotesANameThatNeedsIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`alias 'a$b'=echo; alias 'a$b'`, "'a$b'=echo\n"},
 		{`alias 'a b'=echo; alias 'a b'`, "'a b'=echo\n"},
@@ -49,6 +50,7 @@ func TestAListingQuotesANameThatNeedsIt(t *testing.T) {
 // a column of names rather than a definition — measured the same day, all
 // four of these write the name bare.
 func TestASentenceAboutAnAliasLeavesTheNameBare(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`alias 'a$b'=echo; type 'a$b'`, "a$b is an alias for echo\n"},
 		{`alias 'a$b'=echo; command -V 'a$b'`, "a$b is an alias for echo\n"},

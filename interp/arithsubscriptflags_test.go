@@ -40,6 +40,7 @@ func runSubArith(t *testing.T, src string) (string, int) {
 // name, which refused it, and to the table as a *key* on an association, which
 // found nothing and answered a silent zero (#1986).
 func TestAFlagGroupIsReadInsideAnExpression(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the value a search found", `a=(10 20 30); echo $(( a[(r)20] ))`, "20"},
 		{"the index it found it at", `a=(10 20 30); echo $(( a[(i)20] ))`, "2"},
@@ -72,6 +73,7 @@ func TestAFlagGroupIsReadInsideAnExpression(t *testing.T) {
 // is the whole of why the two go through one function: two rules would write
 // where the read could not look.
 func TestAFlagGroupNamesTheElementAWriteInsideAnExpressionReaches(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a value search", `a=(10 20 30); (( a[(r)20] = 9 )); printf "[%s]" "${a[@]}"`, "[10][9][30]"},
 		{"an index search", `a=(10 20 30); (( a[(i)20] = 9 )); printf "[%s]" "${a[@]}"`, "[10][9][30]"},
@@ -105,6 +107,7 @@ func TestAFlagGroupNamesTheElementAWriteInsideAnExpressionReaches(t *testing.T) 
 // key literally named `(r)1`, silently, at status 0 — a plausible table with
 // an element nobody wrote (#2288).
 func TestASearchWritingATableInsideAnExpressionWritesNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a value search", `typeset -A m; m[aa]=1; (( m[(r)1] = 5 )); printf "%d[%s]" "${#m[@]}" "${m[aa]}"`, "1[1]"},
 		{"a key search", `typeset -A m; m[aa]=1; (( m[(k)aa] = 5 )); printf "%d[%s]" "${#m[@]}" "${m[aa]}"`, "1[1]"},
@@ -148,6 +151,7 @@ func TestASearchWritingATableInsideAnExpressionWritesNothing(t *testing.T) {
 // is 0, the twentieth element being empty. It was refused by name while `(w)`
 // was not carried (#5152).
 func TestAWordFlagInAnExpressionReadsAnArraysElements(t *testing.T) {
+	t.Parallel()
 	const src = `a=(10 20 30); echo $(( a[(w)20] )) $(( a[(w)2] ))`
 	out, status := runSubArith(t, src)
 	if out != "0 20\n" || status != 0 {
@@ -159,6 +163,7 @@ func TestAWordFlagInAnExpressionReadsAnArraysElements(t *testing.T) {
 // they are text, and the subscript is read as the arithmetic it is — which is
 // what keeps this additive.
 func TestParenthesesInASubscriptAreTextWithoutTheGrammar(t *testing.T) {
+	t.Parallel()
 	const src = `a=(10 20 30); echo $(( a[(r)20] ))`
 	out, status := runGrammar(t, src, subscripting, nil)
 	if status == 0 || strings.Contains(out, "subscript flag") {

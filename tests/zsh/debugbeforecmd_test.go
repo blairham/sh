@@ -128,6 +128,7 @@ func TestDebugBeforeCmdIsSubshellLocal(t *testing.T) {
 //
 // Measured on zsh 5.9.2, 2026-09-25, `-f` throughout.
 func TestDebugBeforeCmdReportsItsState(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"on by default", "[[ -o debugbeforecmd ]] && print on || print off\n", "on\n"},
 		{
@@ -158,6 +159,7 @@ func TestDebugBeforeCmdReportsItsState(t *testing.T) {
 // `unsetopt debugbeforecmd; setopt` writes `nodebugbeforecmd` among the
 // deviations.
 func TestDebugBeforeCmdIsListedWhenItIsOff(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "unsetopt debugbeforecmd\nsetopt\n")
 	if st != 0 {
 		t.Fatalf("status %d: %q", st, out)

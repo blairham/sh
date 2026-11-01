@@ -19,6 +19,7 @@ import (
 // division by zero, so the written text is the only text there ever is
 // (#1373).
 func TestARefusedSubscriptedLiteralIsNamedAsWritten(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.SubscriptedArrayLiteral = SubscriptedArrayLiteralRefused
 	for _, tc := range []struct{ src, want string }{

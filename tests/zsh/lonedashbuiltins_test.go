@@ -37,6 +37,7 @@ import (
 // was not given a umask to read or change" whatever the dash does. See
 // TestALoneDashEndsTheUmaskOptions.
 func TestALoneDashEndsTheOptionsOfABuiltinWithItsOwnReader(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		want      []string // substrings the output must hold
@@ -184,6 +185,7 @@ func TestALoneDashEndsTheOptionsOfABuiltinWithItsOwnReader(t *testing.T) {
 // `setopt -x` is refused here where the reference takes it. Both are older
 // than #5040 and neither moved.
 func TestTheOptionLettersBehindNoDashAreUnmoved(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		status          int
@@ -216,6 +218,7 @@ func TestTheOptionLettersBehindNoDashAreUnmoved(t *testing.T) {
 // without asking anything. Only a dialect that answers differently can tell
 // "eaten because the answer said so" from "eaten because nothing looked".
 func TestTheLoneDashReadersAskRatherThanAssume(t *testing.T) {
+	t.Parallel()
 	run := func(t *testing.T, src string, answer interp.Answer) (string, int) {
 		t.Helper()
 		f, err := syntax.Parse(src+"\n", zsh.Dialect())

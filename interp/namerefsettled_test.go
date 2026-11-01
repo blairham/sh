@@ -32,6 +32,7 @@ func runSettled(t *testing.T, src string) (string, int) {
 // A subscript is arithmetic, so settling the target settles the number — and
 // what the subscript *named* stops mattering afterwards.
 func TestASettledReferenceRecordsTheNumberItsSubscriptCameTo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			name: "a subscript naming a variable",
@@ -77,6 +78,7 @@ func TestASettledReferenceRecordsTheNumberItsSubscriptCameTo(t *testing.T) {
 // A subscript that will not evaluate is **this declaration's** failure where
 // the target is settled here, and the complaint is the builtin's own.
 func TestASettledReferenceRefusesASubscriptItCannotEvaluate(t *testing.T) {
+	t.Parallel()
 	for _, sub := range []string{"a[@]", "a[*]", "a[1+]"} {
 		t.Run(sub, func(t *testing.T) {
 			out, _ := runSettled(t, "a=(x y)\ntypeset -n r="+sub+"\necho AFTER")
@@ -99,6 +101,7 @@ func TestASettledReferenceRefusesASubscriptItCannotEvaluate(t *testing.T) {
 // A chain is followed to its end at the declaration, so re-aiming the middle
 // link afterwards leaves this one where it was.
 func TestASettledReferenceFollowsTheChainOnce(t *testing.T) {
+	t.Parallel()
 	src := "u=1\nw=9\ntypeset -n s=u\ntypeset -n s2=s\ntypeset -p s2\ntypeset -n s=w\necho \"[$s2]\"\ntypeset -p s2"
 	out, _ := runSettled(t, src)
 	if out != "declare -n s2='u'\n[1]\ndeclare -n s2='u'\n" {
@@ -116,6 +119,7 @@ func TestASettledReferenceFollowsTheChainOnce(t *testing.T) {
 // under the name the script wrote. Only where the declaration carries a
 // value, which is the pair that makes it a rule.
 func TestADeclarationThroughAReferenceCanNameItsOwnOperand(t *testing.T) {
+	t.Parallel()
 	sem := namerefAimSemantics()
 	sem.NamerefTargetResolvedWhenAimed = No
 	sem.DeclarationThroughAReferenceNamesTheOperand = Yes

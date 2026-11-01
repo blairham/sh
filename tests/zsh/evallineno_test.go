@@ -16,6 +16,7 @@ import (
 // option *on* is the default and the control, and it already agreed before
 // this was wired, which is what keeps the change narrow (#4551).
 func TestEvalLinenoDecidesWhetherEvalTextHasItsOwnLines(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ set, want string }{
 		{"setopt evallineno", "1\n2\n"},
 		{"unsetopt evallineno", "2\n2\n"},
@@ -33,6 +34,7 @@ func TestEvalLinenoDecidesWhetherEvalTextHasItsOwnLines(t *testing.T) {
 // writes `(eval)` in place of the script's name. So the diagnostic a command
 // inside the text raises moves with the parameter.
 func TestEvalLinenoAlsoDecidesWhatADiagnosticInTheTextIsCalled(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ set, want string }{
 		{"setopt evallineno", "(eval):2: command not found: nosuchcommand_xyz\n"},
 		{"unsetopt evallineno", "zsh:2: command not found: nosuchcommand_xyz\n"},
@@ -48,6 +50,7 @@ func TestEvalLinenoAlsoDecidesWhatADiagnosticInTheTextIsCalled(t *testing.T) {
 // And the state is reported back on all three surfaces a script reads, in
 // both directions — the half that was already right and must stay so.
 func TestEvalLinenoIsReportedBackInBothStates(t *testing.T) {
+	t.Parallel()
 	const src = `[[ -o evallineno ]] && print a=on || print a=off
 print b=${options[evallineno]}
 unsetopt evallineno
@@ -77,6 +80,7 @@ setopt
 // off, which is how it was found (#6540). Measured 2026-10-15 on zsh 5.9.2
 // under `-fc`.
 func TestEvalLinenoNamesAParseFailureInTheTextByTheCaller(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"setopt evallineno\neval 'echo )'\n", "(eval):1: parse error near `)'\n"},
 		{"unsetopt evallineno\neval 'echo )'\n", "zsh:1: parse error near `)'\n"},

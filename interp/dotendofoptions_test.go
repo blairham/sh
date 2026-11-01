@@ -30,6 +30,7 @@ import (
 // || return`, so a real `~/.zshrc` printed `no such file or directory: --`
 // and loaded no highlighting (#4210).
 func TestALeadingDashDashEndsDotsOptionsUnderEitherAnswer(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "f.sh"), []byte("echo SOURCED\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -51,6 +52,7 @@ func TestALeadingDashDashEndsDotsOptionsUnderEitherAnswer(t *testing.T) {
 // either answer, because the lift above the gate must not have turned into a
 // loop that eats them.
 func TestASecondDashDashIsTheOperand(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, reads := range []Answer{Yes, No} {
 		t.Run("DotReadsOptions="+reads.String(), func(t *testing.T) {
@@ -69,6 +71,7 @@ func TestASecondDashDashIsTheOperand(t *testing.T) {
 // sourced nothing: measured, zsh says `not enough arguments` at 1 for
 // `source --` exactly as it does for `.` alone.
 func TestDashDashWithNoOperandIsTheNoOperandComplaint(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	sem := permissive()
 	sem.DotReadsOptions = No

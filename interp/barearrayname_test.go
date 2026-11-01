@@ -39,6 +39,7 @@ func runBareName(t *testing.T, whole Answer, src string) (string, int) {
 // still assigned, so `a=(x y z); unset "a[0]"` answered `y`: an element the
 // script never named, at a position it had not asked about.
 func TestABareArrayNameIsUnsetOnceItsBaseElementIsRemoved(t *testing.T) {
+	t.Parallel()
 	out, st := runBareName(t, No,
 		`a=(x y z); unset "a[0]"; echo "bare=[${a-U}] set=[${a+S}] at=[${a[@]}] n=${#a[@]}"`)
 	if want := "bare=[U] set=[] at=[y z] n=2\n"; out != want {
@@ -54,6 +55,7 @@ func TestABareArrayNameIsUnsetOnceItsBaseElementIsRemoved(t *testing.T) {
 // reading the base is 1, so the element removed is the second one and what is
 // left in its place is an empty string rather than a gap.
 func TestABareArrayNameUnderTheWholeArrayReadingStaysSet(t *testing.T) {
+	t.Parallel()
 	out, st := runBareName(t, Yes,
 		`a=(x y z); unset "a[2]"; echo "bare=[${a-U}] set=[${a+S}] n=${#a[@]}"`)
 	if want := "bare=[x  z] set=[S] n=3\n"; out != want {
@@ -68,6 +70,7 @@ func TestABareArrayNameUnderTheWholeArrayReadingStaysSet(t *testing.T) {
 // position and not the removal that decides, which the lowest-assigned reading
 // got wrong the same way — `a[5]=q` answered `q`.
 func TestABareArrayNameIsUnsetWhenTheBaseElementWasNeverWritten(t *testing.T) {
+	t.Parallel()
 	out, st := runBareName(t, No, `a[5]=q; echo "bare=[${a-U}] whole=[${a[@]+S}] n=${#a[@]}"`)
 	if want := "bare=[U] whole=[S] n=1\n"; out != want {
 		t.Errorf("out = %q, want %q", out, want)
@@ -81,6 +84,7 @@ func TestABareArrayNameIsUnsetWhenTheBaseElementWasNeverWritten(t *testing.T) {
 // than a diagnostic — so the wrong reading is a wrong number and nothing says
 // so. `$((a+5))` was 7, five plus the element that had survived.
 func TestABareArrayNameInArithmeticIsZeroOnceItsBaseElementIsRemoved(t *testing.T) {
+	t.Parallel()
 	out, st := runBareName(t, No, `a=(1 2 3); unset "a[0]"; echo "arith=$((a+5))"`)
 	if want := "arith=5\n"; out != want {
 		t.Errorf("out = %q, want %q", out, want)
@@ -94,6 +98,7 @@ func TestABareArrayNameInArithmeticIsZeroOnceItsBaseElementIsRemoved(t *testing.
 // command fails. It printed a value at status 0, so the option a script turns
 // on precisely to catch this said nothing.
 func TestABareArrayNameWithNoBaseElementIsRefusedUnderNounset(t *testing.T) {
+	t.Parallel()
 	out, st := runBareName(t, No, `a=(x y z); unset "a[0]"; set -u; echo "[$a]"; echo after`)
 	// The whole of the output, so that neither the value nor the command
 	// after it can be there: the wording and status are the core's, and the
@@ -111,6 +116,7 @@ func TestABareArrayNameWithNoBaseElementIsRefusedUnderNounset(t *testing.T) {
 // Both halves in one test, because a fix for either alone is what produced the
 // set-but-empty answer neither shell gives.
 func TestABareArrayNameOfAnArrayWithNothingInIt(t *testing.T) {
+	t.Parallel()
 	const src = `a=(x); unset "a[1]"; echo "bare=[${a-U}] set=[${a+S}] n=${#a[@]}"`
 	out, st := runBareName(t, Yes, src)
 	if want := "bare=[] set=[S] n=1\n"; out != want {
@@ -131,6 +137,7 @@ func TestABareArrayNameOfAnArrayWithNothingInIt(t *testing.T) {
 // Writing the base element back makes the name set again, which is what says
 // the store and not a flag is what is being read.
 func TestABareArrayNameComesBackWhenItsBaseElementIsWrittenAgain(t *testing.T) {
+	t.Parallel()
 	out, st := runBareName(t, No, `a=(x y z); unset "a[0]"; a[0]=q; echo "bare=[${a-U}]"`)
 	if want := "bare=[q]\n"; out != want {
 		t.Errorf("out = %q, want %q", out, want)
@@ -150,6 +157,7 @@ func TestABareArrayNameComesBackWhenItsBaseElementIsWrittenAgain(t *testing.T) {
 // array behind it is named plainly under the same flag, so the sentence is
 // not simply a suffix.
 func TestAnUnboundBareArrayNameCanNameItsFirstElement(t *testing.T) {
+	t.Parallel()
 	run := func(t *testing.T, names bool, src string) string {
 		t.Helper()
 		out, _ := runGrammar(t, src, nil, func(r *Runner) {

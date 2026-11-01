@@ -21,6 +21,7 @@ import (
 // preset flipped to Yes would change nothing this shell can be made to do,
 // and would change bash's neighbors the moment one of them grew the option.
 func TestZshAnswersNoToHistoryExpansionInAScript(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().HistoryExpansionInAScript; got != interp.No {
 		t.Errorf("HistoryExpansionInAScript is %v, want No", got)
 	}
@@ -40,6 +41,7 @@ func TestZshAnswersNoToHistoryExpansionInAScript(t *testing.T) {
 // It refuses `set -o history` outright — `no such option: history` — so a
 // script written for bash cannot even reach the question here.
 func TestZshDoesNotExpandHistoryInAScript(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src string }{
 		{"setopt banghist", "setopt banghist\necho one two three\necho !!\n"},
 		{"the option already on", "echo one two three\necho !!\n"},

@@ -21,6 +21,7 @@ import (
 // Named for the flags rather than for a shell, per the rule in AGENTS.md; the
 // same pairs are asserted as one shell's answer in dialect/zsh. See #1608.
 func TestTheIndirectionFlagCarriesKeyAndValueToTheLookupItMovesTo(t *testing.T) {
+	t.Parallel()
 	// tab is the table the indirection lands on, m an association whose one
 	// value names it, and `a` — the *key* of that one pair — a live scalar.
 	// So reading `k` at the wrong lookup does not come back empty: it comes
@@ -126,6 +127,7 @@ n=tab
 // On the subscript grammar rather than flagsRun's, because a search is a flag
 // group inside the brackets and a plain group in front does not enable it.
 func TestTheIndirectionFlagCarriesTheLettersOverASubscriptedBase(t *testing.T) {
+	t.Parallel()
 	const setup = `typeset -A tab=(k1 v1 k2 v2)
 typeset -A m=(a tab)
 a=A_val

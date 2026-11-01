@@ -36,6 +36,7 @@ func ere() func(*Runner) {
 // The pattern is held in a parameter wherever a backslash is in play, so that
 // the shell's own quote removal does not take it before the matcher sees it.
 func TestAPosixEREIsNotWhatTheEngineWouldCompile(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// A collating element and an equivalence class, which RE2 has not: in
 		// the C locale every character is both of itself.
@@ -118,6 +119,7 @@ func rematchERE() func(*Runner) {
 // is graded in. Every row here answered the modern way before: the option and
 // the parameter were both accepted and neither did anything.
 func TestACompatibilityLevelTakesBackTheQuotingRule(t *testing.T) {
+	t.Parallel()
 	level := func(r *Runner) {
 		sem := permissive()
 		sem.RegexQuotingMakesLiteral = Yes

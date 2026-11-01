@@ -99,6 +99,7 @@ func itoaKind(k ParameterKind) string {
 // zsh 5.9.2, the only shell with the flag; the corpus row is
 // `param/expansion-flags-parameter-type`.
 func TestTheTypeFlagDescribesTheNameAndNotItsValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a scalar", `v=abc; printf "[%s]" "${(t)v}"`, "[KINDscalar]"},
 		{"an array", `w=(a b); printf "[%s]" "${(t)w}"`, "[KINDarray]"},
@@ -135,6 +136,7 @@ func TestTheTypeFlagDescribesTheNameAndNotItsValue(t *testing.T) {
 // have, so answering it here would make `${(t)0-D}` substitute `D` for a
 // parameter every shell in the panel provides — a plausible word at status 0.
 func TestTheTypeFlagRefusesASpecialParameterByName(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`printf "[%s]" "${(t)0}"`,
 		`set -- a; printf "[%s]" "${(t)1}"`,

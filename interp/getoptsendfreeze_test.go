@@ -31,6 +31,7 @@ const endFreezeAxis = "a freeze on the `getopts` name ending the script where th
 
 // The two answers, over the shape the issue was filed with.
 func TestGetoptsFrozenNameAtTheEndOfTheOptionsIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `set -- x; N=kept; readonly N; getopts "a:" N; echo "end st=$? N=[$N]"; echo after`
 	for _, tc := range []struct {
 		name   string
@@ -68,6 +69,7 @@ func TestGetoptsFrozenNameAtTheEndOfTheOptionsIsAnAxis(t *testing.T) {
 // errors are 1 exits 2 from this line. A model that let the fatal path set
 // the status would pass the test above and fail here.
 func TestGetoptsFrozenNameAtTheEndOfTheOptionsCarriesTheBuiltinStatus(t *testing.T) {
+	t.Parallel()
 	sem := endFreezeSem(Yes)
 	sem.FatalErrorStatusIsOne = Yes
 	dg := Diagnostics{ReadonlyVariable: "%s: frozen"}
@@ -83,6 +85,7 @@ func TestGetoptsFrozenNameAtTheEndOfTheOptionsCarriesTheBuiltinStatus(t *testing
 // one is set, so a dialect that ends the script at the end of the options
 // still reports and returns over a letter.
 func TestGetoptsFrozenNameOverALetterIsNotAsked(t *testing.T) {
+	t.Parallel()
 	const src = `set -- -a v; N=kept; readonly N; getopts "a:" N; echo "letter st=$? N=[$N]"; echo after`
 	const want = "sh: N: frozen\nletter st=2 N=[kept]\nafter\n"
 	for _, answer := range []Answer{No, Yes, Unspecified} {
@@ -102,6 +105,7 @@ func TestGetoptsFrozenNameOverALetterIsNotAsked(t *testing.T) {
 // the silent form ends on all three as well — so the axis is about the path
 // and not about the shape that ended it.
 func TestGetoptsFrozenNameAtTheEndOfTheOptionsOverEveryWayOfRunningOut(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, params, spec string }{
 		{"a non-option word", `set -- x`, `"a:"`},
 		{"a double dash", `set -- --`, `"a:"`},
@@ -133,6 +137,7 @@ func TestGetoptsFrozenNameAtTheEndOfTheOptionsOverEveryWayOfRunningOut(t *testin
 // names nothing has frozen reaches no question at all, which is what keeps
 // this off the path every use of the builtin takes.
 func TestGetoptsFrozenNameAtTheEndOfTheOptionsIsAskedOnlyOnARefusal(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{ReadonlyVariable: "%s: frozen"}
 	t.Run("refused", func(t *testing.T) {
 		sem := endFreezeSem(Unspecified)
@@ -156,6 +161,7 @@ func TestGetoptsFrozenNameAtTheEndOfTheOptionsIsAskedOnlyOnARefusal(t *testing.T
 // this at all: there is no write for the freeze to refuse, so the unanswered
 // axis is quiet and the builtin reports 1.
 func TestGetoptsFrozenNameIsNotAskedWhereTheEndWritesNoName(t *testing.T) {
+	t.Parallel()
 	sem := endFreezeSem(Unspecified)
 	sem.GetoptsEndOfOptionsNamesIt = No
 	dg := Diagnostics{ReadonlyVariable: "%s: frozen"}

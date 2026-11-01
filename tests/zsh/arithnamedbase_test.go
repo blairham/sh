@@ -20,6 +20,7 @@ import "testing"
 // keeping: `37#5` and `1#5` are one sentence with a different number in it,
 // and only the second was wrong.
 func TestABaseOutsideTheRangeIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	const wording = "zsh:1: invalid base (must be 2 to 36 inclusive): "
 	for _, tc := range []struct{ src, want string }{
 		// The lower end, and the digits it has no room for.
@@ -60,6 +61,7 @@ func TestABaseOutsideTheRangeIsRefusedByName(t *testing.T) {
 // rather than about `base#` at large: a base that *has* an alphabet still
 // ends its numeral at a digit outside it and still blames that digit.
 func TestABaseInTheRangeStillEndsAtADigitItLacks(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`echo $(( 2#5 ))`, "zsh:1: bad math expression: operator expected at `5 '\n"},
 		{`echo $(( 3#9 ))`, "zsh:1: bad math expression: operator expected at `9 '\n"},

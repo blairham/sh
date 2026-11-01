@@ -13,6 +13,7 @@ import (
 // quoting. Measured 2026-10-03 on zsh 5.9.2 under `-f -c` with `a=(x y z)`
 // (#5562). The wording is TestAnUnreadableByteEndsASubscriptsExpression's.
 func TestAQuotedIndexedSubscriptIsRefused(t *testing.T) {
+	t.Parallel()
 	const arr = "a=(x y z); "
 	for _, c := range []struct{ src, out string }{
 		{"echo ${a['2']}; echo after", ""},

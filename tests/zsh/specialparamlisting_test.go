@@ -13,6 +13,7 @@ import (
 // the table** (#5157). Measured 2026-10-01 on zsh 5.9.2 under `-f -c`, `env
 // -i PATH=/usr/bin:/bin`, byte for byte. See registerTheSpecialParameterListing.
 func TestTheSpecialParametersAreListed(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"typeset +", `typeset + | /usr/bin/head -8`,

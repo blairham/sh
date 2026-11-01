@@ -142,6 +142,7 @@ func TestPrintfTimeNowAndShellStart(t *testing.T) {
 // The zone is the Runner's `$TZ`, not the process's — the same rule that
 // keeps PATH out of os/exec.
 func TestPrintfTimeReadsTheRunnersZone(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ tz, want string }{
 		{"UTC", "01:46 UTC\n"},
 		{"America/New_York", "21:46 EDT\n"},
@@ -177,6 +178,7 @@ func TestPrintfTimeReadsTheRunnersZone(t *testing.T) {
 // The conversion specifications themselves, against a Sunday in September
 // 2001 — every one measured from a live shell in the C locale.
 func TestPrintfTimeConversionSpecifications(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ spec, want string }{
 		{"%a", "Sun"},
 		{"%A", "Sunday"},

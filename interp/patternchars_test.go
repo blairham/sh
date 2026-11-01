@@ -28,6 +28,7 @@ func bothLocales(t *testing.T, src, wantUTF8, wantSingle string) {
 // locale even though the pattern is five ASCII bytes. Measured: bash 5.3, bash
 // 3.2, ksh93 and zsh all answer five under a UTF-8 locale and six under C.
 func TestAQuestionMarkConsumesOneUnit(t *testing.T) {
+	t.Parallel()
 	bothLocales(t, `s=héllo; case $s in ?????) printf five;; ??????) printf six;; esac`,
 		"five", "six")
 }
@@ -38,6 +39,7 @@ func TestAQuestionMarkConsumesOneUnit(t *testing.T) {
 // two ASCII characters — so a test that asserted only that one would pass
 // against the bug.
 func TestTrimmingCountsTheSameUnitAMatchDoes(t *testing.T) {
+	t.Parallel()
 	bothLocales(t, `s=héllo; printf "[%s][%s]" "${s#???}" "${s%??}"`,
 		"[lo][hél]", "[llo][hél]")
 	// Two off the front rather than three, which is the one that separates
@@ -55,6 +57,7 @@ func TestTrimmingCountsTheSameUnitAMatchDoes(t *testing.T) {
 // has the unit question twice: where a match may start, and where the scan
 // resumes after one.
 func TestReplacementRunsOverUnits(t *testing.T) {
+	t.Parallel()
 	bothLocales(t, `s=日本語; printf "[%s]" "${s//?/X}"`, "[XXX]", "[XXXXXXXXX]")
 	bothLocales(t, `s=héllo; printf "[%s]" "${s/??/X}"`, "[Xllo]", "[X\xa9llo]")
 	// The anchored forms take the same stops.
@@ -67,6 +70,7 @@ func TestReplacementRunsOverUnits(t *testing.T) {
 // near, because `[ae]` holds neither of its bytes but a byte matcher is
 // looking at only one of them at a time.
 func TestABracketHoldsOneWholeUnit(t *testing.T) {
+	t.Parallel()
 	bothLocales(t, `case é in [é]) printf lit;; *) printf no;; esac`, "lit", "no")
 	bothLocales(t, `case é in [ae]) printf half;; *) printf whole;; esac`, "whole", "whole")
 	// Two characters that share a lead byte, which is what a comparison
@@ -82,6 +86,7 @@ func TestABracketHoldsOneWholeUnit(t *testing.T) {
 // U+00E7 ç is between a and U+00E9 é as a number, and is not between them
 // byte for byte, so a matcher comparing encoded forms answers this wrongly.
 func TestABracketRangeIsRankedByCodePoint(t *testing.T) {
+	t.Parallel()
 	bothLocales(t, `case ç in [a-é]) printf in;; *) printf out;; esac`, "in", "out")
 	bothLocales(t, `case é in [a-ÿ]) printf in;; *) printf out;; esac`, "in", "out")
 	// Outside the range on the far side, so the answer is not "any character
@@ -93,6 +98,7 @@ func TestABracketRangeIsRankedByCodePoint(t *testing.T) {
 // uniform. bash 5.3, bash 3.2 and zsh agree exactly and this follows them;
 // ksh93 answers alpha and nothing else, and dash answers none of them.
 func TestACharacterClassOutsideAscii(t *testing.T) {
+	t.Parallel()
 	const src = `for c in alpha alnum upper lower digit space punct print graph; do case $1 in [[:$c:]]) printf "%s " "$c";; esac; done`
 	for _, tc := range []struct{ ch, want string }{
 		{"é", "alpha alnum lower print graph "},
@@ -121,6 +127,7 @@ func TestACharacterClassOutsideAscii(t *testing.T) {
 // neither, and space in both. Go counts it Graphic, so the space is taken
 // back out by hand.
 func TestTwoClassesWhoseAnswersAreNotTheObviousOnes(t *testing.T) {
+	t.Parallel()
 	bothLocales(t, `case ٣ in [[:digit:]]) printf digit;; *) printf no;; esac`, "no", "no")
 	bothLocales(t, `case ٣ in [[:alnum:]]) printf alnum;; *) printf no;; esac`, "alnum", "no")
 	// And `alnum` is `Nd` and not every kind of number. `Ⅷ` U+2167 is `Nl`
@@ -156,6 +163,7 @@ func TestTwoClassesWhoseAnswersAreNotTheObviousOnes(t *testing.T) {
 
 // `[[ ]]` reaches the same matcher as `case`, so it answers the same way.
 func TestAConditionMatchesTheSameUnits(t *testing.T) {
+	t.Parallel()
 	bothLocales(t, `[[ héllo == ????? ]] && printf yes || printf no`, "yes", "no")
 	bothLocales(t, `[[ é == [a-ÿ] ]] && printf yes || printf no`, "yes", "no")
 }
@@ -165,6 +173,7 @@ func TestAConditionMatchesTheSameUnits(t *testing.T) {
 // the pattern. An all-ASCII `?` against a two-character name is the whole
 // point: the pattern says nothing about the encoding and the answer moves.
 func TestGlobbingMatchesTheSameUnits(t *testing.T) {
+	t.Parallel()
 	// abcd is four bytes and héllo is five characters and six bytes, so
 	// exactly one of them is five units — and which one moves with the
 	// locale. Under C neither is, so the pattern matches nothing and stands
@@ -186,6 +195,7 @@ func TestGlobbingMatchesTheSameUnits(t *testing.T) {
 // character: a matcher cannot count characters in one operator and bytes in
 // the operator beside it.
 func TestAStarStopsBetweenUnits(t *testing.T) {
+	t.Parallel()
 	bothLocales(t, "s=héllo; case $s in *[\xa9]llo) printf hit;; *) printf miss;; esac", "miss", "hit")
 	// The ordinary case is unaffected, which is what says the alignment is a
 	// restriction on where a star may stop and not on what it may match.
@@ -197,6 +207,7 @@ func TestAStarStopsBetweenUnits(t *testing.T) {
 // subject is the same match either way, so a shell whose axis is unanswered
 // still matches — and that is most of every script.
 func TestAnAsciiMatchAsksNothing(t *testing.T) {
+	t.Parallel()
 	out, st := runLocale(t, Unspecified, []string{"LC_ALL=C.UTF-8"},
 		`case hello in ?????) printf five;; esac; printf "[%s]" "${x-abc}"`)
 	if out != "five[abc]" || st != 0 {
@@ -214,6 +225,7 @@ func TestAnAsciiMatchAsksNothing(t *testing.T) {
 // is entirely ASCII, which is the case a caller naming only the pattern would
 // have let through.
 func TestANonAsciiMatchNeedsAnAnswer(t *testing.T) {
+	t.Parallel()
 	out, st := runLocale(t, Unspecified, []string{"LC_ALL=C.UTF-8"},
 		`case héllo in ?????) printf five;; esac`)
 	if !strings.Contains(out, "a character being the locale's rather than a byte") {

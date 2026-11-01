@@ -19,6 +19,7 @@ import (
 // again with a pipe on it, every run without a terminal ends at `can't access
 // terminal`. So the rows below are the whole builtin for a script.
 func TestVaredRefusesTheWayZshDoes(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{"no operands", `vared`, "zsh:vared:1: not enough arguments\n"},
@@ -70,6 +71,7 @@ func TestVaredRefusesTheWayZshDoes(t *testing.T) {
 // edits the element; asking `${+name}` instead wrote `bad substitution` for
 // `a b` and called a positional nothing had set missing.
 func TestVaredsNameCheckIsNarrowerThanAName(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a subscript on a set array", `a=(1 2); vared "a[1]"`, "zsh:vared:1: can't access terminal\n"},
@@ -107,6 +109,7 @@ func TestVaredsNameCheckIsNarrowerThanAName(t *testing.T) {
 // reach: a shell at a prompt has one, and `can't access terminal` there would
 // be a wrong sentence and not a missing feature.
 func TestVaredNamesTheHalfItHasNotGot(t *testing.T) {
+	t.Parallel()
 	out, st, err := preset.Combined(t, dialecttest.Base{
 		Dir: t.TempDir(), Terminal: true, Interactive: true,
 	}, `v=x; vared v; echo "st=$?"`)

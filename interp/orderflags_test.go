@@ -25,6 +25,7 @@ func ordering(d *syntax.Dialect) {
 // `(B a C b)` comes back `a b B C` rather than `B C a b`. That is recorded
 // in the spec and not implemented.
 func TestTheOrderingFlags(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"o sorts ascending", `a=(c a b); printf "[%s]" "${(@o)a}"`, "[a][b][c]"},
 		{"O sorts descending", `a=(c a b); printf "[%s]" "${(@O)a}"`, "[c][b][a]"},
@@ -126,6 +127,7 @@ func TestTheOrderingFlags(t *testing.T) {
 //
 // Measured on zsh 5.9.2, 2026-09-08, under LC_ALL=C.
 func TestTheSignedNumericSort(t *testing.T) {
+	t.Parallel()
 	const b = `b=(-1 -10 -3 2 10); `
 	for _, tc := range []struct{ name, src, want string }{
 		// The three readings of the same five elements, which is what says
@@ -189,6 +191,7 @@ func TestTheSignedNumericSort(t *testing.T) {
 }
 
 func TestATieKeepsTheOrderItWasWrittenIn(t *testing.T) {
+	t.Parallel()
 	const src = `a=(B1 b1 B2 b2 B3 b3 B4 b4 B5 b5 B6 b6 B7 b7 A1 a1); printf "[%s]" "${(@oi)a}"`
 	want := "[A1][a1][B1][b1][B2][b2][B3][b3][B4][b4][B5][b5][B6][b6][B7][b7]"
 	out, st := runGrammar(t, src, ordering, nil)
@@ -207,6 +210,7 @@ func TestATieKeepsTheOrderItWasWrittenIn(t *testing.T) {
 // which is the plain byte order of the two names. Measured on zsh 5.9.2
 // (`/opt/homebrew/bin/zsh`, `-f`) under LC_ALL=C, 2026-09-26.
 func TestANumericTieDoesNotConsumeTheRun(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"what follows an equal run does not decide it",

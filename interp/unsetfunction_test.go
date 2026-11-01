@@ -20,6 +20,7 @@ import (
 // complains about any name it does not hold, including a well formed one.
 // Independent, which is what makes them two fields rather than one.
 func TestUnsetFunctionSpeaksAboutTwoDifferentThings(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name          string
 		checks, warns Answer
@@ -65,6 +66,7 @@ func TestUnsetFunctionSpeaksAboutTwoDifferentThings(t *testing.T) {
 // Unsetting a function that is there is quiet in all four, and it really is
 // unset afterwards — which the reporting must not get in the way of.
 func TestUnsetFunctionThatIsThereIsQuietAndWorks(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name          string
 		checks, warns Answer
@@ -92,6 +94,7 @@ func TestUnsetFunctionThatIsThereIsQuietAndWorks(t *testing.T) {
 
 // Each operand is answered for, and the status survives to the end.
 func TestUnsetFunctionAnswersForEachOperand(t *testing.T) {
+	t.Parallel()
 	out, st := unsetFnRun(t, "unset -f 1x nosuch\n", No, Yes)
 	if n := strings.Count(out, "not found"); n != 2 {
 		t.Errorf("said %q, want both operands reported", out)

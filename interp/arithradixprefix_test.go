@@ -31,6 +31,7 @@ func runRadix(t *testing.T, empty Answer, binary bool, src string) (string, int)
 }
 
 func TestARadixPrefixWithNoDigitsIsZeroWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`echo "v=$(( 0x ))"`, "v=0"},
 		{`echo "v=$(( 0X ))"`, "v=0"},
@@ -57,6 +58,7 @@ func TestARadixPrefixWithNoDigitsIsZeroWhereTheDialectSaysSo(t *testing.T) {
 // on the empty run: where the dialect has `0b` at all, `0b` with nothing after
 // it answers the same way `0x` does.
 func TestABinaryRadixPrefixWhereTheDialectHasOne(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`echo "v=$(( 0b101 ))"`, "v=5"},
 		{`echo "v=$(( 0B101 ))"`, "v=5"},

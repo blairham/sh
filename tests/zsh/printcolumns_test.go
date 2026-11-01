@@ -20,6 +20,7 @@ import "testing"
 // different rules agree, which is what the issue that filed this carried, and
 // four of the rows below are there to rule one out each.
 func TestPrintInColumns(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			// Filled **down**: the first column takes the first ceil(n/c)
@@ -135,6 +136,7 @@ func TestPrintInColumns(t *testing.T) {
 // no room, and a wide character takes two. Measured the same day and the same
 // way, each first operand against the same `cc dd ee`.
 func TestPrintInColumnsMeasuresTheProcessedWidth(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			// The control: three ordinary characters, three plus two.
@@ -184,6 +186,7 @@ func TestPrintInColumnsMeasuresTheProcessedWidth(t *testing.T) {
 
 // And the two refusals the operand can make, which are worded differently.
 func TestPrintInColumnsRefusesABadCount(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"zero columns", "print -C 0 a b", "zsh:print:1: invalid number of columns: 0\n"},
 		{"a negative count", "print -C -1 a b", "zsh:print:1: invalid number of columns: -1\n"},

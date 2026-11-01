@@ -27,6 +27,7 @@ func octalSem(drops Answer) Semantics {
 }
 
 func TestAnOctalEscapePastAByte(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, keeps, drops string }{
 		// The controls: a value that fits is the same byte under both, and so
 		// is a run whose fourth digit was never part of the escape. A row that
@@ -66,6 +67,7 @@ func TestAnOctalEscapePastAByte(t *testing.T) {
 // with no answer for it still writes `$'\101'` — which is what keeps a
 // dialect that never reaches the question from having to answer it.
 func TestAnOctalEscapeThatFitsNeverAsksTheAxis(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `printf '%s' $'a\101\0z'`, withSem(octalSem(Unspecified)))
 	if out != "aA\x00z" || st != 0 {
 		t.Errorf("= %q status %d, want %q and 0", out, st, "aA\x00z")
@@ -74,6 +76,7 @@ func TestAnOctalEscapeThatFitsNeverAsksTheAxis(t *testing.T) {
 
 // And one that does not fit is refused rather than guessed.
 func TestAnUnansweredOctalOverflowIsRefused(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `printf '%s' $'\401'`, withSem(octalSem(Unspecified)))
 	if st == 0 {
 		t.Errorf("= %q status %d, want a failing status", out, st)

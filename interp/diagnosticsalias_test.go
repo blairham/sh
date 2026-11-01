@@ -29,6 +29,7 @@ import (
 // move an axis takes a copy first: `d := r.diag().Clone()`, which is what
 // locationPrefixNamed does and why.
 func TestNothingWritesThroughTheDiagnostics(t *testing.T) {
+	t.Parallel()
 	names, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
@@ -135,6 +136,7 @@ func isDiagCall(e ast.Expr) bool {
 // reports a clean tree in the same words as a broken one, which is the
 // failure this repository has made often enough to write down.
 func TestTheDiagnosticsGuardCatchesAWriteThroughABoundName(t *testing.T) {
+	t.Parallel()
 	requireViolations(t, 1, `package interp
 func f(r *Runner) {
 	d := r.diag()
@@ -146,6 +148,7 @@ func f(r *Runner) {
 // The sharpest form, because it needs no name and reads like an ordinary
 // field write.
 func TestTheDiagnosticsGuardCatchesAWriteStraightOffTheCall(t *testing.T) {
+	t.Parallel()
 	requireViolations(t, 1, `package interp
 func f(r *Runner) { r.diag().Location = LocationNameOnly }`)
 }
@@ -153,6 +156,7 @@ func f(r *Runner) { r.diag().Location = LocationNameOnly }`)
 // And the form that is correct, which has to stay quiet or the guard would
 // forbid the very thing it tells a caller to do.
 func TestTheDiagnosticsGuardAllowsACopy(t *testing.T) {
+	t.Parallel()
 	requireViolations(t, 0, `package interp
 func f(r *Runner) {
 	d := r.diag().Clone()
@@ -189,6 +193,7 @@ func requireViolations(t *testing.T, want int, src string) {
 // shape: the line compiles, and `d.Location = LocationNone` inside a value
 // method meant what it said until the receiver became a pointer.
 func TestADiagnosticsMethodWritesOnlyACopy(t *testing.T) {
+	t.Parallel()
 	names, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
@@ -302,11 +307,13 @@ func rebound(body *ast.BlockStmt, name string, pos token.Pos) bool {
 // The guard's own cases: a write through the receiver fires, a write on a
 // copy does not, and the methods that move the table in place are allowed.
 func TestTheMethodGuardCatchesAReceiverWrite(t *testing.T) {
+	t.Parallel()
 	requireReceiverWrites(t, 1, `package interp
 func (d *Diagnostics) f() { d.Location = LocationNone }`)
 }
 
 func TestTheMethodGuardAllowsACopy(t *testing.T) {
+	t.Parallel()
 	requireReceiverWrites(t, 0, `package interp
 func (d *Diagnostics) f() string {
 	n := d.Clone()

@@ -30,6 +30,7 @@ import (
 // at the call and there is nothing after it to read. That is not a workaround:
 // it is the next test's subject.
 func TestErrReturnTakesAnImplicitReturn(t *testing.T) {
+	t.Parallel()
 	// %s is where the one word the two states differ by goes.
 	for _, c := range []struct{ name, src, on, off string }{
 		{
@@ -91,6 +92,7 @@ func TestErrReturnTakesAnImplicitReturn(t *testing.T) {
 // nothing at all and leaves 1, where `unsetopt errreturn` ahead of the same
 // three lines writes all three and leaves 0.
 func TestEveryLevelInTurnTakesTheImplicitReturn(t *testing.T) {
+	t.Parallel()
 	const body = "g() { false; print g-after }\n" +
 		"f() { g; print f-after }\n" +
 		"f\n" +
@@ -120,6 +122,7 @@ func TestEveryLevelInTurnTakesTheImplicitReturn(t *testing.T) {
 // implicit, once with a written `return` and no option anywhere — and the two
 // have to agree byte for byte. Measured on zsh 5.9.2, 2026-09-25.
 func TestTheImplicitReturnLandsWhereAWrittenOneDoes(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, implicit, written, want string
 		status                        int
@@ -163,6 +166,7 @@ func TestTheImplicitReturnLandsWhereAWrittenOneDoes(t *testing.T) {
 // still on there — takes a return of its own, which is why `f-after` is absent
 // as well as `notreached`. Measured on zsh 5.9.2, 2026-09-25.
 func TestTheImplicitReturnEndsASourcedFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "inner.zsh")
 	if err := os.WriteFile(path, []byte("print in-src\nfalse\nprint notreached\n"), 0o600); err != nil {
@@ -198,6 +202,7 @@ func TestTheImplicitReturnEndsASourcedFile(t *testing.T) {
 // judgement" is right for `set -e` in every column and wrong here, and it is
 // wrong in exactly these two cells. Measured on zsh 5.9.2, 2026-09-25.
 func TestATestedContextExemptsTheImplicitReturnOnlyToTheCall(t *testing.T) {
+	t.Parallel()
 	const body = "f() { false; print inner }\n" +
 		"if f; then print then; else print else; fi\n" +
 		"print after\n"
@@ -278,6 +283,7 @@ func TestAnErrTrapTakesTheFailureAndStopsThePropagation(t *testing.T) {
 // written, where the implicit return alone would have left the function and
 // written `post st=1` at 0.
 func TestErrExitOutranksTheImplicitReturn(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src string }{
 		{"both set in the function", "f() { setopt localoptions errexit errreturn; false; print x }\n"},
 		{"errexit global, errreturn local", "setopt errexit\nf() { setopt localoptions errreturn; false; print x }\n"},
@@ -298,6 +304,7 @@ func TestErrExitOutranksTheImplicitReturn(t *testing.T) {
 // option's reach does not widen under an emulation the way `POSIX_TRAPS` does
 // (#4547).
 func TestErrReturnIsStillReportedAsItWas(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"the condition follows it", "setopt errreturn\n[[ -o errreturn ]] && print on || print off\n", "on\n"},
 		{"and back again", "setopt errreturn\nunsetopt errreturn\n[[ -o errreturn ]] && print on || print off\n", "off\n"},

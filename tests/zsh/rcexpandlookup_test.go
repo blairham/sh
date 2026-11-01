@@ -11,6 +11,7 @@ import "testing"
 // D04parameter.ztst). Measured 2026-10-02 on zsh 5.9.2
 // (`/opt/homebrew/bin/zsh -f`, `LC_ALL=C`).
 func TestARcExpandLookupOfOneValueIsTheEmptyString(t *testing.T) {
+	t.Parallel()
 	const setup = "setopt rcexpandparam; a=(p q); typeset -A h; h=(X x)\n"
 	for _, tc := range []struct{ src, want string }{
 		{`print -r -- S n=$a[5] v=$a[(r)Y] k=$h[(i)y] r=$h[(r)Y] m=$h[zz] E`, "S n= v= k= r= m= E\n"},

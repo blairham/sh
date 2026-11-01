@@ -40,6 +40,7 @@ func runIndirect(t *testing.T, src string, setup func(*Runner)) string {
 // `${!prefix@}` yields the names, not any value — and the two spellings differ
 // exactly as `$@` and `$*` do.
 func TestTheNamesWithAPrefix(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`ZQ_a=1; ZQ_b=2; echo ${!ZQ_@}`, "ZQ_a ZQ_b"},
 		{`ZQ_a=1; ZQ_b=2; printf "[%s]" "${!ZQ_@}"`, "[ZQ_a][ZQ_b]"},
@@ -62,6 +63,7 @@ func TestTheNamesWithAPrefix(t *testing.T) {
 
 // A name `unset` took away is not listed, because it cannot be read either.
 func TestUnsetNamesAreNotListed(t *testing.T) {
+	t.Parallel()
 	out := runIndirect(t, `ZQ_a=1; ZQ_b=2; unset ZQ_a; echo "[${!ZQ_@}]"`, nil)
 	if got, want := out, "[ZQ_b]"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -71,6 +73,7 @@ func TestUnsetNamesAreNotListed(t *testing.T) {
 // The names come from everywhere a lookup would find one, so a variable the
 // shell inherited is listed beside one it set.
 func TestInheritedNamesAreListed(t *testing.T) {
+	t.Parallel()
 	withEnv := func(r *Runner) { r.Env = []string{"ZQ_env=1"} }
 	out := runIndirect(t, `ZQ_set=2; echo ${!ZQ_@}`, withEnv)
 	if got, want := out, "ZQ_env ZQ_set"; got != want {
@@ -84,6 +87,7 @@ func TestInheritedNamesAreListed(t *testing.T) {
 // of the environment, so the producer's table is the only place a removed
 // name survives to be listed by mistake.
 func TestAProducedNameIsListedUntilItIsUnset(t *testing.T) {
+	t.Parallel()
 	produce := func(r *Runner) {
 		r.SetDynamic("ZQ_made", func(*Runner) string { return "x" })
 	}

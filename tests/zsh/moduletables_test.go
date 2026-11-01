@@ -32,6 +32,7 @@ import (
 // input row is the control: a general fallback would have written the name
 // in both.
 func TestAFunctionsSourceFollowsTheRouteWhenThereIsNoFile(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		route interp.Route
@@ -74,6 +75,7 @@ func TestAFunctionsSourceFollowsTheRouteWhenThereIsNoFile(t *testing.T) {
 // it — under `-f` from a script file with `env -i PATH=/usr/bin:/bin
 // TERM=dumb` and a scratch `HOME`, `zsh/parameter` loaded on the first line.
 func TestTheSevenTablesThatStoppedRefusing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			// The pattern characters, and the rows that say the list is a
@@ -195,6 +197,7 @@ func TestTheSevenTablesThatStoppedRefusing(t *testing.T) {
 // lookup that failed must still leave a row, under the number, because the
 // length of this table and the length of `$GROUPS` are one fact.
 func TestTheUserGroupsAreTheProcessesOwn(t *testing.T) {
+	t.Parallel()
 	ids, err := os.Getgroups()
 	if err != nil || len(ids) == 0 {
 		t.Skip("no group list on this platform")
@@ -226,6 +229,7 @@ for k in ${(ko)usergroups}; do print -r -- "$k=$usergroups[$k]"; done`)
 // failure this guards is a name landing with the view and without the
 // attributes, which is what every one of these had to be given by hand.
 func TestTheSevenTablesCarryTheModuleAttributes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, word string }{
 		{"patchars", "array-readonly-hide-hideval-special"},
 		{"historywords", "array-readonly-hide-hideval-special"},

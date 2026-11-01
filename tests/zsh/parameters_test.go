@@ -16,6 +16,7 @@ import (
 // first, then tied, case, readonly, export, hide, unique and special, which
 // is what the combinations at the bottom pin down.
 func TestParametersDescribesEveryKindAndAttribute(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name, decl, want string
@@ -75,6 +76,7 @@ func TestParametersDescribesEveryKindAndAttribute(t *testing.T) {
 // actually do with the table — powerlevel10k tests membership in seven
 // places and reads a value in one.
 func TestParametersAnswersAboutTheNamesThemselves(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name, src, want string
@@ -131,6 +133,7 @@ func TestParametersAnswersAboutTheNamesThemselves(t *testing.T) {
 // today's preset. What is asserted is that a name the script made and a name
 // the shell provides are both in the keys, and a name nothing made is not.
 func TestParametersCoversTheNamesTheShellHas(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	src := `zmodload zsh/parameter
 mine=1

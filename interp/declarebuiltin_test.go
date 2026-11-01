@@ -18,6 +18,7 @@ import (
 // expression. That is the whole reason it cannot be applied once at the point
 // of declaring and forgotten.
 func TestTheIntegerAttributeEvaluatesALaterAssignment(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset -i n; n=5+2; echo "$n"`, "7"},
 		{`typeset -i n=3*3; echo "$n"`, "9"},
@@ -37,6 +38,7 @@ func TestTheIntegerAttributeEvaluatesALaterAssignment(t *testing.T) {
 // An expression that will not parse stops the script rather than storing
 // something, which is what both shells with the attribute do.
 func TestAnUnparsableIntegerAssignmentIsFatal(t *testing.T) {
+	t.Parallel()
 	out, status := run(t, `typeset -i n; n=1+; echo alive`, nil)
 	if strings.Contains(out, "alive") {
 		t.Errorf("the script carried on: %q", out)
@@ -49,6 +51,7 @@ func TestAnUnparsableIntegerAssignmentIsFatal(t *testing.T) {
 // The declaration assigns and then freezes. Applying both at once made the
 // declaration refuse its own value.
 func TestReadonlyAttributeAllowsItsOwnValue(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `typeset -r c=1; echo "[$c]"`, nil)
 	if strings.TrimSpace(out) != "[1]" {
 		t.Errorf("got %q, want the value the declaration was given", out)
@@ -69,6 +72,7 @@ func TestReadonlyAttributeAllowsItsOwnValue(t *testing.T) {
 // on a space, and a value that looked like a pattern became the directory
 // listing.
 func TestAnAssignmentIsNotAGlobbingOrSplittingContext(t *testing.T) {
+	t.Parallel()
 	// The names matter. Pathname expansion acts on the *whole* field, so
 	// `export E=*` matches nothing in a directory of plain names and comes
 	// back unchanged whether or not the value was protected — which is a test
@@ -105,6 +109,7 @@ func TestAnAssignmentIsNotAGlobbingOrSplittingContext(t *testing.T) {
 // The rule follows the name, and a dialect adds its own. Without this, a shell
 // that has no such command would still treat its arguments as assignments.
 func TestADialectAddsItsOwnDeclarationUtility(t *testing.T) {
+	t.Parallel()
 	dir := fileDir(t, "a.txt", "x=a.txt")
 	echoArgs := func(rr *Runner, _ context.Context, args []string) int {
 		_, _ = fmt.Fprintln(rr.Stdout, strings.Join(args, " "))
@@ -150,6 +155,7 @@ func fileDir(t *testing.T, names ...string) string {
 // package's rule requires; which shell answers which way is asserted in
 // dialect/.
 func TestTypesetLocalNeedsKeywordFunctionIsAnAxis(t *testing.T) {
+	t.Parallel()
 	answer := func(a Answer) func(*Runner) {
 		return func(r *Runner) {
 			s := *r.Semantics
@@ -182,6 +188,7 @@ func TestTypesetLocalNeedsKeywordFunctionIsAnAxis(t *testing.T) {
 
 // Whether a name declared without a value counts as set.
 func TestDeclaredNameWithoutValueIsEmptyIsAnAxis(t *testing.T) {
+	t.Parallel()
 	answer := func(a Answer) func(*Runner) {
 		return func(r *Runner) {
 			s := *r.Semantics

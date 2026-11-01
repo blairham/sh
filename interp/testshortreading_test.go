@@ -25,6 +25,7 @@ func testReading(t *testing.T, set func(*Semantics), src string) string {
 }
 
 func TestATrailingOperatorIsAWordWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, yes, no string }{
 		// The operator is the last word, so there is nothing for it to be an
 		// operator over: a word under one answer, a refusal under the other.
@@ -57,6 +58,7 @@ func TestATrailingOperatorIsAWordWhereTheAxisSaysSo(t *testing.T) {
 // decides is whether the operator **exists**. That the reference itself
 // answers true is dialect/bash's row.
 func TestANameReferenceTestAsksAboutTheBinding(t *testing.T) {
+	t.Parallel()
 	const src = "v=1\ntest -R v; echo $?"
 	if yes := testReading(t, func(s *Semantics) {
 		s.TestHasTheNameReferenceOperator = Yes
@@ -72,6 +74,7 @@ func TestANameReferenceTestAsksAboutTheBinding(t *testing.T) {
 
 // And a group short enough for the counts to read is read by them.
 func TestAShortGroupIsReadByTheCountsWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, yes, no string }{
 		// One word inside: the operator is the word it is spelled with.
 		{`test -n x -a \( -f \); echo $?`, "0\n", "OPERAND\n2\n"},

@@ -10,6 +10,7 @@ import "testing"
 // where they were (#5151, a chunk of D04parameter.ztst). Measured 2026-10-02
 // on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f`, `LC_ALL=C`).
 func TestTheWPrefixAppliesAModifierToEachWord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`foo=; print -r -- "<${foo:wq}>" "<${:wq}>"`, "<> <>\n"},
 		{`foo="a.b  c.d"; print -r -- "<${foo:wr}>" "<${foo:wu}>"`, "<a  c> <A.B  C.D>\n"},
@@ -30,6 +31,7 @@ func TestTheWPrefixAppliesAModifierToEachWord(t *testing.T) {
 // read on the unbraced spelling as on the braced one (#5151, a chunk of
 // D04parameter.ztst). Measured 2026-10-02 on zsh 5.9.2.
 func TestThePrefixesReachTheBareSpellingAndW(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`W=FOOBAR; echo $W:W_B_l. ${W:W_B_l}`, "fooBar. fooBar\n"},
 		{`W=xAyAz; echo ${W:W.A.u} ${W:W:A:u}`, "XAYAZ XAYAZ\n"},

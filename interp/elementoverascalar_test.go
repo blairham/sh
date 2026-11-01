@@ -18,6 +18,7 @@ import (
 // (#1570). The same fault #1502 fixed for `a+=(x)`, one layer along: there
 // the operator made the name an array and here the subscript does.
 func TestAnElementWrittenOverAScalarKeepsIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the value becomes the first element", `a=abc; a[1]=x`, "[abc][x] keys=0 1 n=2"},
 		{"however far past it the element lands", `a=abc; a[2]=x`, "[abc][x] keys=0 2 n=2"},
@@ -50,6 +51,7 @@ func TestAnElementWrittenOverAScalarKeepsIt(t *testing.T) {
 // The name's attributes fold the join once, which is what says the promoted
 // element is an element and not a string put back by hand.
 func TestAnAppendOverAPromotedScalarFoldsTheAttribute(t *testing.T) {
+	t.Parallel()
 	out, st := runArray(t, `typeset -i a=5; a[0]+=3; printf "[%s]" "${a[@]}"`)
 	if out != "[8]" || st != 0 {
 		t.Errorf("= %q (status %d), want [8] at 0", out, st)
@@ -62,6 +64,7 @@ func TestAnAppendOverAPromotedScalarFoldsTheAttribute(t *testing.T) {
 //
 // See Semantics.NegativeSubscriptCountsOverAPromotedScalar.
 func TestANegativeSubscriptOverAPromotedScalarAsksTheAxis(t *testing.T) {
+	t.Parallel()
 	const src = `a=abc; a[-1]=x; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`
 	// Counting back over the element the promotion made: one element, and the
 	// value it was holding is what was written over.
@@ -92,6 +95,7 @@ func TestANegativeSubscriptOverAPromotedScalarAsksTheAxis(t *testing.T) {
 // A non-negative subscript lands at the number it names under either reading,
 // so it asks nothing — which is what keeps the axis off the common path.
 func TestAPlainSubscriptOverAPromotedScalarAsksNothing(t *testing.T) {
+	t.Parallel()
 	out, st := runPromotedNegative(t, Unspecified,
 		`a=abc; a[1]=x; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
 	if want := "[abc][x] n=2\n"; out != want || st != 0 {

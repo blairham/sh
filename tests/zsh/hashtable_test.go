@@ -45,6 +45,7 @@ func runZshHash(t *testing.T, dir, src string) (string, int) {
 // cannot show: a shell that took the operand and recorded nothing would
 // answer 0 here and leave the name unrunnable.
 func TestHashWritesTheCommandTableFromAnAssignment(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	tool := hashTool(t, dir, "zzc")
 	out, st := runZshHash(t, dir, `hash foo=`+tool+`
@@ -61,6 +62,7 @@ hash`)
 // not a path at all goes in and comes back out at 0. That is what makes this
 // a write of the table rather than a search that happened to succeed.
 func TestHashTakesAnAssignmentsValueAsWritten(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZshHash(t, dir, `hash foo=notapath
 print -r -- "st=$?"
@@ -77,6 +79,7 @@ hash`)
 // command` here where the assignment beside it is silence. The pair is what
 // says the `=` is being read rather than the slash.
 func TestHashStillRefusesAWrittenPathnameWithNoEquals(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	tool := hashTool(t, dir, "zzc")
 	out, st := runZshHash(t, dir, `hash `+tool+` 2>&1
@@ -94,6 +97,7 @@ hash`)
 // pattern, and sorted within each, which is the order the operand list is in
 // rather than the one sorted run the bare listing writes.
 func TestHashDashMListsTheCommandTableByPattern(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZshHash(t, dir, `hash foo=/bin/ls bar=/bin/cat baz=/bin/pwd
 hash -m "f*"
@@ -116,6 +120,7 @@ print -r -- "none=$?"`)
 // under a shell with no such letter, which is a pass an unimplemented option
 // would also produce.
 func TestHashDashMListsTheNamedDirectoriesByPattern(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZshHash(t, dir, `hash -d foo=/tmp bar=/usr
 hash -d -m "f*"
@@ -135,6 +140,7 @@ print -r -- "none=$?"`)
 // that read an empty operand list as "everything" would write the table on
 // the second row and agree with the reference nowhere else.
 func TestHashDashMIsAListingAndNeverADefinition(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZshHash(t, dir, `hash -m foo=/bin/ls
 print -r -- "assign=$?"
@@ -163,6 +169,7 @@ print -r -- "dirs=$?"`)
 // and the row has to hold a letter that is really still absent, or it is
 // three assertions about nothing.
 func TestHashStillNamesTheLettersItHasNotGot(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZshHash(t, dir, `hash -f 2>&1
 print -r -- "f=$?"

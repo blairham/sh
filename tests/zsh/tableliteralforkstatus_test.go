@@ -24,6 +24,7 @@ import (
 // parentheses — and the third is three ways of showing the 0 is not a status
 // being carried through from somewhere.
 func TestAnUnpairedTableLiteralLeavesAForkAtZero(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src string
 		want      string
@@ -133,6 +134,7 @@ func TestAnUnpairedTableLiteralLeavesAForkAtZero(t *testing.T) {
 // reads as "this refusal leaves 0", which is not what the reference does: a
 // script that takes it ends at **1**.
 func TestAnUnpairedTableLiteralStillEndsAScriptAtOne(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src string }{
 		{"at the top level", "typeset -A h=(a 1 b)\nprint reached"},
 		{"inside a function", "f() { typeset -A h=(a 1 b); }\nf\nprint reached"},

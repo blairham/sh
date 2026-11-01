@@ -44,6 +44,7 @@ func runWholeArrayCount(
 // LC_ALL=C` from a script file under `set -u` with `echo after` on the line
 // below — every row is a number and `after` runs (#3125).
 func TestCountingAWholeArrayAsksNothingOfTheOption(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a name that holds nothing", `set -u; echo "[${#nope[@]}]"; echo after`},
 		{"and under the star spelling", `set -u; echo "[${#nope[*]}]"; echo after`},
@@ -68,6 +69,7 @@ func TestCountingAWholeArrayAsksNothingOfTheOption(t *testing.T) {
 // `a=(); ${#a[@]}` is `0`. The last two rows are what draw the line, since a
 // rule keyed on "holds no elements" would refuse both of them (#3125).
 func TestACountRefusesANameHoldingNothing(t *testing.T) {
+	t.Parallel()
 	out, st := runWholeArrayCount(t, WholeArrayCountRefusesANameHoldingNothing, No, false,
 		`set -u; echo "[${#nope[@]}]"; echo after`)
 	if want := "nope[@]: parameter not set"; !strings.Contains(out, want) {
@@ -110,6 +112,7 @@ func TestACountRefusesANameHoldingNothing(t *testing.T) {
 // which is the row that says an assigned-and-empty array is not what the
 // refusal is about (#3125).
 func TestACountRefusesANameHoldingNoList(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a name that holds nothing", `set -u; echo "[${#nope[@]}]"; echo after`, "nope: parameter not set"},
 		{"and under the star spelling", `set -u; echo "[${#nope[*]}]"; echo after`, "nope: parameter not set"},
@@ -149,6 +152,7 @@ func TestACountRefusesANameHoldingNoList(t *testing.T) {
 // sentence and exits 1. The control is `${#a}` on the same unset name, which
 // ends the shell in all three (#3125).
 func TestWhetherARefusedCountGivesUpTheLineOrTheShell(t *testing.T) {
+	t.Parallel()
 	const src = "set -u\necho \"c=${#nope[@]}\"; echo SAME\necho NEXT\n"
 	out, st := runWholeArrayCount(t, WholeArrayCountRefusesANameHoldingNoArray, Yes, true, src)
 	if strings.Contains(out, "SAME") {

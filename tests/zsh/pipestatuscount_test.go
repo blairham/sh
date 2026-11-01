@@ -14,6 +14,7 @@ import "testing"
 // is the control, a count that already went through the record. Run with the
 // prelude, because the prelude is what left the record holding a status.
 func TestPipestatusCountsItsElements(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`print -r -- "[$pipestatus]" $#pipestatus ${#pipestatus} ${#pipestatus[@]}`, "[] 0 0 0\n"},
 		{`false | true; print $#pipestatus ${#pipestatus} ${#pipestatus[@]}`, "2 2 2\n"},

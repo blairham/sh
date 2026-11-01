@@ -17,6 +17,7 @@ import "testing"
 // flag — whose base set *is* this shell's `echo`, which is how the gap was
 // found (#1644).
 func TestEchoReadsTheUnicodeEscapes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"four digits", `echo 'a\u0041Z'`, "aAZ\n"},
 		{"eight digits", `echo 'a\U00000041Z'`, "aAZ\n"},
@@ -45,6 +46,7 @@ func TestEchoReadsTheUnicodeEscapes(t *testing.T) {
 // must agree about the values Go's rune type refuses: a replacement character
 // was what came out of this site until the encoder was shared (#1840).
 func TestPrintEncodesTheSameCodePoints(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// In a UTF-8 locale, where the encoding is the whole of the
 		// question: what `print` does with a code point the locale has no

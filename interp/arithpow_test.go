@@ -38,6 +38,7 @@ func runPow(t *testing.T, src string, float bool, negIsError Answer) (string, in
 // The unanimous rows: every shell that parses `**` answers these the same
 // way, so no axis is consulted.
 func TestExponentEvaluates(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`echo $((2**10))`, "1024"},
 		{`echo $((2**0))`, "1"},
@@ -61,6 +62,7 @@ func TestExponentEvaluates(t *testing.T) {
 // refusing and going float: `2**-1` is an error on one side and 0.5 on the
 // other.
 func TestNegativeExponentIsTheAxis(t *testing.T) {
+	t.Parallel()
 	// The status a failed expression carries is a separate diagnostics
 	// field; the axis owns only whether the expression fails at all.
 	out, status := runPow(t, `echo $((2**-1))`, false, Yes)
@@ -80,6 +82,7 @@ func TestNegativeExponentIsTheAxis(t *testing.T) {
 // Where the dialect has floats, `**` is a float operation like the other
 // arithmetic operators — no integer-only refusal arises.
 func TestExponentWithFloats(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`echo $((9**0.5))`, "3"},
 		{`echo $((2.5**2))`, "6.25"},

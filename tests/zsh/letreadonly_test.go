@@ -15,6 +15,7 @@ import (
 // Measured 2026-09-18 against zsh 5.9.2 over a script file, `env -i` with
 // LC_ALL=C (#3470).
 func TestALetRefusedByAFreezeIsNotFatalHere(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, "readonly x=1\nlet x=2\necho after $?\n")
 	if !strings.Contains(out, "read-only variable: x") {
 		t.Errorf("got %q, want the refusal reported", out)
@@ -29,6 +30,7 @@ func TestALetRefusedByAFreezeIsNotFatalHere(t *testing.T) {
 // not fatal, and at the arithmetic command's own status rather than a
 // builtin's.
 func TestTheNeighboursOfThatRefusalAreUnchanged(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		tail      bool

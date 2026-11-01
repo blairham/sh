@@ -15,6 +15,7 @@ import (
 // `LC_ALL=en_US.UTF-8`: the first writes `barXX`, the second, with a third `£` after it, `error in flags
 // near position 10` (#5153).
 func TestEvalReadsAWideFlagDelimiter(t *testing.T) {
+	t.Parallel()
 	out, _, errs := runZshUTF8(t, "foo=bar; eval 'print ${(r£5££X£)foo}'")
 	if out != "barXX\n" || errs != "" {
 		t.Errorf("got %q, %q, want %q", out, errs, "barXX\n")

@@ -18,6 +18,7 @@ import (
 // line all run here and are all refused by bash 5.3.20, bash 3.2 and ksh93u+,
 // each naming the newline (#3627).
 func TestATermsFirstWordMayEndItsLineHere(t *testing.T) {
+	t.Parallel()
 	d := zsh.Dialect()
 	if !d.ConditionNewlineMayFollowATermsFirstWord {
 		t.Error("ConditionNewlineMayFollowATermsFirstWord is false, want true")

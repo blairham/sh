@@ -17,6 +17,7 @@ import (
 // which show the refusal is about the frozen name and the binding or letter,
 // not about the builtin.
 func TestRestrictedModeRefusesEveryDeclarationOfAFrozenName(t *testing.T) {
+	t.Parallel()
 	const on = "setopt restricted; "
 	cases := []struct{ src, want string }{
 		// A local with a value, which shadowed the freeze and was taken.
@@ -79,6 +80,7 @@ func TestRestrictedModeTakesAWriteIntoAProcessSubstitution(t *testing.T) {
 // exit status (#5515). The plain assignment is the control: it is not a
 // builtin and ends at 1.
 func TestARestrictedRefusalEndsWithTheBuiltinsStatus(t *testing.T) {
+	t.Parallel()
 	const on = "setopt restricted; "
 	cases := []struct {
 		src    string

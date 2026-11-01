@@ -21,6 +21,7 @@ import (
 // the destination under both answers are the controls — they say the axis is
 // asked where the search decides something and nowhere else.
 func TestACdpathSearchThatMisses(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name     string
 		replaces Answer

@@ -37,6 +37,7 @@ func bareNamesAreLists(r *Runner) {
 // untouched, the opposite of what a set difference does with the same
 // absence.
 func TestAZipInterleavesTwoLists(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"equal lengths alternate", `a=(1 2 3); b=(x y z); printf "[%s]" ${a:^b}`, "[1][x][2][y][3][z]"},
 		{"the shorter one ends it", `a=(1 2); b=(x y z w); printf "[%s]" ${a:^b}`, "[1][x][2][y]"},
@@ -68,6 +69,7 @@ func TestAZipInterleavesTwoLists(t *testing.T) {
 // list. What quoting does guarantee is that an empty answer is one empty
 // field rather than none, which is the same rule the element filter keeps.
 func TestAQuotedZipJoinsTheLeftAndStillYieldsFields(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the left is one word and the answer is two fields",

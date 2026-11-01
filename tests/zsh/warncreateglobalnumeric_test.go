@@ -9,6 +9,7 @@ import "testing"
 // for a name arithmetic declares as it creates it. Measured 2026-10-02 on zsh
 // 5.9.2 under `-f` (#5155).
 func TestWarnCreateGlobalNamesANumberArithmeticMade(t *testing.T) {
+	t.Parallel()
 	got, _ := runZshOnPath(t, t.TempDir(),
 		"f(){ setopt warncreateglobal; (( g=1.5 )); let h=2; x=$(( q=3 )); (( z++ )); s=1 }; f")
 	want := "f: numeric parameter g created globally in function f\n" +

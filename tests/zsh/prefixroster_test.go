@@ -22,6 +22,7 @@ import (
 // own output is redirected and the command itself carries no redirection
 // (#5048).
 func TestWhichBuiltinsKeepAnAssignmentPrefix(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src   string
 		keeps bool
@@ -57,6 +58,7 @@ func TestWhichBuiltinsKeepAnAssignmentPrefix(t *testing.T) {
 // the first word of the command line is not the command that runs, and it is
 // the one that runs that decides.
 func TestTheRosterIsAskedAboutTheCommandThatRuns(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src   string
 		keeps bool
@@ -96,6 +98,7 @@ func TestTheRosterIsAskedAboutTheCommandThatRuns(t *testing.T) {
 // leaves `$_` as `MARK` — the previous command's last argument, untouched,
 // because `command` ran and recorded nothing.
 func TestAPrefixSendsACommandlessRedirectionDownTheAssignmentsRoad(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`v=1 builtin >f; print "v=[$v]"`, "v=[1]"},
 		{`v=1 command >f; print "v=[$v]"`, "v=[1]"},

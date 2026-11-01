@@ -16,6 +16,7 @@ import (
 // rewrite from, the running name is all that changes. See
 // Runner.RunBuiltinAs.
 func TestARenamedBuiltinComplainsUnderItsName(t *testing.T) {
+	t.Parallel()
 	run := func(from string) string {
 		out, _ := runGrammar(t, "chdir /nonexistent-dir-for-this-test", nil, func(r *Runner) {
 			r.Register("chdir", func(rr *Runner, ctx context.Context, args []string) int {

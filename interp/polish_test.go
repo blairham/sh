@@ -14,6 +14,7 @@ import (
 )
 
 func TestLocalIsDynamicallyScoped(t *testing.T) {
+	t.Parallel()
 	// A local is visible to everything the function calls and gone when it
 	// returns. Testing only the second half would pass against a scheme that
 	// hid the variable from callees, which is not what shells do.
@@ -29,6 +30,7 @@ v=out; outer; echo "after $v"`
 }
 
 func TestLocalRestoresAbsenceNotEmptiness(t *testing.T) {
+	t.Parallel()
 	// The outer variable did not exist, so it must not exist afterwards.
 	// Restoring "" would leave a set-but-empty variable, which `${v-unset}`
 	// can tell apart and a careless implementation cannot.
@@ -39,6 +41,7 @@ func TestLocalRestoresAbsenceNotEmptiness(t *testing.T) {
 }
 
 func TestLocalOutsideAFunctionFails(t *testing.T) {
+	t.Parallel()
 	_, st := run(t, `local v=1`, nil)
 	if st == 0 {
 		t.Error("local outside a function reported success")
@@ -46,6 +49,7 @@ func TestLocalOutsideAFunctionFails(t *testing.T) {
 }
 
 func TestCaseContinueKeepsTestingLaterPatterns(t *testing.T) {
+	t.Parallel()
 	// `;;&` re-tests; `;&` falls through without testing. The difference is
 	// the whole reason they are separate operators, so both are asserted.
 	// `;;&` is not core grammar, so the flag is enabled by name.
@@ -61,6 +65,7 @@ func TestCaseContinueKeepsTestingLaterPatterns(t *testing.T) {
 }
 
 func TestNoclobberRefusesAndPipeOverrides(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "f")
 	if err := os.WriteFile(path, []byte("pre\n"), 0o600); err != nil {
@@ -88,6 +93,7 @@ func TestNoclobberRefusesAndPipeOverrides(t *testing.T) {
 }
 
 func TestSetCDoesNotClobberPositionalParameters(t *testing.T) {
+	t.Parallel()
 	// `set -C` sets an option; only `--` or operands replace the parameters.
 	if got, _ := run(t, `set -- a b c; set -C; echo $#`, nil); got != "3\n" {
 		t.Errorf("got %q, want %q", got, "3\n")
@@ -95,6 +101,7 @@ func TestSetCDoesNotClobberPositionalParameters(t *testing.T) {
 }
 
 func TestIndirectionReadsTheNamedVariable(t *testing.T) {
+	t.Parallel()
 	// `${!x}` is grammar the core does not have, and what it means is the
 	// IndirectionYieldsName axis — both named here.
 	indirect := func(d *syntax.Dialect) {
@@ -114,6 +121,7 @@ func TestIndirectionReadsTheNamedVariable(t *testing.T) {
 }
 
 func TestCaseChangeOperators(t *testing.T) {
+	t.Parallel()
 	got, _ := runGrammar(t, `x=aBc; printf "[%s]" "${x^^}" "${x,,}"`,
 		func(d *syntax.Dialect) { d.ParamCaseChange = true }, nil)
 	if got != "[ABC][abc]" {
@@ -122,6 +130,7 @@ func TestCaseChangeOperators(t *testing.T) {
 }
 
 func TestArithmeticErrorAbandonsTheScript(t *testing.T) {
+	t.Parallel()
 	// Fatality is not an axis: every measured vector stops. Only the status
 	// differs, and that is the FatalErrorStatusIsOne axis asserted in
 	// eval_test.go — so both of its answers are exercised here.
@@ -136,6 +145,7 @@ func TestArithmeticErrorAbandonsTheScript(t *testing.T) {
 }
 
 func TestFailedRedirectSkipsTheCommand(t *testing.T) {
+	t.Parallel()
 	// Not noclobber-specific: any open that fails must stop the command.
 	out, st := run(t, `echo hi > /nope/nowhere/x`, nil)
 	if st == 0 {
@@ -147,6 +157,7 @@ func TestFailedRedirectSkipsTheCommand(t *testing.T) {
 }
 
 func TestBackticksNestWithEscaping(t *testing.T) {
+	t.Parallel()
 	// The older form nests only through backslash escaping, which is the
 	// reason $( ) exists. The escape removal happens in the lexer, so the
 	// inner substitution is found by re-lexing rather than by a special case.

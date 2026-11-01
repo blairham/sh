@@ -15,6 +15,7 @@ import "testing"
 // cannot be told apart by any shell case — and then a dialect that later adds
 // one silently marks it special. This is the row that can tell them apart.
 func TestNameInRosterMatchesWholeNames(t *testing.T) {
+	t.Parallel()
 	const roster = "alias unalias typeset"
 	for _, c := range []struct {
 		name string

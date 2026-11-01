@@ -13,6 +13,7 @@ import "testing"
 // Measured on zsh 5.9.2, `-f`, 2026-09-30. On main before this change every sh
 // row read the zsh answer.
 func TestTheEmulationDecidesWhereTheLastPipelineElementRuns(t *testing.T) {
+	t.Parallel()
 	rows := []struct{ name, src, want string }{
 		{"sh: an assignment", "emulate sh -c 'x=1; echo | x=2; echo x=$x'", "x=1\n"},
 		{"sh: read", "emulate sh -c 'y=0; echo 5 | read y; echo y=$y'", "y=0\n"},

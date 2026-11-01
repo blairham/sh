@@ -21,6 +21,7 @@ const privUnset = `(){ private v=inner; (){ print -r -- "X [$v]"; unset v }; ` +
 	`print -r -- "Y [$v]" }`
 
 func TestAnUnsetInACalleeTakesThePrivateOnlyFromTheShellsOwnName(t *testing.T) {
+	t.Parallel()
 	const mod = "zmodload zsh/param/private\n"
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
@@ -72,6 +73,7 @@ func TestAnUnsetInACalleeTakesThePrivateOnlyFromTheShellsOwnName(t *testing.T) {
 // in both. And the same shapes with no `private` anywhere answer identically,
 // so none of this is about `unset` in a callee generally.
 func TestWhatTheRuleDoesNotReach(t *testing.T) {
+	t.Parallel()
 	const mod = "zmodload zsh/param/private\n"
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
@@ -111,6 +113,7 @@ func TestWhatTheRuleDoesNotReach(t *testing.T) {
 // does the same, and an **association** does the same. All four combinations
 // answer alike, and what moves the answer is what the private displaced.
 func TestItIsNeitherTheCalleesSpellingNorThePrivatesKind(t *testing.T) {
+	t.Parallel()
 	const mod = "zmodload zsh/param/private\n"
 	const named = "g(){ print -r -- \"X [$v]\"; unset v }\n" +
 		`(){ private v=inner; g; print -r -- "Y [$v]" }`

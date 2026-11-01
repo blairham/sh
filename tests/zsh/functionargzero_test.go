@@ -23,6 +23,7 @@ import (
 // all. That is why the table below is written as a pair per construct rather
 // than as a list of calls.
 func TestFunctionArgZeroDecidesWhatDollarZeroNames(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, body, on string }{
 		{"a name() function", `f() { print "0=[$0]" }` + "\nf", "f"},
 		{"a function keyword one", `function f { print "0=[$0]" }` + "\nf", "f"},
@@ -60,6 +61,7 @@ func TestFunctionArgZeroDecidesWhatDollarZeroNames(t *testing.T) {
 // a sourced file reports the shell's own name, from the top level and from
 // inside a function alike.
 func TestFunctionArgZeroReachesASourcedFileToo(t *testing.T) {
+	t.Parallel()
 	const inc = `print 'print "0=[$0]"' > inc.sh` + "\n"
 	for _, tc := range []struct{ name, body string }{
 		{"sourced at the top level", inc + ". ./inc.sh"},
@@ -82,6 +84,7 @@ func TestFunctionArgZeroReachesASourcedFileToo(t *testing.T) {
 // changes nothing, which is what says the rows above are about the *call* and
 // not about `$0` wholesale.
 func TestTheTopLevelDollarZeroIsTheControl(t *testing.T) {
+	t.Parallel()
 	on, _ := runZsh(t, t.TempDir(), `setopt functionargzero`+"\n"+`print "0=[$0]"`)
 	off, _ := runZsh(t, t.TempDir(), `unsetopt functionargzero`+"\n"+`print "0=[$0]"`)
 	if on != off {

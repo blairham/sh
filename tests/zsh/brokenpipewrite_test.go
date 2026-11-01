@@ -83,6 +83,7 @@ func TestABrokenPipeWriteFailsTheCommandAndIsSaidTwice(t *testing.T) {
 // The other errno keeps this shell's own answer, which is the half a single
 // axis would have destroyed: silent, and the command still succeeded.
 func TestAClosedDescriptorWriteStillDoesNotFailTheCommand(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `echo hi >&-`)
 	if st != 0 {
 		t.Errorf("status = %d, want 0 -- this shell does not fail on a closed descriptor", st)

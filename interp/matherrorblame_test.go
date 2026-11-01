@@ -46,6 +46,7 @@ func blameSetup(d Diagnostics) func(*Runner) {
 
 // TestAnEvaluationFailureBlamesToTheEndOfTheExpression pins the first rule.
 func TestAnEvaluationFailureBlamesToTheEndOfTheExpression(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`x=$(( 1/0 ))`, `1/0 : division by 0 [0 ]`},
 		{`x=$(( 1/0 + 2 ))`, `1/0 + 2 : division by 0 [0 + 2 ]`},
@@ -78,6 +79,7 @@ func TestAnEvaluationFailureBlamesToTheEndOfTheExpression(t *testing.T) {
 // blame on to the end. Without it the change above reads as "quote more", and
 // what it actually is is "quote more *here*".
 func TestALiteralTheReaderRefusedBlamesItself(t *testing.T) {
+	t.Parallel()
 	d := blameDiags()
 	d.DigitTooGreatForBase = "value too great for base"
 	for _, tc := range []struct{ src, want string }{
@@ -103,6 +105,7 @@ func TestALiteralTheReaderRefusedBlamesItself(t *testing.T) {
 // two bugs rather than an off-by-one: the leading blank came off the
 // expression and the trailing one came off the token.
 func TestAnOperandThatRanOutIsBlamedFromItsOperator(t *testing.T) {
+	t.Parallel()
 	d := blameDiags()
 	for _, tc := range []struct{ src, want string }{
 		{`x=$(( 1 + ))`, `1 + : `},
@@ -127,6 +130,7 @@ func TestAnOperandThatRanOutIsBlamedFromItsOperator(t *testing.T) {
 // so a shell that blames an offset inside it blamed a different string from
 // the one it was slicing.
 func TestAComplaintQuotesTheTextTheTreeWasBuiltFrom(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`d=0; (( 1/$d ))`,
 		`d=0; x=$(( 1/$d ))`,
@@ -148,6 +152,7 @@ func TestAComplaintQuotesTheTextTheTreeWasBuiltFrom(t *testing.T) {
 // The dialect here does *not* skip the leading blanks, which is what makes the
 // row visible — the one that skips them agrees either way.
 func TestAnOperandKeepsTheBlanksItWasWrittenWith(t *testing.T) {
+	t.Parallel()
 	d := Diagnostics{ArithError: "%[1]s: %[2]s", DivisionByZero: "divide by zero"}
 	for _, tc := range []struct{ src, want string }{
 		{`[[ " 1/0 " -eq 1 ]]`, ` 1/0 : divide by zero`},

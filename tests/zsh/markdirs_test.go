@@ -12,6 +12,7 @@ import (
 // TestMarkDirsWritesASlashAfterADirectory pins `markdirs`. Measured
 // 2026-10-02 on zsh 5.9.2 under `-f` (#5155).
 func TestMarkDirsWritesASlashAfterADirectory(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "tmpcd"), 0o755); err != nil {
 		t.Fatal(err)

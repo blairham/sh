@@ -52,6 +52,7 @@ var (
 // other is exactly the drift this is about, and a comparison of the whole
 // table is the only assertion that cannot miss one.
 func TestTheDrawerAndTheInterpreterReadOneTable(t *testing.T) {
+	t.Parallel()
 	// Built through the preset so that the runner is told which shell it is,
 	// which every runner in this suite has to be: a nil Dialect is the core,
 	// and a nested parse would then run as a shell these tests are not about.
@@ -96,6 +97,7 @@ func TestTheDrawerAndTheInterpreterReadOneTable(t *testing.T) {
 // stripped them would pass while a color was wrong, which is the failure a
 // prompt test is most exposed to.
 func TestPrintPAndThePercentFlagAgree(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, text := range []string{
 		// The color family, which is what #1099 was about and what the one
@@ -164,6 +166,7 @@ func TestPrintPAndThePercentFlagAgree(t *testing.T) {
 // which words. This is the *set* — the shapes a reader would otherwise assume
 // had quietly started working.
 func TestTheRefusalsThatRemainAfterOneTable(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{`print -P '%e'`, "zsh:print:1: the %e prompt escape is not implemented\n"},
@@ -254,6 +257,7 @@ func timeNow() time.Time { return time.Now() }
 // while this shell nested a bare `{` inside double quotes — so the row that
 // looked like the strongest coverage in the file was a record of a lexer bug.
 func TestABraceInTheFlagOperandEndsIt(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	// Asked as the tail of the answer and as the disagreement, rather than
 	// byte for byte: the escape itself is a color this test is not about, and

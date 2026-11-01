@@ -10,6 +10,7 @@ import "testing"
 // is a local; `+g` is a local either way. Measured 2026-10-02 on zsh 5.9.2
 // under `-f` (#5155).
 func TestGlobalExportDecidesTheExportLettersScope(t *testing.T) {
+	t.Parallel()
 	const fns = "show(){ print $v ${(t)v}; }; set1(){ typeset -x v=in; show }; set2(){ typeset +g -x v=in; show }; v=out\n"
 	for _, tc := range []struct{ src, want string }{
 		{"unsetopt globalexport; set1; show", "in scalar-local-export\nout scalar\n"},

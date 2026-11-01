@@ -66,6 +66,7 @@ func reportRun(t *testing.T, answer Answer, src string) (string, int) {
 // in: the shell that joins writes the directory it is in, and the shell that
 // does not never mentions it.
 func TestAPathnameOperandIsReportedAbsolute(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, joined, asWritten string
 	}{
@@ -158,6 +159,7 @@ func TestAPathnameOperandIsReportedAbsolute(t *testing.T) {
 // difference is one the command itself writes: a script reading
 // `cmd=$(command -v ./helper)` gets a different string under each reading.
 func TestAnUnansweredPathnameOperandIsRefused(t *testing.T) {
+	t.Parallel()
 	out, st := reportRun(t, Unspecified, `command -v ./bb/tool`)
 	if st != 2 {
 		t.Errorf("status = %d, want 2", st)
@@ -174,6 +176,7 @@ func TestAnUnansweredPathnameOperandIsRefused(t *testing.T) {
 // PATH, the resolved path is the answer in every column, and a shell with no
 // answer here must still report one.
 func TestABareNameIsNotThePathnameQuestion(t *testing.T) {
+	t.Parallel()
 	out, st := reportRun(t, Unspecified, `command -v ls`)
 	if st != 0 {
 		t.Fatalf("status %d: %s", st, out)
@@ -190,6 +193,7 @@ func TestABareNameIsNotThePathnameQuestion(t *testing.T) {
 // writes `file` for a pathname operand in every column, and an earlier draft
 // that asked inside the search made a bare core refuse it.
 func TestTheKindOfAPathnameOperandIsNotRefused(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`type -t ./bb/tool`,
 		`type -at ./bb/tool`,

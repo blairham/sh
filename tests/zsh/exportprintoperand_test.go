@@ -86,6 +86,7 @@ func TestThePrintListingDeclaresNothing(t *testing.T) {
 // beside operands goes inert and the operands are declared, the reading bash
 // and ksh93 have. Measured 2026-10-02 on zsh 5.9.2 under `-f`.
 func TestPosixBuiltinsMakesThePrintLetterInert(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"setopt posixbuiltins; X=1; export -p X; echo .; typeset -p X", ".\nexport X=1\n"},
 		{"setopt posixbuiltins; X=1; readonly -p X; echo .; X=2", ".\nzsh:1: read-only variable: X\n"},
@@ -109,6 +110,7 @@ func TestPosixBuiltinsMakesThePrintLetterInert(t *testing.T) {
 // alone, arrays under `-a`, a table under `-A`, and every kind in the native
 // form. Measured 2026-10-02 on zsh 5.9.2 under `-f`, inside a function.
 func TestPosixBuiltinsListsScalarsUnlessAKindLetterAsks(t *testing.T) {
+	t.Parallel()
 	const setup = "f(){ local -rax zra=(2); local -rAx zrh=(3 3); local -rx zrs=1; local -ax za=(4 5); local -x zs=6\n"
 	for _, tc := range []struct{ body, want string }{
 		{"print -l ${(M)${(f)\"$(export -ap)\"}:#* z*}", "local -ax za=( 4 5 )\nlocal -arx zra=( 2 )\nlocal -Arx zrh=( [3]=3 )\nlocal -rx zrs=1\nlocal -x zs=6\n"},

@@ -16,6 +16,7 @@ import (
 
 // TestFunctionsSaysAFunctionBack, which is the whole of the first name.
 func TestFunctionsSaysAFunctionBack(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "f(){ echo hi; }\nfunctions f\necho st=$?\n")
 	if !strings.Contains(out, "f () {\n\techo hi\n}\n") {
 		t.Errorf("output = %q, want the body written out", out)
@@ -39,6 +40,7 @@ func TestFunctionsSaysAFunctionBack(t *testing.T) {
 // spelling, and it may because `typeset` declares a local in both bodies
 // here, so nothing about the round trip changes.
 func TestFunctionsPrintsTheKeywordFormWithoutTheKeyword(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "function f { typeset x=1; }\nfunctions f\n")
 	if !strings.HasPrefix(out, "f () {\n") {
 		t.Errorf("output = %q, want the paren header", out)
@@ -57,6 +59,7 @@ func TestFunctionsPrintsTheKeywordFormWithoutTheKeyword(t *testing.T) {
 // TestFunctionsReportsANameItDoesNotHold — silent at 1, and the 1 stands
 // however many other names printed.
 func TestFunctionsReportsANameItDoesNotHold(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "functions nosuch\necho st=$?\n")
 	if out != "st=1\n" || st != 0 {
 		t.Errorf("output = %q status %d, want a silent 1", out, st)
@@ -71,6 +74,7 @@ func TestFunctionsReportsANameItDoesNotHold(t *testing.T) {
 // with the same sentence `unset -f` answers with — which is what running the
 // same code gets, rather than a second wording that would drift.
 func TestUnfunctionRemovesAFunction(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "f(){ :; }\nunfunction f\necho st=$?\nfunctions f\necho st2=$?\n")
 	if out != "st=0\nst2=1\n" || st != 0 {
 		t.Errorf("output = %q status %d, want the function gone at 0", out, st)
@@ -95,6 +99,7 @@ func TestUnfunctionRemovesAFunction(t *testing.T) {
 // panel is silent. Same sentence, same status, and the name is the invoked
 // one.
 func TestUnfunctionWithNoOperandComplains(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "unfunction\necho st=$?\n")
 	if !strings.Contains(out, ":unfunction:1: not enough arguments") || !strings.Contains(out, "st=1\n") {
 		t.Errorf("output = %q, want the complaint at 1", out)
@@ -109,6 +114,7 @@ func TestUnfunctionWithNoOperandComplains(t *testing.T) {
 // and yet `-f` is a bad option to it; `unfunction` is `unset -f` and takes
 // neither `-f` nor `-v`. Measured 2026-09-08 by sweeping the alphabet.
 func TestTheLettersAreNarrowerThanTheBuiltinRenamed(t *testing.T) {
+	t.Parallel()
 	for _, word := range []string{"functions -f", "functions -p", "functions -F"} {
 		out, _ := runZsh(t, t.TempDir(), "f(){ :; }\n"+word+"\necho st=$?\n")
 		if !strings.Contains(out, "bad option: -") || !strings.Contains(out, "st=1\n") {
@@ -146,6 +152,7 @@ func TestTheLettersAreNarrowerThanTheBuiltinRenamed(t *testing.T) {
 // with `2>/dev/null` and would otherwise read a registration that never
 // happened.
 func TestEveryFunctionsLetterThisEngineLacksIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	for _, letter := range []string{"-k", "-z"} {
 		out, _ := runZsh(t, t.TempDir(), "f(){ :; }\nfunctions "+letter+" f\n")
 		if !strings.Contains(out, letter+" is not implemented yet") {
@@ -175,6 +182,7 @@ func TestEveryFunctionsLetterThisEngineLacksIsRefusedByName(t *testing.T) {
 // match on purpose: a listing that found nothing has answered, a removal that
 // removed nothing has not.
 func TestTheMatchingLetterIsAListingAndARemoval(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "fa(){ :; }\ngb(){ :; }\nfunctions -m 'f*'\necho st=$?\n")
 	if !strings.Contains(out, "fa () {") || strings.Contains(out, "gb () {") {
 		t.Errorf("output = %q, want only the matching one", out)
@@ -204,6 +212,7 @@ func TestTheMatchingLetterIsAListingAndARemoval(t *testing.T) {
 // first: the patterns walked the *parameter* table, so the variables went and
 // every function named survived, in silence at 0.
 func TestTheMatchingLetterOnUnsetPicksTheFunctionTable(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"fa(){ :; }\nfa=keep\nunset -f -m 'f*'\necho st=$?\necho \"v=[$fa]\"\nfunctions\n")
 	if strings.Contains(out, "fa () {") {

@@ -15,6 +15,7 @@ import (
 // empty string is a value under `[@]` and null under `[*]`. See
 // Semantics.WholeArrayColonTest for the panel (#3425).
 func TestTheColonTestCountsTheElements(t *testing.T) {
+	t.Parallel()
 	if got, want := zsh.Semantics().WholeArrayColonTest,
 		interp.WholeArrayColonTestCountsTheElementsUnderAt; got != want {
 		t.Errorf("WholeArrayColonTest = %v, want %v", got, want)

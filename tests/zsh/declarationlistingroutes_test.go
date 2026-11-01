@@ -30,6 +30,7 @@ func runZshListing(t *testing.T, src string) (out, errs string, code int) {
 // The control rows are what make an empty answer evidence: the same listing
 // with a pattern that does match writes its rows, so the route is live.
 func TestAPrintMatchingListingThatMatchesNothingWritesNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"one pattern matching nothing", "typeset -p -m 'zzq*'\nprint rc=$?\n", "rc=0\n"},
 		{"the letters joined", "typeset -pm 'zzq*'\nprint rc=$?\n", "rc=0\n"},
@@ -62,6 +63,7 @@ func TestAPrintMatchingListingThatMatchesNothingWritesNothing(t *testing.T) {
 // both sides cannot pass. `RANDOM` moves between reads, which is why the
 // whole tables are not compared byte for byte.
 func TestTopLevelLocalListsAsTypesetDoes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want, wantErr string
 		wantCode                 int
@@ -111,6 +113,7 @@ func TestTopLevelLocalListsAsTypesetDoes(t *testing.T) {
 // on zsh 5.9.2, `f() { local a=1; local -p; }` writes exactly the rows
 // `typeset -p` writes there, `typeset a=1` among them (#6450).
 func TestLocalPrintWithNoOperandIsThePrintTableInAFunction(t *testing.T) {
+	t.Parallel()
 	src := "f() {\n  local a=1\n" +
 		"  x=0 y=0\n  x=$(local -p | grep -vc RANDOM); y=$(typeset -p | grep -vc RANDOM)\n" +
 		"  (( x > 0 && x == y )) && print same || print $x $y\n" +
@@ -129,6 +132,7 @@ func TestLocalPrintWithNoOperandIsThePrintTableInAFunction(t *testing.T) {
 // left unanswered on the premise that its `export` took no container letter,
 // and refused the line (#6452).
 func TestAValuelessExportArrayLetterMakesAnEmptyArray(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a new name", "export -a b\ntypeset -p b\n", "typeset -ax b=(  )\n"},
 		{"over a standing scalar", "x=s\nexport -a x\ntypeset -p x\n", "typeset -ax x=(  )\n"},

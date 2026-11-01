@@ -37,6 +37,7 @@ import (
 // cannot tell a working rule from no rule at all unless `$?` is something
 // else when the line starts.
 func TestACommandThatExpandedAwayReportsItsLastSubstitution(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want, why string }{
 		{
 			"one substitution, and it failed",
@@ -149,6 +150,7 @@ func TestACommandThatExpandedAwayReportsItsLastSubstitution(t *testing.T) {
 //
 // Unanimous across the same six columns, 2026-09-26.
 func TestAnEmptySubstitutionBodyReportsSuccess(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want, why string }{
 		{
 			"nothing but spaces, in a word",
@@ -203,6 +205,7 @@ func TestAnEmptySubstitutionBodyReportsSuccess(t *testing.T) {
 // the shell at `$(exit 3)` and none of them reaches the line after it. This
 // reached it, because the status it was deciding on was 0.
 func TestErrExitStopsOnACommandThatExpandedAway(t *testing.T) {
+	t.Parallel()
 	out := &strings.Builder{}
 	r := expandedAwayRunner(t, out)
 	runExpandedAway(t, r, "set -e\n$(exit 3)\necho after\n")

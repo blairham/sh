@@ -16,6 +16,7 @@ import "testing"
 // `${a['x]y']}` stops at the bracket inside the quotes and is a bad
 // substitution.
 func TestOnlyABackslashProtectsASubscriptsBracket(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -A a; a[x\]y]=1; print -r -- "${a[x\]y]}"`)
 	if out != "1\n" || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, "1\n")

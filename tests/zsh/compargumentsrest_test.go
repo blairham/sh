@@ -26,6 +26,7 @@ const restSpecs = `'-v[verbose]' '-o[opt]:val:' `
 // from inside a `zle -C` widget whose function calls the builtin itself and
 // prints `$words` and `$CURRENT` back.
 func TestARestSpecificationMovesTheWords(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, spec, line, want string }{
 		// The rest specification with two colons replaces them; the same one
 		// with a single colon leaves them alone. Both sides, because one
@@ -91,6 +92,7 @@ func TestARestSpecificationMovesTheWords(t *testing.T) {
 //
 // Measured on zsh 5.9.2, 2026-09-16 from inside a widget.
 func TestTheOptionsStillOfferedAreTheOnesLeft(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, spec, line, want string }{
 		{"something to offer", `'-v[verbose]' '*:rest:'`, "cmd -", "0/-v:verbose"},
 		// Spent, and not repeatable, so there is nothing left.
@@ -128,6 +130,7 @@ func TestTheOptionsStillOfferedAreTheOnesLeft(t *testing.T) {
 // refused with `invalid argument`, and the exclusion list on the accepted one
 // still applies once the hidden option is on the line.
 func TestAHiddenSpecWearsItsExclamationFirst(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, spec, line, want string }{
 		{"accepted before the list", `'-y[why]' '!(-y)-x'`, "cmd -", "0/-y:why"},
 		{"and it is still hidden", `'-y[why]' '!-x'`, "cmd -", "0/-y:why"},
@@ -169,6 +172,7 @@ func TestAHiddenSpecWearsItsExclamationFirst(t *testing.T) {
 // `_tags` says so out loud in its own comment: a `--` first argument tells
 // `comptags` to "use the preceding function nesting level".
 func TestATagLoopBelongsToItsFunction(t *testing.T) {
+	t.Parallel()
 	const helpers = `
 		inner() { comptags -i :x:inner: p q; comptry p q; comptags -N }
 		here() { comptags -R p 2>/dev/null; local x=$?; comptags -R a 2>/dev/null; say "$x$?" }

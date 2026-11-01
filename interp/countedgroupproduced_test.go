@@ -57,6 +57,7 @@ func countedProduced(t *testing.T, dir, src string) string {
 // what `$g` holds. Brace expansion runs before parameter expansion, so
 // nothing about the word the parse cut distinguishes them.
 func TestAProducedParenthesisMakesAWrittenBraceACount(t *testing.T) {
+	t.Parallel()
 	dir := countedFixture(t)
 	for _, tc := range []struct{ name, src, want string }{
 		{"the control", `f {z,y}a`, `2 | [za] [ya]`},
@@ -111,6 +112,7 @@ func TestAProducedParenthesisMakesAWrittenBraceACount(t *testing.T) {
 // reading that expanded the suffix to decide and then expanded the word
 // again would run the command twice, and the reference runs it once.
 func TestDecidingTheBraceRunsTheSubstitutionOnce(t *testing.T) {
+	t.Parallel()
 	dir := countedFixture(t)
 	got := countedProduced(t, dir, `f {2,3}$(printf 'x' >&2; echo '(a)')`)
 	if want := "x2 | [aa] [aaa]"; got != want {

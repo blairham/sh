@@ -47,6 +47,7 @@ func runElementArith(t *testing.T, src string) (string, int) {
 // path with no depth bound, which ended the process with a Go stack overflow
 // rather than answering. bash 5.3.20 and ksh93u+ both answer 6. See #3487.
 func TestAnElementIsFoldedBeforeItIsStored(t *testing.T) {
+	t.Parallel()
 	out, st := runElementArith(t, `typeset -i a
 a[0]=2
 a[0]=a[0]+4
@@ -93,6 +94,7 @@ echo "[${m[k]}] st=$?"`)
 // the name path already answers it the same way, so these assert the sentence,
 // the subject, and that there is a run left to assert on at all.
 func TestAnElementWhoseValueNamesItselfIsBoundedRatherThanFatal(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `a=('a[0]')
 echo "v=$(( a[0] ))"
 echo after`, func(r *Runner) {
@@ -141,6 +143,7 @@ echo after`, func(r *Runner) {
 // an arithmetic that read and wrote used 0 as the old value: `(( b += 5 ))`
 // left 5 where both shells leave 14, silently, at status 0.
 func TestArithmeticReadsAReferenceAimedAtAnElement(t *testing.T) {
+	t.Parallel()
 	out, _ := runElementArith(t, `a=(5 7)
 typeset -n b=a[0]
 typeset -n c=a[1]
@@ -169,6 +172,7 @@ echo "[${a[0]}] [${a[1]}]"`)
 // behavior agrees with the listing in both shells: `typeset -i k; typeset -n
 // k=tgt; k=3+4` leaves `tgt` holding the text `3+4`.
 func TestADeclarationOfAReferenceDiscardsTheFoldingAttributes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ letter, want string }{
 		{"-i", `declare -n k='tgt'`},
 		{"-l", `declare -n k='tgt'`},
@@ -203,6 +207,7 @@ func TestADeclarationOfAReferenceDiscardsTheFoldingAttributes(t *testing.T) {
 // declaration over an array is refused — so `i` is the whole of the
 // measurement, and bash 5.3.20 writes `declare -in y`.
 func TestTheClusteredListingPutsTheIntegerLetterBeforeTheReference(t *testing.T) {
+	t.Parallel()
 	out, _ := runElementArith(t, `typeset -n y; typeset -i y; typeset -x y; typeset -p y`)
 	if !strings.Contains(out, "declare -inx y") {
 		t.Errorf("got %q, want declare -inx y", out)

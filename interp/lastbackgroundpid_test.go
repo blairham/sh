@@ -24,6 +24,7 @@ import (
 // unset to the operators and quiet under `set -u`. A form is what holds all
 // three; see LastBackgroundPidPolicy.
 func TestWhatTheLastBackgroundPidReadsBeforeAnyJob(t *testing.T) {
+	t.Parallel()
 	for _, w := range []struct {
 		name   string
 		policy LastBackgroundPidPolicy
@@ -51,6 +52,7 @@ func TestWhatTheLastBackgroundPidReadsBeforeAnyJob(t *testing.T) {
 // A bare `$!` cannot tell those two apart — both expand to nothing — so the
 // only case that separates them is this one.
 func TestWhetherNounsetRefusesTheLastBackgroundPidBeforeAnyJob(t *testing.T) {
+	t.Parallel()
 	const src = `set -u; echo "[$!]"; echo after`
 
 	refuses := permissive()
@@ -114,6 +116,7 @@ func TestTheLastBackgroundPidIsSetOnceAJobHasRun(t *testing.T) {
 // and dash writes the name alone and says `!: parameter not set`. A third
 // field would have held a copy of one of these in all four presets.
 func TestTheLastBackgroundPidRefusalIsWordedByTheDialect(t *testing.T) {
+	t.Parallel()
 	withDialect := func(sem Semantics, diag Diagnostics) func(*Runner) {
 		return func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &diag }
 	}
@@ -157,6 +160,7 @@ func TestTheLastBackgroundPidRefusalIsWordedByTheDialect(t *testing.T) {
 // survived — which is what said the clause was dead. This case stays as the
 // regression guard for the construct, not for that clause.
 func TestTheAxisDoesNotReachAnIndirection(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.LastBackgroundPid = LastBackgroundPidUnset
 	sem.IndirectionYieldsName = No

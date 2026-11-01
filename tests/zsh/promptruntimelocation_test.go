@@ -29,6 +29,7 @@ import (
 // a rule about who speaks. We wrote `zsh:1: …` and `zsh:cd:1: …` for all five
 // until #2024.
 func TestARunTimeDiagnosticAtAPromptNamesNoLine(t *testing.T) {
+	t.Parallel()
 	d := zsh.Diagnostics()
 	if got := d.ForPrompt().Report("zsh", 1, "command not found: nosuchcmd_zz"); got !=
 		"zsh: command not found: nosuchcmd_zz" {

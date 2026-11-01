@@ -29,6 +29,7 @@ const showV = `/usr/bin/env | /usr/bin/grep "^v=" || print -r -- none`
 // with a scratch HOME and standard input on the null device, each side
 // starting its own binary where a child shell is wanted.
 func TestAPrivateExportReachesAChildStartedByACallee(t *testing.T) {
+	t.Parallel()
 	const mod = "zmodload zsh/param/private\n"
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
@@ -71,6 +72,7 @@ func TestAPrivateExportReachesAChildStartedByACallee(t *testing.T) {
 // it. A change that simply left the private in the tables would pass every
 // row above and break this one.
 func TestThePrivateNameStaysHiddenFromTheCallee(t *testing.T) {
+	t.Parallel()
 	const mod = "zmodload zsh/param/private\n"
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
@@ -97,6 +99,7 @@ func TestThePrivateNameStaysHiddenFromTheCallee(t *testing.T) {
 // headline alone would get wrong: it sits **between** an outer binding and
 // the callee's own.
 func TestWhatThePrivateExportBeatsAndLosesTo(t *testing.T) {
+	t.Parallel()
 	const mod = "zmodload zsh/param/private\n"
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
@@ -161,6 +164,7 @@ func TestWhatThePrivateExportBeatsAndLosesTo(t *testing.T) {
 // because an assignment moves it into the shell's own table and the row would
 // then be the one above wearing a different spelling.
 func TestAPrivateExportBeatsAnInheritedName(t *testing.T) {
+	t.Parallel()
 	const src = "zmodload zsh/param/private\n" +
 		"inner(){ " + showV + " }\n(){ private -x v=q; inner }\n"
 	dir := t.TempDir()
@@ -181,6 +185,7 @@ func TestAPrivateExportBeatsAnInheritedName(t *testing.T) {
 // past the names it covers, so every row those passes already answered is a
 // row this could have broken.
 func TestTheOrdinaryEnvironmentIsUnmoved(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an exported name", "typeset -x v=q\n" + showV, "v=q"},

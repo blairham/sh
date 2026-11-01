@@ -27,6 +27,7 @@ func blankSub(a Answer) func(*Runner) {
 // operand is the *element* that names and not the number. The array is what
 // carries that distinction: against an unset name both answers are zero.
 func TestABlankArithmeticSubscriptAnswersByAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		a      Answer
@@ -68,6 +69,7 @@ func TestABlankArithmeticSubscriptAnswersByAxis(t *testing.T) {
 // the empty ones. An axis worded for both would have to give one of those
 // answers to the other.
 func TestABlankSubscriptIsNotAnEmptySubscript(t *testing.T) {
+	t.Parallel()
 	src := `a=(5 6 7); echo $(( a[ ] )); echo $(( a[] ))`
 	out, st := run(t, src, func(r *Runner) {
 		s := *r.Semantics
@@ -87,6 +89,7 @@ func TestABlankSubscriptIsNotAnEmptySubscript(t *testing.T) {
 // Unspecified is the probe that says "not reached" rather than "reached and
 // permitted": an axis that was consulted with no answer would refuse by name.
 func TestABlankSubscriptOnAnAssociativeNameIsAKey(t *testing.T) {
+	t.Parallel()
 	for _, a := range []Answer{Yes, No, Unspecified} {
 		src := `typeset -A m; k=" "; m[$k]=7; echo $(( m[ ] )); echo after`
 		out, st := run(t, src, blankSub(a))
@@ -102,6 +105,7 @@ func TestABlankSubscriptOnAnAssociativeNameIsAKey(t *testing.T) {
 // through to the *bare name* when there is no index, so a refused
 // `(( a[ ] = 9 ))` would otherwise overwrite the array with a number.
 func TestABlankSubscriptAsAnAssignmentTarget(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		a    Answer
@@ -123,6 +127,7 @@ func TestABlankSubscriptAsAnAssignmentTarget(t *testing.T) {
 // No answer is refused by name. The two that exist leave different values and
 // different streams behind, so neither can stand in for the other.
 func TestABlankArithmeticSubscriptUnansweredIsRefused(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `a=(5 6 7); echo $(( a[ ] )); echo after`, blankSub(Unspecified))
 	if !strings.Contains(out, "a subscript holding only whitespace") ||
 		!strings.Contains(out, "no dialect was chosen") {
@@ -138,6 +143,7 @@ func TestABlankArithmeticSubscriptUnansweredIsRefused(t *testing.T) {
 // in every shell that has subscripts at all, so an axis placed there would
 // move a row the panel agrees about.
 func TestABlankExpressionIsNotAffectedByTheSubscriptAxis(t *testing.T) {
+	t.Parallel()
 	for _, a := range []Answer{Yes, No, Unspecified} {
 		src := `echo $((   )); echo after`
 		out, st := run(t, src, blankSub(a))

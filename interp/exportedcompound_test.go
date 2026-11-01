@@ -31,6 +31,7 @@ func runExported(t *testing.T, a Answer, src string) (string, int) {
 }
 
 func TestAnExportedCompoundReachesAChildByAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, yes, no string }{
 		{
 			"an array declared with the letter",
@@ -70,6 +71,7 @@ func TestAnExportedCompoundReachesAChildByAxis(t *testing.T) {
 // The scalar half is untouched under both answers, which is the control that
 // says the axis moves the compound and nothing beside it.
 func TestAnExportedScalarReachesAChildUnderEitherAnswer(t *testing.T) {
+	t.Parallel()
 	const src = `export b=1; typeset -x c=(p); printf "[%s]" "$(env | grep -c '^[bc]=')"`
 	if out, _ := runExported(t, Yes, src); out != "[2]" {
 		t.Errorf("first value: = %q, want both names", out)
@@ -83,6 +85,7 @@ func TestAnExportedScalarReachesAChildUnderEitherAnswer(t *testing.T) {
 // nothing in the third — which is a listing question, the compound reaching no
 // child there anyway.
 func TestASubscriptedOperandsAttributesAreAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -x a[1]=v; typeset -p a`
 	out, _ := runGrammar(t, src, func(d *syntax.Dialect) {
 		d.ArraySubscript = true
@@ -128,6 +131,7 @@ func TestASubscriptedOperandsAttributesAreAnAxis(t *testing.T) {
 // `${a[3]}` and to `typeset -p a`, at status 0, so a script that declared an
 // array that way had none (#1380).
 func TestAValuelessSubscriptedOperandDeclaresTheArray(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// No `=()` on the listing: the operand carries no value, so the name
 		// is declared an array and nothing has written to it. Measured
@@ -166,6 +170,7 @@ func TestAValuelessSubscriptedOperandDeclaresTheArray(t *testing.T) {
 // the first element is the name itself and declares none. The brackets are
 // read twice only where the first pass found the first element (#6490).
 func TestAValuelessSubscriptReadPastTheFirstDeclaresTheArray(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The listing of the held state is a dialect's, and the ksh tests
 		// assert it; what the core can see is the kind.

@@ -36,6 +36,7 @@ func hooked(t *testing.T) Semantics {
 // that separates them, and it is how the behavior was measured in the first
 // place (#1779).
 func TestACommandThatIsOnlyRedirectionsRunsTheNullCommand(t *testing.T) {
+	t.Parallel()
 	const markers = `R(){ printf R; }; N(){ printf N; }; READNULLCMD=R; NULLCMD=N; `
 	for _, tc := range []struct{ name, src, want string }{
 		// One plain input redirection, and the descriptor it names does not
@@ -69,6 +70,7 @@ func TestACommandThatIsOnlyRedirectionsRunsTheNullCommand(t *testing.T) {
 // so `>g` puts its output in `g` rather than on the terminal — which is the
 // half a standard-output comparison cannot see.
 func TestTheNullCommandRunsUnderItsOwnRedirections(t *testing.T) {
+	t.Parallel()
 	sem := hooked(t)
 	dir := t.TempDir()
 	out, st := run(t, `N(){ printf N; }; NULLCMD=N; >g`, func(r *Runner) {
@@ -86,6 +88,7 @@ func TestTheNullCommandRunsUnderItsOwnRedirections(t *testing.T) {
 // the six panel columns'. Asserted from the same source as the row above, so
 // that the two readings are told apart by the vector alone.
 func TestWithoutTheHookOnlyTheRedirectionHappens(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	dir := t.TempDir()
 	out, st := run(t, `N(){ printf N; }; NULLCMD=N; >g`, func(r *Runner) {
@@ -106,6 +109,7 @@ func TestWithoutTheHookOnlyTheRedirectionHappens(t *testing.T) {
 // opens and runs nothing, in the shell that has the hook as well as in the
 // five that do not.
 func TestAnAssignmentPrefixIsNotANullCommand(t *testing.T) {
+	t.Parallel()
 	sem := hooked(t)
 	out, st := run(t, `printf 'hello\n' > f; R(){ printf R; }; READNULLCMD=R; x=1 <f; printf "[x=%s]" "$x"`,
 		func(r *Runner) { r.Semantics = &sem })
@@ -120,6 +124,7 @@ func TestAnAssignmentPrefixIsNotANullCommand(t *testing.T) {
 // The reading parameter falls back rather than refusing when it is empty, so
 // a script that clears it gets the writing one.
 func TestAnEmptyReadingParameterFallsBackToTheWritingOne(t *testing.T) {
+	t.Parallel()
 	sem := hooked(t)
 	for _, src := range []string{
 		`N(){ printf N; }; NULLCMD=N; READNULLCMD=; <f`,
@@ -136,6 +141,7 @@ func TestAnEmptyReadingParameterFallsBackToTheWritingOne(t *testing.T) {
 // command is refused by name, the refusal abandons the script, and the
 // redirection never happens.
 func TestAnEmptyNullCommandIsRefused(t *testing.T) {
+	t.Parallel()
 	sem := hooked(t)
 	dg := PosixDiagnostics()
 	dg.RedirectionWithNoCommand = "redirection with no command"

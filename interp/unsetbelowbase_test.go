@@ -37,6 +37,7 @@ func runUnsetBelowBase(
 // at status 0 — telling a script it had removed something out of reach. It is
 // the boundary an assignment already refuses, reached from `unset`.
 func TestUnsetBelowTheFirstElementIsRefused(t *testing.T) {
+	t.Parallel()
 	const src = `a=(x y z); unset "a[0]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`
 	out, st := runUnsetBelowBase(t, No, UnsetArraySpanLeavesOneEmptyElement, src)
 	if !strings.Contains(out, "a") || !strings.Contains(out, "st=1") {
@@ -61,6 +62,7 @@ func TestUnsetBelowTheFirstElementIsRefused(t *testing.T) {
 // script can therefore test it, and reusing the fatal path would have been a
 // new bug rather than a fix.
 func TestUnsetBelowTheFirstElementDoesNotEndTheScript(t *testing.T) {
+	t.Parallel()
 	out, st := runUnsetBelowBase(t, No, UnsetArraySpanLeavesOneEmptyElement,
 		`a=(x y z); unset "a[0]"; echo after`)
 	if !strings.Contains(out, "after") || st != 0 {
@@ -73,6 +75,7 @@ func TestUnsetBelowTheFirstElementDoesNotEndTheScript(t *testing.T) {
 // span that is there and a subscript past the start names none, so it is
 // silent rather than refused, the same reading `unset a[-2]` records.
 func TestUnsetPastTheStartIsRefusedOnlyWhereTheAnswerRemoves(t *testing.T) {
+	t.Parallel()
 	const src = `a=(x y z); unset "a[-4]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`
 	out, _ := runUnsetBelowBase(t, Yes, UnsetArraySpanRemovesTheElements, src)
 	if !strings.Contains(out, "st=1") || !strings.Contains(out, "[x][y][z] n=3") {
@@ -99,6 +102,7 @@ func TestUnsetPastTheStartIsRefusedOnlyWhereTheAnswerRemoves(t *testing.T) {
 // blanking answer a scalar's own element is reachable, and only what stands
 // below it is refused.
 func TestUnsetAtTheFirstElementOfAScalarIsNotRefused(t *testing.T) {
+	t.Parallel()
 	out, _ := runUnsetBelowBase(t, No, UnsetArraySpanLeavesOneEmptyElement,
 		`a=v; unset "a[1]"; echo "st=$?"`)
 	if strings.TrimSpace(out) != "st=0" {
@@ -109,6 +113,7 @@ func TestUnsetAtTheFirstElementOfAScalarIsNotRefused(t *testing.T) {
 // A subscript written as an expression is named as it was written and not as
 // the number it came to, which is the reason the text is carried this far.
 func TestARefusedUnsetSubscriptIsNamedAsWritten(t *testing.T) {
+	t.Parallel()
 	out, _ := runUnsetBelowBase(t, Yes, UnsetArraySpanRemovesTheElements,
 		`a=(x y z); unset "a[x-9]"; echo "st=$?"`)
 	if !strings.Contains(out, "x-9") {
@@ -126,6 +131,7 @@ func TestARefusedUnsetSubscriptIsNamedAsWritten(t *testing.T) {
 // the base, and every other subscript is UnsetSubscriptOnAScalarIsAnError's
 // question rather than this one.
 func TestUnsetBelowTheFirstCharacterOfAScalar(t *testing.T) {
+	t.Parallel()
 	const src = `a=v; unset "a[0]"; echo "st=$? [${a-UNSET}]"`
 	out, _ := runUnsetBelowBase(t, No, UnsetArraySpanLeavesOneEmptyElement, src,
 		func(s *Semantics) { s.ScalarSubscriptIsACharacter = Yes })
@@ -151,6 +157,7 @@ func TestUnsetBelowTheFirstCharacterOfAScalar(t *testing.T) {
 // A name holding nothing at all has no first element for a subscript to be
 // before, so there is nothing to refuse under any answer.
 func TestUnsetBelowTheFirstElementOfANameHoldingNothing(t *testing.T) {
+	t.Parallel()
 	for _, p := range []UnsetArraySpanPolicy{
 		UnsetArraySpanRemovesTheElements,
 		UnsetArraySpanLeavesOneEmptyElement,

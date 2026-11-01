@@ -34,6 +34,7 @@ const whereZzcIsRemembered = `at=$(hash -t zzc 2>/dev/null); ` +
 // a command *saw* and never what was *found*: `PATH=/nowhere ls` ran `ls`
 // where every column in the panel answers 127.
 func TestAPrefixedPathIsTheOneSearched(t *testing.T) {
+	t.Parallel()
 	out, st := withDirs(t, `zzc; PATH=$PWD/d2 zzc`, func(d1, d2 string) {
 		hashable(t, d1, "zzc", "echo V1")
 		hashable(t, d2, "zzc", "echo V2")
@@ -46,6 +47,7 @@ func TestAPrefixedPathIsTheOneSearched(t *testing.T) {
 // And the failing half, which is the form the issue was filed as: a PATH with
 // nothing on it finds nothing, whatever this shell's own PATH holds.
 func TestAPrefixedPathThatHoldsNothingFindsNothing(t *testing.T) {
+	t.Parallel()
 	out, st := withDirs(t, `PATH=/nowhere-zz zzc 2>/dev/null; echo "st=$?"`,
 		func(d1, _ string) { hashable(t, d1, "zzc", "echo V1") }, nil)
 	if out != "st=127\n" || st != 0 {
@@ -56,6 +58,7 @@ func TestAPrefixedPathThatHoldsNothingFindsNothing(t *testing.T) {
 // The prefix is the command's and not the shell's: the name goes back to what
 // it held, and the next search is made with it.
 func TestAPrefixedPathIsGivenBack(t *testing.T) {
+	t.Parallel()
 	out, st := withDirs(t, `p=$PATH; PATH=$PWD/d2 zzc; [ "$PATH" = "$p" ] && echo same; zzc`,
 		func(d1, d2 string) {
 			hashable(t, d1, "zzc", "echo V1")
@@ -70,6 +73,7 @@ func TestAPrefixedPathIsGivenBack(t *testing.T) {
 // end of the same take-back: `unset PATH` leaves a shell with no PATH, and a
 // prefix must not invent one.
 func TestAPrefixedPathOverNoPathAtAllLeavesNoPath(t *testing.T) {
+	t.Parallel()
 	out, st := withDirs(t, `unset PATH; PATH=$PWD/d2 zzc; echo "after=[${PATH-unset}]"`,
 		func(_, d2 string) { hashable(t, d2, "zzc", "echo V2") }, nil)
 	if st != 0 || out != "V2\nafter=[unset]\n" {
@@ -82,6 +86,7 @@ func TestAPrefixedPathOverNoPathAtAllLeavesNoPath(t *testing.T) {
 // applying the value to this shell cannot quietly become a substitute for
 // putting it in the environment.
 func TestAPrefixedPathReachesTheChildToo(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `PATH=/zz-child /usr/bin/env | grep '^PATH=' || echo "(none)"`, nil)
 	if st != 0 || out != "PATH=/zz-child\n" {
 		t.Errorf("out=%q st=%d, want the child shown the prefix's PATH", out, st)
@@ -96,6 +101,7 @@ func TestAPrefixedPathReachesTheChildToo(t *testing.T) {
 // run in the middle takes the *other* copy under both answers, which is what
 // keeps this a test about the table rather than about the search.
 func TestAPrefixedPathEmptiesTheCommandHashOrDoesNot(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		empties Answer
@@ -129,6 +135,7 @@ func TestAPrefixedPathEmptiesTheCommandHashOrDoesNot(t *testing.T) {
 // only the bare external route leaves this one recording the path the prefixed
 // search found, which is an answer no column in the panel gives.
 func TestAPrefixedPathThroughCommandAnswersTheTableTheSameWay(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		empties Answer
@@ -166,6 +173,7 @@ func TestAPrefixedPathThroughCommandAnswersTheTableTheSameWay(t *testing.T) {
 // be read as covering every prefix, and a rule that emptied the table only
 // under one answer would pass every other test here.
 func TestAPrefixedPathOnABuiltinEmptiesTheTableUnderEitherAnswer(t *testing.T) {
+	t.Parallel()
 	for _, empties := range []Answer{Yes, No} {
 		out, st := withDirs(t,
 			`zzc; PATH=/nowhere-zz true; `+whereZzcIsRemembered,
@@ -186,6 +194,7 @@ func TestAPrefixedPathOnABuiltinEmptiesTheTableUnderEitherAnswer(t *testing.T) {
 // is the control the axis needs: without it, a rule that emptied the table for
 // every prefixed external command would pass the Yes side of every row above.
 func TestAPrefixThatIsNotThePathLeavesTheTableAlone(t *testing.T) {
+	t.Parallel()
 	out, st := withDirs(t, `zzc; v=1 zzc; `+whereZzcIsRemembered,
 		func(d1, d2 string) {
 			hashable(t, d1, "zzc", "echo V1")
@@ -205,6 +214,7 @@ func TestAPrefixThatIsNotThePathLeavesTheTableAlone(t *testing.T) {
 // holding what it held, so the search is the shell's own and the child is shown
 // the shell's own value too.
 func TestAFrozenPathIsNotSuppliedByAPrefix(t *testing.T) {
+	t.Parallel()
 	out, st := withDirs(t, `readonly PATH; PATH=$PWD/d2 zzc 2>/dev/null; echo "st=$?"`,
 		func(d1, d2 string) {
 			hashable(t, d1, "zzc", "echo V1")

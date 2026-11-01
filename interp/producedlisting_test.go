@@ -32,6 +32,7 @@ func producing(name, value string, d *ProducedDeclaration) func(*Runner) {
 }
 
 func TestAProducedParameterListsAsTheDialectSaysItDoes(t *testing.T) {
+	t.Parallel()
 	// The clustered form is bash's and the export-spelled one is what ksh93
 	// and zsh write; a base rides on the letter only in the second, and the
 	// float letter is only written there, so each row asks the form that has
@@ -94,6 +95,7 @@ func TestAProducedParameterListsAsTheDialectSaysItDoes(t *testing.T) {
 // value would report a parameter whose value is empty, and one that wrote a
 // stored value would report a value nothing here holds.
 func TestAListedProducedParameterCarriesTheProducedValue(t *testing.T) {
+	t.Parallel()
 	out, _, st := declRunWith(t, "typeset -p X", nil, Diagnostics{}, nil,
 		producing("X", "drawn", &ProducedDeclaration{}))
 	if want := "declare -- X=\"drawn\"\n"; out != want || st != 0 {
@@ -111,6 +113,7 @@ func TestAListedProducedParameterCarriesTheProducedValue(t *testing.T) {
 // name goes to whatever the listing would otherwise do with it, which here is
 // the missing-name route the field above turns on.
 func TestAnUnsetProducedParameterIsNotListed(t *testing.T) {
+	t.Parallel()
 	answered := func(s *Semantics) {
 		s.DeclarePrintReportsAMissingName = Yes
 		s.RemovedShellOwnParameterIsStillAName = No
@@ -129,6 +132,7 @@ func TestAnUnsetProducedParameterIsNotListed(t *testing.T) {
 // on, so what moves between the two is this field alone — a row that let both
 // fields move would not say which one decided it.
 func TestARemovedShellOwnParameterCanStillBeAName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -158,6 +162,7 @@ func TestARemovedShellOwnParameterCanStillBeAName(t *testing.T) {
 // Without this row the `Yes` above could be a listing that had gone silent
 // about every removed name.
 func TestARemovedOrdinaryNameIsStillReportedMissing(t *testing.T) {
+	t.Parallel()
 	answered := func(s *Semantics) {
 		s.DeclarePrintReportsAMissingName = Yes
 		s.RemovedShellOwnParameterIsStillAName = Yes
@@ -173,6 +178,7 @@ func TestARemovedOrdinaryNameIsStillReportedMissing(t *testing.T) {
 // the integer *attribute*: a script can still assign whatever it likes, and
 // the producer keeps answering.
 func TestAProducedDeclarationIsNotAnAttribute(t *testing.T) {
+	t.Parallel()
 	out, _, st := declRunWith(t, `X=abc; echo "[$X]"`, nil, Diagnostics{}, nil,
 		producing("X", "5", &ProducedDeclaration{Integer: true}))
 	if want := "[5]\n"; out != want || st != 0 {
@@ -205,6 +211,7 @@ func listedRows(out string, names ...string) string {
 // `declare -i RANDOM` where its own `declare -p RANDOM` writes
 // `declare -i RANDOM="16735"`. See Semantics.ProducedParameterListing.
 func TestAListingWithNoOperandsNamesTheProducedParameters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		listing ProducedListing
@@ -234,6 +241,7 @@ func TestAListingWithNoOperandsNamesTheProducedParameters(t *testing.T) {
 // for a reason: an implementation that answered NameOnly by dropping every
 // value from the listing would pass a row holding the produced name alone.
 func TestNameOnlyReachesOnlyTheProducedParameter(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) { s.ProducedParameterListing = ProducedListingNameOnly }
 	out, _, st := declRunWith(t, "v=1; typeset -p v", set, Diagnostics{}, nil,
 		producing("X", "5", &ProducedDeclaration{Integer: true}))
@@ -247,6 +255,7 @@ func TestNameOnlyReachesOnlyTheProducedParameter(t *testing.T) {
 // the opt-in, which is what keeps a produced table of a hundred entries from
 // arriving in `typeset -p` because somebody registered a reader for it.
 func TestAnUnregisteredProducerIsNotInTheBareListing(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) { s.ProducedParameterListing = ProducedListingWithValue }
 	out, _, st := declRunWith(t, "v=1; typeset -p", set, Diagnostics{}, nil,
 		producing("X", "5", nil))
@@ -260,6 +269,7 @@ func TestAnUnregisteredProducerIsNotInTheBareListing(t *testing.T) {
 // the named `-p` uses: a listing that reached the producer anyway would draw
 // a reading out of a parameter that is gone.
 func TestAnUnsetProducedParameterLeavesTheBareListing(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) { s.ProducedParameterListing = ProducedListingWithValue }
 	out, _, st := declRunWith(t, "v=1; unset X; typeset -p", set, Diagnostics{}, nil,
 		producing("X", "5", &ProducedDeclaration{Integer: true}))
@@ -278,6 +288,7 @@ func TestAnUnsetProducedParameterLeavesTheBareListing(t *testing.T) {
 // as `declare -- RANDOM="1+1"` in bash 5.3 and `RANDOM=1+1` in ksh93u+, where
 // this asserted `-i` (#6039).
 func TestAStoredValueWinsOverTheProducedRow(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) {
 		s.ProducedParameterListing = ProducedListingNameOnly
 		s.AssignmentRestoresAnUnsetProducedParameter = No
@@ -294,6 +305,7 @@ func TestAStoredValueWinsOverTheProducedRow(t *testing.T) {
 // registers six producers and answers nothing would otherwise write six
 // refusals for one command.
 func TestAnUnansweredProducedListingRefusesOnce(t *testing.T) {
+	t.Parallel()
 	two := func(r *Runner) {
 		producing("X", "5", &ProducedDeclaration{Integer: true})(r)
 		producing("Y", "6", &ProducedDeclaration{Integer: true})(r)
@@ -312,6 +324,7 @@ func TestAnUnansweredProducedListingRefusesOnce(t *testing.T) {
 // left out rather than admitted and rejected, which is also what keeps them
 // from asking an axis they would never use.
 func TestTheFilteredListingsDoNotReachTheProducedParameters(t *testing.T) {
+	t.Parallel()
 	for _, word := range []string{"export -p", "readonly -p"} {
 		t.Run(word, func(t *testing.T) {
 			// No ProducedParameterListing at all: reaching the axis here
@@ -336,6 +349,7 @@ func TestTheFilteredListingsDoNotReachTheProducedParameters(t *testing.T) {
 // write, which is what #2518 read as a version split between two columns of
 // one shell (#2722).
 func TestTheLastReadingAnswerWaitsForAReadAndThenKeepsIt(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) { s.ProducedParameterListing = ProducedListingLastReading }
 	for _, tc := range []struct{ why, src, want string }{
 		{
@@ -375,6 +389,7 @@ func TestTheLastReadingAnswerWaitsForAReadAndThenKeepsIt(t *testing.T) {
 // Proven with a producer that counts, because a producer answering a constant
 // cannot tell a cache from a re-read.
 func TestAListingDoesNotCountAsAReadOfTheProducer(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) { s.ProducedParameterListing = ProducedListingLastReading }
 	out, _, st := declRunWith(t, ": $X; typeset -p; typeset -p", set, Diagnostics{}, nil,
 		countingListed("X", &ProducedDeclaration{Integer: true}))
@@ -395,6 +410,7 @@ func TestAListingDoesNotCountAsAReadOfTheProducer(t *testing.T) {
 // stated per parameter because it is not a rule about readings: the panel has
 // names that carry `-i` unread and names that carry none either side.
 func TestTheIntegerLetterCanWaitForTheFirstRead(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) { s.ProducedParameterListing = ProducedListingLastReading }
 	d := &ProducedDeclaration{Integer: true, IntegerOnceRead: true}
 	out, _, st := declRunWith(t, "typeset -p", set, Diagnostics{}, nil, producing("X", "5", d))
@@ -447,6 +463,7 @@ func countingListed(name string, d *ProducedDeclaration) func(*Runner) {
 // Measured, the panel answers all three routes with one rule per shell — see
 // Runner.listedNames for the table (#2722).
 func TestTheProducedAnswerReachesTheBareListingsToo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		why    string
 		set    func(*Semantics)

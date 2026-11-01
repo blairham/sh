@@ -25,6 +25,7 @@ import (
 // controls hold fixed: the same words in the other order, a plain name in
 // front, and a declaration not written as one are all 1.
 func TestAPatternRefusedBehindADeclarationsAssignmentLeavesTheStatus(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src       string
 		wantC, wantFile int
@@ -81,6 +82,7 @@ func TestAPatternRefusedBehindADeclarationsAssignmentLeavesTheStatus(t *testing.
 // What an `always` half and the line after a subshell read is the status kept,
 // not the fatal one. Measured as above: both write 3.
 func TestWhatIsReadAfterARefusedPatternBehindADeclarationsAssignment(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`(exit 3); { typeset y=1 *nomatch* } always { print in=$? }`,
 		`(exit 3); (typeset y=1 *nomatch*); print in=$?`,

@@ -14,6 +14,7 @@ import (
 //
 // Measured 2026-10-02 on zsh 5.9.2 under `-f -c` (#5145).
 func TestAnArithStoreRefusalIsAnError(t *testing.T) {
+	t.Parallel()
 	const sentence = "newarray: assignment to invalid subscript range"
 	for _, c := range []struct{ name, src, want string }{
 		{"(( )) leaves 2 and carries on", "(( newarray[0] = 1 )); print st=$?", "st=2\n"},
@@ -35,6 +36,7 @@ func TestAnArithStoreRefusalIsAnError(t *testing.T) {
 // written and fatal: measured, `(( newarray[0] = 1 )); newarray[0]=2; print
 // no` writes the sentence twice and exits 1 without the `no`.
 func TestAStoreAfterAnArithStoreRefusalIsRefusedAsBefore(t *testing.T) {
+	t.Parallel()
 	out, st, errs := runZshUTF8(t, "(( newarray[0] = 1 )); newarray[0]=2; print no")
 	if out != "" || st != 1 || strings.Count(errs, "newarray: assignment to invalid subscript range") != 2 {
 		t.Errorf("got %q at %d, %q, want nothing at 1 and the sentence twice", out, st, errs)

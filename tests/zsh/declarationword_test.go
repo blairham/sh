@@ -25,6 +25,7 @@ import (
 // this harness parses the whole source before running any of it, so an alias
 // defined in it is never seen by the line that uses it.
 func TestADeclarationIsTheWordAsWrittenInThisDialect(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	forms := []struct {
 		name, line string
@@ -68,6 +69,7 @@ func TestADeclarationIsTheWordAsWrittenInThisDialect(t *testing.T) {
 // expression was evaluated: the whole `3 y` is a bad expression, and `3` alone
 // is not — and the `y` that falls out of the split is declared numeric too.
 func TestANumericDeclarationIsTheWordAsWrittenInThisDialect(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{"integer, an expansion", `cmd=integer; $cmd v=$b; print -rn -- "[$v] [$y]"`, "[3] [0]"},

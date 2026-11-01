@@ -14,6 +14,7 @@ import (
 // Measured 2026-09-30 over `-c` on zsh 5.9.2, which writes these lines byte for byte;
 // the command ran here as one named `!` before.
 func TestABangAfterABarIsRefusedInThisDialectsWords(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"echo | ! true", "zsh:1: parse error near `!'\n"},
 		{"! true | ! true", "zsh:1: parse error near `!'\n"},

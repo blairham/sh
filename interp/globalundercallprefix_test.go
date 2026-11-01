@@ -42,6 +42,7 @@ func globalLetter(reaches Answer) func(*Semantics) {
 // outer one gives back what the declaration wrote, so the write went
 // underneath both temporary bindings rather than over either.
 func TestAGlobalDeclarationWritesUnderACallsAssignmentPrefix(t *testing.T) {
+	t.Parallel()
 	const src = `inner() { typeset -g t=3; echo "1[${t-U}]"; }
 outer() { t=7 inner; echo "2[${t-U}]"; }
 t=9 outer; echo "3[${t-U}]"`
@@ -70,6 +71,7 @@ t=9 outer; echo "3[${t-U}]"`
 // callee with no prefix of its own. A name the prefix was never holding is
 // the control: the declaration writes the shell's cell as it always did.
 func TestAGlobalDeclarationReachesTheOutermostPrefixHoldingTheName(t *testing.T) {
+	t.Parallel()
 	const src = `a3() { typeset -g v=3; }
 b3() { v=7 a3; echo "1[${v-U}]"; }
 c3() { v=8 b3; echo "2[${v-U}]"; }
@@ -104,6 +106,7 @@ z=7 d; echo "5[${y-U}][${z-U}]"`
 // them worth having: they get there through different cells, and reading the
 // body is what tells them apart.
 func TestWhichOfALocalAndACallsPrefixHoldsTheShellsCell(t *testing.T) {
+	t.Parallel()
 	const src = `g1() { typeset -g q=3; }
 f1() { local q=5; q=7 g1; echo "1[${q-U}]"; }
 q=1; f1; echo "2[${q-U}]"
@@ -129,6 +132,7 @@ r=9 g2; echo "4[${r-U}]"`
 // bindings come off around the whole declaration rather than around the
 // store.
 func TestAGlobalDeclarationsAttributesGoUnderTheCallsPrefixToo(t *testing.T) {
+	t.Parallel()
 	const src = `f() { typeset -gx e=3; }
 e=7 f; typeset -p e
 g() { typeset -gr n=3; }
@@ -146,6 +150,7 @@ n=7 g; typeset -p n`
 // the same name inside the body writes the binding the prefix put there and
 // goes back with it.
 func TestWhatACallsPrefixStillTakesBack(t *testing.T) {
+	t.Parallel()
 	const src = `f() { typeset -g a; }
 a=7 f; echo "1[${a-U}]"
 g() { typeset b=3; }

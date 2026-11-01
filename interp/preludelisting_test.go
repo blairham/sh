@@ -74,6 +74,7 @@ const listingPrelude = "__helper() { echo helper; }\np() { __helper; }\nq() { ec
 // TestAPreludeFunctionIsNotInAFunctionListing: the whole listing is the
 // script's own functions and nothing else, in both of `-F`'s shapes.
 func TestAPreludeFunctionIsNotInAFunctionListing(t *testing.T) {
+	t.Parallel()
 	out, errs, st := preludeListingRun(t, listingPrelude, "f() { echo f; }\ntypeset -F", nil)
 	if want := "declare -f f\n"; out != want {
 		t.Errorf("stdout = %q, want exactly %q — the prelude's three are the shell's", out, want)
@@ -102,6 +103,7 @@ func TestAPreludeFunctionIsNotInAFunctionListing(t *testing.T) {
 // the listing is empty and 0 — not 1, which is what a name that is no
 // function answers, and not the prelude said back.
 func TestAnEmptyFunctionListingIsStillZero(t *testing.T) {
+	t.Parallel()
 	out, errs, st := preludeListingRun(t, listingPrelude, "typeset -F", nil)
 	if out != "" || errs != "" || st != 0 {
 		t.Errorf("stdout %q stderr %q status %d, want nothing written and 0", out, errs, st)
@@ -115,6 +117,7 @@ func TestAnEmptyFunctionListingIsStillZero(t *testing.T) {
 // 5.3.20 — because there is a builtin of that name and no function, and a
 // prelude function is how a dialect written as shell spells a builtin.
 func TestAPreludeFunctionIsNoFunctionWhenItIsNamed(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"typeset -F p", "typeset -f q"} {
 		out, errs, st := preludeListingRun(t, listingPrelude, src, nil)
 		if out != "" || errs != "" {
@@ -130,6 +133,7 @@ func TestAPreludeFunctionIsNoFunctionWhenItIsNamed(t *testing.T) {
 // and it is compared by declaration, so a script that writes its own `p` owns
 // the name from that moment — in the listing, and speaking for itself.
 func TestRedefiningAPreludeFunctionPutsItInTheListing(t *testing.T) {
+	t.Parallel()
 	out, errs, st := preludeListingRun(t, listingPrelude, "p() { echo mine; }\ntypeset -F", nil)
 	if want := "declare -f p\n"; out != want {
 		t.Errorf("stdout = %q, want exactly %q — a redefinition is the script's own", out, want)
@@ -143,6 +147,7 @@ func TestRedefiningAPreludeFunctionPutsItInTheListing(t *testing.T) {
 // by the other name. A bare `set` in the engine that lists functions after
 // its variables asks the same question and had the same leak.
 func TestABareSetListingLeavesThePreludeOut(t *testing.T) {
+	t.Parallel()
 	out, errs, st := preludeListingRun(t, listingPrelude, "f() { echo f; }\nset", func(s *Semantics) {
 		s.SetListing = SetListingAssignmentsThenFunctions
 	})

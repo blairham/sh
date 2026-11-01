@@ -28,6 +28,7 @@ import (
 // grammar. Removing the guard passes the first and fails nothing else, which is
 // why it is written down here rather than left to a sweep.
 func TestTheIntegerRenderingIsAskedOnlyWhereTheReadingsDisagree(t *testing.T) {
+	t.Parallel()
 	floats := func(d *syntax.Dialect) { d.ArithFloat = true }
 	unanswered := func(r *Runner) {
 		sem := CoreSemantics()

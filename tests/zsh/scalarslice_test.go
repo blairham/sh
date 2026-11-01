@@ -22,6 +22,7 @@ import (
 // 1 everywhere else (#1553) — so the two are separate questions and the rows
 // below assert both of them side by side.
 func TestAWholeSubscriptSlicesTheValueOfAScalar(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the first character", `h="a b"; echo "${h[@]:0:1}"`, "a\n"},
 		{"the star spelling", `h="a b"; echo "${h[*]:0:1}"`, "a\n"},

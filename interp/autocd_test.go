@@ -23,6 +23,7 @@ import (
 // moving and the other moves in silence, which is why that half is an Answer
 // and not a default.
 func TestABareDirectoryNameMayBeReadAsACd(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name        string
 		on          bool
@@ -103,6 +104,7 @@ func TestABareDirectoryNameMayBeReadAsACd(t *testing.T) {
 // each had their turn. Measured with a *directory* named `echo`, which is the
 // arrangement that tells the two orders apart.
 func TestADirectoryDoesNotShadowACommand(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "echo"), 0o755); err != nil {
 		t.Fatal(err)

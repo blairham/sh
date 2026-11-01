@@ -11,6 +11,7 @@ import "testing"
 // and through the `:q` modifier (#5640). Measured 2026-10-03 on zsh 5.9.2
 // under -f, beside `xay` and `xby`.
 func TestASubstitutionsLiveCharactersPassTheFlagsAndANesting(t *testing.T) {
+	t.Parallel()
 	const setup = "print -n >xay; print -n >xby; s=xQy\n"
 	for _, tc := range []struct{ src, want string }{
 		{`print ${(j:,:)s:s/Q/?/} ${(q)s:s/Q/?/} ${(r:3:)s:s/Q/?/}`, "xay xby xay xby xay xby\n"},

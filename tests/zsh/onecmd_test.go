@@ -27,6 +27,7 @@ func zshWriting(out, errs *bytes.Buffer) driver.Shell {
 }
 
 func TestZshRefusesTheOneCommandLetterInItsOwnWords(t *testing.T) {
+	t.Parallel()
 	var out, errs bytes.Buffer
 	code := driver.MainArgs(zshWriting(&out, &errs), []string{"zsh", "-c", "set -t\necho NO"})
 	// The letter's own spelling, not the name it abbreviates; the status and
@@ -51,6 +52,7 @@ func TestZshRefusesTheOneCommandLetterInItsOwnWords(t *testing.T) {
 // refusal gets wrong: asking for the state the option is already in succeeds,
 // silently, exactly as it does for every long name.
 func TestZshGrantsTheStateItAlreadyHolds(t *testing.T) {
+	t.Parallel()
 	var out, errs bytes.Buffer
 	code := driver.MainArgs(zshWriting(&out, &errs), []string{"zsh", "-c", "set +t; echo B"})
 	if out.String() != "B\n" || errs.String() != "" || code != 0 {

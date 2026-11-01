@@ -17,6 +17,7 @@ import (
 // and only the interval has a floor. A value past either is refused with the
 // word quoted as written and status 1, before any file is opened.
 func TestFlockTimeoutAndIntervalCeilings(t *testing.T) {
+	t.Parallel()
 	rows := []struct {
 		letter, value string
 		refused       bool

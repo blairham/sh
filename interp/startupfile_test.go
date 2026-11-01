@@ -43,6 +43,7 @@ func startupRun(t *testing.T, src string, carries Answer) (string, int) {
 // stop there, and diagnose nothing. It is how a real `~/.bashrc` bails out
 // early, most often as `[ -z "$PS1" ] && return`.
 func TestAReturnInAStartupFileStopsTheFileAndSaysNothing(t *testing.T) {
+	t.Parallel()
 	for _, carries := range []Answer{Yes, No} {
 		out, _ := startupRun(t, "echo BEFORE\nreturn 3\necho AFTER\n", carries)
 		if !strings.Contains(out, "BEFORE") {
@@ -70,6 +71,7 @@ func TestAReturnInAStartupFileStopsTheFileAndSaysNothing(t *testing.T) {
 // startup file's status out, and a `return` with no argument means the last
 // command's status everywhere.
 func TestTheStatusAStartupFileLeaves(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name         string
 		src          string
@@ -96,6 +98,7 @@ func TestTheStatusAStartupFileLeaves(t *testing.T) {
 // file. Without that, reading any startup file at all would make a later
 // `return` at a script's own top level legal for good.
 func TestAStartupFileDoesNotLeaveTheShellLookingSourced(t *testing.T) {
+	t.Parallel()
 	var buf strings.Builder
 	sem := PosixSemantics()
 	sem.ReturnOutsideAFunctionIsRefused = Yes
@@ -131,6 +134,7 @@ func TestAStartupFileDoesNotLeaveTheShellLookingSourced(t *testing.T) {
 // is followed by the next startup file and then by the prompt, not skipped
 // past. Two files in a row, the first of them returning.
 func TestAStartupFileThatReturnsDoesNotStopTheNextOne(t *testing.T) {
+	t.Parallel()
 	var buf strings.Builder
 	sem := PosixSemantics()
 	sem.ReturnOutsideAFunctionIsRefused = Yes
@@ -158,6 +162,7 @@ func TestAStartupFileThatReturnsDoesNotStopTheNextOne(t *testing.T) {
 // picking one. The file still stops where it was told to — that part is
 // unanimous and is not what is unanswered.
 func TestAStartupFileReturnWithNoAnswerRecordedIsNamed(t *testing.T) {
+	t.Parallel()
 	out, _ := startupRun(t, "echo BEFORE\nreturn 3\necho AFTER\n", Unspecified)
 	if !strings.Contains(out, "return") || !strings.Contains(out, "disagree") {
 		t.Errorf("said %q, want the axis named", out)
@@ -177,6 +182,7 @@ func TestAStartupFileReturnWithNoAnswerRecordedIsNamed(t *testing.T) {
 // is fine. Every shell in the panel that reads a startup file names the
 // startup file (#1123).
 func TestAStartupFileIsNamedByTheDiagnosticsItRaises(t *testing.T) {
+	t.Parallel()
 	var buf strings.Builder
 	sem := PosixSemantics()
 	dg := Diagnostics{Location: LocationTightLine, LocationNamesTheCurrentFile: true}
@@ -219,6 +225,7 @@ func TestAStartupFileIsNamedByTheDiagnosticsItRaises(t *testing.T) {
 // zsh binary. The frame exists for the location and for nothing else, and
 // without the mark on it giving the file a frame would have moved `$0` too.
 func TestAStartupFileDoesNotBecomeDollarZero(t *testing.T) {
+	t.Parallel()
 	var buf strings.Builder
 	sem := PosixSemantics()
 	sem.DollarZeroNames = DollarZeroIsTheInnermostCall

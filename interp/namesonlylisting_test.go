@@ -42,6 +42,7 @@ func withNamesOnly(s *Semantics) {
 // The plus sense of the `f` letter, with no pattern anywhere on the line —
 // the row the `-m` path answered and this one did not.
 func TestAPlusSignedFunctionLetterNamesItsFunctions(t *testing.T) {
+	t.Parallel()
 	src := "pb() { echo two; }\npa() { echo one; }\n"
 	for _, tc := range []struct{ name, line, want string }{
 		{"with no operand", "typeset +f", "pa\npb\n"},
@@ -70,6 +71,7 @@ func TestAPlusSignedFunctionLetterNamesItsFunctions(t *testing.T) {
 // Both answers are asserted because a fix that ignored the axis would pass
 // the row above and fail this one.
 func TestAPlusSignedFunctionLetterOnlyNamesWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	saysNo := func(s *Semantics) {
 		withNamesOnly(s)
 		s.FunctionNamesUnderPlus = No
@@ -111,6 +113,7 @@ func scriptRowsOnly(out string, prefixes ...string) string {
 // A status the sign does not touch: a name nobody defined is silent at 1, and
 // the 1 stands however many other names printed.
 func TestANamedFunctionListingReportsOneForANameItDoesNotHold(t *testing.T) {
+	t.Parallel()
 	src := "pa() { echo one; }\ntypeset +f pa nosuch"
 	out, errs, st := declRun(t, src, withNamesOnly, Diagnostics{})
 	if out != "pa\n" || errs != "" || st != 1 {
@@ -122,6 +125,7 @@ func TestANamedFunctionListingReportsOneForANameItDoesNotHold(t *testing.T) {
 // the two signs are two listings: values under a minus, attribute words and
 // the bare name under a plus.
 func TestABareSignIsAnOptionWordAndPicksTheListing(t *testing.T) {
+	t.Parallel()
 	src := "qa=1\ntypeset -i qb=2\n"
 	for _, tc := range []struct{ name, line, want string }{
 		{"a minus is the bare listing", "typeset -", "qa=\"1\"\ninteger qb=\"2\"\n"},
@@ -166,6 +170,7 @@ func onlyQ(out string) string {
 // asserted by its status and its silence on stdout, since the wording belongs
 // to whichever preset supplied it.
 func TestABareSignIsANameWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, "pa=1\ntypeset +", func(s *Semantics) {
 		withNamesOnly(s)
 		s.SignAloneIsAnOptionWord = No
@@ -183,6 +188,7 @@ func TestABareSignIsANameWhereTheDialectSaysSo(t *testing.T) {
 // front of them. Two letters are a union and not an intersection, which is the
 // row a single letter cannot discriminate.
 func TestAPlusSignedAttributeLetterIsAFilterOverTheWholeTable(t *testing.T) {
+	t.Parallel()
 	src := "qa=1\nexport qb=2\ntypeset -i qc=3\n"
 	for _, tc := range []struct{ name, line, want string }{
 		{"one letter", "typeset +x", "qb\n"},
@@ -212,6 +218,7 @@ func TestAPlusSignedAttributeLetterIsAFilterOverTheWholeTable(t *testing.T) {
 // rather than by containment: a listing that grew a command word or lost one
 // is the failure this catches, and a substring test cannot see either.
 func TestAMinusSignedAttributeLetterListsTheSelectedValues(t *testing.T) {
+	t.Parallel()
 	src := "qa=1\nexport qb=2\ntypeset -i qc=3\n"
 	clustered := func(s *Semantics) {
 		withNamesOnly(s)
@@ -244,6 +251,7 @@ func TestAMinusSignedAttributeLetterListsTheSelectedValues(t *testing.T) {
 // The two signs are two listings, which is the pair this asserts rather than
 // either row: the plus names the selection and the minus values it.
 func TestTheTwoSignsOfAnAttributeLetterAreTwoListings(t *testing.T) {
+	t.Parallel()
 	src := "qa=1\nexport qb=2\n"
 	plain := func(s *Semantics) {
 		withNamesOnly(s)
@@ -274,6 +282,7 @@ func TestTheTwoSignsOfAnAttributeLetterAreTwoListings(t *testing.T) {
 // and that list had no room for a compound, so `typeset -p q` wrote the row
 // from the same state the listing passed over.
 func TestAValuelessCompoundIsAmongTheFilteredRows(t *testing.T) {
+	t.Parallel()
 	kept := func(s *Semantics) {
 		withNamesOnly(s)
 		s.BareDeclarationListing = DeclareListingClustered
@@ -301,6 +310,7 @@ func TestAValuelessCompoundIsAmongTheFilteredRows(t *testing.T) {
 // The table is one name per interesting combination, so that a union, an
 // intersection and a narrowing each write something the other two do not.
 func TestTheAttributeLettersCombineTheWayTheAxisSays(t *testing.T) {
+	t.Parallel()
 	src := "qa=1\nexport qb=2\ntypeset -i qc=3\ntypeset -a qd=(p)\ntypeset -ai qe=(4)\n"
 	with := func(form DeclarationFilterForm) func(*Semantics) {
 		return func(s *Semantics) {
@@ -353,6 +363,7 @@ func TestTheAttributeLettersCombineTheWayTheAxisSays(t *testing.T) {
 // nothing chose. The control is one letter on the same dialect, which still
 // answers.
 func TestTwoAttributeLettersAreRefusedWhereNoDialectChose(t *testing.T) {
+	t.Parallel()
 	unchosen := func(s *Semantics) {
 		withNamesOnly(s)
 		s.BareDeclarationListing = DeclareListingPlainAssignment
@@ -380,6 +391,7 @@ func TestTwoAttributeLettersAreRefusedWhereNoDialectChose(t *testing.T) {
 // than whole. The control is the letter that says where a declaration lands
 // rather than what a name is — that one drops out and the whole table stands.
 func TestALetterWithoutEffectSelectsNothingAndTheGlobalLetterSelectsEverything(t *testing.T) {
+	t.Parallel()
 	inert := func(s *Semantics) {
 		withNamesOnly(s)
 		s.DeclareOptions = "aAfgilmpruxz"

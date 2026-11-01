@@ -21,6 +21,7 @@ import (
 // the four dialects without the letter refuse the word before a direction is
 // chosen.
 func TestShiftFromTheEnd(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().ShiftFromTheEndLetter; got != interp.Yes {
 		t.Errorf("ShiftFromTheEndLetter = %v, want Yes", got)
 	}
@@ -39,6 +40,7 @@ shift -p;   print "C=$? [$*]"`)
 // The letter reaches an array named as an operand too, and the count in front
 // of it is read exactly as it is for the front form.
 func TestShiftFromTheEndOfANamedArray(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `arr=(1 2 3 4)
 shift -p 2 arr; print "A=$? (${(j:,:)arr})"
 arr2=(1 2 3)
@@ -55,6 +57,7 @@ shift -p arr2;  print "B=$? (${(j:,:)arr2})"`)
 // change that read the letter and then ran the front form would agree with
 // the first row and not with the second.
 func TestShiftFromTheEndOutOfRange(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `set -- a b c
 shift -p 5; print "A=$? [$*] n=$#"
 set -- a b c
@@ -75,6 +78,7 @@ shift -p 0; print "C=$? [$*] n=$#"`)
 // positional parameters are left alone — and the letters behind one `-` are
 // options in their own right.
 func TestShiftFromTheEndOptionScan(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `set -- a b c d e
 shift -p -- 2; print "A=$? [$*]"
 set -- a b c d e

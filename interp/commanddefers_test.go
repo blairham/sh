@@ -28,6 +28,7 @@ import (
 // So each function on that path is held to one of two shapes: it defers
 // nothing at all, or what it defers is within the compiler's limits.
 func TestEveryCommandsDoorDefersOnlyWhatTheCompilerInlines(t *testing.T) {
+	t.Parallel()
 	// What every command runs, and so must defer nothing.
 	deferNothing := map[string]bool{
 		"commandAt":   true,

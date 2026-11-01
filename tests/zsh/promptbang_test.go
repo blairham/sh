@@ -9,6 +9,7 @@ import "testing"
 // on zsh 5.9.2 under `-f`, where the history number is 0 (#5155). See
 // interp.promptBangText.
 func TestPromptBangDrawsTheHistoryNumber(t *testing.T) {
+	t.Parallel()
 	cases := []struct{ src, want string }{
 		{"setopt promptbang; print -P !", "0\n"},
 		{"print -P !", "!\n"},

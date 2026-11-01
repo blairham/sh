@@ -30,6 +30,7 @@ import (
 // at one answers `${x}` from the same stop, so "which forms are stopped" and
 // "what becomes of the `$`" are two questions and not one.
 func TestAContinuationStopsADollarAtEveryFormButANameInDoubleQuotes(t *testing.T) {
+	t.Parallel()
 	d := zsh.Dialect()
 	if got := d.ContinuationStopsADollarAt; got != syntax.NoDollarForm {
 		t.Errorf("ContinuationStopsADollarAt = %b, want no form", got)

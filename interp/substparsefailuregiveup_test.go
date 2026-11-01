@@ -58,6 +58,7 @@ func runSubstGiveUpRaw(t *testing.T, src string, endsTheShell, fatalStatus Answe
 }
 
 func TestASubstitutionRefusedInAHereDocumentBodyEndsTheShellWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	// `cat` never runs in either reading — that half is settled at every
 	// boundary giveUpTheCommand is — so what each row asks is whether `after`
 	// is reached.
@@ -80,6 +81,7 @@ func TestASubstitutionRefusedInAHereDocumentBodyEndsTheShellWhereTheAxisSaysSo(t
 // the script whichever way the body's axis is set, because the axis is asked
 // at the body's boundary and nowhere else.
 func TestASubstitutionRefusedInARedirectionTargetEndsTheShellWhateverTheBodySays(t *testing.T) {
+	t.Parallel()
 	const src = "printf 'start\\n'\ncat < \"$(echo hi; for)\"\nprintf 'after\\n'\n"
 	for _, a := range []Answer{Yes, No} {
 		out, _ := runSubstGiveUp(t, src, a, No)
@@ -92,6 +94,7 @@ func TestASubstitutionRefusedInARedirectionTargetEndsTheShellWhateverTheBodySays
 // The number the carried-on shell leaves behind, which is the second axis and
 // is read at the same boundary.
 func TestTheStatusASubstitutionRefusalLeavesInAHereDocumentBody(t *testing.T) {
+	t.Parallel()
 	const src = "cat <<END\n$(echo hi; for)\nEND\nprintf 'st=%s' \"$?\"\n"
 	t.Run("a fatal error's number", func(t *testing.T) {
 		out, _ := runSubstGiveUp(t, src, No, Yes)
@@ -110,6 +113,7 @@ func TestTheStatusASubstitutionRefusalLeavesInAHereDocumentBody(t *testing.T) {
 // The same axis at the other site: text the script borrowed, where the shell
 // ends rather than carrying on and the number is its exit status.
 func TestTheStatusASubstitutionRefusalEndsBorrowedTextWith(t *testing.T) {
+	t.Parallel()
 	const src = "printf 'start\\n'\neval 'v=$(echo hi; for)'\nprintf 'never\\n'\n"
 	if out, st := runSubstGiveUp(t, src, Yes, Yes); st != 1 || strings.Contains(out, "never") {
 		t.Errorf("out = %q, status = %d, want the script to end at 1 — a fatal error's number", out, st)
@@ -122,6 +126,7 @@ func TestTheStatusASubstitutionRefusalEndsBorrowedTextWith(t *testing.T) {
 // And the row that must not move: the script's own line, which every column
 // answers with the syntax status and where the axis is never asked.
 func TestASubstitutionRefusalOnTheScriptsOwnLineKeepsItsSyntaxStatus(t *testing.T) {
+	t.Parallel()
 	const src = "printf 'start\\n'\nv=$(echo hi; for)\nprintf 'never\\n'\n"
 	for _, a := range []Answer{Yes, No} {
 		out, st := runSubstGiveUp(t, src, Yes, a)
@@ -138,6 +143,7 @@ func TestASubstitutionRefusalOnTheScriptsOwnLineKeepsItsSyntaxStatus(t *testing.
 // `for` on its own reports cannot quietly turn these rows into a suite about
 // something else.
 func TestTheBodyTheseRowsUseDoesNotParse(t *testing.T) {
+	t.Parallel()
 	if _, err := syntax.Parse("echo hi; for", syntax.Core()); err == nil {
 		t.Fatal("the body parsed, so every row above is measuring a shell that never refused anything")
 	}

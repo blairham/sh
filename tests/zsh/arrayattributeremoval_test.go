@@ -20,6 +20,7 @@ import (
 // the letter left the table standing here too, which is neither column's
 // answer (#4241).
 func TestTheArrayAttributeComesOffAndEmptiesTheNameHere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a populated table",
@@ -44,6 +45,7 @@ func TestTheArrayAttributeComesOffAndEmptiesTheNameHere(t *testing.T) {
 // The policy, pinned so that no preset here drifts off the column it was
 // measured from.
 func TestTheArrayAttributeRemovalIsThisDialectsPolicy(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().ArrayAttributeRemoval; got != interp.ArrayAttributeRemovalEmptiesTheName {
 		t.Errorf("ArrayAttributeRemoval = %v, want empties the name", got)
 	}

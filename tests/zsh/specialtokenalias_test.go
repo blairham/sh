@@ -28,6 +28,7 @@ import (
 // expanded the token wherever it stood would pass every positive row here and
 // break every `&&` in every script.
 func TestAGlobalAliasNamedForASpecialToken(t *testing.T) {
+	t.Parallel()
 	table := func(name string) (string, bool) {
 		v, ok := map[string]string{"&&": "print SPLICED", "|": "print SPLICED"}[name]
 		return v, ok
@@ -74,6 +75,7 @@ func TestAGlobalAliasNamedForASpecialToken(t *testing.T) {
 // The parser asks nothing when `GlobalAliases` is nil, so the same line is a
 // parse error there — as it is in every shell in the panel but one.
 func TestASpecialTokenIsNotAliasedWithoutGlobalAliases(t *testing.T) {
+	t.Parallel()
 	p := syntax.NewParser("print one\n&& print two\n", zsh.Dialect())
 	p.Parse()
 	if p.Err() == nil {
@@ -91,6 +93,7 @@ func TestASpecialTokenIsNotAliasedWithoutGlobalAliases(t *testing.T) {
 // `&&` is left as the token, which is then a parse error exactly as it was
 // before any alias existed.
 func TestASpecialTokenAliasEndingInItselfStops(t *testing.T) {
+	t.Parallel()
 	table := func(name string) (string, bool) {
 		v, ok := map[string]string{"&&": "print A; &&"}[name]
 		return v, ok

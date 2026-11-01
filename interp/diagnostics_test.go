@@ -13,6 +13,7 @@ import (
 )
 
 func TestSyntaxErrorStatusIsADialectAnswer(t *testing.T) {
+	t.Parallel()
 	// The number is the SyntaxErrorStatus field's to give — measured per
 	// dialect across eight distinct syntax errors, and asserted per preset in
 	// the dialect packages. It was hardcoded to 2 under a comment claiming
@@ -40,6 +41,7 @@ func TestSyntaxErrorStatusIsADialectAnswer(t *testing.T) {
 // script is parsed. A seam that only reached whatever read the file first
 // would be wrong inside `$( )`, which re-parses.
 func TestCommandSubstitutionCarriesTheDialectStatus(t *testing.T) {
+	t.Parallel()
 	for _, want := range []int{1, 2, 3} {
 		f, err := syntax.Parse("x=$(if true); echo after", syntax.Core())
 		if err != nil {
@@ -73,6 +75,7 @@ func TestCommandSubstitutionCarriesTheDialectStatus(t *testing.T) {
 // this package: what the dialect that elides actually prints is pinned beside
 // that dialect.
 func TestUnmatchedNearMaxBytesCutsTheQuotedWordAndZeroKeepsIt(t *testing.T) {
+	t.Parallel()
 	const src = "v=$(echo bbbbbbbbbbbbbbbbbbbbbbbb\n"
 	_, err := syntax.Parse(src, syntax.Dialect{})
 	if err == nil {

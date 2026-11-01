@@ -18,6 +18,7 @@ import (
 // and one that does not, because asserting only the fatal side would pass
 // against an implementation that made everything fatal.
 func TestFatalErrorsAbandonTheScript(t *testing.T) {
+	t.Parallel()
 	shiftFatal := permissive()
 	shiftFatal.FatalErrorStatusIsOne = Yes
 	shiftSurvives := permissive()
@@ -80,6 +81,7 @@ func TestFatalErrorsAbandonTheScript(t *testing.T) {
 // TestFatalStatusIsOneAxis is the evidence for having one axis rather than
 // three: unrelated errors, same split, so FatalErrorStatusIsOne is asked once.
 func TestFatalStatusIsOneAxis(t *testing.T) {
+	t.Parallel()
 	one := permissive()
 	one.FatalErrorStatusIsOne = Yes
 	for _, src := range []string{`readonly r=1; r=2`, `shift 5`, `echo $((1/0))`} {
@@ -93,6 +95,7 @@ func TestFatalStatusIsOneAxis(t *testing.T) {
 }
 
 func TestUnmatchedGlobIsFatalOnlyWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	// GlobNoMatchIsError. Reporting the error and then passing the pattern
 	// through was the bug: the diagnostic appeared and the command ran anyway.
 	fatal := permissive()
@@ -124,6 +127,7 @@ func TestUnmatchedGlobIsFatalOnlyWhereTheDialectSaysSo(t *testing.T) {
 }
 
 func TestUnterminatedBracketIsNotAGlob(t *testing.T) {
+	t.Parallel()
 	// `[` is the test builtin's name. Treating it as a pattern reported
 	// "no matches found: [" on every use of `test`, which went unnoticed
 	// until an unmatched pattern became fatal and the builtin stopped
@@ -147,6 +151,7 @@ func TestUnterminatedBracketIsNotAGlob(t *testing.T) {
 }
 
 func TestArithmeticAxesAreAsked(t *testing.T) {
+	t.Parallel()
 	// ArithNameValueRecurses: a name-shaped value is re-evaluated where the
 	// axis says Yes and an error where it says No.
 	recurses := permissive()
@@ -181,6 +186,7 @@ func TestArithmeticAxesAreAsked(t *testing.T) {
 }
 
 func TestCoreRefusesTheNewAxes(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`x=abc; echo $((x+1))`, `echo $((08))`} {
 		if _, st := run(t, src, withSem(CoreSemantics())); st != 2 {
 			t.Errorf("%s under the core: status = %d, want a refusal", src, st)
@@ -192,6 +198,7 @@ func TestCoreRefusesTheNewAxes(t *testing.T) {
 // `${!x}` divergence; the grammar half is asserted in the syntax package.
 // Together they express three answers with two binary questions.
 func TestIndirectionMeaningIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `x=y; y=V; printf "[%s]" "${!x}"`
 	indirect := func(d *syntax.Dialect) {
 		d.ParamIndirection = true

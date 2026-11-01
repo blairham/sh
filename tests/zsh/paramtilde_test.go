@@ -42,6 +42,7 @@ func tildeFlagDir(t *testing.T) (home, dir string) {
 // does not expand, so both halves are a no-op in the shells that read the
 // characters as text. Measured 2026-09-06 on zsh 5.9.2.
 func TestTheTildeFlagIsThisDialects(t *testing.T) {
+	t.Parallel()
 	home, dir := tildeFlagDir(t)
 	for _, tc := range []struct{ src, want string }{
 		// The pattern half, against the dialect's own no.
@@ -72,6 +73,7 @@ func TestTheTildeFlagIsThisDialects(t *testing.T) {
 // A parse error is not what this is: the tilde is grammar here, so a `${~x}`
 // in a file this dialect reads goes through.
 func TestTheTildeFlagParsesInThisDialect(t *testing.T) {
+	t.Parallel()
 	if _, err := parseZsh("echo ${~x}\necho ${~~x}\necho ${(U)~x}"); err != nil {
 		t.Errorf("parse: %v", err)
 	}

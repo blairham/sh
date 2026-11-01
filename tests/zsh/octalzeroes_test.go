@@ -19,6 +19,7 @@ import "testing"
 // working: no diagnostic, and the other shells' number wrong in a place
 // where both answers are plausible and file modes are written this way.
 func TestOctalZeroesMakesALeadingZeroABase(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The default, and the option asked for and taken back.
 		{`echo "$(( 010 )) $(( 0100 ))"`, "10 100\n"},
@@ -71,6 +72,7 @@ func TestOctalZeroesMakesALeadingZeroABase(t *testing.T) {
 // arithmetic — and a subshell's `setopt` stays in the subshell, which is what
 // reading an axis buys over storing a flag.
 func TestOctalZeroesIsReadBackOffTheArithmetic(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`[[ -o octalzeroes ]] && echo on || echo off`, "off\n"},
 		{`setopt octal_zeroes; [[ -o octal_zeroes ]] && echo on || echo off`, "on\n"},

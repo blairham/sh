@@ -21,6 +21,7 @@ import (
 // with `failing bck-i-search: echo_` once nothing older matches. The trailing
 // underscore is zsh's own and is part of the wording rather than a cursor.
 func TestHistoryStyleDrawsTheSearchBelowTheLine(t *testing.T) {
+	t.Parallel()
 	s := zsh.HistoryStyle()
 	if got, want := s.SearchPrompt, "bck-i-search: %s_"; got != want {
 		t.Errorf("SearchPrompt = %q, want %q", got, want)
@@ -40,6 +41,7 @@ func TestHistoryStyleDrawsTheSearchBelowTheLine(t *testing.T) {
 // prompt. bash asked the same thing forgets it entirely, and that conflict on
 // identical intent is why this is an axis.
 func TestHistoryStyleKeepsWhatItDoesNotWrite(t *testing.T) {
+	t.Parallel()
 	s := zsh.HistoryStyle()
 	if got, want := s.Ignore, "HISTORY_IGNORE"; got != want {
 		t.Errorf("Ignore = %q, want %q", got, want)
@@ -84,6 +86,7 @@ func TestHistoryStyleKeepsWhatItDoesNotWrite(t *testing.T) {
 // reading against HIST_IGNORE_SPACE until this was re-measured; it is the
 // reading of HISTORY_IGNORE, taken in the same session.
 func TestTheOptionSpelledRulesTakeNoAxis(t *testing.T) {
+	t.Parallel()
 	s := zsh.HistoryStyle()
 	// There is deliberately no per-option field to assert the absence of.
 	// What pins the behavior is repl's own rules, which return "not
@@ -110,6 +113,7 @@ func TestTheOptionSpelledRulesTakeNoAxis(t *testing.T) {
 // together, and that the two names are the ones HistoryStyle points at. A test
 // that only asked `setopt` would pass for an option nothing could read.
 func TestTheHistoryOptionsAreReadableThroughTheNamespace(t *testing.T) {
+	t.Parallel()
 	style := zsh.HistoryStyle()
 	for _, tc := range []struct {
 		named string

@@ -101,6 +101,7 @@ readonly
 typeset -p V`
 
 func TestPosixModeMovesThreeListingAxesAndNotTheFourth(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		posix bool
@@ -143,6 +144,7 @@ declare -x V="a b"
 // Leaving the mode puts the dialect's own forms back rather than asserting
 // the clustered shape, which is the half the saved fields exist for.
 func TestLeavingPosixModePutsTheListingFormsBack(t *testing.T) {
+	t.Parallel()
 	want := `declare -x V="a b"
 declare -r R="2"
 declare -x V="a b"
@@ -164,6 +166,7 @@ declare -x V="a b"
 // shell this is about: it writes `export V='a b'` and `typeset -r R=2`, so
 // the two axes really do have to be saved apart.
 func TestLeavingPosixModeKeepsAListingFormThatWasAlreadyTheCommandWord(t *testing.T) {
+	t.Parallel()
 	out, st := posixListingRun(t, posixListingSrc, func(r *Runner) {
 		r.SetPosixMode(true)
 		r.SetPosixMode(false)
@@ -183,6 +186,7 @@ func TestLeavingPosixModeKeepsAListingFormThatWasAlreadyTheCommandWord(t *testin
 // loop and function-name axes already make. An axis nobody answered is still
 // refused by name inside the mode.
 func TestPosixModeDoesNotAnswerAnUnansweredListingAxis(t *testing.T) {
+	t.Parallel()
 	out, st := posixListingRun(t, `V=1; export V; export -p`, func(r *Runner) {
 		r.SetPosixMode(true)
 	}, func(s *Semantics) { s.ExportListing = DeclarationListingUnspecified })

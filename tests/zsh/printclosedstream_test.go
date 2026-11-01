@@ -29,6 +29,7 @@ import "testing"
 // defect, and it is why the fix is one call rather than a second sentence: see
 // interp.Runner.BuiltinWriteFailed.
 func TestAWriteToAStreamSomethingElseClosedIsReported(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const said = "zsh:1: write error: bad file descriptor\n"
 	for _, tc := range []struct{ name, src, wantErr string }{
@@ -52,6 +53,7 @@ func TestAWriteToAStreamSomethingElseClosedIsReported(t *testing.T) {
 // case this rule turns on: the same closed descriptor, the same failed write,
 // and the answer decided by **who wrote the redirection**.
 func TestAWriteToAStreamTheCommandClosedItselfIsQuiet(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src string }{
 		{"on the command", "print foo >&-\n"},

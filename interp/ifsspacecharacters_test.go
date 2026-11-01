@@ -36,6 +36,7 @@ const countArgs = `printf 'n=%s' "$#"; for e in "$@"; do printf '[%s]' "$e"; don
 // IFS or are ordinary separators that delimit once each and are never
 // absorbed.
 func TestTheWhitespaceHalfOfIFSIsTheDialectsOwn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, three, every string }{
 		{
 			// A run of two with nothing between them: one delimiter where
@@ -86,6 +87,7 @@ func TestTheWhitespaceHalfOfIFSIsTheDialectsOwn(t *testing.T) {
 // name takes the remainder of the line with the closing run of IFS whitespace
 // off it, and which characters that run may hold is this question.
 func TestTheWhitespaceHalfOfIFSReachesReadsRemainder(t *testing.T) {
+	t.Parallel()
 	// IFS is every space character but the space itself, so the leading
 	// spaces of the first field survive and the tail is a run of the three
 	// at issue with a space inside it.
@@ -103,6 +105,7 @@ func TestTheWhitespaceHalfOfIFSReachesReadsRemainder(t *testing.T) {
 // none of the three characters in it reaches no question at all, so every
 // ordinary script splits under an unanswered vector without a word.
 func TestAnOrdinaryIFSAsksNothingAboutItsWhitespaceHalf(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the default separators",
@@ -147,6 +150,7 @@ func TestAnOrdinaryIFSAsksNothingAboutItsWhitespaceHalf(t *testing.T) {
 // `[[:IFSSPACE:]]` reads the same half, so a pattern asking which separators
 // are whitespace gets the dialect's answer rather than a fixed three.
 func TestTheIFSSpaceClassReadsTheDialectsHalf(t *testing.T) {
+	t.Parallel()
 	src := `IFS=$(printf '\v'); c=$(printf '\v'); case $c in [[:IFSSPACE:]]) printf hit;; *) printf miss;; esac`
 	run := func(every interp.Answer) (string, int) {
 		t.Helper()

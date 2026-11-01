@@ -16,6 +16,7 @@ import "testing"
 // before the fill leaving the two out; and a write to `$commands`, its first
 // touch, filling it as a read does.
 func TestTheCommandTableIsFilledByListingPath(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/files
 zf_mkdir -p p1/zdir p2
 for f in p2/zab p2/zbar p2/zbaz p1/zfoo p1/zbar p1/zqux p1/zz; do print '#!/bin/sh' > $f; zf_chmod 755 $f; done

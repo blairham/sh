@@ -87,6 +87,7 @@ func runNamerefWith(t *testing.T, sem Semantics, src string) (string, int) {
 // value is taken as written rather than as a name: an element is a possible
 // target and reads through.
 func TestAValueTheNameHoldsAimsTheReference(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			name: "a scalar the name held",
@@ -121,6 +122,7 @@ func TestAValueTheNameHoldsAimsTheReference(t *testing.T) {
 // words, and the name is left exactly as it was found — a plain scalar, not a
 // reference to text no shell can name.
 func TestAValueThatCannotAimTheReferenceIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, value := range []string{"/", "", "1x", "a b"} {
 		src := `b=` + quoteForShell(value) + `; typeset -n b; echo "st=$?"; echo "[${b-GONE}]"`
 		out, _ := runNameref(t, src)
@@ -143,6 +145,7 @@ func TestAValueThatCannotAimTheReferenceIsRefused(t *testing.T) {
 // `local`, and it is measured rather than reasoned — `-g`, which makes no new
 // cell, aims at the outer value on the same line that `local` leaves unaimed.
 func TestAFreshBindingHasNoValueToAdopt(t *testing.T) {
+	t.Parallel()
 	out, _ := runNameref(t, `good=G
 outer=good
 f() { local -n outer; typeset -p outer; }
@@ -161,6 +164,7 @@ g`)
 // at is aimed by its first value, and a value that is no possible name aims
 // it nowhere. See refuseNamerefAim.
 func TestAnAssignmentCannotAimAReferenceAtSomethingThatIsNoName(t *testing.T) {
+	t.Parallel()
 	out, _ := runNameref(t, `typeset -n q
 q=/
 echo "st=$?"
@@ -189,6 +193,7 @@ typeset -p q`)
 // not. Measured on bash 5.3.20 — `declare -n t; t=/ ; echo after` never
 // prints `after`, where the `read` spelling does.
 func TestWhatABadAimCostsTheRestOfTheLine(t *testing.T) {
+	t.Parallel()
 	out, _ := runNameref(t, `typeset -n t; t=/ ; echo after-the-assignment`)
 	if strings.Contains(out, "after-the-assignment") {
 		t.Errorf("got %q, want the rest of the line given up", out)
@@ -207,6 +212,7 @@ func TestWhatABadAimCostsTheRestOfTheLine(t *testing.T) {
 // that is no name **ends the loop** — reported once, at 1, with the body
 // never reached for that word and the reference left where it was.
 func TestALoopWordThatCannotAimTheReferenceEndsTheLoop(t *testing.T) {
+	t.Parallel()
 	out, _ := runNameref(t, `typeset -n w
 for w in / a; do echo BODY; done
 echo "st=$?"

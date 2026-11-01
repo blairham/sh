@@ -19,6 +19,7 @@ import (
 // the removal for the rest of the session and the second widget read every
 // one of them empty.
 func TestAnUnsetInOneWidgetIsGoneByTheNext(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(
 		t,
 		`c() { unset POSTDISPLAY CUTBUFFER BUFFER LBUFFER RBUFFER CURSOR region_highlight NUMERIC; print -r -- "c ${+POSTDISPLAY}${+CUTBUFFER}${+BUFFER}${+LBUFFER}${+RBUFFER}${+CURSOR}" }
@@ -43,6 +44,7 @@ zle -N b
 // the one the widget assigned to `NUMERIC`, is what an action performed from
 // the widget is given — and an `unset NUMERIC` is none (#5941).
 func TestAWidgetsCountReachesTheActionsItCalls(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `w() { zle forward-word; NUMERIC=2; zle forward-word; unset NUMERIC; zle forward-word }
 zle -N w
 `)
@@ -71,6 +73,7 @@ zle -N w
 // as text. This shell made the queue counter 6, its attribute outliving the
 // call.
 func TestTheCursorIsAnIntegerOnlyInsideAWidget(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(
 		t,
 		`w() { CURSOR=1; CURSOR+=2; a=$CURSOR; CURSOR=5; CURSOR=CURSOR-1; CURSOR+=x; NUMERIC=2; NUMERIC+=3; b=$NUMERIC; NUMERIC=x; print -r -- "c=$a e=$CURSOR n=$b x=$NUMERIC" }
@@ -95,6 +98,7 @@ zle -N w
 // taking the name away. Measured 2026-10-05 through a pseudo-terminal
 // against zsh 5.9.2, on `abcd` with the cursor at 2 (#6038).
 func TestAnUnsetLineParameterEmptiesWhatItStandsFor(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `w() { unset $1; print -r -- "[${(P)+1}][$BUFFER][$CURSOR][$POSTDISPLAY][$CUTBUFFER]" }
 for n in BUFFER LBUFFER RBUFFER CURSOR POSTDISPLAY CUTBUFFER; do
   eval "u$n() { POSTDISPLAY=pp; CUTBUFFER=kk; w $n }; zle -N u$n"

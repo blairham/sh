@@ -45,6 +45,7 @@ func unrunRun(t *testing.T, a Answer, src string) (string, int) {
 
 // The three constructs the reading refuses, each with the answer on and off.
 func TestTheWordsOfAnUnrunCommandAreReadWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a `=word` head with no command behind it", "echo =nosuchcommand_xyz\n", "nosuchcommand_xyz"},
 		{"an expansion the grammar could not read", "echo ${9nope}\n", "bad substitution"},
@@ -65,6 +66,7 @@ func TestTheWordsOfAnUnrunCommandAreReadWhereTheAxisSaysSo(t *testing.T) {
 // And the refusal ends the script, exactly as it does when the command runs:
 // the line after it is not read either.
 func TestAnUnrunWordsRefusalEndsTheScript(t *testing.T) {
+	t.Parallel()
 	out, st := unrunRun(t, Yes, "echo =nosuchcommand_xyz\necho =nosuchcommand_zzz\n")
 	if strings.Contains(out, "nosuchcommand_zzz") {
 		t.Errorf("out %q, want only the first refusal", out)
@@ -79,6 +81,7 @@ func TestAnUnrunWordsRefusalEndsTheScript(t *testing.T) {
 // silent with the axis on, which is what says the reading is the top-level
 // list's and not the construct's.
 func TestAnUnrunCommandInsideACompoundIsNotRead(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a group", "{ echo =nosuchcommand_xyz; }\n"},
 		{"a subshell", "( echo =nosuchcommand_xyz )\n"},
@@ -103,6 +106,7 @@ func TestAnUnrunCommandInsideACompoundIsNotRead(t *testing.T) {
 // And the shapes a list is made of *are* read, which is the other half of the
 // same claim: the reading follows the list and stops at the compound.
 func TestAnUnrunCommandReachedThroughAListIsRead(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"after a separator", "true; echo =nosuchcommand_xyz\n"},
 		{"the right side of an and", "true && echo =nosuchcommand_xyz\n"},
@@ -135,6 +139,7 @@ func TestATimedUnrunCommandIsNotRead(t *testing.T) {
 }
 
 func TestAnUnrunChainSkipsTheSideItWouldNotRun(t *testing.T) {
+	t.Parallel()
 	if out, st := unrunRun(t, Yes, "true || echo =nosuchcommand_xyz\n"); out != "" || st != 0 {
 		t.Errorf("out %q status %d, want the right side skipped", out, st)
 	}
@@ -144,6 +149,7 @@ func TestAnUnrunChainSkipsTheSideItWouldNotRun(t *testing.T) {
 // is evaluated, nothing is matched, no value is fetched and nothing is stored.
 // Each of these refuses when the command runs and is silent here.
 func TestReadingAnUnrunCommandsWordsExpandsNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a command substitution", "echo $(echo RAN >&2)\n"},
 		{"a parameter with a word to complain with", "echo ${nope:?boom}\n"},
@@ -163,6 +169,7 @@ func TestReadingAnUnrunCommandsWordsExpandsNothing(t *testing.T) {
 // answered, which is what keeps `set -n` working in a vector that has not
 // chosen: an ordinary file reads through with nothing said.
 func TestAnUnrunCommandWithNothingToRefuseAsksNothing(t *testing.T) {
+	t.Parallel()
 	s := CoreSemantics()
 	out, st := runGrammar(t, "set -n\necho hi\ntrue && false\nif true; then :; fi\n",
 		unrunGrammar, withSem(s))
@@ -185,6 +192,7 @@ func TestAnUnrunCommandWithNothingToRefuseAsksNothing(t *testing.T) {
 // ends the script at 1, which is what says the difference is the fork and not
 // the pipe.
 func TestAnUnrunWordsRefusalInAForkCostsThisShellNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		status    int
@@ -234,6 +242,7 @@ func unrunArrayRun(t *testing.T, a Answer, src string) (string, int) {
 // The fourth shape: a `[` an unbraced `$name` never closed. It needs no value
 // to answer — the brackets are a subscript and this one does not terminate.
 func TestAnUnrunCommandsUnclosedBareSubscriptIsRead(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a bracket at the end of the word", "printf x $a[\n"},
 		{"a bracket the word never closes", "printf x $a[1 2]\n"},
@@ -254,6 +263,7 @@ func TestAnUnrunCommandsUnclosedBareSubscriptIsRead(t *testing.T) {
 // **evaluates**. A command of nothing but assignments has them read; a
 // command word in front of them takes the reading away.
 func TestAnUnrunAssignmentsLiteralSubscriptIsRead(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		refused   bool
@@ -294,6 +304,7 @@ func TestAnUnrunAssignmentsLiteralSubscriptIsRead(t *testing.T) {
 // substitution runs, and a parameter between the brackets contributes
 // nothing — set or not, since nothing set it.
 func TestReadingAnUnrunLiteralsSubscriptExpandsNothing(t *testing.T) {
+	t.Parallel()
 	// A parameter in the subscript is not expanded, so the text is **empty**
 	// — the wording names no subscript at all. Never the parameter's value,
 	// and never the name between the brackets either, which is what a reading

@@ -21,6 +21,7 @@ import (
 // are the same shape and the same width of change, and the axis must not move
 // them.
 func TestAFloatLetterChangeRereadsByTheAxis(t *testing.T) {
+	t.Parallel()
 	const x = "3.14159265358979"
 	for _, c := range []struct {
 		name, src    string
@@ -95,6 +96,7 @@ func TestAFloatLetterChangeRereadsByTheAxis(t *testing.T) {
 // A dialect that spells both letters and has not answered the axis is refused
 // by name where a declaration really changes one, and nowhere else.
 func TestAnUnansweredFloatLetterChangeRefusesOnlyWhereItArises(t *testing.T) {
+	t.Parallel()
 	out, errs, st := floatRun(t, `typeset -F 1 f=3.14159; typeset -F 8 f; echo "$f"`,
 		withExponentLetter(FloatFormatSignificantDigits), Diagnostics{})
 	if st != 0 || errs != "" {

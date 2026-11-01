@@ -15,6 +15,7 @@ import (
 // two are the ways the held copy is kept or let go of, so a hold that leaked
 // past an assignment, or one a second `getopts` refreshed, fails here.
 func TestGetoptsLeavesTheEnvironmentCopyOfItsOwnParameters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, held, refreshed string }{
 		{"OPTIND", `export OPTIND=1; getopts x: o -x6`, "OPTIND=1\n", "OPTIND=2\n"},
 		{"OPTARG", `export OPTARG=pre; getopts x: o -x6`, "OPTARG=pre\n", "OPTARG=6\n"},
@@ -56,6 +57,7 @@ func TestGetoptsLeavesTheEnvironmentCopyOfItsOwnParameters(t *testing.T) {
 // It carries no export attribute in the cell, so the assignment after it is
 // one the plain store takes, and that road lets the hold go as well.
 func TestGetoptsHoldsAnInheritedParametersEntry(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Yes, No} {
 		t.Run(answer.String(), func(t *testing.T) {
 			sem := permissive()
@@ -84,6 +86,7 @@ func TestGetoptsHoldsAnInheritedParametersEntry(t *testing.T) {
 // over an OPTARG nothing exported writes no refusal, and neither does one
 // whose exported name operand it fills.
 func TestAGetoptsOverUnexportedParametersAsksNothing(t *testing.T) {
+	t.Parallel()
 	out, st := run(
 		t,
 		`export o=1; getopts x: o -x6; echo $o $OPTARG; env | grep -E '^(o|OPTARG)='`,
@@ -102,6 +105,7 @@ func TestAGetoptsOverUnexportedParametersAsksNothing(t *testing.T) {
 // that refresh under either answer — taking a prefix back, and a `local`'s
 // restore — and they fail if the hold outlives them.
 func TestAFunctionCallsOptindStoresLeaveTheEnvironmentCopy(t *testing.T) {
+	t.Parallel()
 	const child = "env | grep -E '^OPTIND=' || echo none; echo $OPTIND"
 	for _, tc := range []struct{ name, src, held, refreshed string }{
 		{"the reset on the way in", `export OPTIND=3; f() { ` + child + `; }; f`, "OPTIND=3\n1\n", "OPTIND=1\n1\n"},
@@ -133,6 +137,7 @@ func TestAFunctionCallsOptindStoresLeaveTheEnvironmentCopy(t *testing.T) {
 // caller's back without the axis being asked: under CoreSemantics, which
 // answers it neither way, the call writes no refusal.
 func TestAFunctionCallOverAnUnexportedOptindAsksNothing(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	sem.GetoptsFunctionPosition = GetoptsFunctionPositionIsLocal
 	sem.GetoptsAssignmentRestartsWord = Yes

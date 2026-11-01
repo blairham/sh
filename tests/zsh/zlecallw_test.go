@@ -15,6 +15,7 @@ import (
 // the list. Measured 2026-10-02 through a pseudo-terminal against zsh 5.9.2
 // (#5398) — and it is how add-zle-hook-widget's dispatcher calls each widget.
 func TestZleCallWithWSetsTheCalledWidgetsName(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `inner() { print -r -- "W=$WIDGET n=$# [$*]" }; zle -N inner
 outer() { zle inner -w; print -r -- "after W=$WIDGET"; zle inner -Nw -- a b; zle inner -N x; zle inner -wN; zle inner }; zle -N outer`)
 	_, ok, said := runWidget(t, r, out, "outer", repl.Line{})

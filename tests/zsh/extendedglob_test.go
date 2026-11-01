@@ -20,6 +20,7 @@ import (
 // refusal cannot pass for a miss.
 
 func TestExtendedGlobIsHonoredAndNotOnlyRemembered(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The same pattern, both ways round: this is the pair that says the
 		// option is a switch rather than a formality.
@@ -40,6 +41,7 @@ func TestExtendedGlobIsHonoredAndNotOnlyRemembered(t *testing.T) {
 }
 
 func TestTheExtendedOperators(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`[[ ABC == (#i)abc ]] && echo hit || echo miss`, "hit"},
 		{`[[ ABCdef == (#i)abc(#I)def ]] && echo hit || echo miss`, "hit"},
@@ -65,6 +67,7 @@ func TestTheExtendedOperators(t *testing.T) {
 // Every surface, because a flag honored in one place and dropped in another
 // is the same silent wrong answer somewhere else.
 func TestTheOperatorsReachEverySurfaceInThisShell(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, name := range []string{"ABC", "abd", "aaa"} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {
@@ -113,6 +116,7 @@ func TestTheOperatorsReachEverySurfaceInThisShell(t *testing.T) {
 //
 // Measured on zsh 5.9.2, 2026-09-07 — see docs/spec/grammar/patterns.md.
 func TestTheAnchorsOnEverySurface(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, name := range []string{"ax", "bx", "ay"} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {
@@ -165,6 +169,7 @@ func TestTheAnchorsOnEverySurface(t *testing.T) {
 //
 // Measured on zsh 5.9.2, 2026-09-07 — see docs/spec/grammar/patterns.md.
 func TestTheReportingFlagsInThisShell(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "ax"), nil, 0o600); err != nil {
 		t.Fatal(err)
@@ -234,6 +239,7 @@ func TestTheReportingFlagsInThisShell(t *testing.T) {
 // `"${(@)parts/%(#b)(*)$'\2'/…}"`, so a replacement that does not match
 // leaves the marker bytes in `$PROMPT` and the prompt draws `^B`.
 func TestAFlagGroupInFrontOfAQuotedLiteral(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		// The control: nothing quoted behind the group, which always matched.
@@ -276,6 +282,7 @@ func TestAFlagGroupInFrontOfAQuotedLiteral(t *testing.T) {
 // `$match[1]` with an empty value rather than seeing that the feature is not
 // here.
 func TestTheUnimplementedFlagsAreRefusedByName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, name string }{
 		{`[[ abd == (#a1)abc ]]; echo "m=[$match[1]]"`, "(#a)"},
 		{`[[ abc == (#u)abc ]]`, "(#u)"},
@@ -303,6 +310,7 @@ func TestTheUnimplementedFlagsAreRefusedByName(t *testing.T) {
 // A letter no shell has is this shell's own `bad pattern`, and the status it
 // exits with is the surface's rather than one number. Measured all four.
 func TestALetterNoShellHasIsThisShellsBadPattern(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src    string
 		status int
@@ -327,6 +335,7 @@ func TestALetterNoShellHasIsThisShellsBadPattern(t *testing.T) {
 // A metacharacter that arrived from a value is not one, which is the answer
 // this shell already gives for `*` asked of the three new characters.
 func TestTheOperatorsAreNotReadInAnExpansionsResult(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`p="a#b"; [[ ab == $p ]] && echo hit || echo miss`, "miss"},
 		{`p="a#b"; [[ 'a#b' == $p ]] && echo hit || echo miss`, "hit"},

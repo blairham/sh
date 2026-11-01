@@ -264,6 +264,7 @@ func TestTheTwoExitTrapAxesAreAskedApart(t *testing.T) {
 // TestExecWithNoWordsKeepsItsRedirections is the other exec, which shares
 // nothing with the first but a name.
 func TestExecWithNoWordsKeepsItsRedirections(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out := filepath.Join(dir, "out.txt")
 
@@ -283,6 +284,7 @@ func TestExecWithNoWordsKeepsItsRedirections(t *testing.T) {
 // TestExecWithNoWordsClearsAFailure is the same surprise as an empty eval: it
 // reports success rather than preserving the status before it.
 func TestExecWithNoWordsClearsAFailure(t *testing.T) {
+	t.Parallel()
 	out, _, _ := execRun(t, t.TempDir(), `false; exec; echo st=$?`, nil)
 	if got := strings.TrimSpace(out); got != "st=0" {
 		t.Errorf("output = %q, want st=0", got)
@@ -307,6 +309,7 @@ func TestARedirectionOnlyExecDoesNotEndTheScript(t *testing.T) {
 // error type loses: 127 for a command that is not there, 126 for a file that
 // is there and will not run. Both unanimous across the panel.
 func TestTheStatusSeparatesMissingFromUnrunnable(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	unrunnable := filepath.Join(dir, "ne.sh")
 	if err := os.WriteFile(unrunnable, []byte("x\n"), 0o600); err != nil {
@@ -338,6 +341,7 @@ func TestTheStatusSeparatesMissingFromUnrunnable(t *testing.T) {
 // executable file not found in $PATH`. That reached four dialects' diagnostics
 // before the error was unwrapped, where every real shell says "not found".
 func TestGoErrorTextDoesNotReachADiagnostic(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	unrunnable := filepath.Join(dir, "ne.sh")
 	if err := os.WriteFile(unrunnable, []byte("x\n"), 0o600); err != nil {
@@ -372,6 +376,7 @@ func TestGoErrorTextDoesNotReachADiagnostic(t *testing.T) {
 // TestExecOptionsAreADialectQuestion pins that the answer comes before the
 // lookup, because it decides which word the command is.
 func TestExecOptionsAreADialectQuestion(t *testing.T) {
+	t.Parallel()
 	// With options, `-a` is consumed and the command is what follows.
 	sem := execSemantics()
 	sem.ExecTakesOptions = Yes
@@ -428,6 +433,7 @@ func TestExecOptionsAreADialectQuestion(t *testing.T) {
 // every other exec failure this one must *not* end the script, because a gate
 // that can end a script is a gate that can break one.
 func TestADeniedExecLeavesTheShellRunning(t *testing.T) {
+	t.Parallel()
 	out, _, _ := execRun(t, t.TempDir(), `exec echo hi; echo after`, func(r *Runner) {
 		r.Gate = GateFunc(func(context.Context, Action) Decision { return Deny })
 	})
@@ -442,6 +448,7 @@ func TestADeniedExecLeavesTheShellRunning(t *testing.T) {
 // TestExecEmitsEvents covers the audit half of the seam, which a sandbox and
 // an agent protocol both read.
 func TestExecEmitsEvents(t *testing.T) {
+	t.Parallel()
 	var kinds []EventKind
 	execRun(t, t.TempDir(), `exec echo hi`, func(r *Runner) {
 		r.Events = SinkFunc(func(_ context.Context, e Event) {
@@ -465,6 +472,7 @@ func TestExecEmitsEvents(t *testing.T) {
 // TestExecIsASpecialBuiltin closes the third of the four gaps: the table said
 // so before any of them existed.
 func TestExecIsASpecialBuiltin(t *testing.T) {
+	t.Parallel()
 	if !IsSpecialBuiltin("exec") {
 		t.Error("exec should be a special builtin")
 	}
@@ -692,6 +700,7 @@ func TestExecBundlesItsOptionLetters(t *testing.T) {
 // exists and the replacement road finds it; so do `exec true` and `exec
 // false`. A grid made of those says nothing at all (#5047).
 func TestExecReachesTheShellsOwnCommands(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		ended           bool

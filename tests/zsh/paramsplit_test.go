@@ -15,6 +15,7 @@ import (
 // unquoted expansion's result is not split here, so the construct is the only
 // thing that can split one. Measured 2026-09-06 on zsh 5.9.2.
 func TestTheSplitFlagIsThisDialects(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{`f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; v="a b c"; f ${v}`, `1:[a b c]`},
@@ -39,6 +40,7 @@ f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; v="a b c"; f ${==v}`, `1:[a b c]`
 // A parse error is not what this is: the `=` is grammar here, so a `${=x}` in
 // a file this dialect reads goes through.
 func TestTheSplitFlagParsesInThisDialect(t *testing.T) {
+	t.Parallel()
 	if _, err := parseZsh("echo ${=x}\necho ${==x}\necho ${(U)=x}\necho ${=~x}"); err != nil {
 		t.Errorf("parse: %v", err)
 	}
@@ -60,6 +62,7 @@ func TestTheSplitFlagParsesInThisDialect(t *testing.T) {
 // diagnostic, so nothing downstream can tell. A row that asserted only the
 // absence of an error would have passed against exactly that.
 func TestTheSplitFlagCarriesAVersionPredicate(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{
 		"at-least": `local -a want have
 want=(${=1})

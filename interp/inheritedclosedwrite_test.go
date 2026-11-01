@@ -79,6 +79,7 @@ func TestAFailedWriteIsWordedOnlyWhereTheCommandDidNotCloseTheStream(t *testing.
 // The controls, which are the rows a change that spoke for a stream merely
 // *being* closed would get wrong. Neither of these has a failed write in it.
 func TestAStreamMerelyBeingClosedSaysNothing(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`exec 1>&-; true`, `exec 1>&-; echo -n ""`} {
 		out, st := run(t, src, closedWriteSetup("SAID\n"))
 		if strings.Contains(out, "SAID") || st != 0 {

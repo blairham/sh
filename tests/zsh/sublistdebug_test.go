@@ -164,6 +164,7 @@ func TestABackgroundedSublistFiresOnceInTheJob(t *testing.T) {
 // And the axis says so, so a column flipped by hand fails here as well as in
 // the rows above.
 func TestSublistDebugAxis(t *testing.T) {
+	t.Parallel()
 	if got, want := zsh.Semantics().DebugTrapSublists, interp.DebugTrapSublistOnceForTheList; got != want {
 		t.Errorf("DebugTrapSublists = %v, want %v", got, want)
 	}

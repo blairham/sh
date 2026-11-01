@@ -75,6 +75,7 @@ func runQualifiedWith(t *testing.T, dir, src string, set func(*Semantics)) (stri
 // Every row is a measurement on zsh 5.9.2, 2026-09-06, against exactly the
 // directory qualifierDir builds.
 func TestATrailingGroupIsAQualifierList(t *testing.T) {
+	t.Parallel()
 	dir := qualifierDir(t)
 	for _, tc := range []struct{ name, src, want string }{
 		{"everything, for the rows below to be read against", `printf "[%s]" *`, `[d1][f1][f2][l1]`},
@@ -134,6 +135,7 @@ func TestATrailingGroupIsAQualifierList(t *testing.T) {
 // fatal miss and a deleted word have in common and only the status and the
 // diagnostic separate them.
 func TestTheNQualifierDeletesAMissRatherThanFailing(t *testing.T) {
+	t.Parallel()
 	dir := qualifierDir(t)
 	// `[]` and not nothing: the *word* is deleted, so `printf` runs with no
 	// operands and writes its format once. Which is the answer the shell
@@ -161,6 +163,7 @@ func TestTheNQualifierDeletesAMissRatherThanFailing(t *testing.T) {
 // `echo MY ( x )` was read as a qualifier list rather than as anything of the
 // shell's — and it is the answer the shell itself gives.
 func TestAnUnknownQualifierIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	dir := qualifierDir(t)
 	for _, tc := range []struct{ src, want string }{
 		{`printf "[%s]" *(qqq)`, "unknown file attribute: q"},
@@ -192,6 +195,7 @@ func TestAnUnknownQualifierIsRefusedByName(t *testing.T) {
 // half of the question and belongs to the dialect that answers it — see
 // dialect/zsh, where an unquoted expansion is not a pattern at all.
 func TestQuotingKeepsAGroupFromBeingOne(t *testing.T) {
+	t.Parallel()
 	dir := qualifierDir(t)
 	for _, tc := range []struct{ src, want string }{
 		{`printf "[%s]" "( x )"`, `[( x )]`},
@@ -219,6 +223,7 @@ func TestQuotingKeepsAGroupFromBeingOne(t *testing.T) {
 // construct — two words, printed with the space between them — where the
 // same input with globbing on names a file attribute.
 func TestWithGlobbingOffTheGroupIsOnlyText(t *testing.T) {
+	t.Parallel()
 	dir := qualifierDir(t)
 	out, st := runQualifiedWith(t, dir, `set -f; printf "[%s]" MY ( x )`,
 		func(s *Semantics) { s.SetFTurnsOffGlobbing = Yes })
@@ -286,6 +291,7 @@ func permissionDir(t *testing.T) string {
 // `A`, `I` and `E` says "group", and the assignment is readable only from
 // which of them hold of 0644 and which of 0755.
 func TestThePermissionQualifiersReadTheMode(t *testing.T) {
+	t.Parallel()
 	dir := permissionDir(t)
 	for _, tc := range []struct{ list, want string }{
 		// Owner: every name here is owner-readable and owner-writable, and
@@ -321,6 +327,7 @@ func TestThePermissionQualifiersReadTheMode(t *testing.T) {
 // Perm(), and only Perm() answers a permission letter — so a set-user-ID file
 // at 4755 is `s` and is not any of the nine.
 func TestTheModeBitQualifiers(t *testing.T) {
+	t.Parallel()
 	dir := permissionDir(t)
 	for _, tc := range []struct{ list, want string }{
 		{"s", "[suid]"},
@@ -361,6 +368,7 @@ func TestTheModeBitQualifiers(t *testing.T) {
 // one is neither: `x` is zsh's owner-execute test, and the only thing wrong
 // was that this refused a letter it had.
 func TestABareQualifierListNamesTheWord(t *testing.T) {
+	t.Parallel()
 	dir := permissionDir(t)
 	for _, src := range []string{`echo (x)`, `echo (.)`, `echo prog(x)`} {
 		out, st := runQualified(t, dir, src)

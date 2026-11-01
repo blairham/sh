@@ -22,6 +22,7 @@ import (
 // shift shows; and the six at the top of the range pin how the value a script
 // assigned is reduced, which ordinary seeds cannot see.
 func TestASeededRandomAnswersTheMeasuredSequence(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, c := range []struct {
 		seed int64
@@ -64,6 +65,7 @@ func TestASeededRandomAnswersTheMeasuredSequence(t *testing.T) {
 // reproducible rather than merely derived, and a subshell carries the parent's
 // place away rather than sharing it.
 func TestASeedStartsTheSequenceAgainAndASubshellTakesItsOwnCopy(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, _ := runZsh(t, dir, `
 RANDOM=42; a="$RANDOM $RANDOM"
@@ -89,6 +91,7 @@ echo "[$a][$b][$c][$d]"`)
 // bare name is its value. Measured on zsh 5.9.2: `abc=5; RANDOM=abc` seeds 5, which
 // is the row that separates arithmetic from "text that is not a number is zero".
 func TestSeedingRandomIsArithmetic(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	plain, _ := runZsh(t, dir, `RANDOM=7; echo "$RANDOM"`)
 	for _, src := range []string{

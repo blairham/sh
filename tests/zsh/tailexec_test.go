@@ -120,6 +120,7 @@ func TestTheReplacementStartsWhereTheShellIs(t *testing.T) {
 // is not handed to the replacement. It runs through this shell as it does
 // when it is forked, and it does run.
 func TestAScriptWithNoInterpreterLineIsNotReplacedInto(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(dir+"/ns", []byte("echo ran\n"), 0o700); err != nil {
 		t.Fatal(err)

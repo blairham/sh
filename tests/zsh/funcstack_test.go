@@ -30,6 +30,7 @@ const show = `print -r -- "${#funcstack[@]} [${(j:][:)funcstack}]"`
 // whole of what a script reads this for. Every row was measured against
 // zsh 5.9.2.
 func TestFuncstackNamesTheUnitsInnermostFirst(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name, src, want string
@@ -86,6 +87,7 @@ func TestFuncstackNamesTheUnitsInnermostFirst(t *testing.T) {
 // given a script file can tell whether it was: under `-c` there is no such
 // frame to drop, and every case above would pass with the rule missing.
 func TestFuncstackHasNoFrameForTheScriptItself(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 	}{
@@ -124,6 +126,7 @@ func TestFuncstackHasNoFrameForTheScriptItself(t *testing.T) {
 // found on PATH is the one that discriminates: zsh 5.9.2 answers with the
 // full path while the operand stays `lib.zsh`.
 func TestFuncstackNamesASourcedFileByThePathItWasFoundAt(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	body := "print -r -- \"top ${#funcstack[@]} [${(j:][:)funcstack}]\"\n" +
 		"sf(){ print -r -- \"fn  ${#funcstack[@]} [${(j:][:)funcstack}]\"; }\nsf\n"

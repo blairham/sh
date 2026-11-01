@@ -18,6 +18,7 @@ import (
 // `-fc '<program>'`; the table is on
 // interp.Diagnostics.SyntaxUnexpectedIONumberIsItsOperator.
 func TestARefusedIONumberIsNamedByItsOperator(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"for 2>x\n", ">"},
 		{"select 2<x\n", "<"},

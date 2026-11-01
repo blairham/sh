@@ -10,6 +10,7 @@ import "testing"
 // a value's own characters are text (#5601). Measured 2026-10-03 on zsh 5.9.2
 // under `-f`, in a directory holding `xay` and `xby`.
 func TestASubstitutionsReplacementKeepsItsPatternCharacters(t *testing.T) {
+	t.Parallel()
 	const setup = "print -n >xay; print -n >xby; s=xQy\n"
 	for _, tc := range []struct{ src, want string }{
 		{`print ${s:s/Q/?/} ${s:s/Q/[ab]/} $s:s/Q/*/`, "xay xby xay xby xay xby\n"},

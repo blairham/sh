@@ -27,6 +27,7 @@ import (
 // `echo a\db*` naming `adb` is zsh 5.9.2's answer and ksh93u+'s alike; what
 // is being pinned is not the row but the reach of somebody else's rule.
 func TestAWrittenBackslashIsQuotingAndNotAFieldCharacter(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, n := range []string{"adb", "a1b"} {
 		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {

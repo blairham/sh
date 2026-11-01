@@ -20,6 +20,7 @@ import (
 // a reference and what it points at are frozen separately, and only the second
 // one can refuse what goes through it.
 func TestUnsetThroughAReferenceAsksTheTargetsFreeze(t *testing.T) {
+	t.Parallel()
 	// A **frozen reference** at an unfrozen name: the unset goes through and
 	// takes the target, and the reference is still there aimed at it.
 	out, st := runNameref(t, `x=1; typeset -rn RO=x

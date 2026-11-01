@@ -57,6 +57,7 @@ func localCursorSem(restores Answer) Semantics {
 // inside a word on the strength of it — so a `=1` case would pass with
 // nothing here implemented at all.
 func TestALocalOptindDoesNotCarryTheCallersPositionIntoTheCall(t *testing.T) {
+	t.Parallel()
 	const src = `g() { local OPTIND; set -- -cd; while getopts "cd" x; do printf "[%s]" "$x"; done; }; ` +
 		`set -- -ab; getopts "ab" o; g; echo`
 	for _, restores := range []Answer{Yes, No} {
@@ -76,6 +77,7 @@ func TestALocalOptindDoesNotCarryTheCallersPositionIntoTheCall(t *testing.T) {
 // rather than a test of the builtin. The only thing the call does is declare
 // the name.
 func TestALocalOptindHandsBackThePositionInAWord(t *testing.T) {
+	t.Parallel()
 	const src = `g() { local OPTIND=1; :; }; set -- -ab; getopts ab o; echo "1=$o"; ` +
 		`g; getopts ab o; echo "2=[$o] st=$?"`
 	for _, tc := range []struct {
@@ -104,6 +106,7 @@ func TestALocalOptindHandsBackThePositionInAWord(t *testing.T) {
 // call had already moved, and the caller would come back to the middle of the
 // callee's scan rather than to its own place.
 func TestASecondLocalOptindInOneCallDoesNotResaveThePosition(t *testing.T) {
+	t.Parallel()
 	const src = `g() { local OPTIND=1; set -- -cd; getopts "cd" x; local OPTIND; }; ` +
 		`set -- -ab; getopts ab o; g; getopts ab o; echo "[$o]"`
 	sem := localCursorSem(Yes)
@@ -124,6 +127,7 @@ func TestASecondLocalOptindInOneCallDoesNotResaveThePosition(t *testing.T) {
 // case bounds its own iterations and asserts the shape of the repetition
 // instead.
 func TestAGetoptsLoopAroundACallThatDeclaresItsOwnOptind(t *testing.T) {
+	t.Parallel()
 	const src = `f() { local OPTIND=1 o; while getopts "pqr" o; do i=$((i+1)); ` +
 		`if [ "$i" -gt 8 ]; then break; fi; printf "[%s]" "$o"; ` +
 		`if [ "$o" = q ]; then f -p; fi; done; }; i=0; f -pqr; echo " steps=$i"`

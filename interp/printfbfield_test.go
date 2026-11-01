@@ -14,6 +14,7 @@ import (
 // one answer and a conversion the shell does not have under the other, which
 // stops the format where it stands.
 func TestABFieldIsPaddedOrRefused(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		takes Answer
 		want  string
@@ -36,6 +37,7 @@ func TestABFieldIsPaddedOrRefused(t *testing.T) {
 // TestACharConstantBehindBlanks: `" 'A"` is 65 to an integer conversion that
 // reads through the blanks, and a bad number to one that does not.
 func TestACharConstantBehindBlanks(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		through Answer
 		want    string
@@ -54,6 +56,7 @@ func TestACharConstantBehindBlanks(t *testing.T) {
 // complaint quotes the format from the `%` to its end rather than the
 // directive alone.
 func TestABadVerbNamesTheRestOfTheFormat(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		rest bool
 		want string

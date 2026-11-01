@@ -21,6 +21,7 @@ import (
 // redirection **succeeds** must store either way, or the axis has stopped
 // being about the failure.
 func TestArrayOperandIsStoredPastAFailedOpenAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		answer  Answer

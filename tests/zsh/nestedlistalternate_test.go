@@ -21,6 +21,7 @@ import "testing"
 //
 // Every row measured 2026-10-04 on zsh 5.9.2 with `zsh -f -c`.
 func TestAnEmptyAlternateOverANestedListIsNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`printf '<%s>' x ${$((7))+} y`, "<x><y>"},
 		{`printf '<%s>' x ${$(echo 7)+} y`, "<x><y>"},

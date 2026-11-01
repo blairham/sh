@@ -18,6 +18,7 @@ import (
 // 2026-09-27 from script files under `env -i PATH=/usr/bin:/bin` with a
 // scratch `HOME`, both shells in the same run.
 func TestFunctionNestingIsTheParameterAndItsWords(t *testing.T) {
+	t.Parallel()
 	const refusal = "maximum nested function level reached; increase FUNCNEST?"
 	for _, tc := range []struct{ name, src, want string }{
 		// The parameter itself: the shell's own integer, base ten written

@@ -23,6 +23,7 @@ import (
 // The accounts are read from the file here, so the expectation is too: root's
 // line is what the table must say about root.
 func TestAnInteractiveShellsUserDirsAreThePasswordDatabase(t *testing.T) {
+	t.Parallel()
 	f, err := os.Open("/etc/passwd")
 	if err != nil {
 		t.Skipf("no password file: %v", err)

@@ -25,6 +25,7 @@ import "testing"
 // TestTheReversedFamilyTakesBothStreams is the base reading: each of the five
 // sends standard error to the named file along with standard output.
 func TestTheReversedFamilyTakesBothStreams(t *testing.T) {
+	t.Parallel()
 	for _, op := range []string{">>&", ">&|", ">&!", ">>&|", ">>&!"} {
 		t.Run(op, func(t *testing.T) {
 			out, st, read := markerRun(t, "( print O; print E >&2 ) "+op+"f\n")
@@ -45,6 +46,7 @@ func TestTheReversedFamilyTakesBothStreams(t *testing.T) {
 // that the base reading above cannot tell apart: both put the two streams in
 // the file, and only one of them keeps what was there.
 func TestTheReversedAppendAppends(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ op, want string }{
 		{">>&", "seed\nO\nE\n"},
 		{">>&|", "seed\nO\nE\n"},
@@ -73,6 +75,7 @@ func TestTheReversedAppendAppends(t *testing.T) {
 // file the unmarked spellings refuse, and over a *missing* one the unmarked
 // append refuses.
 func TestTheMarkerOverridesNoclobberInThisFamilyToo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a truncating write over an existing file",
@@ -118,6 +121,7 @@ func TestTheMarkerOverridesNoclobberInThisFamilyToo(t *testing.T) {
 // duplicates the descriptor and `>&-` closes it, while every spelling this
 // flag adds treats the same text as a **filename**.
 func TestTheReversedFamilyAlwaysNamesAFile(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, file, want string }{
 		{"print O >>&2\n", "2", "O\n"},
 		{"print O >>&-\n", "-", "O\n"},

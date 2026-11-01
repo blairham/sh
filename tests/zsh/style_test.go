@@ -13,6 +13,7 @@ import (
 // This shell's answers to the layout questions — and it is the only shell
 // whose answers are not all the core's.
 func TestStyleAnswers(t *testing.T) {
+	t.Parallel()
 	s := zsh.Style()
 	if s.Indent != "  " {
 		t.Errorf("Indent = %q, want two spaces", s.Indent)
@@ -35,6 +36,7 @@ func TestStyleAnswers(t *testing.T) {
 // Measured: 317 `if … {`, 120 `} else {` and 61 `for … ( ) {` across 335 zsh
 // scripts on the machine, and none in any other dialect.
 func TestTheBraceSpellingIsKept(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Style().BraceShortForm; got != syntax.PreserveShortForm {
 		t.Errorf("BraceShortForm = %v, want preserve — see docs/spec/style.md", got)
 	}
@@ -44,6 +46,7 @@ func TestTheBraceSpellingIsKept(t *testing.T) {
 // disagreement as well as its direction. A second field drifting away from
 // the core without a measurement behind it should fail here first.
 func TestStyleDiffersFromTheCoreInExactlyOnePlace(t *testing.T) {
+	t.Parallel()
 	core, ours := syntax.CoreStyle(), zsh.Style()
 	core.BraceShortForm = ours.BraceShortForm
 	if core != ours {

@@ -59,6 +59,7 @@ func runZshSplitOnRoute(t *testing.T, route interp.Route, src string) (out strin
 // option failing to set, and a grid that passed `-o` on the command line
 // could not tell those apart.
 func TestContinueOnErrorIsDecidedByTheRoute(t *testing.T) {
+	t.Parallel()
 	const src = "setopt continueonerror\nreadonly foo\nfoo=bar set output\nprint -r -- after\n"
 	for _, tc := range []struct {
 		name     string
@@ -89,6 +90,7 @@ func TestContinueOnErrorIsDecidedByTheRoute(t *testing.T) {
 // Without the option the same program ends the shell on every route, which is
 // what keeps the rows above about the option rather than about the route.
 func TestWithoutTheOptionEveryRouteEndsTheShell(t *testing.T) {
+	t.Parallel()
 	const src = "readonly foo\nfoo=bar set output\nprint -r -- after\n"
 	for _, route := range []interp.Route{
 		interp.RouteScriptFile, interp.RouteStandardInput, interp.RouteCommandString,
@@ -118,6 +120,7 @@ func TestWithoutTheOptionEveryRouteEndsTheShell(t *testing.T) {
 // another door — `posixbuiltins` is what makes it fatal at all (#5124) — and
 // the switch does not rescue that either. See interp.Runner.fatalPosixSpecialQuiet.
 func TestPosixBuiltinsOutranksTheSwitchForASpecialBuiltin(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name      string
 		src       string
@@ -160,6 +163,7 @@ func TestPosixBuiltinsOutranksTheSwitchForASpecialBuiltin(t *testing.T) {
 // The option reports itself, and `unsetopt` puts the shell back — the half
 // that keeps it a switch rather than a latch.
 func TestTheOptionReportsItselfAndComesBackOff(t *testing.T) {
+	t.Parallel()
 	out, st, _ := runZshSplitOnRoute(t, interp.RouteScriptFile,
 		"if [[ -o continueonerror ]]; then print -r -- on; else print -r -- off; fi\n"+
 			"setopt continueonerror\n"+

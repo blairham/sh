@@ -18,6 +18,7 @@ import (
 // The guard that bash's Semantics.ListedTildeIsBareWhereItCannotExpand did not
 // leak into this column (#2298).
 func TestAListedTildeIsQuotedWhereverItStands(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a value with a tilde inside it", `v='a~b'; set | while IFS= read -r l; do case $l in v=*) echo "$l";; esac; done`, "v='a~b'\n"},
 		{"a value ending in a tilde", `w='b~'; set | while IFS= read -r l; do case $l in w=*) echo "$l";; esac; done`, "w='b~'\n"},
@@ -46,6 +47,7 @@ func TestAListedTildeIsQuotedWhereverItStands(t *testing.T) {
 // HOME=/orig`, from a script file, with `typeset -p` beside the store —
 // Semantics.SubscriptKeyExpandsALeadingTilde (#2298).
 func TestASubscriptsLeadingTildeIsTakenAsCharacters(t *testing.T) {
+	t.Parallel()
 	// HOME is set by the script: the preset harness gives a run no home of
 	// its own, and a `~` with nothing to expand to is left alone in every
 	// column, which would make the row pass for the wrong reason.

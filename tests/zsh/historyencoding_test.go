@@ -22,6 +22,7 @@ import (
 // does not say its files are written that way. A mutation run is what asked —
 // turning either answer off broke nothing in repl (#2452).
 func TestThisShellsHistoryFileIsContinuedAndStamped(t *testing.T) {
+	t.Parallel()
 	style := zsh.HistoryStyle()
 	if !style.EntriesContinueOnABackslash {
 		t.Error("entries do not continue on a backslash, so a multi-line command reads as several")
@@ -43,6 +44,7 @@ func TestThisShellsHistoryFileIsContinuedAndStamped(t *testing.T) {
 // Asserted through the decoder rather than off the field, because the field
 // being true is only interesting if it changes what a file reads as.
 func TestABlankLineInThisShellsHistoryFileIsAnEntry(t *testing.T) {
+	t.Parallel()
 	style := zsh.HistoryStyle()
 	if !style.EmptyLinesAreEntries {
 		t.Error("an empty line is not an entry, so a blank in the file silently disappears")

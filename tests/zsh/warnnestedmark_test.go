@@ -9,6 +9,7 @@ import "testing"
 // word the nested lint uses for a name holding a number. Measured 2026-10-02
 // on zsh 5.9.2 under `-f` (#5155).
 func TestFunctionsWMarksOneBodyForTheNestedLint(t *testing.T) {
+	t.Parallel()
 	const warn = "f: scalar parameter g set in enclosing scope in function f\n"
 	cases := []struct{ src, want string }{
 		{"g=1; f(){ g=2 }; functions -W f; f", warn},

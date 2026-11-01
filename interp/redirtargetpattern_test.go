@@ -47,6 +47,7 @@ func patternRun(t *testing.T, dir, src string, expands Answer) (string, int) {
 }
 
 func TestAPatternWrittenIntoARedirectionTargetIsMatchedOrNot(t *testing.T) {
+	t.Parallel()
 	t.Run("matched, the input side", func(t *testing.T) {
 		dir := patternDir(t)
 		out, st := patternRun(t, dir, `cat < only-*.txt`, Yes)
@@ -122,6 +123,7 @@ func TestAPatternWrittenIntoARedirectionTargetIsMatchedOrNot(t *testing.T) {
 // column measured: bash in POSIX mode writes a file called `a b` where its
 // own mode calls the same redirection ambiguous.
 func TestARedirectionTargetIsSplitOnlyWhereItIsAlsoMatched(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := run(t, `e="a b"; printf 'X\n' > $e`, func(r *Runner) {
 		sem := permissive()
@@ -171,6 +173,7 @@ func TestARedirectionTargetIsSplitOnlyWhereItIsAlsoMatched(t *testing.T) {
 // itself — but only where the two readings differ, so an ordinary target and
 // a pattern that matched nothing ask it nothing.
 func TestAnUnansweredPatternAxisRefusesOnlyWhereItDecides(t *testing.T) {
+	t.Parallel()
 	dir := patternDir(t)
 	out, st := run(t, `cat < only-*.txt`, func(r *Runner) {
 		sem := permissive()

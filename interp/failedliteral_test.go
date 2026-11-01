@@ -27,6 +27,7 @@ func failedLiteralSem(keeps Answer) Semantics {
 // reports the failure once, where the store used to expand the list again and
 // report it twice (#6606).
 func TestALiteralStopsAtTheElementThatFails(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"a=(1 2)\n(a=(5 $(echo SIDE >&2) $((1/0)) $(echo AFTER >&2)))\necho \"[${a[*]}]\"\n",
 		"a=(1 2)\n(a+=(5 $(echo SIDE >&2) $((1/0)) $(echo AFTER >&2)))\necho \"[${a[*]}]\"\n",
@@ -104,6 +105,7 @@ func TestAFailedSubscriptedTableAppendKeepsItsPairs(t *testing.T) {
 // With the answer unchosen, a literal that expands asks nothing, and so does
 // one that fails without a subscript at its head.
 func TestALiteralThatExpandsAsksNothingAboutAFailedOne(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"a=([0]=x [1]=y); echo \"${a[*]}\"",
 		"a=(1 2); (a=(x $((1/0)))); echo \"${a[*]}\"",

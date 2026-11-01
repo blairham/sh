@@ -23,6 +23,7 @@ import "testing"
 // the first word alone agrees with a rule about `typeset` and is silent about
 // the one that was broken.
 func TestAPlainWordOverAnArrayIsRefusedWhicheverWordWritesIt(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, second := range []string{"typeset v=x", "declare v=x", "local v=x", "readonly v=x", "export v=x"} {
 		for _, first := range []string{"typeset -a v", "declare -a v", "local -a v"} {
@@ -56,6 +57,7 @@ func declarationWord(s string) string {
 // already right before #5074 and has to stay right: a gate written to the
 // failing rows alone would refuse all four.
 func TestReDeclaringTheSameKindIsTakenAndSoIsTheOtherDirection(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the same kind twice", `(){ local -a v; local -a v; }`, "st=0 after"},
@@ -83,6 +85,7 @@ func TestReDeclaringTheSameKindIsTakenAndSoIsTheOtherDirection(t *testing.T) {
 // enclosing scope or in the shell, and the inner `local` is taken in each —
 // which is what a gate that simply asked "is this name an array" would break.
 func TestANewBindingOverAnOuterArrayIsTaken(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src string }{
 		{"a nameless function inside one", `(){ local -a v; (){ local v=x; } }`},
@@ -106,6 +109,7 @@ func TestANewBindingOverAnOuterArrayIsTaken(t *testing.T) {
 // a substitution ends only that — which is the ordinary reach of this shell's
 // fatal errors and is what `typeset` already had.
 func TestTheRefusalEndsTheScriptAndNamesTheFrame(t *testing.T) {
+	t.Parallel()
 	const def = "f(){ local -a v; local v=x; }\n"
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{

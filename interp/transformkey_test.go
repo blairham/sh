@@ -33,6 +33,7 @@ func runTransformKey(t *testing.T, src string) (string, int) {
 }
 
 func TestTheKeyTransformsQuoteAKeyTheListingQuotes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, key, listing, transform string }{
 		{"a blank", "a b", `["a b"]="v"`, `"a b" "v" `},
 		{"a double quote", `"`, `["\""]="v"`, `"\"" "v" `},
@@ -74,6 +75,7 @@ func TestTheKeyTransformsQuoteAKeyTheListingQuotes(t *testing.T) {
 // back with `read` or a loop. Measured, and the reason the quoting is not
 // simply applied to every key transform.
 func TestTheLowercaseKeyTransformLeavesAKeyAlone(t *testing.T) {
+	t.Parallel()
 	src := `k='a b'; typeset -A m; m[$k]=v; printf '[%s]' "${m[@]@k}"; echo`
 	out, _ := runTransformKey(t, src)
 	if got := strings.TrimSpace(out); got != "[a b][v]" {
@@ -84,6 +86,7 @@ func TestTheLowercaseKeyTransformLeavesAKeyAlone(t *testing.T) {
 // An indexed array's keys are its subscripts, and a subscript is bare under
 // every rule — the row that says the change did not reach the other container.
 func TestTheKeyTransformsLeaveAnIndexedSubscriptBare(t *testing.T) {
+	t.Parallel()
 	src := `a=(one "t w"); echo "${a[@]@A}"; printf '[%s]\n' "${a[@]@K}"`
 	out, _ := runTransformKey(t, src)
 	want := "declare -a a=([0]=\"one\" [1]=\"t w\")\n[0 \"one\" 1 \"t w\"]"

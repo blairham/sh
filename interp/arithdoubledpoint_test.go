@@ -42,6 +42,7 @@ func doubledPointGrammar(d *syntax.Dialect) {
 // same literal in the same spelling, one operand along, draws the ordinary
 // sentence.
 func TestADoubledPointInTheLeadingNumeralHasItsOwnSentence(t *testing.T) {
+	t.Parallel()
 	run := func(t *testing.T, expr, wording string) string {
 		t.Helper()
 		d := doubledPointDiags()
@@ -102,6 +103,7 @@ func TestADoubledPointInTheLeadingNumeralHasItsOwnSentence(t *testing.T) {
 // The `.5` row is the collision the rule has to settle, and the reason a
 // leading point is not simply a name byte.
 func TestADottedNameReadsInArithmetic(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		dot  bool
@@ -143,6 +145,7 @@ func TestADottedNameReadsInArithmetic(t *testing.T) {
 // them is zero in every column, and a name holding the empty string is zero
 // inside them too — so it is *unset* and not empty.
 func TestAnUnsetNameInsideASubscript(t *testing.T) {
+	t.Parallel()
 	run := func(t *testing.T, must Answer, src string) (string, int) {
 		t.Helper()
 		sem := doubledPointSem()

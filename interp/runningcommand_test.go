@@ -147,6 +147,7 @@ func TestTheRunningCommandFollowsTheReading(t *testing.T) {
 // written before a command's own words are expanded, whether anything is
 // watching or not.
 func TestTheRunningCommandIsRecordedWithNoTrapSet(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 	}{

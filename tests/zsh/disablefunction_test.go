@@ -13,6 +13,7 @@ import (
 // Measured 2026-10-01 on zsh 5.9.2 (`-f`, a script file under `env -i
 // PATH=/usr/bin:/bin LC_ALL=C`); each row is what that shell wrote.
 func TestASwitchedOffFunctionIsNoFunctionUntilSwitchedBackOn(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const def = "zq() { print zq; }\n"
 	for _, c := range []struct {
@@ -52,6 +53,7 @@ func TestASwitchedOffFunctionIsNoFunctionUntilSwitchedBackOn(t *testing.T) {
 // is `./lib.zsh`, and after `enable -f zq` `whence -v zq` says `zq is a shell
 // function from ./lib.zsh`.
 func TestASwitchedOffFunctionKeepsItsFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "lib.zsh"), []byte("zq() { :; }\n"), 0o600); err != nil {
 		t.Fatal(err)

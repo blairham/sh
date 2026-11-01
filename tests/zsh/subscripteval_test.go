@@ -18,6 +18,7 @@ import (
 // The braced and the bare spellings are one node since #846, so each of these
 // answers both; `TestASubscriptWithoutBracesMeansTheSame` holds the claim.
 func TestASubscriptPairIsARange(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a range of elements", `a=(w x y z); echo "[${a[1,3]}]"`, "[w x y]\n"},
 		{"from the first", `a=(w x y z); echo "[${a[0,2]}]"`, "[w x]\n"},
@@ -55,6 +56,7 @@ func TestASubscriptPairIsARange(t *testing.T) {
 // element. Answering that here would be the other dialect's reading wearing
 // this one's name, which is the silent kind of wrong.
 func TestASubscriptWithThreePartsIsRefused(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `a=(w x y z); echo "[${a[1,2,3]}]"; echo after`)
 	if want := "zsh:1: bad substitution\n"; out != want {
 		t.Errorf("output %q, want %q", out, want)
@@ -71,6 +73,7 @@ func TestASubscriptWithThreePartsIsRefused(t *testing.T) {
 // as well as a plausible miss. That is what makes it a conflict for the
 // semantics vector rather than a construct one grammar has.
 func TestASubscriptOnAStringIsACharacter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the first character", `s=hello; echo "[${s[1]}]"`, "[h]\n"},
 		{"the second", `s=hello; echo "[${s[2]}]"`, "[e]\n"},
@@ -115,6 +118,7 @@ func TestASubscriptOnAStringIsACharacter(t *testing.T) {
 // reading, dash says `Bad substitution`. That is the grammar flag
 // `syntax.SpecialParamSubscript`, and this is the evaluation behind it.
 func TestASubscriptOnTheSpecialParameters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the first parameter", `set -- a b c; echo "[${@[1]}]"`, "[a]\n"},
 		{"through the star", `set -- a b c; echo "[${*[2]}]"`, "[b]\n"},
@@ -146,6 +150,7 @@ func TestASubscriptOnTheSpecialParameters(t *testing.T) {
 // fields however it is subscripted; and either spelling of the list is enough
 // — `"${@[*]}"` and `"${*[@]}"` both keep theirs.
 func TestAQuotedSubscriptMakesTheFieldsItsNameMakes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a range joins", `a=(x y z); set -- "${a[1,2]}"; echo "n=$#"`, "n=1\n"},
 		{"joined with the first of IFS", `IFS=-; a=(x y z); echo "[${a[1,2]}]"`, "[x-y]\n"},
@@ -169,6 +174,7 @@ func TestAQuotedSubscriptMakesTheFieldsItsNameMakes(t *testing.T) {
 // where it named one value — and a range is on both sides of that line, since
 // a range of an array is elements and a range of a string is a substring.
 func TestALengthOverARangeCountsWhatTheRangeNamed(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"elements are counted", `a=(aa bb cc); echo "[${#a[1,2]}]"`, "[2]\n"},
 		{"characters are measured", `s=hello; echo "[${#s[2,4]}]"`, "[3]\n"},

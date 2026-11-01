@@ -27,6 +27,7 @@ const errExitSubstSrc = `set -e; echo "end[$(false; echo no)]"; echo after`
 // bash under the name `sh`: the body's own shell holds the option, so it ends
 // at `false` and the word comes back empty.
 func TestErrExitEntersACommandSubstitutionYesStopsTheBody(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, errExitSubstSrc, func(r *interp.Runner) {
 		r.Semantics.ErrExitEntersACommandSubstitution = interp.Yes
 	})
@@ -38,6 +39,7 @@ func TestErrExitEntersACommandSubstitutionYesStopsTheBody(t *testing.T) {
 // TestErrExitEntersACommandSubstitutionNoRunsTheBodyOn is bash and BusyBox
 // ash: the body does not hold the option, so `echo no` runs.
 func TestErrExitEntersACommandSubstitutionNoRunsTheBodyOn(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, errExitSubstSrc, func(r *interp.Runner) {
 		r.Semantics.ErrExitEntersACommandSubstitution = interp.No
 	})
@@ -52,6 +54,7 @@ func TestErrExitEntersACommandSubstitutionNoRunsTheBodyOn(t *testing.T) {
 // and `set -o` there reports `errexit off`. A body that kept the letter and
 // merely declined to stop would be wrong about itself.
 func TestErrExitEntersACommandSubstitutionNoLeavesTheOptionOffInTheBody(t *testing.T) {
+	t.Parallel()
 	const src = `set -e; echo "[$(case $- in (*e*) echo E;; (*) echo none;; esac)]"`
 	for _, tc := range []struct {
 		answer interp.Answer
@@ -74,6 +77,7 @@ func TestErrExitEntersACommandSubstitutionNoLeavesTheOptionOffInTheBody(t *testi
 // ash included, so the answer must not reach a subshell that is not a
 // substitution's body.
 func TestErrExitStillEntersASubshell(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `set -e; (false; echo no); echo after`, func(r *interp.Runner) {
 		r.Semantics.ErrExitEntersACommandSubstitution = interp.No
 	})
@@ -87,6 +91,7 @@ func TestErrExitStillEntersASubshell(t *testing.T) {
 // shell that never set `-e`, so a Runner with no answer here has to run
 // `echo $(…)` rather than refuse it by name.
 func TestErrExitEntersACommandSubstitutionIsNotAskedWithoutTheOption(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `echo "end[$(false; echo no)]"`, func(r *interp.Runner) {
 		r.Semantics.ErrExitEntersACommandSubstitution = interp.Unspecified
 	})
@@ -99,6 +104,7 @@ func TestErrExitEntersACommandSubstitutionIsNotAskedWithoutTheOption(t *testing.
 // of the rule above: where the columns *do* disagree, a shell that was never
 // told says so by name rather than picking one.
 func TestErrExitEntersACommandSubstitutionUnansweredIsRefused(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, errExitSubstSrc, func(r *interp.Runner) {
 		r.Semantics.ErrExitEntersACommandSubstitution = interp.Unspecified
 	})
@@ -113,6 +119,7 @@ func TestErrExitEntersACommandSubstitutionUnansweredIsRefused(t *testing.T) {
 // `inherit_errexit` on, `set +o posix` leaves it on, and
 // `shopt -u inherit_errexit` is the only way back.
 func TestPosixModeMovesErrExitIntoACommandSubstitutionOneWay(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, errExitSubstSrc, func(r *interp.Runner) {
 		r.Semantics.ErrExitEntersACommandSubstitution = interp.No
 		r.SetPosixMode(true)
@@ -147,6 +154,7 @@ func r0(t *testing.T) bool {
 // inherit_errexit` in a bash invoked as `sh` puts the shell back where plain
 // bash starts.
 func TestSetErrExitEntersACommandSubstitutionTravelsBothWays(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		start interp.Answer
 		set   bool

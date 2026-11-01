@@ -100,6 +100,7 @@ func runDialect(t *testing.T, r *interp.Runner, out *bytes.Buffer, src string) s
 }
 
 func TestADialectExtendsTheCore(t *testing.T) {
+	t.Parallel()
 	var out bytes.Buffer
 	r := newDialect(t, &out)
 
@@ -125,6 +126,7 @@ func TestADialectExtendsTheCore(t *testing.T) {
 }
 
 func TestAPreludeFunctionReplacesABuiltin(t *testing.T) {
+	t.Parallel()
 	// The reason most of a dialect can be shell: a function shadows a
 	// builtin, so the core's answer can be replaced without touching it.
 	var out bytes.Buffer
@@ -135,6 +137,7 @@ func TestAPreludeFunctionReplacesABuiltin(t *testing.T) {
 }
 
 func TestADialectCanRemoveWhatItDoesNotHave(t *testing.T) {
+	t.Parallel()
 	// A dialect without a command should not offer it — the same reasoning as
 	// the parser refusing a construct rather than accepting it and meaning
 	// something else.
@@ -156,6 +159,7 @@ func TestADialectCanRemoveWhatItDoesNotHave(t *testing.T) {
 }
 
 func TestTheAxesAreValuesNotForks(t *testing.T) {
+	t.Parallel()
 	// Two dialects differing only in a field, which is the point of the
 	// vector: "which shell am I" is data. Both start from the same base and
 	// answer one axis differently.
@@ -240,6 +244,7 @@ func TestReadFileGatedResolvesAgainstTheRunnersDirectory(t *testing.T) {
 // the difference — and the dialect is still told, where it stands, that the
 // value moved. A producer can do the second half and not the first.
 func TestAnAssignmentActionIsToldWhereItStands(t *testing.T) {
+	t.Parallel()
 	var out bytes.Buffer
 	r := newDialect(t, &out)
 	var seen []string
@@ -282,6 +287,7 @@ func TestAnAssignmentActionIsToldWhereItStands(t *testing.T) {
 // where the visible value moved, nothing for a name the restore leaves unset,
 // and the value itself for one it leaves set.
 func TestAnAssignmentActionIsToldWhenARestorePutsAValueBack(t *testing.T) {
+	t.Parallel()
 	var out bytes.Buffer
 	r := newDialect(t, &out)
 	var seen []string

@@ -11,6 +11,7 @@ import "testing"
 // listing, not the whole table. Measured 2026-10-16 on zsh 5.9.2, `-f`, under
 // `env -i PATH=/usr/bin:/bin` (#6810).
 func TestADeclarationNumberWithNoNameIsAListing(t *testing.T) {
+	t.Parallel()
 	const table = "pick() { print -r -- ${(M)${(f)1}:#$~2}; }\n" +
 		"typeset -F fl=1; typeset -E ex=2; integer n=3; typeset -a ar=(q); typeset -x xp=4\n"
 	for _, tc := range []struct{ src, want string }{

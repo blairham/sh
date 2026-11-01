@@ -134,6 +134,7 @@ func TestAPlainParameterWordAnswersAsTheFullRoadDoes(t *testing.T) {
 // something: a plain scalar is answered by the shortcut, and the states it
 // must decline are declined.
 func TestThePlainParameterShortcutIsReached(t *testing.T) {
+	t.Parallel()
 	for name, sem := range plainParamVectors() {
 		t.Run(name, func(t *testing.T) {
 			var out strings.Builder

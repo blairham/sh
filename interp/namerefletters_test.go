@@ -33,6 +33,7 @@ func runNamerefLetters(t *testing.T, src string) (string, int) {
 // A case letter written on the `-n` line folds the **name the reference is
 // aimed at**, and the letter stays on the reference to say so.
 func TestACaseLetterOnAReferenceFoldsTheNameItIsAimedAt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			name: "the upper letter",
@@ -74,6 +75,7 @@ func TestACaseLetterOnAReferenceFoldsTheNameItIsAimedAt(t *testing.T) {
 // And the fold is done **by the declaration**, so a second `-n` over the same
 // reference takes the letter off and leaves the folded name standing.
 func TestASecondReferenceDeclarationDropsTheFoldingLetter(t *testing.T) {
+	t.Parallel()
 	out, status := runNamerefLetters(t,
 		`v=1; typeset -nu r=v; typeset -p r; typeset -n r; typeset -p r`)
 	want := "declare -nu r='V'\ndeclare -n r='V'\n"
@@ -87,6 +89,7 @@ func TestASecondReferenceDeclarationDropsTheFoldingLetter(t *testing.T) {
 // aim. Refused at 1 and **in silence** — the word as written passed the check
 // that has a sentence.
 func TestAnIntegerReferenceHasNoNameToAimAt(t *testing.T) {
+	t.Parallel()
 	out, status := runNamerefLetters(t,
 		`v=1; typeset -ni r=v; echo "st=$?"; echo "[$r]"`)
 	if !strings.HasPrefix(out, "st=1\n") {
@@ -114,6 +117,7 @@ func TestAnIntegerReferenceHasNoNameToAimAt(t *testing.T) {
 // is still tested too. Three rows, because either test alone passes two of
 // them and fails the third.
 func TestTheSelfReferenceCheckSeesBothTheWordAndTheFold(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		refused   bool
@@ -137,6 +141,7 @@ func TestTheSelfReferenceCheckSeesBothTheWordAndTheFold(t *testing.T) {
 // builtin's bare usage line, with none of the sentence a letter the builtin
 // has not got would earn.
 func TestTheReferenceLetterCanBeRefusedInCompany(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"typeset -ni r=v",
 		"typeset -rn r=v",

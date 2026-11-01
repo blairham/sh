@@ -19,6 +19,7 @@ import (
 // `functions f` still lists `echo =tool`. Every road `=cmd` takes is a row,
 // because each of them wrote into the tree on its own.
 func TestEqualsInABodyIsResolvedOnEveryCall(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, body string
 		setup      func(*Runner)
@@ -60,6 +61,7 @@ func TestEqualsInABodyIsResolvedOnEveryCall(t *testing.T) {
 // `h() { x=~/q; y=a:~/r; }` called with HOME at /a and then /b reads /b the
 // second time, and in bash 5.3 a subscript's `~` does the same.
 func TestATildeInABodyIsExpandedOnEveryCall(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, before, body, want string }{
 		{"a value's head", "", `x=~/q; echo $x`, "/a/q\n/b/q\n"},
 		{"after a colon in a value", "", `x=c:~/q; echo $x`, "c:/a/q\nc:/b/q\n"},

@@ -16,6 +16,7 @@ import "testing"
 //
 // Measured on zsh 5.9.2, 2026-09-12.
 func TestAScalarContextJoinsBelowTheOperator(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The discriminating pair: the same characters in the same
 		// assignment, parting on where the join sits. Unquoted the trim

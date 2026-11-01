@@ -16,6 +16,7 @@ import (
 // Without a length behind it the empty offset is zero, and the reading
 // without the flag is zero in both places.
 func TestABlankSubstringOffsetBeforeALength(t *testing.T) {
+	t.Parallel()
 	colon := func(d *syntax.Dialect) { d.ParamSubstringOffsetTakesALeadingColon = true }
 	plain := func(d *syntax.Dialect) { d.ParamSubstringOffsetTakesALeadingColon = false }
 

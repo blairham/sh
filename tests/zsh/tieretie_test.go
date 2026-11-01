@@ -11,6 +11,7 @@ import "testing"
 // on that line keeps the old separator instead. Measured 2026-10-02 on zsh
 // 5.9.2 under `-f`, every row.
 func TestTyingAPairAgainJoinsItsElementsWithTheNewSeparator(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"letters and a separator over a tied pair",

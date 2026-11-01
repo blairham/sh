@@ -54,6 +54,7 @@ func helpDiagnostics() Diagnostics {
 // The answer is on standard output and the refusal beside it is not, which is
 // how a script tells them apart.
 func TestTheHelpOptionIsAnsweredOnStandardOutput(t *testing.T) {
+	t.Parallel()
 	out, errOut, _ := helpRun(t, helpDiagnostics(), `export --help; echo "st=$?"`)
 	if !strings.Contains(out, "export: export [-fn] [name[=value] ...]") {
 		t.Errorf("stdout %q, want the help text", out)
@@ -74,6 +75,7 @@ func TestTheHelpOptionIsAnsweredOnStandardOutput(t *testing.T) {
 // A builtin with no entry has no answer, and the word is then the option
 // nobody has — which is what three of the panel's five do for every builtin.
 func TestABuiltinWithNoHelpRefusesTheHelpOption(t *testing.T) {
+	t.Parallel()
 	out, errOut, _ := helpRun(t, helpDiagnostics(), `unset --help; echo "st=$?"`)
 	if !strings.Contains(errOut, "unset: --: invalid option") {
 		t.Errorf("stderr %q, want the ordinary bad-option refusal", errOut)
@@ -93,6 +95,7 @@ func TestABuiltinWithNoHelpRefusesTheHelpOption(t *testing.T) {
 // says "this builtin is finished" with a nonzero code and has no other way to
 // say it: a zero here would print the answer and then run the builtin.
 func TestTheHelpStatusDefaultsToTheUsageStatus(t *testing.T) {
+	t.Parallel()
 	dg := helpDiagnostics()
 	dg.BuiltinHelpStatus = 0
 	out, _, _ := helpRun(t, dg, `export --help x=1; echo "st=$?"; echo "[${x-unset}]"`)
@@ -106,6 +109,7 @@ func TestTheHelpStatusDefaultsToTheUsageStatus(t *testing.T) {
 
 // It has to be the exact word, and it has to stand where an option stands.
 func TestTheHelpOptionIsTheWholeWordInTheOptionRegion(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		// An abbreviation is not it, and neither is a word with anything
 		// after it.
@@ -135,6 +139,7 @@ func TestTheHelpOptionIsTheWholeWordInTheOptionRegion(t *testing.T) {
 // A letter that takes an argument has already claimed the word, so the reader
 // answers this rather than a scan of the argument list.
 func TestALetterThatTakesAnArgumentClaimsTheHelpWord(t *testing.T) {
+	t.Parallel()
 	dg := helpDiagnostics()
 	dg.BuiltinHelp["read"] = "read: read [-r] [-d delim] [name ...]"
 	out, _, _ := helpRun(t, dg, `printf 'a-b\n' | { read -d --help v; echo "[$v]"; }`)

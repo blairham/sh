@@ -16,6 +16,7 @@ import "testing"
 //
 // Measured on zsh 5.9.2, 2026-09-12.
 func TestATildeOnThePatternSideOfAComparison(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name, src, want string

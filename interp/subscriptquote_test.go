@@ -33,6 +33,7 @@ func keyRun(t *testing.T, src string, quoting interp.Answer) (string, int) {
 }
 
 func TestASubscriptIsAQuotingContextOrIsTakenAsWritten(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, removed, asWritten string }{
 		{
 			"a quoted key, written quoted and read bare",
@@ -85,6 +86,7 @@ func TestASubscriptIsAQuotingContextOrIsTakenAsWritten(t *testing.T) {
 // Left unanswered on purpose: an unanswered axis that is asked says so and
 // refuses, so the values coming back at status 0 are the whole assertion.
 func TestAPlainKeyNeverAsksTheSubscriptQuotingAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a bare key", `typeset -A m; m[k]=P; printf "[%s]" "${m[k]}"`, `[P]`},
 		{"a substituted key", `typeset -A m; v=k; m[$v]=P; printf "[%s]" "${m[$v]}"`, `[P]`},
@@ -105,6 +107,7 @@ func TestAPlainKeyNeverAsksTheSubscriptQuotingAxis(t *testing.T) {
 
 // And it is asked where they differ, which is the other half of the claim.
 func TestAnUnansweredSubscriptQuotingAxisIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	out, _ := keyRun(t, `typeset -A m; m[k]=P; printf "[%s]" "${m["k"]}"`, interp.Unspecified)
 	if !strings.Contains(out, "an array subscript being a quoting context") {
 		t.Errorf("got %q, want the axis refused by name", out)
@@ -119,6 +122,7 @@ func TestAnUnansweredSubscriptQuotingAxisIsRefusedByName(t *testing.T) {
 // wrongly: with `p[s]=T`, `${p[ s ]}` looks up three characters and is empty
 // in bash, ksh93 and zsh alike.
 func TestTheWholeArraySpellingAndTheBlanksAreNotTheAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a bare at is the whole array", `typeset -A n; n[a]=1; n[b]=2; printf "%d" "${#n[@]}"`, `2`},
 		{"a bare star too", `typeset -A n; n[a]=1; n[b]=2; set -- "${n[*]}"; printf "%d" "$#"`, `1`},
@@ -150,6 +154,7 @@ func TestTheWholeArraySpellingAndTheBlanksAreNotTheAxis(t *testing.T) {
 // match the result of an expansion, and `setopt globsubst` asks it in the one
 // that does not.
 func TestAPatternEscapeReachesEveryCharacterOrASet(t *testing.T) {
+	t.Parallel()
 	// zsh's set, which is what makes the rows below the shell's answer rather
 	// than a set invented here.
 	const zshSet = `-=!*?[]()|^~#<>\`

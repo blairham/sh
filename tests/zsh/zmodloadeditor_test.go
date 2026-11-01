@@ -22,6 +22,7 @@ import (
 
 // At a prompt, two modules are there that nothing asked for.
 func TestZmodloadModulesAnInteractiveShellHasLoaded(t *testing.T) {
+	t.Parallel()
 	var outb strings.Builder
 	r := preset.Runner(dialecttest.Base{
 		Dir: t.TempDir(), Interactive: true, Terminal: true, Stdout: &outb, Stderr: &outb,
@@ -49,6 +50,7 @@ zmodload`))
 // this comes from had the other way round. Interactive with nothing to edit is
 // a script's answer.
 func TestZmodloadEditorModulesNeedATerminalAndNotJustAPrompt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name        string
 		interactive bool
@@ -83,6 +85,7 @@ zmodload`)
 // `zmodload -e zsh/zle`, so a shell that only had the module by the time the
 // prompt was drawn would refuse every one of them and be no better off.
 func TestZmodloadZleIsLoadedInsideAStartupFileAndCompleteIsNot(t *testing.T) {
+	t.Parallel()
 	var buf strings.Builder
 	r := preset.Runner(dialecttest.Base{
 		Dir: t.TempDir(), Interactive: true, Terminal: true,
@@ -105,6 +108,7 @@ print -r -- "complete=$?"`, nil); err != nil {
 // behind it, which is the pair that makes the rule a moment rather than a
 // property of the shell.
 func TestZmodloadCompleteIsLoadedOnceTheStartupFileIsDone(t *testing.T) {
+	t.Parallel()
 	var buf strings.Builder
 	r := preset.Runner(dialecttest.Base{
 		Dir: t.TempDir(), Interactive: true, Terminal: true,
@@ -131,6 +135,7 @@ print -r -- "after=$?"`)
 // line after `setopt zle` loads both. Measured 2026-10-02 on zsh 5.9.2
 // through a pseudo-terminal (#5524).
 func TestTheEditorModulesWaitForTheEditorUnderPlusZ(t *testing.T) {
+	t.Parallel()
 	var buf strings.Builder
 	r := preset.Runner(dialecttest.Base{
 		Dir: t.TempDir(), Interactive: true, Terminal: true, Stdout: &buf, Stderr: &buf,

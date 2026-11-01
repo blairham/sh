@@ -45,6 +45,7 @@ func extendedQuotingSem() Semantics {
 // quoted unconditionally would pass any row whose value needs quoting, and a
 // reading that never quoted would pass any row whose value does not.
 func TestTheMinimalQuotingFlag(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The point of the modifier: a value that needs nothing comes back
 		// as itself, where `q` and `qq` both spell it out.
@@ -121,6 +122,7 @@ func TestTheMinimalQuotingFlag(t *testing.T) {
 // single quotes fails it on the third value, and one that dropped the empty
 // value's quotes fails it there.
 func TestMinimalQuotingRoundTrips(t *testing.T) {
+	t.Parallel()
 	values := []string{
 		`plain`, `"with space"`, `"has'quote"`, `"a'b c"`, `"a'b'c"`, `"'"`,
 		`""`, `"~"`, `"~x"`, `"x~y"`, `"=x"`, `"PATH=/x"`, `"#c"`, `"x#"`,
@@ -146,6 +148,7 @@ done`
 // values and a reading of either that passed the agreements would still be
 // the wrong flag.
 func TestTheExtendedQuotingFlag(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// Where the two agree, which is most of the table.
 		{"a value needing nothing is bare", `v=plain; printf "[%s][%s]" "${(q+)v}" "${(q-)v}"`, "[plain][plain]"},
@@ -219,6 +222,7 @@ func TestTheExtendedQuotingFlag(t *testing.T) {
 // quoteExtendedRendered — and pinned by the corpus rather than by a
 // property they cannot satisfy.
 func TestExtendedQuotingRoundTrips(t *testing.T) {
+	t.Parallel()
 	values := []string{
 		`plain`, `"with space"`, `"has'quote"`, `"a'b c"`, `"a'b'c"`, `"'"`,
 		`"''"`, `"x'"`, `"'x"`, `""`, `"~"`, `"~x"`, `"x~y"`, `"=x"`,
@@ -253,6 +257,7 @@ done`
 //
 // Measured on zsh 5.9.2, 2026-09-08, under LC_ALL=C.
 func TestWhichMinusIsTheQuotingModifier(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"beside the q", `v="a b"; printf "[%s]" "${(q-)v}"`, "['a b']"},
 		{"with a flag in front of it", `v="a b"; printf "[%s]" "${(@q-)v}"`, "['a b']"},
@@ -345,6 +350,7 @@ func TestWhichMinusIsTheQuotingModifier(t *testing.T) {
 // which is why the bug survived — it is a longer spelling and not a broken
 // one, and only a comparison against the shell says so.
 func TestTheQuotingTableIsShared(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the q flag leaves an interior tilde", `v="a~b"; printf "[%s]" "${(q)v}"`, "[a~b]"},
 		{"and escapes a leading one", `v="~x"; printf "[%s]" "${(q)v}"`, `[\~x]`},
@@ -364,6 +370,7 @@ func TestTheQuotingTableIsShared(t *testing.T) {
 // list before `:q` is a quoting at all — without that axis answered, `${v:q}`
 // is an arithmetic offset and every row below passes for the wrong reason.
 func TestTheQuotingModifierReadsTheSameTable(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an interior tilde is left alone", `v="a~b"; printf "[%s]" "${v:q}"`, "[a~b]"},
 		{"a leading one is escaped", `v="~x"; printf "[%s]" "${v:q}"`, `[\~x]`},

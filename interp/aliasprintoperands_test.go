@@ -28,6 +28,7 @@ func aliasPrintIgnores(yes Answer) func(*Semantics) {
 const twoAliases = `alias a=1 b=2; `
 
 func TestThePrintOptionThrowsItsOperandsAway(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"a name the table holds is not a filter: the whole table comes back",
@@ -94,6 +95,7 @@ func TestThePrintOptionThrowsItsOperandsAway(t *testing.T) {
 // The other answer over the same snippets, which is the mutation: with the
 // field off, `-p` is a listing *shape* and the operands are obeyed.
 func TestThePrintOptionObeysItsOperandsWhereItIsNotTheWholeListing(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"a name the table holds is the only line",
@@ -133,6 +135,7 @@ func TestThePrintOptionObeysItsOperandsWhereItIsNotTheWholeListing(t *testing.T)
 // a name the table *holds*: one writes the whole table for it and the other
 // writes nothing at all.
 func TestEndingTheLookupAndThrowingTheOperandsAwayAreNotOneField(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{AliasNotFound: "%[2]s: alias not found"}
 	ends := func(s *Semantics) { s.AliasOptionEndsTheLookup = Yes }
 	if got, _ := aliasRun(t, ends, dg, twoAliases+`alias -p a; echo $?`); got != "0\n" {

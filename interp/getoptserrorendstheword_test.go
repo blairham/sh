@@ -38,6 +38,7 @@ func endsTheWordSem(ends, lags Answer) Semantics {
 // one could not say which of them the number came from. Three of the four
 // cells are a real column; the fourth is the composition and is marked.
 func TestGetoptsErrorEndsTheWordIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `set -- -axb -b
 OPTIND=1
 while getopts 'ab' o 2>/dev/null; do printf '[%s %s]' "$o" "$OPTIND"; done
@@ -90,6 +91,7 @@ getopts 'ab' o; getopts 'ab' o`
 // here, which is what makes the `No` row 1 rather than 2, so the row says
 // which of the two axes moved the number.
 func TestGetoptsErrorEndsTheWordAtAMissingArgument(t *testing.T) {
+	t.Parallel()
 	const src = `set -- -ba
 OPTIND=1
 while getopts 'ba:' o 2>/dev/null; do printf '[%s %s]' "$o" "$OPTIND"; done
@@ -118,6 +120,7 @@ printf ' end=%s\n' "$OPTIND"`
 // the lagging off wholesale — rather than at the refusal — would pass every
 // row above, because a refusal is all those rows read.
 func TestGetoptsErrorEndsTheWordLeavesAnAcceptedLetterAlone(t *testing.T) {
+	t.Parallel()
 	const src = `set -- -b -c
 OPTIND=1
 while getopts 'bc' o 2>/dev/null; do printf '[%s %s]' "$o" "$OPTIND"; done

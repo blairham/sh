@@ -10,6 +10,7 @@ import "testing"
 // 5.9.2 (`-f`, a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`) with
 // both spellings planted; each row is what that shell wrote.
 func TestASearchDropsTheEscapeOnlyBeforeADollarOrABackquote(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const plant = "a=('a$b' 'a\\$b' 'a`b' 'a\\`b' 'a{b' 'a\\{b' 'a*b' 'a\\*b')\nh=('a$b' 1 'a\\$b' 2)\n"
 	for _, c := range []struct{ name, src, want string }{

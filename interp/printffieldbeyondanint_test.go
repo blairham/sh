@@ -71,6 +71,7 @@ func TestAFieldNumberWrapsIntoAnInt(t *testing.T) {
 // with, so a `-` flag arriving from a negative width has to be in it and a
 // negative precision has to be gone from it, dot and all.
 func TestAFieldBeyondAnIntIsFoundAndWrapped(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, spec  string
 		wantBeyond  bool

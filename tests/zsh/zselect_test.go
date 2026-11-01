@@ -30,6 +30,7 @@ import (
 // The two lines above it are here as well, because the whole of #1768 is that
 // they are three consecutive lines and the first two are `|| return`.
 func TestTheProbeAPromptWorkerGuardsOnPasses(t *testing.T) {
+	t.Parallel()
 	out, st, errs := runZshSplitWithZselect(
 		t,
 		t.TempDir(),
@@ -117,6 +118,7 @@ print -r -- "st=$? reply=($reply) named=$(( $reply[2] == fd )) shape=$#reply"`)
 // descriptor, whose value is the letters it was ready in — the one shape here
 // where a descriptor appears once rather than once per set. All measured.
 func TestZselectAnswersInReplyAndInTheNamedParameters(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	// Two descriptors on a regular file, which is ready for reading and for
 	// writing at every instant — so what is being read here is the *shape* of
@@ -177,6 +179,7 @@ print -r -- "st=$? mine=($mine)"`)
 // That is also what a stray operand gets, and it is why the last two lines are
 // in the same case as the first.
 func TestWhatZselectRefuses(t *testing.T) {
+	t.Parallel()
 	out, st, errs := runZshSplitWithZselect(t, t.TempDir(), `zselect -q 3 -t 0
 print -r -- "letter=$?"
 zselect -t
@@ -209,6 +212,7 @@ print -r -- "garbage=$?"`)
 // was not in the feature table at all — and the theme's `|| return` on that
 // line is the first of the two guards the worker's body stops at.
 func TestTheZselectModuleLoadsAndNamesItsOneBuiltin(t *testing.T) {
+	t.Parallel()
 	out, st, _ := runZshSplitWithZselect(t, t.TempDir(), `zmodload zsh/zselect
 print -r -- "plain=$?"
 zmodload -F zsh/zselect b:zselect

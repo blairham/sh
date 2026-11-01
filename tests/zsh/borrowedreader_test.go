@@ -18,6 +18,7 @@ import (
 // written either way, so a test matching on it would pass with either answer.
 // Measured against zsh 5.9.2, 2026-09-11.
 func TestBorrowedTextRunsWhatItRead(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	evalMark := filepath.Join(dir, "eval")
 	fileMark := filepath.Join(dir, "file")

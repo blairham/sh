@@ -16,6 +16,7 @@ import (
 // contents — noisy at the moment of failure and silent for every read
 // afterwards.
 func TestAssigningThroughASubscriptThatExpands(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(x y); i=1; a[$i]=Q; printf "[%s]" "${a[@]}"`, "[x][Q]"},
 		{`a=(x y); i=1; a[${i}]=Q; printf "[%s]" "${a[@]}"`, "[x][Q]"},
@@ -48,6 +49,7 @@ func TestAssigningThroughASubscriptThatExpands(t *testing.T) {
 // A name broken by an expansion is not a name, so the word stays a command
 // name and the shell reports what the expansion made of it.
 func TestANameBrokenByAnExpansionIsNotAnAssignment(t *testing.T) {
+	t.Parallel()
 	out, st := runArray(t, `b=X; a$b=c`)
 	if !strings.Contains(out, "aX=c") {
 		t.Errorf("got %q, want the expanded word reported as a command", out)

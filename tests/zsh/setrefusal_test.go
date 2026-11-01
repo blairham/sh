@@ -40,6 +40,7 @@ func refuseAtInvocation(t *testing.T, apply func(*interp.Runner)) string {
 // for every message here, and the dash is written into the wording: `set +q`
 // is refused as `-q`, which dash also does and bash and ksh93 do not (#598).
 func TestZshRefusesASetOptionInItsOwnWords(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{"set -q\n", "zsh:set:1: bad option: -q\n"},
 		{"set +q\n", "zsh:set:1: bad option: -q\n"},
@@ -55,6 +56,7 @@ func TestZshRefusesASetOptionInItsOwnWords(t *testing.T) {
 // where the run-time form writes `zsh:set:1:`. No usage block follows either
 // spelling; zsh is the shell in the panel that prints none anywhere.
 func TestZshRefusesAnInvocationOptionWithNoLocationAtAll(t *testing.T) {
+	t.Parallel()
 	got := refuseAtInvocation(t, func(r *interp.Runner) { r.SetOptionLetters("q", true) })
 	if want := "zsh: bad option: -q\n"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -70,6 +72,7 @@ func TestZshRefusesAnInvocationOptionWithNoLocationAtAll(t *testing.T) {
 // only b, c, j, q and z of the fifty-two and has the other forty-seven — so
 // nearly every letter this shell does not implement is one zsh really has.
 func TestZshKeepsTheSetLettersItHasAndThisShellDoesNot(t *testing.T) {
+	t.Parallel()
 	// `-A` is not in the list: it assigns an array and is implemented — see
 	// Semantics.SetArrayLetter. A letter both claimed and refused is dead
 	// data that says the opposite of what the shell does.

@@ -57,6 +57,7 @@ func writeShebangFile(t *testing.T, dir, name, content string) string {
 // shell that had merely stopped complaining would print nothing, and one that
 // read the file itself would print `body`.
 func TestASlashlessInterpreterIsFoundOnPath(t *testing.T) {
+	t.Parallel()
 	dir, bin := t.TempDir(), t.TempDir()
 	writeShebangFile(t, bin, "myint", "#!/bin/sh\nprintf '[%s]' \"$0\" \"$@\"; echo\n")
 	script := writeShebangFile(t, dir, "uses.scr", "#!myint\necho body\n")
@@ -72,6 +73,7 @@ func TestASlashlessInterpreterIsFoundOnPath(t *testing.T) {
 // `$? -eq 127` for "not found" is reading, where bash says 126 for the same
 // shape. The same sentence for a `#!` written as a path that is not there.
 func TestAMissingInterpreterIsNamedAndIs127(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		line string
@@ -100,6 +102,7 @@ func TestAMissingInterpreterIsNamedAndIs127(t *testing.T) {
 // `#!` naming nothing at all is refused rather than read as a shell script.
 // Every other column in the panel runs it and reports 0.
 func TestAnEmptyInterpreterLineIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, line := range []string{"#!\n", "#!  \t \n"} {
 		dir, bin := t.TempDir(), t.TempDir()
 		writeShebangFile(t, dir, "e.scr", line+"echo ran-anyway\n")

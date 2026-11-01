@@ -19,6 +19,7 @@ import "testing"
 // bash and ksh93 keep the array and write element 0, which is why this is
 // Semantics.ScalarAssignedOverACompoundReplacesTheName and not a rule.
 func TestAScalarAssignedOverAnArrayLeavesAPlainScalar(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `v=(a b c)
 v=x
 print -r -- "assign: [$v] n=${#v}"
@@ -51,6 +52,7 @@ typeset -p m`)
 // The body's read is asserted and not only the listing afterwards: a fix at
 // the end of the loop would leave every pass wrong and the last line right.
 func TestAForLoopReplacesAnArrayItsVariableWasHolding(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `v=(a b c)
 for v in x y z; do print -rn -- "[$v n=${#v}]"; done
 print
@@ -66,6 +68,7 @@ typeset -p v`)
 // makes the second one mean something — without it a loop that never saw an
 // array would pass too.
 func TestANameReadAsAnArrayIsReplacedByALaterLoop(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `line=()
 print -r -- "one two three" | read -rA line
 typeset -p line
@@ -82,6 +85,7 @@ typeset -p line`)
 // an assigning expansion — the two other spellings that reach the store
 // without going through an assignment statement.
 func TestReadAndAnAssigningExpansionReplaceAnArray(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `a=(1 2 3)
 read a <<< "zz"
 typeset -p a
@@ -98,6 +102,7 @@ typeset -p b`)
 // this shell exactly as it is elsewhere, and the name that was an array before
 // the command is an array after it.
 func TestAPrefixAssignmentLeavesTheArrayStanding(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `a=(p q)
 a=x true
 typeset -p a`)

@@ -10,6 +10,7 @@ import "testing"
 // declared. Measured 2026-10-03 on zsh 5.9.2 under `-fc` (#5685). See
 // interp.Semantics.AttachedNumberEndsAtTheFirstNonDigit.
 func TestAnAttachedNumberTakesTheRestOfTheWord(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`typeset -Z3x s=7; echo st=$?; typeset -p s`, "zsh:typeset:1: bad width value: 3x\nst=1\nzsh:typeset:1: no such variable: s\n"},
 		{`typeset -i16x s=255; echo st=$?`, "zsh:typeset:1: bad base value: 16x\nst=1\n"},

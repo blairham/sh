@@ -51,6 +51,7 @@ func TestAnInputDuplicatesOperandIsReadWhenTheRedirectionIsSetUp(t *testing.T) {
 // row of its own because a parser that simply stopped refusing would also
 // pass the rows above while letting `<&x` open a file called `x`.
 func TestAnInputDuplicateFromAParameterDuplicates(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "f"), []byte("line-one\nline-two\n"), 0o600); err != nil {
 		t.Fatal(err)

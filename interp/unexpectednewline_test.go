@@ -51,6 +51,7 @@ func refusedNewline(t *testing.T, src string) error {
 // two of the four, which is exactly why the distinction has to be in the
 // class and not in the wording.
 func TestARefusedNewlineIsItsOwnClass(t *testing.T) {
+	t.Parallel()
 	const src = "echo a\nfor\ndone"
 	quoted := Diagnostics{SyntaxUnexpected: `"%[1]s" unexpected`}
 	if got := quoted.ParseFailure(refusedNewline(t, src)); !strings.Contains(got, `"newline" unexpected`) {
@@ -77,6 +78,7 @@ func TestARefusedNewlineIsItsOwnClass(t *testing.T) {
 // it reaches both places a line is written: the location a report is put at,
 // and the verb of the one dialect that carries the number inside its sentence.
 func TestARefusedNewlineMayBeBlamedOnTheLineItEnds(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src      string
 		at, ends int

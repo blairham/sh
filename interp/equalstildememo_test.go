@@ -14,6 +14,7 @@ import (
 // is in the table must not be answered with the one before it that is not,
 // nor the other way round.
 func TestTheEqualsTildeTableIsAskedAboutEachCommand(t *testing.T) {
+	t.Parallel()
 	out, _ := runGrammar(t, `HOME=/h
 printf '%s\n' a=~
 echo a=~

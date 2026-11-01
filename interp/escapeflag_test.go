@@ -52,6 +52,7 @@ func withTestExpansionEscapes(r *interp.Runner) {
 // The escape flag reads the escapes in the value, and its argument says which
 // parts of the set are live.
 func TestTheEscapeFlagReadsTheValuesEscapes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"an empty argument still reads escapes",
@@ -96,6 +97,7 @@ func TestTheEscapeFlagReadsTheValuesEscapes(t *testing.T) {
 // round — and neither order of the letters in the group changes the answer,
 // which is the third row of each pair.
 func TestTheEscapeFlagRunsWhereTheRulesPutIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the case conversion runs first, making an escape",
@@ -142,6 +144,7 @@ func TestTheEscapeFlagRunsWhereTheRulesPutIt(t *testing.T) {
 // no backslash in it, so it would pass the first thing anyone tried and answer
 // at status 0 wherever it mattered.
 func TestTheEscapeFlagIsRefusedWithoutAnEscapeReader(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `v='a\tb'; printf "[%s]" "${(g::)v}"`, escapingFlags, nil)
 	want := "sh: ${(g::)v}: the (g) expansion flag is not implemented\n"
 	if out != want {
@@ -158,6 +161,7 @@ func TestTheEscapeFlagIsRefusedWithoutAnEscapeReader(t *testing.T) {
 // failures are answered in different places and only this order proves the
 // parser is the one answering.
 func TestAnEscapeOptionLetterTheFlagLacksIsAFlagsError(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a letter outside the set",
@@ -193,6 +197,7 @@ func TestAnEscapeOptionLetterTheFlagLacksIsAFlagsError(t *testing.T) {
 // everything else. Asserted with a reader installed, so the refusal that
 // fires is this one rather than the by-name refusal of an absent reader.
 func TestTheMarkedSeparatorIsRefusedBesideTheEscapeFlag(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `a=(p q); printf "[%s]" "${(~g::j.|.)a}"`,
 		markedSeparatorWithEscapes, withTestExpansionEscapes)
 	want := "sh: ${(~g::j.|.)a}: the (~) expansion flag is not implemented beside the (g) flag\n"

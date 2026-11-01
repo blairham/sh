@@ -26,6 +26,7 @@ import "testing"
 // is what the first pass of this measurement said. `${+x}` rather than the
 // value is what settles it, and every row below carries one.
 func TestTheReadEchoLetters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			// The headline pair. The echo is the **split values** and not
@@ -154,6 +155,7 @@ func TestTheReadEchoLetters(t *testing.T) {
 // against a shell that wrote it to standard error, which is where a
 // diagnostic would naturally have gone.
 func TestTheReadEchoGoesToStandardOutput(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"standard error is not where it goes",

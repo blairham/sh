@@ -38,6 +38,7 @@ func runSeparator(t *testing.T, stops Answer, src string) (string, int) {
 }
 
 func TestACommaThatArrivedThroughASubstitutionSeparatesNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a pair through a parameter", `a=(p q r); i="1,2"; printf "[%s]" "${a[$i]}"`, "[p]"},
 		{"and the expression stops there", `a=(p q r s); i="2,3"; printf "[%s]" "${a[$i]}"`, "[q]"},
@@ -67,6 +68,7 @@ func TestACommaThatArrivedThroughASubstitutionSeparatesNothing(t *testing.T) {
 // The tail is not evaluated at all, which is the discriminator against a
 // reading that evaluated it and threw the value away.
 func TestTheTailAfterASubstitutedSeparatorIsNotEvaluated(t *testing.T) {
+	t.Parallel()
 	const src = `a=(p q r s); n=0; i="2,n=9"; printf "[%s] n=%s" "${a[$i]}" "$n"`
 	out, st := runSeparator(t, Yes, src)
 	if out != "[q] n=0" || st != 0 {
@@ -77,6 +79,7 @@ func TestTheTailAfterASubstitutedSeparatorIsNotEvaluated(t *testing.T) {
 // The other answer reads the comma as the operator it is everywhere else,
 // which is what every column without ranges does.
 func TestWithoutTheSeparatorRuleTheCommaIsTheOperator(t *testing.T) {
+	t.Parallel()
 	const src = `a=(p q r s); i="2,3"; printf "[%s]" "${a[$i]}"`
 	out, st := runSeparator(t, No, src)
 	if out != "[r]" || st != 0 {
@@ -88,6 +91,7 @@ func TestWithoutTheSeparatorRuleTheCommaIsTheOperator(t *testing.T) {
 // which is the left of an assignment: the pair is separated at the first one
 // and the arithmetic has the rest.
 func TestACommaTheSourceWroteIsStillTheOperator(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a third comma on the left", `a=(1 2 3); a[1,2,3]=(x y); printf "[%s]" "${a[@]}"`, "[x][y]"},
 		{"an append reads no pair at all", `a=(1 2 3); a[2,3]+=(x); printf "[%s]" "${a[@]}"`, "[1][2][3][x]"},
@@ -107,6 +111,7 @@ func TestACommaTheSourceWroteIsStillTheOperator(t *testing.T) {
 // The axis is asked where a separator arrived through a substitution and
 // nowhere else — not for a written one, and not outside a subscript.
 func TestTheSeparatorAxisIsAskedAtTheSubstitutedComma(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		asked     bool

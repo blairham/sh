@@ -31,6 +31,7 @@ func withKeyListing(d *syntax.Dialect) {
 // depend on how the table was built — and the probes are the ones that can
 // tell the three readings apart. docs/spec/semantics.md holds the panel.
 func TestAKeyedTableListsByKeyWhateverOrderItWasBuiltIn(t *testing.T) {
+	t.Parallel()
 	// The three permutations of one table. Insertion order would give three
 	// different answers, a hash order would give one that is neither sorted
 	// nor historical, and sorting gives this.
@@ -61,6 +62,7 @@ func TestAKeyedTableListsByKeyWhateverOrderItWasBuiltIn(t *testing.T) {
 // re-added key would move to the end, and under a sorted order it cannot move
 // at all. Measured on zsh too, where it does not move either.
 func TestARemovedKeyComesBackWhereItWas(t *testing.T) {
+	t.Parallel()
 	src := `typeset -A m; m[z]=1; m[a]=2; m[m]=3; unset "m[z]"; m[z]=9; printf "[%s]" "${!m[@]}" "${m[@]}"`
 	got, _ := runGrammar(t, src, withKeyListing, nil)
 	if want := "[a][m][z][2][3][9]"; got != want {
@@ -74,6 +76,7 @@ func TestARemovedKeyComesBackWhereItWas(t *testing.T) {
 // one way for `${m[@]}` and another for a loop reads as working until
 // something lines the two up.
 func TestOneOrderForEverySurface(t *testing.T) {
+	t.Parallel()
 	const build = `typeset -A m; m[z]=1; m[a]=2; m[m]=3; `
 	for _, c := range []struct{ name, src, want string }{
 		{"the keys", `printf "[%s]" "${!m[@]}"`, "[a][m][z]"},
@@ -99,6 +102,7 @@ func TestOneOrderForEverySurface(t *testing.T) {
 // written in. A probe over `m=(a 1 b 2)` answers `1` under every reading there
 // is and says nothing at all.
 func TestTheFirstValueIsTheFirstOfThisOrder(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.ArrayScalarIsTheWholeArray = No
 	sem.KeyedTableScalarIsTheFirstValue = Yes

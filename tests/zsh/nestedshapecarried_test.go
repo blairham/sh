@@ -14,6 +14,7 @@ import "testing"
 // same one value surviving, and the level between — a filter or a single
 // subscript — is the only thing that differs.
 func TestANestedListKeepsItsShapeThroughALevel(t *testing.T) {
+	t.Parallel()
 	const pre = `x=$'two\nthree'; y=three; s=hello; a=(hello)
 `
 	rows := []struct{ src, want string }{
@@ -49,6 +50,7 @@ func TestANestedListKeepsItsShapeThroughALevel(t *testing.T) {
 // nested inner is the shape of the word where the test fires and of the inner
 // where it does not. Every row measured on zsh 5.9.2 under -f, 2026-10-05.
 func TestANestedConditionalIsTheShapeOfWhatItCameTo(t *testing.T) {
+	t.Parallel()
 	const pre = `x=$'two\nthree'; a=(hello); b=(p q); e=; s=hello
 `
 	rows := []struct{ src, want string }{

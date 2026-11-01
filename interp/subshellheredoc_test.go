@@ -19,6 +19,7 @@ import (
 
 // The write side: yes puts back what the body's expansion wrote, no leaves it.
 func TestASubshellsHeredocBodyExpandingInTheSubshellConfinesTheWrite(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		answer Answer
 		want   string
@@ -50,6 +51,7 @@ func TestASubshellsHeredocBodyExpandingInTheSubshellConfinesTheWrite(t *testing.
 // tell a give-up of the command from a give-up of the line, which is the
 // degradation #4687 found in a committed test.
 func TestASubshellsFailedHeredocBodyCostsTheParenthesesUnderEitherAnswer(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Yes, No} {
 		t.Run(answer.String(), func(t *testing.T) {
 			sem := testSemantics()
@@ -80,6 +82,7 @@ func TestASubshellsFailedHeredocBodyCostsTheParenthesesUnderEitherAnswer(t *test
 // HeredocBodyFailureIsTheRedirections decides. If this row stopped moving,
 // the row above would be measuring a boundary that swallows every failure.
 func TestTheSameFailingBodyOnAGroupStillFollowsTheOtherAxis(t *testing.T) {
+	t.Parallel()
 	const src = "{ echo RAN; } <<END ; printf SAME\n$(( 1/0 ))\nEND\nprintf NEXT"
 	for _, tc := range []struct {
 		redirs       Answer
@@ -108,6 +111,7 @@ func TestTheSameFailingBodyOnAGroupStillFollowsTheOtherAxis(t *testing.T) {
 // a command's body and keeps a subshell's while dash and BusyBox ash do the
 // reverse.
 func TestTheSubshellsHeredocBodyAndACommandsAreSeparateAxes(t *testing.T) {
+	t.Parallel()
 	const src = "n=0\n%s <<END\n$(( n+=5 ))\nEND\nprintf 'n=%%s' \"$n\""
 	for _, tc := range []struct {
 		name            string
@@ -136,6 +140,7 @@ func TestTheSubshellsHeredocBodyAndACommandsAreSeparateAxes(t *testing.T) {
 // throughout and every one of these keeps its write, because this shell runs
 // them itself and there is nowhere else for the write to have gone.
 func TestTheSubshellHeredocAxisLeavesAGroupAlone(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.HeredocBodyOnASubshellExpandsInTheSubshell = Yes
 	for _, tc := range []struct{ name, cmd string }{
@@ -158,6 +163,7 @@ func TestTheSubshellHeredocAxisLeavesAGroupAlone(t *testing.T) {
 // five bodies on the same day, every column answers alike — so the axis has to
 // reach all five here too.
 func TestTheSubshellHeredocAxisDoesNotCareWhatTheParenthesesHold(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.HeredocBodyOnASubshellExpandsInTheSubshell = Yes
 	for _, cmd := range []string{"( cat )", "( : ; cat )", "( v=1; cat )", "( cat; cat )", "( ( cat ) )"} {
@@ -173,6 +179,7 @@ func TestTheSubshellHeredocAxisDoesNotCareWhatTheParenthesesHold(t *testing.T) {
 // The parentheses reach wherever they are written, which is what a rule keyed
 // on the *statement* rather than on the construct would lose.
 func TestTheSubshellHeredocAxisReachesANestedAndACalledSubshell(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.HeredocBodyOnASubshellExpandsInTheSubshell = Yes
 	for _, tc := range []struct{ name, src string }{
@@ -194,6 +201,7 @@ func TestTheSubshellHeredocAxisReachesANestedAndACalledSubshell(t *testing.T) {
 // substitution and counted as a whole line, so the body's own text reaching
 // the command cannot be mistaken for it.
 func TestASubshellsHeredocBodyIsExpandedUnderEitherAnswer(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Yes, No} {
 		for _, cmd := range []string{"( cat >/dev/null )", "( : )"} {
 			t.Run(answer.String()+" "+cmd, func(t *testing.T) {
@@ -213,6 +221,7 @@ func TestASubshellsHeredocBodyIsExpandedUnderEitherAnswer(t *testing.T) {
 // answer — the control that says the count above is about the expansion
 // happening rather than about the axis.
 func TestASubshellHeredocTheShellNeverReachesExpandsNothing(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Yes, No} {
 		t.Run(answer.String(), func(t *testing.T) {
 			sem := testSemantics()
@@ -228,6 +237,7 @@ func TestASubshellHeredocTheShellNeverReachesExpandsNothing(t *testing.T) {
 // A quoted delimiter is not expanded at all, so there is no write to place and
 // the axis is never reached — the control that must not move.
 func TestAQuotedDelimiterOnASubshellAsksNothing(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.HeredocBodyOnASubshellExpandsInTheSubshell = Unspecified
 	out, st := run(t, "n=0\n( cat ) <<'END'\n$(( n+=5 ))\nEND\nprintf 'n=%s' \"$n\"", withSem(sem))
@@ -240,6 +250,7 @@ func TestAQuotedDelimiterOnASubshellAsksNothing(t *testing.T) {
 // unanswered dialect can still run one — the rule every axis in this seam is
 // asked by.
 func TestAQuietSubshellHeredocAsksNothing(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.HeredocBodyOnASubshellExpandsInTheSubshell = Unspecified
 	out, st := run(t, "v=hi\n( cat ) <<END\n[$v]\nEND", withSem(sem))
@@ -250,6 +261,7 @@ func TestAQuietSubshellHeredocAsksNothing(t *testing.T) {
 
 // And one that writes refuses rather than guessing.
 func TestAnUnansweredSubshellHeredocThatWritesIsRefused(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.HeredocBodyOnASubshellExpandsInTheSubshell = Unspecified
 	out, st := run(t, "n=0\n( printf CAME-HERE ) <<END\n$(( n+=5 ))\nEND", withSem(sem))

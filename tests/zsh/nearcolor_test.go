@@ -17,6 +17,7 @@ import (
 // at random and the grays from #000000 in steps of five. See interp/nearcolor.go,
 // which says which distance these settle.
 func TestTheNearestPaletteColorIsTheMeasuredOne(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		rgb  int
 		want int

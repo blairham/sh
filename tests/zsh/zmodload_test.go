@@ -14,6 +14,7 @@ import (
 
 // What a fresh shell has loaded, and the two shapes it says it in.
 func TestZmodloadListsWhatAFreshShellHasLoaded(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload
 print -r -- "bare=$?"
 zmodload -L
@@ -26,6 +27,7 @@ print -r -- "commands=$?"`)
 
 // `-e` asks rather than loads, and says nothing either way.
 func TestZmodloadDashEAsksWhetherAModuleIsLoaded(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -e zsh/main
 print -r -- "main=$?"
 zmodload -e zsh/zutil
@@ -75,6 +77,7 @@ print -r -- "both=$?"`)
 // and the day a module with a condition this shell has not got is added the
 // answer is already right.
 func TestAMissingBuiltinDoesNotHoldAModuleShut(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zutil 2>&1
 print -r -- "zutil=$?"
 zregexparse a b c 2>&1
@@ -106,6 +109,7 @@ print -r -- "complete=$?"`)
 // refusal going quiet: it is 1 in a shell that has loaded nothing else, and
 // 2 on the line after the load.
 func TestZmodloadLoadsAModuleWhoseParametersAllAnswer(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `print -r -- "before=${#modules}"
 zmodload zsh/parameter 2>&1
 print -r -- "st=$?"
@@ -134,6 +138,7 @@ print -r -- "after=$?"`)
 // still refused, so the four above are being *asked about* rather than waved
 // through by kind.
 func TestEveryFeatureOfTheCompleteModuleIsAskedAbout(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/complete 2>&1
 print -r -- "whole=$?"
 for f in c:prefix c:suffix c:after c:between b:compadd b:compset; do
@@ -156,6 +161,7 @@ print -r -- "nosuch=$?"`)
 // this builtin writes does. That is measured in zsh: the module loader speaks
 // for the first and the builtin for the second.
 func TestALoadFailureIsNotTheBuiltinSpeaking(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/nosuchmodule 2>&1
 print -r -- "load=$?"
 zmodload -q zsh/main 2>&1
@@ -171,6 +177,7 @@ print -r -- "opt=$?"`)
 // silenced and the status is still 1. A shell that answered 0 here sends a
 // plugin manager on to call a builtin the module was supposed to bring.
 func TestZmodloadDashSIsSilentAndStillFails(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -s zsh/nosuchmodule 2>&1
 print -r -- "st=$?"`)
 	want := "st=1\n"
@@ -186,6 +193,7 @@ print -r -- "st=$?"`)
 // was already loaded cannot show it at all, because becoming loaded twice
 // looks the same as not being reached.
 func TestZmodloadAttemptsEveryModuleNamed(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/nosuchmodule zsh/alsonosuch zsh/main 2>&1
 print -r -- "st=$?"
 zmodload -e zsh/main
@@ -203,6 +211,7 @@ print -r -- "main-still=$?"`)
 // `no such module` as a name nobody has ever used; `zsh/main` is loaded, so
 // it goes, and the emptied listing survives being written.
 func TestZmodloadDashUMeansNotLoaded(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -u zsh/mathfunc 2>&1
 print -r -- "real=$?"
 zmodload -u zsh/nosuchmodule 2>&1
@@ -223,6 +232,7 @@ print -r -- "listing=$?"`)
 // that is loaded but names no features has its own sentence — all three
 // measured, and the third is the one `zsh/main` reaches.
 func TestZmodloadFeatureLetters(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -l zsh/main 2>&1
 print -r -- "l=$?"
 zmodload -F 2>&1
@@ -251,6 +261,7 @@ print -r -- "lF-absent=$?"`)
 // zsh still has and this shell still has not — module aliases — and it is
 // the same pair of wordings.
 func TestZmodloadTellsAMissingLetterFromAnUnknownOne(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -m zsh/x 2>&1
 print -r -- "a=$?"
 zmodload -A zsh/main 2>&1
@@ -299,6 +310,7 @@ print -r -- "X=$?"`)
 // found: zmodload` gave it nothing it could act on. That both halves of that
 // particular line load today is why the module here had to move again.
 func TestZmodloadRefusalReachesTheScriptsOwnBranch(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`zmodload zsh/pcre 2>/dev/null || { print -r -- "aborting"; }
 print -r -- "st=$?"`)
@@ -311,6 +323,7 @@ print -r -- "st=$?"`)
 // A subshell gets its own set, which is what keeping the store in the
 // runner's own table is for.
 func TestZmodloadUnloadingInASubshellLeavesTheParentAlone(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `(zmodload -u zsh/main; zmodload; print -r -- "in=$?")
 zmodload
 print -r -- "out=$?"`)
@@ -329,6 +342,7 @@ print -r -- "out=$?"`)
 // `-F` and did nothing would write `+` against all four here and pass a test
 // that only asked for status 0.
 func TestZmodloadDashFSelectsWhichFeaturesAModuleExposes(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -F zsh/zutil b:zstyle
 print -r -- "select=$?"
 zmodload -lF zsh/zutil
@@ -350,6 +364,7 @@ zmodload -lF zsh/zutil`)
 // features on a module that is not loaded are the only ones that end up on;
 // on one that is, the features nobody named stay exactly as they were.
 func TestZmodloadDashFIsADeltaOnAModuleAlreadyLoaded(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zutil
 zmodload -F zsh/zutil -b:zparseopts
 print -r -- "narrow=$?"
@@ -363,6 +378,7 @@ zmodload -lF zsh/zutil`)
 // A bare feature name means `+`, which is the spelling every real caller
 // uses, and the last operand about a feature wins.
 func TestZmodloadDashFReadsTheSignsOnItsOperands(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -F zsh/zutil b:zstyle +b:zformat -b:zstyle
 print -r -- "st=$?"
 zmodload -lF zsh/zutil`)
@@ -377,6 +393,7 @@ zmodload -lF zsh/zutil`)
 // refusal from a half-applied command: a shell that applied as it went would
 // answer `loaded=0` on the second question.
 func TestZmodloadDashFAppliesNothingWhenAnOperandNamesNoFeature(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -F zsh/zutil +b:zstyle +b:nosuch 2>&1
 print -r -- "st=$?"
 zmodload -e zsh/zutil
@@ -411,6 +428,7 @@ print -r -- "loaded=$?"`)
 // still refused by its own name and not by all four of its module's, so the
 // selection is being read rather than waved through.
 func TestZmodloadDashFNarrowingMovesTheVerdict(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zutil 2>&1
 print -r -- "whole=$?"
 zmodload -F zsh/zutil b:zstyle 2>&1
@@ -439,6 +457,7 @@ print -r -- "condition=$?"`)
 // the `|| return` not fire and leave the failure to turn up later, in a
 // function whose caller has gone.
 func TestTheThreeModulesAStartupNarrowsAreLoadedByTheFeaturesItNames(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -F zsh/stat b:zstat 2>&1
 print -r -- "stat=$?"
 zmodload -F zsh/net/socket b:zsocket 2>&1
@@ -475,6 +494,7 @@ print -r -- "guard=$?"`)
 // name — the `zf_` spellings included, which are otherwise always present
 // here.
 func TestTheNamesThatWouldShadowACommandArriveOnlyWhenAsked(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `whence -w stat rm mv
 zmodload -F zsh/stat b:stat 2>&1
 print -r -- "stat=$?"
@@ -502,6 +522,7 @@ whence -w mv ln rm zf_mv`)
 // every one of them, so the rule this shell states is the narrow one — an
 // unload undoes the load. See zmodloadRelease.
 func TestAPlainLoadSwitchesTheShadowingNamesOnAndAnUnloadPutsThemBack(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/files
 print -r -- "load=$?"
 whence -w rm zf_rm
@@ -528,6 +549,7 @@ whence -w zstyle`)
 // world, and one that calls `zf_rm` gets this shell's. The refusal is reserved
 // for the line that *asked*.
 func TestAWholeLoadOfTheThreeModulesIsStillTheInferredQuestion(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/stat zsh/net/socket zsh/files 2>&1
 print -r -- "st=$?"
 zmodload -lF zsh/stat`)
@@ -542,6 +564,7 @@ zmodload -lF zsh/stat`)
 // identical sentence the `-lF` listing gives, which is measured and is why
 // the two paths keep their own locations.
 func TestZmodloadDashFOnAModuleWithNoFeatures(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -F zsh/main +b:x 2>&1
 print -r -- "select=$?"
 zmodload -lF zsh/main 2>&1
@@ -557,6 +580,7 @@ print -r -- "list=$?"`)
 // about the combination rather than about either letter, and the four other
 // letters it names reach an unimplemented-letter refusal here first.
 func TestZmodloadDashUCannotBeCombinedWithDashF(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -uF zsh/zutil +b:zstyle 2>&1
 print -r -- "st=$?"`)
 	want := "zsh:zmodload:1: -b, -c, -f, -p and -u cannot be combined with -F\nst=1\n"
@@ -571,6 +595,7 @@ print -r -- "st=$?"`)
 // rules are separated — the sign is stripped to decide whether the operand
 // names a feature at all, and not stripped again to decide what it matches.
 func TestZmodloadListingFiltersOnTheOperandAsWritten(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zutil
 zmodload -lF zsh/zutil b:zstyle
 print -r -- "bare=$?"
@@ -591,6 +616,7 @@ print -r -- "unknown=$?"`)
 // `-lF` with no module is refused instead, which is measured and is the one
 // asymmetry between the two listing letters.
 func TestZmodloadDashLFWritesTheSelectionAsACommand(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -F zsh/zutil b:zformat b:zstyle
 zmodload -LF zsh/zutil
 print -r -- "one=$?"
@@ -615,6 +641,7 @@ print -r -- "list=$?"`)
 // rule: the plain load is widened by zmodloadWiden whatever the unload did,
 // so only the narrowed reload can say that the earlier selection is gone.
 func TestAModuleThatIsNotLoadedHasNothingOn(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -F zsh/zutil b:zstyle
 zmodload -u zsh/zutil
 zmodload -F zsh/zutil b:zformat
@@ -631,6 +658,7 @@ zmodload -lF zsh/zutil`)
 // The narrowing is the subshell's, the same as the loaded set it sits beside
 // — which is what keeping it in the runner's own tables is for.
 func TestZmodloadNarrowingInASubshellLeavesTheParentAlone(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zutil
 (zmodload -F zsh/zutil -b:zstyle; zmodload -lF zsh/zutil)
 zmodload -lF zsh/zutil`)
@@ -644,6 +672,7 @@ zmodload -lF zsh/zutil`)
 // The line the issue was filed on, in the shape a real plugin writes it:
 // `_fzf_completion` asks `zsh/parameter` for the one parameter it reads.
 func TestZmodloadDashFReachesTheLineAPluginWrites(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`zmodload -F zsh/parameter p:functions 2>/dev/null || print -r -- "no functions"
 print -r -- "st=$?"`)
@@ -665,6 +694,7 @@ print -r -- "st=$?"`)
 // would make `zmodload -u zsh/zpty` in a script that expected the module to
 // be there look like a success.
 func TestZmodloadDashIMakesAnUnloadIdempotent(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -u zsh/mathfunc 2>&1
 print -r -- "u=$?"
 zmodload -us zsh/mathfunc 2>&1
@@ -689,6 +719,7 @@ print -r -- "both=$?"`)
 // 0 on every row of that test and wrong about the one thing the command was
 // for.
 func TestZmodloadDashUIStillUnloadsAModuleThatIsLoaded(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zutil
 print -r -- "load=$?"
 zmodload -e zsh/zutil
@@ -710,6 +741,7 @@ print -r -- "after=$?"`)
 // the half that holds the *letter* fixed while the operation moves — without
 // it, "`-i` quiets zmodload" fits every row of the test above.
 func TestZmodloadDashIIsNotAGeneralQuieting(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -i zsh/nosuchmodule 2>&1
 print -r -- "load=$?"
 zmodload -liF zsh/zutil 2>&1
@@ -755,6 +787,7 @@ print -r -- "D=$?"`)
 // here; one that answers 0 unconditionally fails the row above and the two
 // rows below.
 func TestZmodloadFeatureExistsReadsABareOperandAsExistence(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zutil
 zmodload -F zsh/zutil -b:zstyle
 zmodload -Fe zsh/zutil b:zstyle
@@ -812,6 +845,7 @@ print -r -- "badname=$?"`)
 // and the accepted pair is what keeps the rule from being "any other letter"
 // (#4603). A mutant that refuses `-es` as well fails on the second row.
 func TestZmodloadDashEIsRefusedBesideTheLettersItCannotJoin(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -e zsh/main 2>&1
 print -r -- "e=$?"
 zmodload -es zsh/main 2>&1
@@ -840,6 +874,7 @@ print -r -- "ed=$?"`)
 // same pair with a letter `-e` does object to — reaches the combination
 // refusal in front of it.
 func TestZmodloadDashEDoesNotObjectToTheListingLetter(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -el zsh/main 2>&1
 print -r -- "el=$?"
 zmodload -eli zsh/main 2>&1
@@ -856,6 +891,7 @@ print -r -- "eli=$?"`)
 // nothing here and agree with a fresh zsh, because a module with no declared
 // dependency prints nothing in either shell.
 func TestZmodloadDashDDeclaresAndReportsADependency(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -d zsh/zle zsh/parameter
 print -r -- "declare=$?"
 zmodload -d zsh/zle
@@ -872,6 +908,7 @@ print -r -- "none=$?"`)
 // by module name whatever order the declarations arrived in, and `-L` writes
 // the rows back as the commands that would make them.
 func TestZmodloadDashDListsEveryModuleThatHasOne(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -d zsh/zle zsh/parameter
 zmodload -d zsh/zle zsh/datetime
 zmodload -d zsh/computil zsh/complete
@@ -899,6 +936,7 @@ print -r -- "one=$?"`)
 // zsh/alsonot; zmodload zsh/nosuchmod` names `zsh/alsonot` — the dependency
 // is loaded first, so it is the first thing that can fail (#4740).
 func TestZmodloadDashDRecordsNamesItCannotLoad(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -d zsh/nosuchmod zsh/alsonot
 print -r -- "declare=$?"
 zmodload -d zsh/nosuchmod
@@ -916,6 +954,7 @@ print -r -- "load=$?"`)
 // name that was never there is removed in silence, and the letters with no
 // operand at all are the question zsh asks back.
 func TestZmodloadDashUDTakesADependencyBackOut(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -d zsh/a zsh/b zsh/c
 zmodload -ud zsh/a zsh/b
 print -r -- "one=$?"
@@ -939,6 +978,7 @@ print -r -- "bare=$?"`)
 // The dependency table is the runner's own, so a subshell gets a copy — the
 // same property the module listing and the feature selection have.
 func TestZmodloadDependenciesInASubshellLeaveTheParentAlone(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload -d zsh/a zsh/b
 (zmodload -d zsh/a zsh/c; zmodload -d zsh/a)
 zmodload -d zsh/a`)

@@ -12,6 +12,7 @@ import "testing"
 //
 // Measured 2026-10-02 on zsh 5.9.2 under `-f -c` (#5145).
 func TestAnArithAssignmentReplacesAnArray(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"an empty array", "xarr=(); (( xarr = 3 )); print ${(t)xarr} $xarr", "integer 3\n"},
 		{"an array with elements", "a=(1 2); (( a = 3 )); print ${(t)a} $a", "integer 3\n"},
@@ -31,6 +32,7 @@ func TestAnArithAssignmentReplacesAnArray(t *testing.T) {
 }
 
 func TestATrailingCommaIsAnOperandThatRanOut(t *testing.T) {
+	t.Parallel()
 	out, _, errs := runZshUTF8(t, "(( 3, )); print st=$?")
 	if out != "st=2\n" || errs != "zsh:1: bad math expression: operand expected at end of string\n" {
 		t.Errorf("got %q, %q", out, errs)
@@ -42,6 +44,7 @@ func TestATrailingCommaIsAnOperandThatRanOut(t *testing.T) {
 // leaves a scalar, which is #5369; what is pinned here is the half that
 // holds, that no number was declared.
 func TestAnArithIncrementDeclaresNothingOverAnArray(t *testing.T) {
+	t.Parallel()
 	out, _, errs := runZshUTF8(t, "a=(5); (( a++ )); print ${(t)a} $a[1]")
 	if out == "integer 6\n" || errs != "" {
 		t.Errorf("got %q, %q, want no integer declared", out, errs)

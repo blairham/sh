@@ -14,6 +14,7 @@ import "testing"
 // and the other six refuse, so none of them is a POSIX fact wearing this
 // shell's name. #2223.
 func TestADigitSeparatorIsSkippedInsideANumeral(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ expr, want string }{
 		// The row that decides it. `1_` is worth 1 under a separator reading
 		// and under a discarded-byte reading alike, so it cannot.
@@ -57,6 +58,7 @@ func TestADigitSeparatorIsSkippedInsideANumeral(t *testing.T) {
 // only the lexer and still refuse this one: the text `1_0` here was never in
 // the program.
 func TestADigitSeparatorReachesAStoredValue(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `x=1_0; echo "$(( x ))"; y=0x1_f; echo "$(( y ))"`)
 	if want := "10\n31\n"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
@@ -69,6 +71,7 @@ func TestADigitSeparatorReachesAStoredValue(t *testing.T) {
 // Measured: `$(( _1 ))` is 0 there, an unset name being zero, where a reading
 // that skipped the byte first would make it 1.
 func TestALeadingUnderscoreIsAName(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `echo "$(( _1 ))"; _1=7; echo "$(( _1 ))"`)
 	if want := "0\n7\n"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
@@ -78,6 +81,7 @@ func TestALeadingUnderscoreIsAName(t *testing.T) {
 // The separator hides the byte it stands on and no other, so the numeral
 // still ends where its base runs out.
 func TestASeparatorDoesNotHideTheLettersAfterIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ expr, want string }{
 		{"1_abc", "bad math expression: operator expected at `abc'"},
 		{"0x1_g", "bad math expression: operator expected at `g'"},

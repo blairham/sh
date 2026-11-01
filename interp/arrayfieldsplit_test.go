@@ -53,6 +53,7 @@ func fieldsRun(t *testing.T, src string, split, glob Answer) (string, int) {
 // TestUnquotedListElementsAskTheSplittingAxis: the same value, the same
 // spelling, and a field count that follows the axis rather than the path.
 func TestUnquotedListElementsAskTheSplittingAxis(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src   string
 		split, want string
@@ -86,6 +87,7 @@ func TestUnquotedListElementsAskTheSplittingAxis(t *testing.T) {
 // TestUnquotedArrayElementsSplitExactly asserts the fields themselves, not
 // only how many there are.
 func TestUnquotedArrayElementsSplitExactly(t *testing.T) {
+	t.Parallel()
 	const src = `a=("b 2" c); set -- ${a[@]}; printf "%d" "$#"; printf "[%s]" "$@"`
 	if out, _ := fieldsRun(t, src, Yes, Yes); out != "3[b][2][c]" {
 		t.Errorf("splitting on: got %q, want %q", out, "3[b][2][c]")
@@ -99,6 +101,7 @@ func TestUnquotedArrayElementsSplitExactly(t *testing.T) {
 // rather than against whitespace. A value with no space in it still splits
 // where IFS says so, and a value full of spaces does not where it does not.
 func TestUnquotedListSplitsOnTheActualSeparators(t *testing.T) {
+	t.Parallel()
 	const src = `IFS=-; a=("x-y" z); set -- ${a[@]}; printf "%d" "$#"; printf "[%s]" "$@"`
 	if out, _ := fieldsRun(t, src, Yes, Yes); out != "3[x][y][z]" {
 		t.Errorf("splitting on: got %q, want %q", out, "3[x][y][z]")
@@ -119,6 +122,7 @@ func TestUnquotedListSplitsOnTheActualSeparators(t *testing.T) {
 // pattern is a pattern only where the dialect says the result of an expansion
 // is one. It was never escaped here, so it always was.
 func TestUnquotedListElementsAskTheGlobbingAxis(t *testing.T) {
+	t.Parallel()
 	// A directory with exactly one match, so a pattern that is honored comes
 	// back as the file's name and one that is not comes back as itself.
 	const src = `: > zz1; a=("zz*" other); set -- ${a[@]}; printf "%d" "$#"; printf "[%s]" "$@"`
@@ -150,6 +154,7 @@ func TestUnquotedListElementsAskTheGlobbingAxis(t *testing.T) {
 // shells that split keep the empty field there, and this path drops it as it
 // always has.
 func TestUnquotedListDropsAnEmptyElement(t *testing.T) {
+	t.Parallel()
 	const src = `a=("" x); set -- ${a[@]}; printf "%d" "$#"; printf "[%s]" "$@"`
 	for _, split := range []Answer{Yes, No} {
 		if out, _ := fieldsRun(t, src, split, Yes); out != "1[x]" {
@@ -168,6 +173,7 @@ func TestUnquotedListDropsAnEmptyElement(t *testing.T) {
 // is the whole promise, so neither axis is asked and one field per element
 // comes out whatever they answer.
 func TestQuotedListElementsAreUntouched(t *testing.T) {
+	t.Parallel()
 	const src = `: > zz1; a=("b 2" "zz*"); set -- "${a[@]}"; printf "%d" "$#"; printf "[%s]" "$@"`
 	for _, split := range []Answer{Yes, No} {
 		for _, glob := range []Answer{Yes, No} {
@@ -182,6 +188,7 @@ func TestQuotedListElementsAreUntouched(t *testing.T) {
 // says so rather than picking one, and only where the answer could change the
 // result — an element with no separator in it is not split either way.
 func TestUnquotedListRefusesAnUnansweredAxis(t *testing.T) {
+	t.Parallel()
 	out, _ := fieldsRun(t, `a=("b 2" c); set -- ${a[@]}; printf "%d" "$#"`, Unspecified, Yes)
 	if !strings.Contains(out, "splitting an unquoted parameter expansion") {
 		t.Errorf("got %q, want the unanswered axis named", out)
@@ -224,6 +231,7 @@ func TestUnquotedListRefusesAnUnansweredAxis(t *testing.T) {
 // it is the invariant that outlives any one pair of answers — the two paths
 // give the same fields for the same value.
 func TestUnquotedListEscapesBeforeItSplits(t *testing.T) {
+	t.Parallel()
 	const list = `IFS='*'; a=("x*y" z); set -- ${a[@]}; printf "%d" "$#"; printf "[%s]" "$@"`
 	const scalar = `IFS='*'; v="x*y"; set -- $v; printf "%d" "$#"; printf "[%s]" "$@"`
 	const valueBackslash = `IFS='*'; b=('a\*c' z); set -- ${b[@]}; printf "%d" "$#"; printf "[%s]" "$@"`
@@ -250,6 +258,7 @@ func TestUnquotedListEscapesBeforeItSplits(t *testing.T) {
 // so an element holding a separator would come apart on the way and the
 // joined result would silently lose the boundary.
 func TestAListInAContextThatNeverSplitsIsNotSplit(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"an assignment's value", `IFS=-; a=("p-q" r); v=${a[@]}; printf "[%s]" "$v"`, "[p-q r]"},
 		{"the positional parameters", `IFS=-; set -- "p-q" r; v=$@; printf "[%s]" "$v"`, "[p-q r]"},

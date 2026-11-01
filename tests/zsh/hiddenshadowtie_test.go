@@ -16,6 +16,7 @@ import "testing"
 //
 // Measured on zsh 5.9.2, 2026-09-27, under `-f` from a script file (#4835).
 func TestAHiddenShadowOverATieIsNotTied(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `zmodload zsh/param/private
 f1() { typeset -h path; print "  typeset=${(t)path}" }
 f2() { local   -h path; print "  local=${(t)path}" }
@@ -43,6 +44,7 @@ f1; f2; f3; f7`)
 // already right and a fix aimed at the word must not move it: the hidden
 // local starts empty and the shell's own `path` is back at the return.
 func TestTheHideLetterLeavesATieAloneWithoutAShadow(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `zmodload zsh/param/private
 f4() { private -h HOME; print "  own=${(t)HOME}" }
 f5() { private -h v;    print "  ordinary=${(t)v}" }

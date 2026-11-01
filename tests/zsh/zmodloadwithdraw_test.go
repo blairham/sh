@@ -29,6 +29,7 @@ import (
 // about its operands. A test matching only "there was a diagnostic" would
 // pass for a shell that never withdrew anything.
 func TestAFeatureLeftOffIsNotCallable(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the one left off",
@@ -80,6 +81,7 @@ func TestAFeatureLeftOffIsNotCallable(t *testing.T) {
 // the builtin back. Measured, and the reason `SetBuiltinEnabled` was the
 // wrong seam for this.
 func TestAWithdrawnFeatureIsNotADisabledBuiltin(t *testing.T) {
+	t.Parallel()
 	out, _, _ := runZshSplit(t, t.TempDir(),
 		"zmodload zsh/zutil\nzmodload -F zsh/zutil -b:zparseopts\ndisable\nprint \"dis=$?\"")
 	if strings.Contains(out, "zparseopts") || !strings.Contains(out, "dis=0") {
@@ -91,6 +93,7 @@ func TestAWithdrawnFeatureIsNotADisabledBuiltin(t *testing.T) {
 // are two halves of one answer, and the half that was already right must not
 // move.
 func TestTheFeatureListingStillReportsTheSelection(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"zmodload zsh/zutil\nzmodload -F zsh/zutil -b:zparseopts\nzmodload -lF zsh/zutil")
 	const want = "+b:zformat\n-b:zparseopts\n+b:zregexparse\n+b:zstyle\n"
@@ -116,6 +119,7 @@ func TestTheFeatureListingStillReportsTheSelection(t *testing.T) {
 // `1`, silence at 0 and silence at 0 — so any one of them failing is a
 // regression rather than a rewording.
 func TestAWithdrawnBuiltinIsOutOfTheEnableListingToo(t *testing.T) {
+	t.Parallel()
 	const setUp = "zmodload zsh/parameter\nzmodload zsh/zutil\n" +
 		"zmodload -F zsh/zutil -b:zparseopts\n"
 	for _, tc := range []struct{ name, src, want string }{

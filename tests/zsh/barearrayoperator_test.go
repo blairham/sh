@@ -29,6 +29,7 @@ import (
 // ArrayScalarIsTheWholeArray — so this is reachable only where that axis says
 // the bare name is the whole list, which is why it lives here.
 func TestAnOperatorOverABareArrayRunsBeforeTheJoin(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name, src, want string
@@ -109,6 +110,7 @@ func TestAnOperatorOverABareArrayRunsBeforeTheJoin(t *testing.T) {
 // on `@` — it drops the element while the same build keeps it for `$*`, so
 // the shell disagrees with itself, which is why nothing here models it.
 func TestAnEmptyElementSurvivesAJoinThatKeepsOneWord(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name, src, want string
@@ -143,6 +145,7 @@ func TestAnEmptyElementSurvivesAJoinThatKeepsOneWord(t *testing.T) {
 // are the two neighbors #2326 found: both are a name position that a count
 // reaches, and both were a plausible value at status 0.
 func TestCountingAnEmptyArrayThroughAnInnerExpansion(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name, src, want string
@@ -179,6 +182,7 @@ func TestCountingAnEmptyArrayThroughAnInnerExpansion(t *testing.T) {
 // is measured too: the same characters inside an `if false` branch are no
 // error at all there.
 func TestALengthOverAQuotedInnerIsRefused(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name, src string

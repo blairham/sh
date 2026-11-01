@@ -55,6 +55,7 @@ func headingRun(t *testing.T, src string, abandons Answer) (string, string, int)
 }
 
 func TestAFailedHeadingDoesNotRunTheConstruct(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, mustNot string }{
 		{
 			"a for word list",
@@ -131,6 +132,7 @@ func TestAFailedHeadingDoesNotRunTheConstruct(t *testing.T) {
 // and the next line still does — which is the pairing that says this is the
 // existing axis rather than a rule of its own.
 func TestAFailedHeadingGivesUpTheLineWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, mustNot string }{
 		{"a for word list", "echo pre\nfor i in \"$((1/0))\"; do echo A; done\necho after", "A"},
 		{"a case subject", "echo pre\ncase \"$((1/0))\" in \"\") echo E;; *) echo A;; esac\necho after", "E"},
@@ -161,6 +163,7 @@ func TestAFailedHeadingGivesUpTheLineWhereTheDialectSaysSo(t *testing.T) {
 // it. Without the clear, the *next* line's heading abandoned itself over the
 // previous line's failure — so a good loop after a bad command never ran.
 func TestAHeadingIsNotAbandonedByThePreviousLinesFailure(t *testing.T) {
+	t.Parallel()
 	out, _, st := headingRun(t,
 		"echo pre\necho \"$((1/0))\"\nfor i in a b; do echo \"A$i\"; done\necho after", Yes)
 	for _, want := range []string{"pre", "Aa", "Ab", "after"} {
@@ -177,6 +180,7 @@ func TestAHeadingIsNotAbandonedByThePreviousLinesFailure(t *testing.T) {
 // failure in a loop **body** is the simple-command path #1171 already fixed,
 // and it is per-line there under the answer that gives up a line.
 func TestAFailureInTheBodyIsStillTheSimpleCommandsQuestion(t *testing.T) {
+	t.Parallel()
 	out, _, st := headingRun(t,
 		"echo pre\nfor i in 1 2; do echo \"$((1/0))\"; echo B; done\necho after", Yes)
 	if strings.Contains(out, "B") {
@@ -190,6 +194,7 @@ func TestAFailureInTheBodyIsStillTheSimpleCommandsQuestion(t *testing.T) {
 // A heading with nothing wrong in it is untouched, in every construct the
 // change reached — the rows that would catch a guard that fired too often.
 func TestAGoodHeadingIsUnaffected(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a for word list", "for i in a b; do echo \"A$i\"; done", "Aa\nAb\n"},
 		{"a for over the positional parameters", "set -- x y\nfor i; do echo \"A$i\"; done", "Ax\nAy\n"},
@@ -225,6 +230,7 @@ func TestAGoodHeadingIsUnaffected(t *testing.T) {
 // than the `case`'s own line less one, and the first-line row is the floor:
 // before anything has run the counter reads 1 and not 0.
 func TestCaseSubjectKeepsThePreviousLine(t *testing.T) {
+	t.Parallel()
 	run := func(t *testing.T, src string, keeps Answer) (string, string) {
 		t.Helper()
 		f, err := syntax.Parse(src, syntax.Core())

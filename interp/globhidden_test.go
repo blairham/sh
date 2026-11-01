@@ -30,6 +30,7 @@ func hiddenDir(t *testing.T) string {
 // the directory hiddenDir builds. See interp/globhidden.go for the reasoning
 // and for what reads only the pattern's first byte gets wrong.
 func TestAGroupsAlternativesCanBeginWithAPeriod(t *testing.T) {
+	t.Parallel()
 	dir := hiddenDir(t)
 	for _, tc := range []struct{ name, src, want string }{
 		{"a plain period", `printf "[%s]" .hidden(#qN)`, "[.hidden]"},
@@ -80,6 +81,7 @@ func TestAGroupsAlternativesCanBeginWithAPeriod(t *testing.T) {
 // still in the text it prints back. Through a variable it answers cleanly.
 // Measured 2026-09-15 in exactly the directory hiddenDir builds.
 func TestAParenthesisInsideABracketDoesNotEndTheGroup(t *testing.T) {
+	t.Parallel()
 	dir := hiddenDir(t)
 	for _, tc := range []struct{ name, pattern, want string }{
 		{"a hidden name behind the bracket", "([(]|.hidden)", "[.hidden]"},
@@ -122,6 +124,7 @@ func quantifiedDir(t *testing.T) string {
 // ksh93u+, in exactly the directory quantifiedDir builds, and the two agree
 // row for row. See interp/globhidden.go for the reading.
 func TestAQuantifiedGroupsArmsCanBeginWithAPeriod(t *testing.T) {
+	t.Parallel()
 	dir := quantifiedDir(t)
 	for _, tc := range []struct{ pattern, want string }{
 		// An arm may begin with one, under any quantifier but `!`.
@@ -172,6 +175,7 @@ func TestAQuantifiedGroupsArmsCanBeginWithAPeriod(t *testing.T) {
 // row: `@(.foo|*)` reaches `bar` through its `*` and does not reach `.a`, and
 // `@(?|.?)` reaches `.a` and `.b` through `.?` and the plain `x` through `?`.
 func TestALeadingPeriodIsTakenOnlyByAWrittenPeriod(t *testing.T) {
+	t.Parallel()
 	dir := quantifiedDir(t)
 	for _, tc := range []struct{ pattern, want string }{
 		// The star arm is not a written period, so it reaches the plain
@@ -198,6 +202,7 @@ func TestALeadingPeriodIsTakenOnlyByAWrittenPeriod(t *testing.T) {
 // Measured 2026-09-22 on zsh 5.9.2 with `extendedglob`, in a directory
 // holding `.a`, `.b` and `plain`.
 func TestABareGroupsArmStillHasToWriteThePeriod(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, n := range []string{".a", ".b", "plain"} {
 		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {

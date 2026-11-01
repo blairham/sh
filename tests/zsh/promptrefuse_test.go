@@ -21,6 +21,7 @@ import (
 // cost of giving its answer to the other three was a typed command
 // disappearing (#1893).
 func TestAPromptKeepsAskingAfterARefusedToken(t *testing.T) {
+	t.Parallel()
 	if !zsh.Semantics().PromptAsksAgainAfterARefusedToken {
 		t.Error("this shell refuses a construct at the prompt, where it waits for another line")
 	}

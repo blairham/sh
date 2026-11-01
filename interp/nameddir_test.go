@@ -18,6 +18,7 @@ import (
 // own users — which is not fussiness: a test naming a real user passes on a
 // laptop and fails on a runner that has never heard of them.
 func TestAUserDatabaseIsTheRunnersToCarry(t *testing.T) {
+	t.Parallel()
 	homes := map[string]string{"alder": "/homes/alder", "birch": "/homes/birch"}
 	with := func(r *Runner) {
 		r.UserHomeDir = func(name string) (string, bool) {
@@ -65,6 +66,7 @@ func TestAUserDatabaseIsTheRunnersToCarry(t *testing.T) {
 // order is the whole of this test — a lookup that asked the database first
 // would pass every other row in the file.
 func TestANamedDirectoryWinsOverAUser(t *testing.T) {
+	t.Parallel()
 	with := func(r *Runner) {
 		r.UserHomeDir = func(name string) (string, bool) {
 			if name == "alder" {
@@ -100,6 +102,7 @@ func TestANamedDirectoryWinsOverAUser(t *testing.T) {
 // `hash -d` is two different builtins under one letter, and the axis is what
 // decides which.
 func TestTheHashLetterDIsAnAxis(t *testing.T) {
+	t.Parallel()
 	names := func(r *Runner) {
 		r.Semantics.HashDefinesANamedDirectory = Yes
 		r.Semantics.HashForgetsOneName = No
@@ -158,6 +161,7 @@ func TestTheHashLetterDIsAnAxis(t *testing.T) {
 
 // A subshell owns its table, exactly as it owns the command hash.
 func TestASubshellOwnsItsNamedDirectories(t *testing.T) {
+	t.Parallel()
 	with := func(r *Runner) { r.Semantics.HashDefinesANamedDirectory = Yes }
 	out, _ := run(t, `hash -d a=/tmp; (hash -d a=/var; printf "[%s]" ~a); printf "[%s]" ~a`, with)
 	if out != "[/var][/tmp]" {

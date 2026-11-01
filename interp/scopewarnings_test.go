@@ -41,6 +41,7 @@ func scopeLintRun(t *testing.T, src string, create, outer bool) string {
 }
 
 func TestTheScopeLintsSayWhatAnAssignmentDid(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name         string
 		src          string
@@ -116,6 +117,7 @@ func TestTheScopeLintsSayWhatAnAssignmentDid(t *testing.T) {
 // which is what keeps the capability in the core and the sentence in the
 // dialect.
 func TestAShellWithNoWordingSaysNothing(t *testing.T) {
+	t.Parallel()
 	out, _ := sourceRunWith(t, t.TempDir(), "f() { gv=1; }\nf\necho gv=$gv\n",
 		permissive(), Diagnostics{}, func(r *Runner) {
 			r.SetWarnsAboutAGlobalCreatedInAFunction(true)
@@ -132,6 +134,7 @@ func TestAShellWithNoWordingSaysNothing(t *testing.T) {
 // is what says the test is the frame this shell made rather than a name still
 // standing from the caller.
 func TestTheScopeLintsAskAboutTheCallThisShellMade(t *testing.T) {
+	t.Parallel()
 	out := scopeLintRun(t, "t() { (tv=1); }\nt\n", true, true)
 	if out != "" {
 		t.Errorf("an assignment in a subshell: got %q, want nothing", out)

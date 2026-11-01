@@ -162,6 +162,7 @@ func BenchmarkReplaceLiteralPerChar(b *testing.B) {
 // span from the end of the message down, at each of the nine positions a
 // match starts at.
 func TestASubstitutionAsksTheMatcherOnlyWhereAMatchCouldBe(t *testing.T) {
+	t.Parallel()
 	e := &syntax.ParamExpr{All: true}
 	o := benchOpts(t, "o", literalSubject)
 	got := replace(literalSubject, "o", e, o, armOrder{}, benchDeclined,
@@ -197,6 +198,7 @@ var trimSubject = "  \t" + strings.Repeat("git  commit -m fix ", 100) + " \t "
 // value: 6,030,131 questions on this 1.9KB line, half a second where zsh
 // 5.9.2 takes 0.3 ms.
 func TestATrimSubstitutionAsksTheMatcherOnlyAtTheEnds(t *testing.T) {
+	t.Parallel()
 	const pattern = "((#s)[[:space:]]##|[[:space:]]##(#e))"
 	e := &syntax.ParamExpr{All: true}
 	o := benchOpts(t, pattern, trimSubject)

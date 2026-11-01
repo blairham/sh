@@ -64,6 +64,7 @@ const count = `f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; `
 //
 // Every row is a measurement on zsh 5.9.2, 2026-09-06.
 func TestTheSplitFlagSplitsWhateverTheOptionSays(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"without the flag the value is one field",
@@ -130,6 +131,7 @@ func TestTheSplitFlagSplitsWhateverTheOptionSays(t *testing.T) {
 // rather than assumed: `"${=v}"` splits, and the fields at the edges of the
 // value survive where an unquoted split discards them.
 func TestTheSplitFlagReachesThroughQuotes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`v="a b c"; f "${=v}"`, `3:[a][b][c]`},
 		{`v="a b c"; f "${==v}"`, `1:[a b c]`},
@@ -158,6 +160,7 @@ func TestTheSplitFlagReachesThroughQuotes(t *testing.T) {
 // separator of its own is honored, and adjacent non-whitespace separators
 // leave the empty field between them.
 func TestTheSplitFlagSplitsOnIFS(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`IFS=:; v="a:b c"; f ${=v}`, `2:[a][b c]`},
 		{`IFS=:; v="a::b"; f ${=v}`, `3:[a][][b]`},
@@ -178,6 +181,7 @@ func TestTheSplitFlagSplitsOnIFS(t *testing.T) {
 // character first, which is why `(' x ' y)` is three fields and not the four
 // that splitting each element on its own would give.
 func TestTheSplitFlagSplitsTheListAsOneString(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`a=("x y" z); f ${a[@]}`, `2:[x y][z]`},
 		{`a=("x y" z); f ${=a[@]}`, `3:[x][y][z]`},
@@ -212,6 +216,7 @@ func TestTheSplitFlagSplitsTheListAsOneString(t *testing.T) {
 // own splitting rule — and not something done to what the group produced.
 // Three of these rows change answer if it runs at the wrong end.
 func TestTheSplitFlagSplitsInsideTheFlagGroup(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the case conversion sees the fields", `v="a b c"; f ${(U)=v}`, `3:[A][B][C]`},
 		{
@@ -275,6 +280,7 @@ func TestTheSplitFlagSplitsInsideTheFlagGroup(t *testing.T) {
 // operand, a `case` subject and a here-document body are the value unchanged
 // — all measured.
 func TestTheSplitFlagDoesNotReachAContextThatNeverSplits(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`v="a b"; x=${=v}; printf "[%s]" "$x"`, `[a b]`},
 		{`v=" a  b "; x=${=v}; printf "[%s]" "$x"`, `[ a  b ]`},
@@ -315,6 +321,7 @@ func runSplitHomeSplitting(t *testing.T, src string) (string, int) {
 // rule and not two: `SH_WORD_SPLIT` and `${=spec}` make the same fields, and
 // each is at the head of a word of its own.
 func TestTheTildeFlagReachesTheFieldsTheOptionSplit(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`v="~/zz ~/qq"; f ${~v}`, `2:[HOME/zz][HOME/qq]`},
 		{`v="~/zz ~/qq"; f X${~v}`, `2:[X~/zz][HOME/qq]`},
@@ -331,6 +338,7 @@ func TestTheTildeFlagReachesTheFieldsTheOptionSplit(t *testing.T) {
 // it made is at the head of a word of its own, so a tilde in the second field
 // expands too.
 func TestTheSplitFlagComposesWithTheTildeFlag(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`v="~/zz ~/qq"; f ${=~v}`, `2:[HOME/zz][HOME/qq]`},
 		{`v="~/zz ~/qq"; f ${~=v}`, `2:[HOME/zz][HOME/qq]`},

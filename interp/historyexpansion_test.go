@@ -24,6 +24,7 @@ func promptRunner(t *testing.T) *Runner {
 // afterwards. `set +H` in a .bashrc is how a person who does not want `!!` says
 // so, and a default applied later would put it straight back.
 func TestAnRcFileCanTurnHistoryExpansionOff(t *testing.T) {
+	t.Parallel()
 	r := promptRunner(t)
 	r.StartInteractiveHistory()
 	if !r.HistoryExpansion() {
@@ -42,6 +43,7 @@ func TestAnRcFileCanTurnHistoryExpansionOff(t *testing.T) {
 // And the mirror: a session whose dialect starts with the expander off — which
 // is ksh93, measured — still reaches it through `set -H`.
 func TestADialectThatStartsOffStillTakesTheRequest(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	sem.HistoryExpansion = Yes
 	sem.HistoryExpansionAtAPrompt = No
@@ -65,6 +67,7 @@ func TestADialectThatStartsOffStillTakesTheRequest(t *testing.T) {
 // value turns the expander off without moving the option. Both were measured
 // before anything read the parameter — see docs/spec/history.md.
 func TestHistcharsIsReadFromTheParameter(t *testing.T) {
+	t.Parallel()
 	r := promptRunner(t)
 	r.StartInteractiveHistory()
 	if got := r.HistoryChars().String(); got != "!^#" {
@@ -87,6 +90,7 @@ func TestHistcharsIsReadFromTheParameter(t *testing.T) {
 // With the state off ExpandHistory hands the line straight back, so the one
 // place that decides is the Runner and a front end may call unconditionally.
 func TestExpandHistoryIsInertWithTheStateOff(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	r := newTestRunner(t, &Runner{Semantics: &sem})
 	res, err := r.ExpandHistory("echo !!", []string{"echo one"}, 1)

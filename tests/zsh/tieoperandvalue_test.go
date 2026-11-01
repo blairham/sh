@@ -16,6 +16,7 @@ import "testing"
 // another build of this one), script files under `env -i PATH=/usr/bin:/bin`
 // with a scratch HOME and standard input on the null device.
 func TestWhatEachTieOperandMayHold(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name, src, want string
@@ -89,6 +90,7 @@ func TestWhatEachTieOperandMayHold(t *testing.T) {
 // literal's index in the command's word list (#5096), rather than
 // Runner.literalOperands, which is a set of names.
 func TestTheSeparatorRuleAsksThePositionAndNotTheName(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const refused = "f:typeset: third argument of tie must be join character\n"
 	for _, tc := range []struct {
@@ -114,6 +116,7 @@ func TestTheSeparatorRuleAsksThePositionAndNotTheName(t *testing.T) {
 // The three refusals in the order this shell puts them, each pair of neighbors
 // pinned by one line: the line below is refused by the rule above it.
 func TestTheOrderOfTheTiesOperandRefusals(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -182,6 +185,7 @@ func TestTheOrderOfTheTiesOperandRefusals(t *testing.T) {
 // rather than assumed — the neighbors on either side of it in the order above
 // both run the next command.
 func TestOnlyTheValueOnBothHalvesIsFatal(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{

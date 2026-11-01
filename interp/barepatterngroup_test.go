@@ -15,6 +15,7 @@ import (
 // name turned on inside a state the other name set must still be able to say
 // what it is.
 func TestTheBarePatternGroupPairIsWrittenAndReadBack(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ anywhere, insideAWord bool }{
 		{true, true}, {true, false}, {false, true}, {false, false},
 	} {
@@ -43,6 +44,7 @@ func TestTheBarePatternGroupPairIsWrittenAndReadBack(t *testing.T) {
 // And a pair already in place is left alone, so a runner whose grammar has
 // not moved does not hand the front end a fresh pointer on every option word.
 func TestSettingTheBarePatternGroupPairItAlreadyHasSwapsNothing(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.PatternAlternation = true
 	d.BarePatternGroupInsideAWord = false

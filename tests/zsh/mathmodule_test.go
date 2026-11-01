@@ -43,6 +43,7 @@ func mathValueOf(t *testing.T, expr string) string {
 // float format, so `floor(3.7)` is `3.` where `int(3.7)` is `3` — a table of
 // float64 results compared numerically would call those two the same answer.
 func TestEveryMathFunctionPrintsTheValueTheShellPrints(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ expr, want string }{
 		// The line #1618 opens with.
 		{"sqrt(4)", "2."},
@@ -135,6 +136,7 @@ func TestEveryMathFunctionPrintsTheValueTheShellPrints(t *testing.T) {
 //
 // The oracle corpus has no row for any of the four, for the same reason.
 func TestFourFunctionsDifferFromThisPlatformInTheirLastBit(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ expr, want string }{
 		{"erf(1)", "0.84270079294971489"},
 		{"erfc(1)", "0.15729920705028513"},
@@ -156,6 +158,7 @@ func TestFourFunctionsDifferFromThisPlatformInTheirLastBit(t *testing.T) {
 // by zero, so "no finite answer means the expression fails" was a plausible
 // reading of the module and is the wrong one for every row here.
 func TestAnEdgeIsNamedRatherThanRefused(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ expr, want string }{
 		{"sqrt(-1)", "NaN"},
 		{"acos(2)", "NaN"},
@@ -191,6 +194,7 @@ func TestAnEdgeIsNamedRatherThanRefused(t *testing.T) {
 // measured by calling it with nought, one, two and three operands, and the
 // refusal quotes the call as it was written.
 func TestTheOperandCountIsCheckedAndTheCallQuotedBack(t *testing.T) {
+	t.Parallel()
 	for _, expr := range []string{
 		"sqrt()", "sqrt(1,2)", "atan()", "atan(1,2,3)",
 		"copysign(1)", "fmod(1)", "signgam(1)", "abs()",
@@ -223,6 +227,7 @@ func TestTheOperandCountIsCheckedAndTheCallQuotedBack(t *testing.T) {
 // signed arithmetic the product wraps and the remainder comes back negative,
 // giving -0.09989929199214842 — exactly one less, in range, and wrong.
 func TestRand48IsDeterministicFromItsSeedVariable(t *testing.T) {
+	t.Parallel()
 	out, _, errs := runZshSplit(t, t.TempDir(),
 		"zmodload zsh/mathfunc\n"+
 			"seed=000000000001\n"+
@@ -262,6 +267,7 @@ func TestRand48IsDeterministicFromItsSeedVariable(t *testing.T) {
 // draw of zero, which one state in 2^48 gives: 1 run in 2.8e14 against the 1
 // in 10,000 it replaces.
 func TestRand48ReseedsRatherThanRefusingAVariableItCannotRead(t *testing.T) {
+	t.Parallel()
 	out, _, errs := runZshSplit(t, t.TempDir(),
 		"zmodload zsh/mathfunc\n"+
 			"seed=zzz\n"+
@@ -290,6 +296,7 @@ func TestRand48ReseedsRatherThanRefusingAVariableItCannotRead(t *testing.T) {
 // Each spelling was compared with zsh 5.9 on 2026-09-13 and is identical,
 // which is what makes the flake a fault in the assertion and not in the shell.
 func TestRand48ASmallDrawIsSpelledInScientificNotation(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		seed, want string
 	}{
@@ -315,6 +322,7 @@ func TestRand48ASmallDrawIsSpelledInScientificNotation(t *testing.T) {
 // TestRand48WithoutAnOperandKeepsItsOwnState: the no-operand form advances
 // something, so two calls in one shell differ.
 func TestRand48WithoutAnOperandKeepsItsOwnState(t *testing.T) {
+	t.Parallel()
 	out, _, errs := runZshSplit(t, t.TempDir(),
 		"zmodload zsh/mathfunc\n"+
 			"a=$(( rand48() ))\nb=$(( rand48() ))\n"+
@@ -332,6 +340,7 @@ func TestRand48WithoutAnOperandKeepsItsOwnState(t *testing.T) {
 // own and then lists them gets its own back and not forty-seven lines of C
 // library.
 func TestAMathFunctionOfThisModuleIsNotInTheFunctionsMListing(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "zmodload zsh/mathfunc\nfunctions -M\n")
 	if out != "" || st != 0 {
 		t.Errorf("output = %q status %d, want nothing and 0", out, st)
@@ -345,6 +354,7 @@ func TestAMathFunctionOfThisModuleIsNotInTheFunctionsMListing(t *testing.T) {
 // TestTheMathFuncModuleLoadsAndListsAllFortySeven: `zmodload zsh/mathfunc` is
 // the second line #1618 quotes.
 func TestTheMathFuncModuleLoadsAndListsAllFortySeven(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"zmodload zsh/mathfunc && zmodload -lF zsh/mathfunc\n")
 	if st != 0 {
@@ -367,6 +377,7 @@ func TestTheMathFuncModuleLoadsAndListsAllFortySeven(t *testing.T) {
 // the module refuses by that name. A gate that only ever said yes would pass
 // every other case in this file.
 func TestAMathFunctionTakenAwayHoldsTheModuleShut(t *testing.T) {
+	t.Parallel()
 	out, _, errs := runZshSplit(t, t.TempDir(), "functions +M sqrt\nzmodload zsh/mathfunc\n")
 	want := "zsh:2: failed to load module `zsh/mathfunc': sqrt is not implemented yet\n"
 	if got := out + errs; got != want {

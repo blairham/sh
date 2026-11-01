@@ -31,6 +31,7 @@ const producedTableRefusal = "attempt to set slice of associative array"
 // the produced name only under the option would have found the two columns
 // agreeing and reported nothing.
 func TestAScalarStoredOverAProducedTableIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"aliases", "functions", "commands", "galiases"} {
 		t.Run(name, func(t *testing.T) {
 			for _, state := range []struct {
@@ -61,6 +62,7 @@ func TestAScalarStoredOverAProducedTableIsRefused(t *testing.T) {
 // without it every row above reads as "a scalar over a table is refused",
 // which is the thing #4617 measured as false with the option off.
 func TestAStoredTableStillTakesAScalarWithTheOptionOff(t *testing.T) {
+	t.Parallel()
 	out, st, errs := runZshSplit(t, t.TempDir(),
 		"typeset -A h=(one 1)\nh=string\ntypeset -p h\nprint reached\n")
 	if want := "typeset h=string\nreached\n"; out != want {
@@ -84,6 +86,7 @@ func TestAStoredTableStillTakesAScalarWithTheOptionOff(t *testing.T) {
 // alias, a keyed literal fills the table, and the produced *index* array
 // beside it takes a scalar without a word.
 func TestTheProducedTableRefusalReachesEveryScalarStore(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src string
 		// refused says the row earns the sentence and ends the shell; the
@@ -150,6 +153,7 @@ func TestTheProducedTableRefusalReachesEveryScalarStore(t *testing.T) {
 // already draws, and the row that says the refusal is an **error** rather than
 // a request to stop.
 func TestAProducedTableRefusalInsideAnEvalDoesNotEndTheScript(t *testing.T) {
+	t.Parallel()
 	out, st, errs := runZshSplit(t, t.TempDir(), "eval \"aliases=string\"\nprint reached\n")
 	if !strings.Contains(errs, "aliases: "+producedTableRefusal) {
 		t.Errorf("stderr = %q, want the refusal", errs)
@@ -165,6 +169,7 @@ func TestAProducedTableRefusalInsideAnEvalDoesNotEndTheScript(t *testing.T) {
 // And a function's name goes in front of the sentence where the file and line
 // otherwise do, exactly as the stored table's refusal does.
 func TestAProducedTableRefusalInsideAFunctionNamesTheFunction(t *testing.T) {
+	t.Parallel()
 	_, st, errs := runZshSplit(t, t.TempDir(), "f() { aliases=string; }\nf\nprint reached\n")
 	if !strings.HasPrefix(errs, "f: aliases: "+producedTableRefusal) {
 		t.Errorf("stderr = %q, want it to open with the function's name", errs)

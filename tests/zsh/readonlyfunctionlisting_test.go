@@ -29,6 +29,7 @@ import (
 // variable path and either froze a variable of that name (with an operand)
 // or listed nothing at all (bare), always at status 0 — #4215.
 func TestReadonlyFIsAPlainFunctionListingHere(t *testing.T) {
+	t.Parallel()
 	setup := "b(){ :; }\nc(){ :; }\n"
 	body := func(n string) string { return n + " () {\n\t:\n}\n" }
 	for _, tc := range []struct {
@@ -57,6 +58,7 @@ func TestReadonlyFIsAPlainFunctionListingHere(t *testing.T) {
 // still written and the listing does not stop there, but the status
 // reflects the miss. Measured the same way as the table above.
 func TestReadonlyFOnAMissingNameBesideAFoundOne(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "b(){ :; }\nreadonly -f b nosuch\n")
 	want := "b () {\n\t:\n}\n"
 	if !strings.HasPrefix(out, want) {
@@ -72,6 +74,7 @@ func TestReadonlyFOnAMissingNameBesideAFoundOne(t *testing.T) {
 // same listing is the whole of the fix. A control for the row above rather
 // than new coverage.
 func TestTypesetFrIsUnaffectedByReadonlyFsFix(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "b(){ :; }\ntypeset -fr b\n")
 	want := "b () {\n\t:\n}\n"
 	if out != want || st != 0 {

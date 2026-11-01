@@ -506,6 +506,7 @@ print -r -- "writeletter=$?"`)
 // all would pass every guard a script writes and prove nothing, which is the
 // same accepting-and-inert failure in the loader rather than in the module.
 func TestEveryFeatureOfTheSystemModuleAnswersUnderF(t *testing.T) {
+	t.Parallel()
 	out, _, _ := runZshSplitWithSystem(t, t.TempDir(), `zmodload zsh/system
 print -r -- "plain=$?"
 zmodload -F zsh/system b:sysopen b:sysread b:syswrite

@@ -15,6 +15,7 @@ func promptFlagged(d *syntax.Dialect) { d.ParamExpansionFlags = true }
 
 // `%n` is the user this runner was told about, wherever it appears in the word.
 func TestThePromptUserEscapeExpands(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -46,6 +47,7 @@ func TestThePromptUserEscapeExpands(t *testing.T) {
 // `env USER=someone-else zsh` draw the wrong person — so the runner is *told*
 // who it is, and the variables are left standing where the script put them.
 func TestThePromptUserEscapeIsNotAVariable(t *testing.T) {
+	t.Parallel()
 	const src = `USER=impostor; LOGNAME=impostor; USERNAME=impostor; echo "[${(%):-%n}][$USER]"`
 	out, _ := runGrammar(t, src, promptFlagged, func(r *Runner) {
 		r.SetPromptStyle(promptEscapeTable())
@@ -67,6 +69,7 @@ func TestThePromptUserEscapeIsNotAVariable(t *testing.T) {
 // assertion on the whole rendered line catches it: the *output* of the silent
 // version and of a correct empty answer are the same string.
 func TestThePromptUserEscapeIsRefusedWhenNobodyTold(t *testing.T) {
+	t.Parallel()
 	// A second command on the line, to say that the refusal *abandons* the
 	// list rather than only failing the one word: nothing after it runs, so
 	// the whole assertion is the one diagnostic line and no more.
@@ -86,6 +89,7 @@ func TestThePromptUserEscapeIsRefusedWhenNobodyTold(t *testing.T) {
 // An escape this shell does not carry is still refused by name, and the name
 // is the escape the script wrote rather than the first one in the word.
 func TestAnUnknownPromptEscapeIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	const src = `echo "[${(%):-%n%q}]"; echo reached`
 	out, st := runGrammar(t, src, promptFlagged, func(r *Runner) {
 		r.SetPromptStyle(promptEscapeTable())
@@ -103,6 +107,7 @@ func TestAnUnknownPromptEscapeIsRefusedByName(t *testing.T) {
 // The escapes that were already carried still are, so the new case did not
 // displace them.
 func TestThePromptEscapesAlreadyCarriedStillAre(t *testing.T) {
+	t.Parallel()
 	out, _ := runGrammar(t, `echo "[${(%):-%%}]"`, promptFlagged, func(r *Runner) {
 		r.SetPromptStyle(promptEscapeTable())
 	})
@@ -119,6 +124,7 @@ func TestThePromptEscapesAlreadyCarriedStillAre(t *testing.T) {
 // asking. Both halves are asserted — told, they answer; untold, they refuse —
 // because either alone passes with the condition ignored in one direction.
 func TestThePromptHostIsToldOrRefused(t *testing.T) {
+	t.Parallel()
 	told := func(r *Runner) {
 		r.SetPromptStyle(promptHostTable())
 		r.SetPromptHost("box.example.test")
@@ -163,6 +169,7 @@ func promptHostTable() PromptStyle {
 // table in its Apply — and asserted because the alternative reading, an
 // escape language with no rows in it, would refuse every `%` in the word.
 func TestThePercentFlagWithNoTableTransformsNothing(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `echo "[${(%):-%n%%x}]"`, promptFlagged, nil)
 	if want := "[%n%%x]\n"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
@@ -242,6 +249,7 @@ func TestThePromptUserIsAskedOnlyOnce(t *testing.T) {
 // comes from the table: a shell whose field was hard-wired to either sentence
 // would pass one row and fail the other.
 func TestAPromptUserQuestionThatAnswersNothingDrawsTheDialectsWord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, noLoginName, want string
 	}{
@@ -275,6 +283,7 @@ func TestAPromptUserQuestionThatAnswersNothingDrawsTheDialectsWord(t *testing.T)
 // no-name sentence for it would be inventing a measurement. Asserted with the
 // same table that draws the sentence above, so only the *question* differs.
 func TestNobodyTellingTheRunnerIsStillARefusalEvenWithAWordForNoName(t *testing.T) {
+	t.Parallel()
 	const src = `echo "[${(%):-%n}]"; echo reached`
 	out, st := runGrammar(t, src, promptFlagged, func(r *Runner) {
 		table := promptEscapeTable()
@@ -298,6 +307,7 @@ func TestNobodyTellingTheRunnerIsStillARefusalEvenWithAWordForNoName(t *testing.
 // that is checked one half at a time is how the host escapes came to have an
 // eager half and a lazy one.
 func TestTheLazyPromptIdentityAnswersLikeTheEagerOne(t *testing.T) {
+	t.Parallel()
 	const src = `echo "[${(%):-%n|%m|%M}]"`
 	const want = "[someone|machine|machine.example]\n"
 	// A table with all three rows, since the two shared ones each carry
@@ -359,6 +369,7 @@ func TestThePromptHostIsNotAskedUntilTheEscapeIsDrawn(t *testing.T) {
 // says this is one code that counts rather than a pair, and a fix that widened
 // both would fail here.
 func TestAHostCountIsANumberOfComponents(t *testing.T) {
+	t.Parallel()
 	told := func(r *Runner) {
 		r.SetPromptStyle(promptHostTable())
 		r.SetPromptHost("a.b.c.d")
@@ -399,6 +410,7 @@ func TestAHostCountIsANumberOfComponents(t *testing.T) {
 // zsh draws `a.b.` for `%3m` and nothing at all for `%-1m`, which is what says
 // the split is plain and there is no path-style leader to keep.
 func TestAHostCountSplitsOnDotsAndNothingElse(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ host, written, want string }{
 		{"solo", "%m", "solo"},
 		{"solo", "%2m", "solo"},
@@ -431,6 +443,7 @@ func TestAHostCountSplitsOnDotsAndNothingElse(t *testing.T) {
 // draws below are asked of one runner, with an assignment between them, and a
 // cached answer fails on the second.
 func TestAPromptHostParameterIsReadOnEveryDraw(t *testing.T) {
+	t.Parallel()
 	const src = `HOST=first.example; echo "[${(%):-%m}][${(%):-%M}]"; HOST=a.b.c.d; echo "[${(%):-%m}][${(%):-%2m}][${(%):-%M}]"`
 	out, st := runGrammar(t, src, promptFlagged, func(r *Runner) {
 		r.SetPromptStyle(promptHostTable())
@@ -449,6 +462,7 @@ func TestAPromptHostParameterIsReadOnEveryDraw(t *testing.T) {
 // the escape would quietly draw the build machine's name at the moment a
 // script had said it meant something else.
 func TestAPromptHostParameterBeatsACarriedInHostName(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `HOST=named.example; echo "[${(%):-%M}]"`, promptFlagged, func(r *Runner) {
 		r.SetPromptStyle(promptHostTable())
 		r.SetPromptHost("carried.in.example")
@@ -467,6 +481,7 @@ func TestAPromptHostParameterBeatsACarriedInHostName(t *testing.T) {
 // still names the escape as missing. Measured, `unset HOST; print -rP "[%m]"`
 // in zsh 5.9.2 writes `[]` and reports 0.
 func TestAnEmptyPromptHostParameterDrawsNothingAndDoesNotRefuse(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `echo "[${(%):-%m}][${(%):-%M}]"`, promptFlagged, func(r *Runner) {
 		r.SetPromptStyle(promptHostTable())
 		r.SetPromptHostParameter("HOST")

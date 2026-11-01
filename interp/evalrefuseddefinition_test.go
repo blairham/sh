@@ -25,6 +25,7 @@ import (
 // a test written only that way would be measuring which grammar the runner
 // had. The second source will not parse in any of them.
 func TestTextEvalCouldNotReadBindsNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, text string }{
 		{"an empty body", "f() {\n}"},
 		{"a body that will not parse", "f() {\nif; then\n}"},
@@ -53,6 +54,7 @@ func TestTextEvalCouldNotReadBindsNothing(t *testing.T) {
 // The lines of the text *before* the refusal still ran, which is the half that
 // keeps the rule above from being "a text that fails anywhere runs nothing".
 func TestTheLinesBeforeARefusalStillRan(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, "eval 'echo one\n{ if; then\n}' 2>/dev/null\necho st=$?\n", func(r *Runner) {
 		s := *r.Semantics
 		s.EvalRunsWhatItParsed = Yes

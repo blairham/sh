@@ -36,6 +36,7 @@ func withTiesAndNulBytes(s *Semantics) {
 }
 
 func TestATiesSeparatorIsTheOperandsFirstByte(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, operand, want string }{
 		// One byte of a two-byte operand: the join is three bytes, not four.
 		{"a two-character operand", `ab`, "3"},
@@ -62,6 +63,7 @@ func TestATiesSeparatorIsTheOperandsFirstByte(t *testing.T) {
 // The empty operand, in both directions and in the listing — the three
 // places a separator is read.
 func TestAnEmptyTieSeparatorIsTheNulByte(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -T A a ''
 a=(p q)
 printf '1 len=%s ' "${#A}"
@@ -82,6 +84,7 @@ typeset -p A`
 // that wrote the byte as an escape would not round-trip, because no word
 // whose first byte is NUL can be written any other way.
 func TestANulTieSeparatorListsAsTheEmptyWord(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -T A a $'\0'
 a=(p q)
 printf '%s|' "${#A}"
@@ -97,6 +100,7 @@ typeset -p A`
 // control that says the change above did not turn "no operand" into the NUL
 // byte as well.
 func TestATieWithNoSeparatorOperandKeepsTheDefault(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -T A a
 A=x:y
 printf '%s|' "${a[*]}"

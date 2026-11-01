@@ -27,6 +27,7 @@ import (
 // TestWhereARefusalsZeroIsRaisedBackToOne; a subshell in a script file leaves
 // the 0 standing.
 func TestAStoreRefusalOfADeclaredElementLeavesZeroAtTheTopLevel(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		why    string
 		answer Answer
@@ -64,6 +65,7 @@ func TestAStoreRefusalOfADeclaredElementLeavesZeroAtTheTopLevel(t *testing.T) {
 // complaint by a route that is not a declaration at all, and a declaration
 // refused for the name being frozen is refused before the store is reached.
 func TestOnlyTheStoresOwnRefusalTakesTheZero(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ why, src string }{
 		{"the same refusal from a bare assignment", "a=(x y)\na[-5]=v\necho after\n"},
 		{"a declaration refused before the store", "typeset -r a=1\ntypeset a[0]=v\necho after\n"},
@@ -84,6 +86,7 @@ func TestOnlyTheStoresOwnRefusalTakesTheZero(t *testing.T) {
 // A declaration whose element the store *takes* is untouched by any of this:
 // the answer moves a refusal's status and must not move a success's.
 func TestAnElementTheStoreTakesIsNotGivenTheZeroRule(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declaredElementRun(t,
 		"a=(x y)\ntypeset a[1]=v\necho \"[${a[1]}]\"\n", Yes, RouteCommandString)
 	if errs != "" {

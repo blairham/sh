@@ -30,6 +30,7 @@ import (
 // So the shell agreed that what was printed meant something else, in both
 // rows, which is what made this the printer's bug rather than the parser's.
 func TestAPrintedPatternGroupStillMatchesOutsideACondition(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			// An argument, where the group is matched against filenames.

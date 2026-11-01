@@ -19,6 +19,7 @@ import (
 // control: zsh is the mode that moves no defaults, so every name in that list
 // is the letter's own doing (#4530).
 func TestEmulateLocalTurnsOnThreeLocalScopingOptions(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `f(){ emulate -L zsh; setopt }; f`)
 	if st != 0 {
 		t.Fatalf("status %d, want 0", st)
@@ -39,6 +40,7 @@ func TestEmulateLocalTurnsOnThreeLocalScopingOptions(t *testing.T) {
 // through the listing — and it is the letter that writes it, so a plain
 // `emulate zsh` leaves the option where it found it.
 func TestEmulateLocalIsWhatTurnsLocalPatternsOn(t *testing.T) {
+	t.Parallel()
 	const src = `f(){ emulate -L zsh; [[ -o localpatterns ]] && print inL=on || print inL=off }
 g(){ emulate zsh; [[ -o localpatterns ]] && print bare=on || print bare=off }
 f
@@ -52,6 +54,7 @@ g
 
 // `$options` is the third surface, and the one a framework reads.
 func TestLocalPatternsReachesTheOptionsParameter(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `f(){ emulate -L zsh; print ${options[localpatterns]} }; f`)
 	if st != 0 || out != "on\n" {
 		t.Errorf("out %q status %d, want ${options[localpatterns]} on inside emulate -L", out, st)

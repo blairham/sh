@@ -53,6 +53,7 @@ func usageDiagnostics() Diagnostics {
 // *run* ends at is the second half: 0 where the script reached its last line
 // and 2 where the error took the shell with it.
 func TestAUsageErrorEscapesBorrowedTextWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name, src string
 	}{
@@ -97,6 +98,7 @@ func TestAUsageErrorEscapesBorrowedTextWhereTheDialectSaysSo(t *testing.T) {
 // line as "an error inside a builtin" rather than as "an error about the call"
 // passes every assertion above and fails here.
 func TestANonUsageErrorIsStillCaughtWhereAUsageErrorEscapes(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := sourceRun(t, dir,
 		"readonly r=1\neval 'r=2'\necho \"AFTER st=$?\"\n",
@@ -115,6 +117,7 @@ func TestANonUsageErrorIsStillCaughtWhereAUsageErrorEscapes(t *testing.T) {
 // are run, because a catch that consumed controlExit without asking which kind
 // it is holding is invisible under the answer that lets everything out.
 func TestExitInsideBorrowedTextIsNotAUsageError(t *testing.T) {
+	t.Parallel()
 	for _, escapes := range []Answer{Yes, No} {
 		dir := t.TempDir()
 		out, st := sourceRun(t, dir, "eval 'exit 7'\necho NOT-REACHED\n",

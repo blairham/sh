@@ -21,6 +21,7 @@ import (
 // ksh93u+ 2012-08-01 keeps only `q`. See
 // interp.Semantics.SubscriptQuotationEndsTheKey (#3968).
 func TestNoKeyEndsAtAQuotedExpansionHere(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; kq=q; (( m[q'$kq'z] = 42 )); ` +
 		`for k in "${(k)m[@]}"; do printf "<%s>" "$k"; done`
 	out, st := answersRun(t, src)
@@ -32,6 +33,7 @@ func TestNoKeyEndsAtAQuotedExpansionHere(t *testing.T) {
 // The axis, pinned against a preset drifting off the column it was measured
 // from.
 func TestTheKeyEndingIsAnAxis(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().SubscriptQuotationEndsTheKey; got != interp.No {
 		t.Errorf("SubscriptQuotationEndsTheKey = %v, want no", got)
 	}

@@ -27,6 +27,7 @@ func operandDiags() Diagnostics {
 // panel word apart and what nobody noticed, because the third words both the
 // same way.
 func TestAMissingOperandIsTwoWordings(t *testing.T) {
+	t.Parallel()
 	d := operandDiags()
 	for _, tc := range []struct {
 		src  string
@@ -52,6 +53,7 @@ func TestAMissingOperandIsTwoWordings(t *testing.T) {
 // wording", so a preset does not have to repeat itself to say it does not
 // distinguish the cases.
 func TestOneWordingServesBothWhenTheSecondIsEmpty(t *testing.T) {
+	t.Parallel()
 	// The sentence is deliberately not the wording a missing field falls back
 	// to, so the test tells "the other field was consulted" from "nothing was
 	// and the default stood in".
@@ -73,6 +75,7 @@ func TestOneWordingServesBothWhenTheSecondIsEmpty(t *testing.T) {
 // whole range are one fact about that shell, which is why the blamed text is
 // enough to know it and no second flag has to be kept in step with the first.
 func TestBlamingPastTheExpressionMakesARanOutFailureAFoundOne(t *testing.T) {
+	t.Parallel()
 	d := operandDiags()
 	d.SubstringErrorNamesTheWholeRange = true
 	src := `x=abcdef; echo "${x:1+:2}"`
@@ -91,6 +94,7 @@ func TestBlamingPastTheExpressionMakesARanOutFailureAFoundOne(t *testing.T) {
 // Without that answer the range is blamed as the parser saw it, and the
 // failure stays the one the parser found.
 func TestBlamingOnlyTheOffsetKeepsTheRanOutWording(t *testing.T) {
+	t.Parallel()
 	d := operandDiags()
 	out, _ := runGrammar(t, `x=abcdef; echo "${x:1+:2}"`, nil, func(r *Runner) { r.Diagnostics = &d })
 	if !strings.Contains(out, "1+: ran out") {

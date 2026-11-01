@@ -43,6 +43,7 @@ func completionOnTheThirdWord(t *testing.T, src string) []string {
 // `SUFFIX` is empty, `words` is `(git sub a=b=c tail)` and `CURRENT` is 3.
 // The rows are that session's, one condition per row.
 func TestTheCompletionConditionsAnswerInsideACompletion(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, cond string
 		want       int
@@ -102,6 +103,7 @@ func TestTheCompletionConditionsAnswerInsideACompletion(t *testing.T) {
 // `PREFIX=a=b=c` and `IPREFIX=` back out after all fifteen conditions had
 // run.
 func TestACompletionConditionLeavesTheParametersAlone(t *testing.T) {
+	t.Parallel()
 	got := completionOnTheThirdWord(t, widgetOf(
 		"[[ -prefix *= ]]; [[ -after git ]]; [[ -between git tail ]]; "+
 			"compadd -U -Q -- \"PREFIX=$PREFIX IPREFIX=$IPREFIX w=${(j:|:)words} C=$CURRENT\"",
@@ -130,6 +132,7 @@ func TestACompletionConditionLeavesTheParametersAlone(t *testing.T) {
 // missing, because a condition has no word that runs it and so no way to tell
 // a script about itself.
 func TestTheCompleteModuleLoads(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `zmodload zsh/complete; echo st=$?; zmodload`)
 	if st != 0 {
 		t.Errorf("status = %d, want 0: %q", st, out)

@@ -15,6 +15,7 @@ import "testing"
 // file; `go version -m` says *not a Go executable* for it and
 // `github.com/blairham/sh/cmd/zsh` for ours.
 func TestAListedByteThatIsNotACharacterIsEscaped(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a lone lead byte", `v=$'\xc3'; typeset -p v`, "typeset v=$'\\M-C'\n"},
 		{"one in the middle of a value", `w=$'a\xc1b'; typeset -p w`, "typeset w=$'a\\M-Ab'\n"},
@@ -55,6 +56,7 @@ func TestAListedByteThatIsNotACharacterIsEscaped(t *testing.T) {
 // row and in both listings, which is what narrows it to the key. Measured
 // 2026-09-26 on zsh 5.9.2 under `-f`.
 func TestTheBareListingSpellsATableKeyAsTheDeclarationDoes(t *testing.T) {
+	t.Parallel()
 	rows := func(src string) string { return src }
 	for _, tc := range []struct{ name, src, want string }{
 		{

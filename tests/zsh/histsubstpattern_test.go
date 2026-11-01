@@ -13,6 +13,7 @@ import (
 // `f` and `F:n:` modifier prefixes, and `${v/#%pat/rep}`. Measured 2026-10-02
 // on zsh 5.9.2 under `-f` with `extendedglob` (#5155).
 func TestHistSubstPatternAndTheRepeatingModifiers(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, name := range []string{"tmpfile1", "tmpfile2"} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o644); err != nil {

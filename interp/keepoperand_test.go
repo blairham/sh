@@ -15,6 +15,7 @@ import (
 // namesAfterARefusal does. The list is the front of args until an operand is
 // dropped, so every pattern with a drop goes through the copy.
 func TestKeepOperandKeepsWhatItIsGiven(t *testing.T) {
+	t.Parallel()
 	orig := []string{"a", "b", "c", "d"}
 	for mask := range 1 << len(orig) {
 		args := slices.Clone(orig)

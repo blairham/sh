@@ -21,6 +21,7 @@ import (
 // that sources a plugin: it asks whether the ice's value begins with a `!`,
 // which is how it decides whether the load needs tracking (#1516).
 func TestASecondSubscriptReadsWhatTheFirstNamed(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the shape a plugin manager writes",
@@ -52,6 +53,7 @@ func TestASecondSubscriptReadsWhatTheFirstNamed(t *testing.T) {
 // `(hello world)` is `hello[2]` — so the two spellings are not the same node
 // here, where every other subscript reading they share is.
 func TestABareChainIsOneSubscriptAndThenText(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `a=(hello world); echo "[$a[1][2]]"`)
 	if want := "[hello[2]]\n"; out != want || st != 0 {
 		t.Errorf("gave %q at %d, want %q at 0", out, st, want)
@@ -61,6 +63,7 @@ func TestABareChainIsOneSubscriptAndThenText(t *testing.T) {
 // A chain on a nested expansion is the two constructs at once, and this tree
 // refuses it by name rather than answering with the last subscript alone.
 func TestAChainOnANestedExpansionIsRefusedHere(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `a=(hello world); echo "[${${a}[1][2]}]"`)
 	const want = "${${a}[1][2]}: a chain of subscripts on a nested expansion is not implemented"
 	if !strings.Contains(out, want) {

@@ -23,6 +23,7 @@ import "testing"
 // `\e[0m\e[49m\e[38;5;NNNm` where zsh writes four escapes, and every segment
 // boundary in the drawn prompt came out a color short.
 func TestAPromptRenderingRestoresWhatAnEarlierOneSet(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const decl = `v='%F{070}'; w='%b'; k='%K{021}'; c='%f'; `
 	for _, tc := range []struct {

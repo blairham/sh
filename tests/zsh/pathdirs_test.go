@@ -15,6 +15,7 @@ import (
 // non-executable `sub/n` in a path directory `top`, and the working
 // directory holding `sub/here` and a non-executable `sub/n` of its own.
 func TestPathDirsSearchesASlashedNameDownThePath(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	top := filepath.Join(dir, "top")
 	write := func(path, body string, mode os.FileMode) {

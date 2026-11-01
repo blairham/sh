@@ -42,6 +42,7 @@ func axisRun(t *testing.T, src string, set func(*Semantics)) (string, int) {
 }
 
 func TestArrayLengthWithoutASubscriptIsAnAxis(t *testing.T) {
+	t.Parallel()
 	out, _ := axisRun(t, `a=(hello by z); echo "${#a}"`, func(s *Semantics) {
 		s.ArrayLengthWithoutSubscriptIsCount = Yes
 	})
@@ -65,6 +66,7 @@ func TestArrayLengthWithoutASubscriptIsAnAxis(t *testing.T) {
 // associative shape lands in the same place and is graded in the corpus,
 // where the other axes a keyed array asks are answered by a dialect.
 func TestArrayLengthAsksTheAxisAtOneElementToo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, count, width string
 	}{
@@ -96,6 +98,7 @@ func TestArrayLengthAsksTheAxisAtOneElementToo(t *testing.T) {
 // bug this axis fixes returns a plausible string at status 0, so a test that
 // only checked for no diagnostic passed against it.
 func TestABareArrayNameBeingTheListIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `a=(one two); set -- $a; echo "n=$# [$1][$2]"`
 	out, _ := axisRun(t, src, func(s *Semantics) {
 		s.ArrayNameWithoutSubscriptIsTheList = Yes
@@ -115,6 +118,7 @@ func TestABareArrayNameBeingTheListIsAnAxis(t *testing.T) {
 // splits, so a join-then-split would give one field `xyz` where the elements
 // were never joined at all gives three.
 func TestABareArrayNameAsAListDoesNotJoinFirst(t *testing.T) {
+	t.Parallel()
 	out, _ := axisRun(t, `IFS=; a=(x y z); set -- $a; echo "n=$# [$1][$2][$3]"`,
 		func(s *Semantics) { s.ArrayNameWithoutSubscriptIsTheList = Yes })
 	if strings.TrimSpace(out) != "n=3 [x][y][z]" {
@@ -127,6 +131,7 @@ func TestABareArrayNameAsAListDoesNotJoinFirst(t *testing.T) {
 // the first character of IFS, not a hard space (#854). Both answers are
 // asserted so the field cannot quietly take over the quoted spelling.
 func TestABareArrayNameQuotedStillJoinsOnIfs(t *testing.T) {
+	t.Parallel()
 	for _, a := range []Answer{Yes, No} {
 		out, _ := axisRun(t, `IFS=-; a=(x y z); set -- "$a"; echo "n=$# [$1]"`,
 			func(s *Semantics) {
@@ -143,6 +148,7 @@ func TestABareArrayNameQuotedStillJoinsOnIfs(t *testing.T) {
 // value too, measured — an assignment's value and a `case` subject among
 // them. Routing those through the list path would join them on a hard space.
 func TestABareArrayNameJoinsWhereNothingSplits(t *testing.T) {
+	t.Parallel()
 	out, _ := axisRun(t, `IFS=-; a=(x y z); v=$a; case $a in "x-y-z") echo joined;; *) echo split;; esac; echo "[$v]"`,
 		func(s *Semantics) {
 			s.ArrayScalarIsTheWholeArray = Yes
@@ -157,6 +163,7 @@ func TestABareArrayNameJoinsWhereNothingSplits(t *testing.T) {
 // either way, so an unanswered axis must still run rather than refuse — and
 // an empty one is no field at all under both.
 func TestABareArrayNameOfOneElementAsksNothing(t *testing.T) {
+	t.Parallel()
 	out, status := axisRun(t, `a=(only); set -- $a; echo "n=$# [$1]"`, func(*Semantics) {})
 	if strings.TrimSpace(out) != "n=1 [only]" || status != 0 {
 		t.Errorf("got %q at %d, want the element without a question", out, status)
@@ -176,6 +183,7 @@ func TestABareArrayNameOfOneElementAsksNothing(t *testing.T) {
 // measured in the corpus against that shell instead of asserted on a vector
 // that cannot parse it.
 func TestOperatorsOnABareArrayNameFollowTheAxis(t *testing.T) {
+	t.Parallel()
 	out, _ := axisRun(t, `a=(one two three); set -- ${a:1}; echo "n=$# [$1]"`,
 		func(s *Semantics) { s.ArrayNameWithoutSubscriptIsTheList = Yes })
 	if strings.TrimSpace(out) != "n=2 [two]" {
@@ -214,6 +222,7 @@ func TestOperatorsOnABareArrayNameFollowTheAxis(t *testing.T) {
 // shell. Each row below is one such spelling, and each guard that keeps it out
 // is what mutation kills through this test.
 func TestABareArrayNameAsksNothingWhereTheListPathDoesNotAnswer(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// `${#a}` is ArrayLengthWithoutSubscriptIsCount's question.
 		{`a=(one two); set -- ${#a}; echo "[$1]"`, "[2]"},
@@ -252,6 +261,7 @@ func TestABareArrayNameAsksNothingWhereTheListPathDoesNotAnswer(t *testing.T) {
 // `${a=d}` and `${a?e}` answer alike. Before #984 it was one field holding
 // `one two` in every dialect — nobody's answer, at status 0.
 func TestABareArrayNameUnderAConditionalAsksTheAxis(t *testing.T) {
+	t.Parallel()
 	for _, op := range []string{":=d", ":?e", "=d", "?e"} {
 		src := `a=(one two); set -- ${a` + op + `}; echo "n=$# [$1]"`
 		set := func(s *Semantics) {
@@ -279,6 +289,7 @@ func TestABareArrayNameUnderAConditionalAsksTheAxis(t *testing.T) {
 // A plain scalar is not an array and asks nothing, however the axis is
 // answered: the rewrite must key on the *store*, not on the spelling.
 func TestABareScalarNameIsNotAList(t *testing.T) {
+	t.Parallel()
 	for _, a := range []Answer{Yes, No} {
 		out, status := axisRun(t, `v="x y"; set -- $v; echo "n=$# [$1]"`,
 			func(s *Semantics) {
@@ -300,6 +311,7 @@ func TestABareScalarNameIsNotAList(t *testing.T) {
 // that answered yes handed a spurious empty argument to every
 // `f "${arr[@]}"` written before anything filled `arr`.
 func TestAQuotedAtOnAnUnsetNameIsAnAxis(t *testing.T) {
+	t.Parallel()
 	out, _ := axisRun(t, `set -- "${a[@]}"; echo "n=$#"`, func(s *Semantics) {
 		s.UnsetNameAtIsOneEmptyField = Yes
 	})
@@ -339,6 +351,7 @@ func TestAQuotedAtOnAnUnsetNameIsAnAxis(t *testing.T) {
 }
 
 func TestANegativeSubstringLengthIsAnAxis(t *testing.T) {
+	t.Parallel()
 	out, _ := axisRun(t, `x=abcdef; echo "[${x:1:-2}]"`, func(s *Semantics) {
 		s.SubstringNegativeLengthIsEmpty = Yes
 	})
@@ -354,6 +367,7 @@ func TestANegativeSubstringLengthIsAnAxis(t *testing.T) {
 }
 
 func TestLinenoInAFunctionIsAnAxis(t *testing.T) {
+	t.Parallel()
 	src := "f(){\necho $LINENO\n}\nf"
 	out, _ := axisRun(t, src, func(s *Semantics) { s.LinenoCountsFromTheFunction = Yes })
 	if strings.TrimSpace(out) != "1" {
@@ -376,6 +390,7 @@ func TestLinenoInAFunctionIsAnAxis(t *testing.T) {
 // six panel columns do (#1679), and a prompt theme's first statement is
 // written that way.
 func TestBraceRangeEndpointsExpandedIsAnAxis(t *testing.T) {
+	t.Parallel()
 	src := `n=3; echo {1..$n}`
 	out, _ := axisRun(t, src, func(s *Semantics) {
 		s.BraceExpansion = Yes
@@ -435,6 +450,7 @@ func TestAFailedExpandedRangeKeepsWhatItExpanded(t *testing.T) {
 // keeps a list's expansions from being run for a range that will not read
 // them.
 func TestACommaBeatsAnExpandedRange(t *testing.T) {
+	t.Parallel()
 	out, _ := axisRun(t, `f() { echo ran >&2; echo 3; }; printf '[%s]' {1..$(f),5} 2>&1`,
 		func(s *Semantics) {
 			s.BraceExpansion = Yes
@@ -446,6 +462,7 @@ func TestACommaBeatsAnExpandedRange(t *testing.T) {
 }
 
 func TestBraceRangePaddingIsAnAxis(t *testing.T) {
+	t.Parallel()
 	src := `echo {01..3}`
 	out, _ := axisRun(t, src, func(s *Semantics) {
 		s.BraceExpansion = Yes
@@ -479,6 +496,7 @@ func TestBraceRangePaddingIsAnAxis(t *testing.T) {
 }
 
 func TestBraceRangeStepSignIsAnAxis(t *testing.T) {
+	t.Parallel()
 	// A sign pointing away from the far endpoint: honored, the range holds
 	// its first element alone; ignored, the endpoints set the direction and
 	// the step contributes magnitude.
@@ -515,6 +533,7 @@ func TestBraceRangeStepSignIsAnAxis(t *testing.T) {
 }
 
 func TestBraceRangeNegativeStepReversalIsAnAxis(t *testing.T) {
+	t.Parallel()
 	// `{3..1..-1}` is the corner where the sign agrees with the endpoints,
 	// so the sign axis is not asked and only the reversal question remains.
 	out, _ := axisRun(t, `echo {3..1..-1}`, func(s *Semantics) {
@@ -555,6 +574,7 @@ func TestBraceRangeNegativeStepReversalIsAnAxis(t *testing.T) {
 }
 
 func TestALocalInheritingTheExportAttributeIsAnAxis(t *testing.T) {
+	t.Parallel()
 	// Read through a real child rather than through a listing: what the axis
 	// decides is what a command is told, and a shell can hold the attribute
 	// and still hand the entry over, or the other way about.
@@ -635,6 +655,7 @@ func TestALocalInheritingTheExportAttributeIsAnAxis(t *testing.T) {
 // and why an unanswered vector is refused here rather than silently taking
 // whichever reading happened to be first in the code.
 func TestARangeWithAMissingComponentIsAnAxis(t *testing.T) {
+	t.Parallel()
 	keeps := func(s *Semantics) {
 		s.BraceExpansion = Yes
 		s.BraceRangeMissingEndCountsFromZero = No
@@ -683,6 +704,7 @@ func TestARangeWithAMissingComponentIsAnAxis(t *testing.T) {
 // road: bash reads it as one and counts, and the two that decline fall
 // through to the axis above.
 func TestARangeWithAZeroStepIsAnAxis(t *testing.T) {
+	t.Parallel()
 	if out, st := axisRun(t, `printf '[%s]' {1..2..0}`, func(s *Semantics) {
 		s.BraceExpansion = Yes
 		s.BraceRangeZeroStepCountsAsOne = Yes
@@ -711,6 +733,7 @@ func TestARangeWithAZeroStepIsAnAxis(t *testing.T) {
 // What a range between two single characters spans, and the spelling both
 // readings share.
 func TestACharacterRangeIsAnAxis(t *testing.T) {
+	t.Parallel()
 	wide := func(s *Semantics) {
 		s.BraceExpansion = Yes
 		s.BraceCharRangeSpansAnyCharacter = Yes
@@ -749,6 +772,7 @@ func TestACharacterRangeIsAnAxis(t *testing.T) {
 // A `+` in front of a range's number, which Go's own number reader accepts
 // for free and one shell does not.
 func TestAPlusOnARangeNumberIsAnAxis(t *testing.T) {
+	t.Parallel()
 	if out, st := axisRun(t, `printf '[%s]' {+1..2}`, func(s *Semantics) {
 		s.BraceExpansion = Yes
 		s.BraceRangeNumberMayCarryAPlus = Yes

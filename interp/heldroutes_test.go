@@ -53,6 +53,7 @@ func recreateWithFiles(t *testing.T, d string) {
 }
 
 func TestEveryRelativeRouteAsksTheDirectoryHeld(t *testing.T) {
+	t.Parallel()
 	t.Run("control: the files are where the shell is", func(t *testing.T) {
 		// The positive the rows below need: in a directory nothing has
 		// happened to, every route finds what is there.

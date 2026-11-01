@@ -54,6 +54,7 @@ func sourceTextRun(t *testing.T, src string, keep bool, dg Diagnostics, before f
 // The headline. The blanks, the comment and the terminator are all things the
 // tree has already forgotten, so none of these can pass through the layout.
 func TestAListingCanBeTheDefinitionsOwnSourceText(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{FunctionListingHeader: "%[1]s()%[2]s", FunctionListingIsSourceText: true}
 	for _, tc := range []struct{ name, src, want string }{
 		{"the blanks as written", "f(){   :;   }; typeset -f f", "f(){   :;   };"},
@@ -99,6 +100,7 @@ func TestAListingCanBeTheDefinitionsOwnSourceText(t *testing.T) {
 // kept the text run by a vector that does not write it. Both lay the body out
 // and both end with a newline of their own.
 func TestOneHalfOfThePairAloneLeavesTheLayoutInPlace(t *testing.T) {
+	t.Parallel()
 	const src = "f(){   :;   }; typeset -f f"
 	const want = "f(){   :\n}\n"
 	out, st := sourceTextRun(t, src, false,
@@ -121,6 +123,7 @@ func TestOneHalfOfThePairAloneLeavesTheLayoutInPlace(t *testing.T) {
 // shell's own sentence about the name belongs — which is the whole of what
 // SetUndefinedFunctions is for.
 func TestAFunctionStillToBeReadIsNotListedFromItsOldSource(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{FunctionListingHeader: "%[1]s()%[2]s", FunctionListingIsSourceText: true}
 	out, st := sourceTextRun(t, "f() { echo body; }; typeset -f f", true, dg,
 		func(r *Runner) {

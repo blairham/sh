@@ -13,6 +13,7 @@ import "testing"
 // this same shell *absorbs* a closing whitespace run, so the two are separate
 // answers and not one (#1186).
 func TestReadIntoAnArrayKeepsTheClosingWhitespaceField(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	count := `printf "n=%s" "${#r[@]}"; for e in "${r[@]}"; do printf "[%s]" "$e"; done`
 	for _, tc := range []struct{ src, want string }{

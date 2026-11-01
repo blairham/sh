@@ -10,6 +10,7 @@ import "testing"
 // zsh 5.9.2 under `-f` (#5155): with the option on, `exec` runs only an
 // external command, whatever function or builtin has the name.
 func TestPosixBuiltinsTakesExecOffTheShellsOwnCommands(t *testing.T) {
+	t.Parallel()
 	const fn = "f(){print fn $1}; "
 	cases := []struct{ src, want string }{
 		{fn + "(exec f a); print st=$?", "fn a\nst=0\n"},

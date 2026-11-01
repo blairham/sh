@@ -26,6 +26,7 @@ import (
 // reported success. That is the shape of failure a gate exists to prevent —
 // the write goes somewhere the script did not ask for, and nothing says so.
 func TestARefusedOpenStopsTheCommand(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	victim := filepath.Join(dir, "victim")
 	for _, tc := range []struct{ name, src string }{
@@ -85,6 +86,7 @@ func TestARefusedOpenStopsTheCommand(t *testing.T) {
 // path and the kernel not having it are meant to be indistinguishable: to
 // the construct asking, a path the policy hides does not exist.
 func TestADeniedStatReadsAsAMissingPath(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	file := filepath.Join(dir, "present")
 	if err := testenv.WriteExecutable(file, []byte(":\n"), 0o700); err != nil {
@@ -184,6 +186,7 @@ func TestADeniedStatReadsAsAMissingPath(t *testing.T) {
 // A denied directory read yields no entries: the pattern misses, exactly as
 // it does over a directory the process may not list.
 func TestADeniedDirectoryReadMatchesNothing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, name := range []string{"a", "b"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("x\n"), 0o600); err != nil {
@@ -219,6 +222,7 @@ func TestADeniedDirectoryReadMatchesNothing(t *testing.T) {
 // `.` denied its file reads is reported the way `.` refused its file by the
 // kernel is: same diagnostic path, and above all the file never runs.
 func TestADeniedSourceReadFailsLikeAnUnreadableFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	sourced := filepath.Join(dir, "sourced.sh")
 	if err := os.WriteFile(sourced, []byte("echo ran-anyway\n"), 0o600); err != nil {
@@ -490,6 +494,7 @@ func TestARefusalReachesABackgroundJob(t *testing.T) {
 // A refused command is a command that failed, not a broken shell: the script
 // carries on.
 func TestARefusedCommandFailsAndTheScriptCarriesOn(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	sem := PosixSemantics()
 	r := newTestRunner(t, &Runner{

@@ -56,6 +56,7 @@ func checkAgainstModel(t *testing.T, step string, a Array, m arrayModel) {
 // the middle and at the end, writes below zero and far past the end, and a
 // gap filled back in.
 func TestIndexedArrayAnswersAsTheMapDid(t *testing.T) {
+	t.Parallel()
 	type op struct {
 		del bool
 		pos int
@@ -108,6 +109,7 @@ func TestIndexedArrayAnswersAsTheMapDid(t *testing.T) {
 // cases thought of: a hole opened and closed across a word, a trim that
 // takes several holes with it, a switch to the map in the middle.
 func TestIndexedArrayRandomOperationsAnswerAsTheMapDid(t *testing.T) {
+	t.Parallel()
 	rng := rand.New(rand.NewPCG(6099, 1))
 	for round := range 300 {
 		a, m := NewArray(0), arrayModel{}
@@ -132,6 +134,7 @@ func TestIndexedArrayRandomOperationsAnswerAsTheMapDid(t *testing.T) {
 
 // A nil array reads as one with nothing in it, the way a nil map did.
 func TestANilIndexedArrayReadsAsEmpty(t *testing.T) {
+	t.Parallel()
 	var a Array
 	if a.Len() != 0 || a.Has(0) || len(a.subscripts()) != 0 {
 		t.Fatal("a nil array holds something")
@@ -151,6 +154,7 @@ func TestANilIndexedArrayReadsAsEmpty(t *testing.T) {
 // Deleting during a walk is allowed and the deleted position is not visited,
 // in both forms of the store.
 func TestIndexedArrayWalkHonorsADeleteMadeDuringIt(t *testing.T) {
+	t.Parallel()
 	for _, far := range []bool{false, true} {
 		a := ArrayOf(Scalar("a"), Scalar("b"), Scalar("c"), Scalar("d"))
 		if far {
@@ -176,6 +180,7 @@ func TestIndexedArrayWalkHonorsADeleteMadeDuringIt(t *testing.T) {
 // A write during a walk that moves the store into the map does not lose the
 // positions the walk had not reached yet.
 func TestIndexedArrayWalkSurvivesTheSwitchToTheMap(t *testing.T) {
+	t.Parallel()
 	a := ArrayOf(Scalar("a"), Scalar("b"), Scalar("c"))
 	var seen []int
 	for k := range a.All() {
@@ -373,6 +378,7 @@ func BenchmarkIndexedArrayWalk(b *testing.B) {
 // A short gap stays in the slice, so `a[10]=x` on a small zsh array does not
 // cost the map; a write below zero or far out does move it there.
 func TestAShortGapStaysInTheSlice(t *testing.T) {
+	t.Parallel()
 	a := ArrayOf(Scalar("x"))
 	a.Set(10, Scalar("y"))
 	if a.sparse != nil {
@@ -393,6 +399,7 @@ func TestAShortGapStaysInTheSlice(t *testing.T) {
 // map's: a write through the copy's nested element must not reach the
 // original's.
 func TestACloneCopiesNestedElementsInBothForms(t *testing.T) {
+	t.Parallel()
 	for _, sparse := range []bool{false, true} {
 		a := ArrayOf(Scalar("x"), Element{Nested: ArrayOf(Scalar("p"), Scalar("q"))})
 		if sparse {

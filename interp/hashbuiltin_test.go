@@ -15,6 +15,7 @@ import (
 // the dialect's question.
 
 func TestHashBareAndResetSucceed(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `hash; hash -r; echo "st=$?"`, nil)
 	if st != 0 || !strings.Contains(out, "st=0") {
 		t.Errorf("out=%q st=%d, want quiet success", out, st)
@@ -22,6 +23,7 @@ func TestHashBareAndResetSucceed(t *testing.T) {
 }
 
 func TestHashEmptyTableWordingIsTheDialects(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `hash`, func(r *Runner) {
 		r.Diagnostics = &Diagnostics{HashEmptyTable: "hash: hash table empty"}
 	})
@@ -31,6 +33,7 @@ func TestHashEmptyTableWordingIsTheDialects(t *testing.T) {
 }
 
 func TestHashAMissingNameIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -58,6 +61,7 @@ func TestHashAMissingNameIsAnAxis(t *testing.T) {
 }
 
 func TestHashCountsABuiltinUnlessPathAlone(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer

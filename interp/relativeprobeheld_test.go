@@ -63,6 +63,7 @@ func resolvedTempDir(t *testing.T) string {
 }
 
 func TestARelativeFileTestAsksTheDirectoryHeld(t *testing.T) {
+	t.Parallel()
 	t.Run("control: a directory nothing has happened to", func(t *testing.T) {
 		// The positive the rows below need: with the file there, every
 		// letter that can say yes does, so a row reading n is the case and

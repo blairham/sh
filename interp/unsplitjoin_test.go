@@ -46,6 +46,7 @@ func joinSepRun(t *testing.T, src string, atOnIFS Answer) (string, int) {
 // them is the same answer in the same shell, which is what makes this one axis
 // rather than one per context.
 func TestTheAtSpellingsUnsplitJoinIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, onIFS, onSpace string }{
 		{
 			"an assignment's value",
@@ -96,6 +97,7 @@ func TestTheAtSpellingsUnsplitJoinIsAnAxis(t *testing.T) {
 // routed both spellings through one answer would pass the rows above and turn
 // every one of these into a diagnostic.
 func TestTheStarSpellingsUnsplitJoinIsNotTheAxis(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`IFS=-; a=(x y z); v=${a[*]}; printf "%s" "$v"`, "x-y-z"},
 		{`IFS=-; set -- x y z; v=$*; printf "%s" "$v"`, "x-y-z"},
@@ -116,6 +118,7 @@ func TestTheStarSpellingsUnsplitJoinIsNotTheAxis(t *testing.T) {
 // restating. Its own two axes are answered here so the row reaches the
 // question it is about; the separator is what is being asserted.
 func TestARangeSubscriptJoinsOnIFSWithoutTheAxis(t *testing.T) {
+	t.Parallel()
 	const src = `IFS=-; a=(x y z); v=${a[1,2]}; printf "%s" "$v"`
 	for _, a := range []Answer{Yes, No, Unspecified} {
 		out, st := axisRun(t, src, func(s *Semantics) {
@@ -135,6 +138,7 @@ func TestARangeSubscriptJoinsOnIFSWithoutTheAxis(t *testing.T) {
 // join happens either way here and joining with nothing is exactly what one
 // shell does.
 func TestAnEmptyIFSJoinsWithNothing(t *testing.T) {
+	t.Parallel()
 	const star = `IFS=""; a=(x y); v=${a[*]}; printf "%s" "$v"`
 	if out, st := joinSepRun(t, star, No); out != "xy" || st != 0 {
 		t.Errorf("star: got %q status %d, want %q at 0", out, st, "xy")
@@ -153,6 +157,7 @@ func TestAnEmptyIFSJoinsWithNothing(t *testing.T) {
 // may demand a dialect. Unspecified is the test: an unanswered axis is a
 // refusal, so these would fail rather than merely differ.
 func TestTheUnsplitJoinIsNotAskedWhereTheReadingsAgree(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(x y z); v=${a[@]}; printf "%s" "$v"`, "x y z"},
 		{`unset IFS; a=(x y z); v=${a[@]}; printf "%s" "$v"`, "x y z"},
@@ -170,6 +175,7 @@ func TestTheUnsplitJoinIsNotAskedWhereTheReadingsAgree(t *testing.T) {
 // must not move. `"${a[*]}"` is one field joined on IFS and `"${a[@]}"` is one
 // field per element, in every shell measured.
 func TestTheQuotedSpellingsAreUnaffected(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`IFS=-; a=(x y z); set -- "${a[*]}"; printf "%d" "$#"; printf "[%s]" "$@"`, `1[x-y-z]`},
 		{`IFS=-; a=(x y z); set -- "${a[@]}"; printf "%d" "$#"; printf "[%s]" "$@"`, `3[x][y][z]`},
@@ -195,6 +201,7 @@ func TestTheQuotedSpellingsAreUnaffected(t *testing.T) {
 // join by a different route — is here beside it, because the two printing
 // different things is what the whole join rule exists to prevent.
 func TestABackslashSeparatorSurvivesTheUnsplitJoin(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`IFS='\'; set -- x y; v=$*; printf "[%s]" "$v"`, `[x\y]`},
 		{`IFS='\'; set -- x y; printf "[%s]" "$*"`, `[x\y]`},

@@ -17,6 +17,7 @@ import (
 // routes did not, so `(( 1/0 ))` and `let '1/0'` said `division by 0` with
 // nothing to say which expression or which loop iteration had done it.
 func TestAMathComplaintFromACommand(t *testing.T) {
+	t.Parallel()
 	naming := func() Diagnostics {
 		return Diagnostics{ArithError: "%[1]s: %[2]s"}
 	}

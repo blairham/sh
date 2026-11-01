@@ -16,6 +16,7 @@ import (
 // integration is `'builtin' 'autoload' '-Uz' '--' "$file"`, a call by
 // `${file:t}` and an `unfunction`. Measured 2026-10-02 on zsh 5.9.2 (#5392).
 func TestAutoloadOfAnAbsolutePathDefinesItsBaseName(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	fns := filepath.Join(dir, "fns")
 	if err := os.Mkdir(fns, 0o755); err != nil {

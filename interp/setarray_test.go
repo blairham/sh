@@ -58,6 +58,7 @@ func setArrayRun(t *testing.T, src string, set func(*Semantics), dg Diagnostics)
 // The whole of what the letter is for: an array assigned through a name that
 // is not a literal, which `name=(…)` cannot express.
 func TestSetArrayAssignsThroughAHeldName(t *testing.T) {
+	t.Parallel()
 	out, errs, st := setArrayRun(t, `h=hh
 set -A $h m n o
 echo "n=${#hh[@]} [${hh[@]}] first=[${hh[0]}]"`, nil, Diagnostics{})
@@ -71,6 +72,7 @@ echo "n=${#hh[@]} [${hh[@]}] first=[${hh[0]}]"`, nil, Diagnostics{})
 // store `name=(…)` reaches — so the array base is the dialect's and not this
 // builtin's. A store of its own would have had to answer the base twice.
 func TestSetArrayReplacesAndReadsTheDialectsBase(t *testing.T) {
+	t.Parallel()
 	out, errs, st := setArrayRun(t, `set -A a x y z
 set -A a p
 echo "1 n=${#a[@]} [${a[@]}]"
@@ -92,6 +94,7 @@ echo "2 zero=[${b[0]}] one=[${b[1]}]"`, nil, Diagnostics{})
 // standing, which is a different operation from the minus form rather than
 // the same one. A single implementation gets this half wrong.
 func TestThePlusFormReplacesFromTheFront(t *testing.T) {
+	t.Parallel()
 	out, errs, st := setArrayRun(t, `set -A b 1 2 3 4 5
 set +A b Q R
 echo "1 n=${#b[@]} [${b[@]}]"
@@ -109,6 +112,7 @@ echo "3 n=${#c[@]} [${c[@]}]"`, nil, Diagnostics{})
 // as it was — unanimous, and *not* the minus form's answer to the same
 // emptiness.
 func TestThePlusFormWithNoValuesLeavesTheArrayAlone(t *testing.T) {
+	t.Parallel()
 	out, errs, st := setArrayRun(t, `set -A c 1 2 3
 set +A c
 echo "n=${#c[@]} [${c[@]}]"`, nil, Diagnostics{})
@@ -133,6 +137,7 @@ echo "n=${#c[@]} [${c[@]}]"`, nil, Diagnostics{})
 func emptyArrayTellsTheStatesApart(s *Semantics) { s.EmptyArrayIsSet = Yes }
 
 func TestSetArrayWithNoValuesLeavesAnEmptyArray(t *testing.T) {
+	t.Parallel()
 	out, errs, st := setArrayRun(t, `set -A e 1 2
 set -A e
 echo "n=${#e[@]} set=[${e[@]+yes}]"`, emptyArrayTellsTheStatesApart, Diagnostics{})
@@ -144,6 +149,7 @@ echo "n=${#e[@]} set=[${e[@]+yes}]"`, emptyArrayTellsTheStatesApart, Diagnostics
 }
 
 func TestSetArrayWithNoValuesUnsetsUnderTheOtherAnswer(t *testing.T) {
+	t.Parallel()
 	out, errs, st := setArrayRun(t, `set -A e 1 2
 set -A e
 echo "n=${#e[@]} set=[${e[@]+yes}]"`, func(s *Semantics) {
@@ -158,6 +164,7 @@ echo "n=${#e[@]} set=[${e[@]+yes}]"`, func(s *Semantics) {
 }
 
 func TestSetArrayWithNoValuesRefusesWithoutTheAxis(t *testing.T) {
+	t.Parallel()
 	_, errs, st := setArrayRun(t, `set -A e`, func(s *Semantics) {
 		s.SetArrayWithNoValuesUnsetsTheName = Unspecified
 	}, Diagnostics{})
@@ -171,6 +178,7 @@ func TestSetArrayWithNoValuesRefusesWithoutTheAxis(t *testing.T) {
 // Where the name ends the options, every word behind it is a value — dash
 // words and `--` included.
 func TestTheNameEndsTheOptions(t *testing.T) {
+	t.Parallel()
 	out, errs, st := setArrayRun(t, `set -A f -x -y
 echo "1 n=${#f[@]} [${f[@]}]"
 set -A g -- 1 2
@@ -188,6 +196,7 @@ echo "2 n=${#g[@]} [${g[@]}]"`, nil, Diagnostics{})
 // both**, because whether `--` is an operand *is* whether options are still
 // being read.
 func TestTheOptionsCanCarryOnPastTheName(t *testing.T) {
+	t.Parallel()
 	carryOn := func(s *Semantics) { s.SetArrayOptionsContinuePastTheName = Yes }
 	out, errs, st := setArrayRun(t, `set -A g -- 1 2
 echo "n=${#g[@]} [${g[@]}] x=[$-]"`, carryOn, Diagnostics{})
@@ -206,6 +215,7 @@ echo "n=${#f[@]} [${f[@]}]"`, carryOn, Diagnostics{})
 }
 
 func TestTheOptionsAfterTheNameRefuseWithoutTheAxis(t *testing.T) {
+	t.Parallel()
 	_, errs, st := setArrayRun(t, `set -A a x`, func(s *Semantics) {
 		s.SetArrayOptionsContinuePastTheName = Unspecified
 	}, Diagnostics{})
@@ -219,6 +229,7 @@ func TestTheOptionsAfterTheNameRefuseWithoutTheAxis(t *testing.T) {
 // The letters in front of the array letter still apply, which is what makes
 // it one bundle rather than a word of its own.
 func TestTheLettersInFrontOfTheArrayLetterStillApply(t *testing.T) {
+	t.Parallel()
 	out, errs, st := setArrayRun(t, `set -uA nn 1 2
 echo "n=${#nn[@]} [${nn[@]}]"
 echo "flag=[${-}]"`, nil, Diagnostics{})
@@ -236,6 +247,7 @@ echo "flag=[${-}]"`, nil, Diagnostics{})
 // The positional parameters are left alone. `set` replacing them is the
 // letter's whole other meaning, and an array assignment must not reach it.
 func TestSetArrayLeavesThePositionalParametersAlone(t *testing.T) {
+	t.Parallel()
 	out, errs, st := setArrayRun(t, `set -- one two three
 set -A a x y
 echo "pos=[$*] n=$# arr=[${a[@]}]"`, nil, Diagnostics{})
@@ -251,6 +263,7 @@ echo "pos=[$*] n=$# arr=[${a[@]}]"`, nil, Diagnostics{})
 // through — the fatality included, which both shells with the letter answer
 // yes: the script ends there.
 func TestABadArrayNameIsRefused(t *testing.T) {
+	t.Parallel()
 	out, errs, st := setArrayRun(t, `set -A 1bad v
 echo "after"`, nil, Diagnostics{
 		BuiltinBadName:       map[string]string{"set": "not an identifier: %[2]s"},
@@ -280,6 +293,7 @@ echo "after"`, func(s *Semantics) { s.BadNameToDeclarationFatal = No }, Diagnost
 // afterwards prints its complaint with the array already written — which is
 // the bug refuseReadonly exists to have fixed once.
 func TestSetArrayOverAFrozenNameStoresNothing(t *testing.T) {
+	t.Parallel()
 	out, errs, st := setArrayRun(t, `set -A ro keep
 readonly ro
 set -A ro gone
@@ -302,6 +316,7 @@ echo "st=$? [${ro[@]}]"`, func(s *Semantics) {
 // the values from that subscript on, and the placement reads the array base —
 // which is the whole of what could have gone wrong in silence.
 func TestASubscriptedArrayNameIsNamedAsMissing(t *testing.T) {
+	t.Parallel()
 	out, errs, st := setArrayRun(t, `set -A 'sub[2]' v
 echo "after"`, nil, Diagnostics{})
 	want := "testsh: set: -A with a subscripted name is not implemented yet\n"
@@ -319,6 +334,7 @@ echo "after"`, nil, Diagnostics{})
 // them counted; either choice answers the other shell's script wrongly and
 // says nothing about it.
 func TestAnAssociationTargetIsNamedAsMissing(t *testing.T) {
+	t.Parallel()
 	_, errs, st := setArrayRun(t, `typeset -A m
 set -A m k1 v1`, func(s *Semantics) {
 		s.DeclareOptions = "aAilprux"
@@ -333,6 +349,7 @@ set -A m k1 v1`, func(s *Semantics) {
 // its words and its usage block, and where it does not the *listing* it would
 // have written is named as missing.
 func TestSetArrayWithNoNameSaysWhichOperandIsMissing(t *testing.T) {
+	t.Parallel()
 	_, errs, st := setArrayRun(t, `set -A`, nil, Diagnostics{
 		SetArrayNeedsAName: "set: %[1]s: name argument expected",
 		BuiltinUsage:       map[string]string{"set": "Usage: set [-A name] [arg ...]"},
@@ -352,6 +369,7 @@ func TestSetArrayWithNoNameSaysWhichOperandIsMissing(t *testing.T) {
 }
 
 func TestSetArrayWithNoNameNamesTheListingAsMissing(t *testing.T) {
+	t.Parallel()
 	_, errs, st := setArrayRun(t, `set -A`, nil, Diagnostics{})
 	want := "testsh: set: -A: a listing is not implemented yet\n"
 	if errs != want || st != 2 {
@@ -363,6 +381,7 @@ func TestSetArrayWithNoNameNamesTheListingAsMissing(t *testing.T) {
 // option, and the refusal already in place is that shell's own — read rather
 // than asked, so nothing complains about a missing dialect.
 func TestWithoutTheLetterTheWordIsAnInvalidOption(t *testing.T) {
+	t.Parallel()
 	_, errs, st := setArrayRun(t, `set -A a x`, func(s *Semantics) {
 		s.SetArrayLetter = Unspecified
 	}, Diagnostics{
@@ -388,6 +407,7 @@ func TestWithoutTheLetterTheWordIsAnInvalidOption(t *testing.T) {
 // Core rather than an axis: both columns that have the letter at all answer
 // every spelling of it alike, so there is no disagreement to record.
 func TestTheArrayLetterWeldsItsNameFromTheRestOfTheWord(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`set -As a z y; echo "a=[${a[*]}] s=[${s[*]}] [$*]"`, "a=[] s=[a z y] []"},
 		{`set -Aarr p q; echo "[${arr[*]}] [$*]"`, "[p q] []"},
@@ -411,6 +431,7 @@ func TestTheArrayLetterWeldsItsNameFromTheRestOfTheWord(t *testing.T) {
 // A bad letter in front of the welded one is still a bad letter, which is
 // what says the weld starts at the `A` and not at the dash.
 func TestABadLetterInFrontOfTheWeldedArrayLetterIsStillRefused(t *testing.T) {
+	t.Parallel()
 	_, errs, _ := setArrayRun(t, `set -ZAb q; echo "[${b[*]}]"`, nil, Diagnostics{})
 	if !strings.Contains(errs, "Z") {
 		t.Errorf("stderr %q, want the unknown letter in front of the weld refused", errs)

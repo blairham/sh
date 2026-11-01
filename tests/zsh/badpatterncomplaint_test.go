@@ -35,6 +35,7 @@ import (
 // because an `eval` reports a bad pattern and lets the script carry on —
 // measured, the reference writes both lines.
 func TestABadPatternInARedirectionTargetIsReportedOnce(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src string
 		want      int
@@ -82,6 +83,7 @@ func TestABadPatternInARedirectionTargetIsReportedOnce(t *testing.T) {
 // made. Asserted apart from the count above, because a shell that stopped
 // complaining altogether would satisfy a count of one.
 func TestARefusedRedirectionTargetNamesNoFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if _, st, errs := runZshSplit(t, dir, "setopt badpattern\n: > [a\n"); st != 1 {
 		t.Errorf("status = %d, want 1 (stderr %q)", st, errs)
@@ -125,6 +127,7 @@ func TestARefusedRedirectionTargetNamesNoFile(t *testing.T) {
 // whose rows were measured under `LC_ALL=C`. See
 // Diagnostics.NearTextEscapesControlCharacters.
 func TestABadPatternComplaintRendersAControlCharacter(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, escape, want string
 	}{

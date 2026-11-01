@@ -44,6 +44,7 @@ func withCompound(p CompoundAttributePolicy, elems, startsOver Answer) func(*Sem
 // three ways that tell them apart: the elements, the length, and — for the
 // table — what a child is told.
 func TestACompoundValueMeetingANewAttribute(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		p          CompoundAttributePolicy
@@ -80,6 +81,7 @@ echo "[${m[k]}] n=${#m[@]}"`, withCompound(tc.p, Yes, No), Diagnostics{})
 // ways all leave the same value, which is what a fresh declaration of the
 // name would leave.
 func TestTheScalarAnArrayIsReplacedWithIsAFreshOne(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `a=(7 8); typeset -i a; echo "1 [$a]"
 b=(x y); typeset -i b; echo "2 [$b]"
 c=(0x10 9); typeset -i c; echo "3 [$c]"`,
@@ -95,6 +97,7 @@ c=(0x10 9); typeset -i c; echo "3 [$c]"`,
 // letter changes no kind, so there is nothing to replace the compound with
 // and the elements stand.
 func TestOnlyATypeLetterReplacesACompoundWithAScalar(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `brr=(a b)
 typeset -u brr
 echo "[${brr[@]}] n=${#brr[@]}"`,
@@ -111,6 +114,7 @@ echo "[${brr[@]}] n=${#brr[@]}"`,
 // puts the empty table there before the question is asked, so every
 // `typeset -A` reached it until this was guarded.
 func TestADeclarationWithNoTypeLetterNeedsNoCompoundAnswer(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) {
 		withCompound(CompoundAttributeUnspecified, Yes, No)(s)
 	}
@@ -126,6 +130,7 @@ echo "[${m[k]}]"`, set, Diagnostics{})
 // An unanswered axis refuses rather than guessing: one answer leaves the
 // array alone, one rewrites every element and one leaves no array at all.
 func TestAnUnansweredCompoundAxisIsRefused(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `arr=(a b)
 typeset -i arr
 echo "st=$?"
@@ -143,6 +148,7 @@ echo "[${arr[@]}]"`, withCompound(CompoundAttributeUnspecified, Yes, No), Diagno
 // reach-back above: the answer that keeps a standing array's elements alone
 // still folds what is written to one of them.
 func TestAnElementWriteGoesThroughTheNamesAttribute(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		elems Answer
@@ -167,6 +173,7 @@ typeset -A m; typeset -i m; m[k]=7+7; echo "3 [${m[k]}]"`,
 // through the same fold — the two spellings that must not be mistaken for the
 // replacement below.
 func TestAnAppendAndADeclarationsOwnLiteralAreFolded(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -ia d=(5+5 6+6); echo "1 [${d[@]}]"
 typeset -ia e; e+=(7+7); echo "2 [${e[@]}]"
 typeset -ia f=(1); f+=(8+8); echo "3 [${f[@]}]"`,
@@ -183,6 +190,7 @@ typeset -ia f=(1); f+=(8+8); echo "3 [${f[@]}]"`,
 // load-bearing half — it says the attribute is gone rather than merely
 // bypassed by the assignment that replaced the elements.
 func TestAWholeArrayAssignmentReCreatesTheName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		startsOver Answer
@@ -209,6 +217,7 @@ echo "[${z[@]}]"`,
 // literal keeps the attribute, and so does the first array literal a declared
 // name receives — the name has to have something to start over.
 func TestWhatDoesNotReCreateTheName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a keyed literal",
@@ -237,6 +246,7 @@ func TestWhatDoesNotReCreateTheName(t *testing.T) {
 // Measured, and both shells that can be asked agree: `typeset -ia d=(1);
 // typeset -ia d=(5+5 6+6)` folds to `10 12` and keeps the letter.
 func TestADeclarationsOwnLiteralNeverReCreatesTheName(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -ia d=(1)
 typeset -ia d=(5+5 6+6)
 typeset -p d
@@ -254,6 +264,7 @@ echo "[${d[@]}]"`,
 // folded either. Measured — `typeset -ua g=(a); g=(bb cc)` lists as
 // `typeset -a g=(bb cc)` and the `dd` after it stays lower-case.
 func TestReCreatingTheNameLosesEveryTypeLetter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"upper", "typeset -ua g=(a)\ng=(bb cc)\ng[0]=dd\necho \"[${g[@]}]\"", "[dd cc]\n"},
 		{"lower", "typeset -la h=(A)\nh=(BB CC)\nh[0]=DD\necho \"[${h[@]}]\"", "[DD CC]\n"},
@@ -274,6 +285,7 @@ func TestReCreatingTheNameLosesEveryTypeLetter(t *testing.T) {
 // unanswered here on purpose: a guard that asked anyway would refuse every
 // array replacement in a preset that has not answered it.
 func TestAnOrdinaryArrayReplacementNeedsNoDialect(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) {
 		withCompound(CompoundAttributeKeepsTheElements, Yes, Unspecified)(s)
 	}
@@ -290,6 +302,7 @@ echo "[${a[@]}] st=$?"`, set, Diagnostics{})
 // answer declares an array of that type, the other a scalar of it and no
 // array at all. See Semantics.NumericAttributeReplacesTheArrayAttribute.
 func TestANumericLetterTakingTheArrayLetterIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -ia z
 typeset -p z
 echo "n=${#z[@]}"`
@@ -312,6 +325,7 @@ echo "n=${#z[@]}"`
 // The table letter is the same question, which is what makes it one answer
 // and not one per container letter.
 func TestTheTableLetterLosesToANumericLetterTheSameWay(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, "typeset -iA m\ntypeset -p m", func(s *Semantics) {
 		withCompound(CompoundAttributeKeepsTheElements, Yes, No)(s)
 		s.NumericAttributeReplacesTheArrayAttribute = Yes
@@ -327,6 +341,7 @@ func TestTheTableLetterLosesToANumericLetterTheSameWay(t *testing.T) {
 // name is already holding — see
 // Semantics.ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver.
 func TestAnArrayLiteralOverANameThatIsNotAnArrayIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -i a
 a=(5+5 6+6)
 typeset -p a
@@ -353,6 +368,7 @@ echo "[${a[@]}]"`
 // with the array letter on the declaration and one without. Neither name is
 // holding anything, so nothing about the value can be the difference.
 func TestTheArrayLetterIsWhatSavesTheNameFromBeingReCreated(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -l e
 e=(AB Cd)
 typeset -p e
@@ -372,6 +388,7 @@ typeset -p f`, func(s *Semantics) {
 // drops on a store. Both sides are run with the *assign* answer fixed at yes,
 // so only the append answer can be what moves.
 func TestAnAppendedArrayLiteralOverAScalarIsItsOwnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -i p=3
 p+=(5+5)
 typeset -p p

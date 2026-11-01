@@ -9,6 +9,7 @@ import "testing"
 // 2026-10-03 on zsh 5.9 under `-c` (#5663). See
 // interp.Semantics.PlusLetterComesOffAfterTheValueLands.
 func TestAPlusLetterComesOffBeforeTheValueLands(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`typeset -l s=A; typeset +l s=B; typeset -p s`, "typeset s=B\n"},
 		{`typeset -u s=a; typeset +u s=b; typeset -p s`, "typeset s=b\n"},

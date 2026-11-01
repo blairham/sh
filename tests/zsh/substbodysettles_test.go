@@ -20,6 +20,7 @@ import (
 // `echo b; v=$(X); echo a`, under `set -n` and run. `refused` is the `set -n`
 // answer and the run writes no `b` for exactly the same rows.
 func TestARefusedSubstitutionBodyIsTheLinesHere(t *testing.T) {
+	t.Parallel()
 	if !zsh.Dialect().SubstitutionBodyRefusalEndsTheRead {
 		t.Fatal("the flag is off, so the rows below say nothing about this dialect")
 	}

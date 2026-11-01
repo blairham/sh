@@ -10,6 +10,7 @@ import "testing"
 // has, over another separator (#5152). Measured 2026-10-02 on zsh 5.9.2
 // (`/opt/homebrew/bin/zsh -f`, `LC_ALL=C`).
 func TestAWordSubscriptCountsWords(t *testing.T) {
+	t.Parallel()
 	const setup = "t=$'a\\tb c'; u=axybxyc\n"
 	for _, tc := range []struct{ src, want string }{
 		{`print -r -- "<${t[(w)2]}><${t[(ws: :)2]}><${t[(pws:\t:)2]}><${t[(wps:\t:)2]}>"`, "<b><c><b c><b c>\n"},

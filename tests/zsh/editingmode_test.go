@@ -19,6 +19,7 @@ import (
 // and then wrote a spurious `noemacs` row the moment a script chose `vi`,
 // which is a deviation from a default this shell did not actually hold.
 func TestNeitherEditingModeIsSelectedOnItsOwn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		interactive     bool

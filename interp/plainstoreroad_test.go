@@ -88,6 +88,7 @@ var theFullRoad = map[string][]string{
 // TestTheFullRoadOfAnAssignmentIsTheOneThePlainStoreWasCheckedAgainst fails
 // when what `assign` or `setVarAs` reaches on the runner changes. See theFullRoad.
 func TestTheFullRoadOfAnAssignmentIsTheOneThePlainStoreWasCheckedAgainst(t *testing.T) {
+	t.Parallel()
 	f, err := parser.ParseFile(token.NewFileSet(), "runner.go", nil, 0)
 	if err != nil {
 		t.Fatal(err)

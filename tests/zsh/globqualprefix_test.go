@@ -17,6 +17,7 @@ import (
 // on zsh 5.9.2 under -fc in the qualifier fixture (`[ab]` matches `a` and
 // `b`); every `out` and `errs` is that shell's.
 func TestAReturnFromQualifierCodeInABareAssignmentLeavesTheListsStatus(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, out, errs string }{
 		// The second assignment's substitution never runs, and the list is 0.
 		{`f() { x=( [ab](e:"return 3":) ) y=$(print side >&2); print inf; }; f; print after $? $#x`, "after 0 1\n", ""},
@@ -54,6 +55,7 @@ func TestAReturnFromQualifierCodeInABareAssignmentLeavesTheListsStatus(t *testin
 // With nothing kept, the pattern misses and the function's refusal ends the
 // shell.
 func TestAReturnFromQualifierCodeUnderAFailingStatusKeepsNoFile(t *testing.T) {
+	t.Parallel()
 	src := `f() { (exit 5); x=( [ab](e:"return 3":) ); print inf; }; f; print after $?`
 	out, st, errs := runZshSplit(t, globCodeFixture(t), src)
 	if out != "" || st != 1 || errs != "f: no matches found: [ab](e:return 3:)\n" {
@@ -70,6 +72,7 @@ func TestAReturnFromQualifierCodeUnderAFailingStatusKeepsNoFile(t *testing.T) {
 // is (#6752). Measured 2026-10-27 on zsh 5.9.2 under -fc in the qualifier
 // fixture, both streams on one pipe.
 func TestATraceLineIsWrittenAheadOfQualifierCodesOwnTrace(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a bare assignment",

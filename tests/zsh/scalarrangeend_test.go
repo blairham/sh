@@ -11,6 +11,7 @@ import "testing"
 // Measured 2026-10-02 on zsh 5.9.2, `env -i PATH=/usr/bin:/bin
 // LC_ALL=en_US.UTF-8 zsh -fc` (#5153).
 func TestASearchEndingARangeOverAString(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"the end is where the match ends", "a=abcdefg; print ${a[(r)cd,(r)ef]}", "cdef\n"},
 		{"a pattern's end", "a=abcdefg; print ${a[1,(r)c?e]}", "abcde\n"},

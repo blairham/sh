@@ -24,6 +24,7 @@ import (
 // went on to refuse the subscript after the division had been reported
 // (#6579).
 func TestAFailedElementWriteKeepsWhatItHeld(t *testing.T) {
+	t.Parallel()
 	src := "z0=$0\n" +
 		"k() { local n=renamed; [[ $1 == $z0 ]] && n=same; shift; " +
 		"print -r -- \"[${(j:,:)a}] ${#a} [$v] [$*] [${(kv)m}] [$n]\"; TRY_BLOCK_ERROR=0 }\n" +
@@ -65,6 +66,7 @@ func TestAFailedElementWriteKeepsWhatItHeld(t *testing.T) {
 // first, so the write to the third was spliced back out — `9 3` — until the
 // value moved ahead of the read to be checked before the store (#6579).
 func TestASpanValueIsExpandedBeforeTheElementsAreRead(t *testing.T) {
+	t.Parallel()
 	out, _, err := preset.Combined(t, dialecttest.Base{Dir: t.TempDir()},
 		"a=(1 2 3); a[1,2]=$((a[3]=9)); print -r -- \"$a\"\n")
 	if err != nil {

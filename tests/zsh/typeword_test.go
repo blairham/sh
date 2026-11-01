@@ -13,6 +13,7 @@ import (
 // Measured 2026-09-12 against zsh 5.9.2. Six classes, `name: kind` a line, in
 // the order the operands were given.
 func TestTypeWordNamesTheKind(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"a builtin", "type -w print\n", "print: builtin\n"},
 		{"a reserved word", "type -w if\n", "if: reserved\n"},
@@ -49,6 +50,7 @@ func TestTypeWordNamesTheKind(t *testing.T) {
 
 // The status is 0 only when every operand was something.
 func TestTypeWordStatusFollowsTheOperands(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src string
 		want      int
@@ -69,6 +71,7 @@ func TestTypeWordStatusFollowsTheOperands(t *testing.T) {
 // the two dialects spell the same question differently and each refuses the
 // other's spelling.
 func TestTypeKindLetterIsNotThisShells(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "type -t ls\n")
 	if want := "zsh:type:1: bad option: -t\n"; out != want || st != 1 {
 		t.Errorf("got %q status %d, want %q at 1", out, st, want)
@@ -85,6 +88,7 @@ func TestTypeKindLetterIsNotThisShells(t *testing.T) {
 // `whence -v` is whence's own letter and is not touched by this, which the
 // last row says, on a builtin so the answer does not depend on PATH.
 func TestTypeVerboseLetterIsNotThisShells(t *testing.T) {
+	t.Parallel()
 	const refused = "zsh:type:1: bad option: -v\n"
 	for _, c := range []struct {
 		src, want string
@@ -109,6 +113,7 @@ func TestTypeVerboseLetterIsNotThisShells(t *testing.T) {
 // `type` has not got is still refused the way it is without `-m`, which is
 // the control that says the letter was taken rather than the word ignored.
 func TestTypePatternLetterIsBuilt(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src, want string
 		st        int
@@ -126,6 +131,7 @@ func TestTypePatternLetterIsBuilt(t *testing.T) {
 // And `whence -w` says the same words, because they are two names for one
 // builtin and the table behind them is one table.
 func TestWhenceAndTypeAgreeOnTheWords(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"print", "if", "nosuchzz"} {
 		byType, _ := runZsh(t, t.TempDir(), "type -w "+src+"\n")
 		byWhence, _ := runZsh(t, t.TempDir(), "whence -w "+src+"\n")

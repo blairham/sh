@@ -21,6 +21,7 @@ import "testing"
 // because "nothing was left after the letters" is the obvious one and it is
 // wrong: `-D` and `-a o` leave nothing and get the *other* sentence.
 func TestZparseoptsWithNoArguments(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		status          int

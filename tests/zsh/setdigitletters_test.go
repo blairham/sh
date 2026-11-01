@@ -29,6 +29,7 @@ import (
 // -m` *not a Go executable*, from script files under `env -i
 // PATH=/usr/bin:/bin` with a scratch `HOME`.
 func TestTheTwelveSetLettersThisShellHadNoRowFor(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The nine positives: the letter turns the option on and `$-` grows.
 		{"correct", `set -0; [[ -o correct ]]; echo "o=$? [$-]"`, "o=0 [0569X]"},
@@ -89,6 +90,7 @@ func TestTheTwelveSetLettersThisShellHadNoRowFor(t *testing.T) {
 // produced place, which put them *behind* the capitals. Measured on one
 // binary, and the third row is what settles it — every digit at once.
 func TestEveryDigitLeadsDollarDash(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`set -8 -0 -3 -T -y -1; echo "[$-]"`, "[0135689TXy]"},
 		{`set -9 +9 -7 -2 -B -w -4; echo "[$-]"`, "[24567BXw]"},

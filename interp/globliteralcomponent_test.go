@@ -67,6 +67,7 @@ func skipAsRoot(t *testing.T) {
 // The name that is missed: a listing of a `--x` directory is refused, and the
 // name inside it is still reachable by being named.
 func TestASpelledComponentIsFoundUnderADirectoryThatCannotBeListed(t *testing.T) {
+	t.Parallel()
 	skipAsRoot(t)
 	dir := modesDir(t)
 	for _, tc := range []struct{ name, src, want string }{
@@ -90,6 +91,7 @@ func TestASpelledComponentIsFoundUnderADirectoryThatCannotBeListed(t *testing.T)
 // walk that joins them without asking offers one under a directory it cannot
 // enter.
 func TestADotComponentIsNotOfferedUnderADirectoryThatCannotBeEntered(t *testing.T) {
+	t.Parallel()
 	skipAsRoot(t)
 	dir := modesDir(t)
 	for _, tc := range []struct{ name, src, want string }{
@@ -112,6 +114,7 @@ func TestADotComponentIsNotOfferedUnderADirectoryThatCannotBeEntered(t *testing.
 // target to stat and is still a name. A resolution that followed the link
 // would drop it, and no column does.
 func TestASpelledComponentNamingADanglingLinkStillMatches(t *testing.T) {
+	t.Parallel()
 	dir := modesDir(t)
 	if got, want := runIn(t, dir, `printf "[%s]" */gone`), `[open/gone]`; got != want {
 		t.Errorf("got %s, want %s", got, want)

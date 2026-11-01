@@ -135,6 +135,7 @@ func TestAHashTypedAtThePromptIsACharacterUntilTheOptionIsSet(t *testing.T) {
 // two that name `-i` are the ones that say the answer is not simply "an
 // interactive shell".
 func TestEveryRouteButThePromptReadsAHashAsAComment(t *testing.T) {
+	t.Parallel()
 	const src = "echo a #b"
 	for _, tc := range []struct {
 		name string

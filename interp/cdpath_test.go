@@ -22,6 +22,7 @@ import (
 // neither, and a leading dash word was read as somewhere to go — `cd -L /tmp`
 // looked for a directory called `-L`.
 func TestCdKeepsOrResolvesTheNameItWasGiven(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name     string
 		cmd      string
@@ -60,6 +61,7 @@ func TestCdKeepsOrResolvesTheNameItWasGiven(t *testing.T) {
 // Which of the two decides when both are given. Three of the panel let the
 // last one win; zsh gives `-P` the answer wherever it appears.
 func TestCdMayLetTheLastPathOptionWinOrNot(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name     string
 		cmd      string
@@ -94,6 +96,7 @@ func TestCdMayLetTheLastPathOptionWinOrNot(t *testing.T) {
 // word as somewhere to go, because its `cd` takes two operands and a leading
 // dash word is the first of them there.
 func TestCdMayRefuseAnOptionItDoesNotHave(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name    string
 		refuses Answer
@@ -139,6 +142,7 @@ func TestCdMayRefuseAnOptionItDoesNotHave(t *testing.T) {
 // one of them alone must not put it to the dialect. A shell with no answer
 // recorded still has to run `cd -P`.
 func TestCdWithOnePathOptionAsksNothing(t *testing.T) {
+	t.Parallel()
 	dir, real := cdTree(t)
 	sem := PosixSemantics()
 	sem.CdRefusesUnknownOption = Yes
@@ -161,6 +165,7 @@ func TestCdWithOnePathOptionAsksNothing(t *testing.T) {
 // A lone `-` is the previous directory and never an option, which the two
 // above must not have taken away.
 func TestCdDashIsStillThePreviousDirectory(t *testing.T) {
+	t.Parallel()
 	dir, _ := cdTree(t)
 	sem := PosixSemantics()
 	sem.CdRefusesUnknownOption = Yes

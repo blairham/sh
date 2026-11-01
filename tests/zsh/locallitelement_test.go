@@ -13,6 +13,7 @@ import "testing"
 // Measured 2026-10-16 on zsh 5.9.2 `-f` from a file, byte for byte apart from
 // the location.
 func TestALiteralThroughASubscriptCannotCreateALocal(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{"f(){ local b[1]=(p q); echo st=$?; }; f; echo end", "f:local: b[1]: can't create local array elements\n"},
 		{"f(){ typeset b[1]=(p q); echo st=$?; }; f; echo end", "f:typeset: b[1]: can't create local array elements\n"},

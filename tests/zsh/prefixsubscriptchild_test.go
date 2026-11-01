@@ -12,6 +12,7 @@ import "testing"
 // read the subscript at all and ran the program at 0 (#6771). See
 // interp/prefixsubscriptinturn.go.
 func TestAProgramsSubscriptedPrefixIsReadInItsChild(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"a failed subscript", "b[1/0]=v /usr/bin/true; echo after $?", "zsh:2: division by zero\nafter 1\n"},
 		{"a step", "b[i++]=v /usr/bin/true; echo $i", "1\n"},

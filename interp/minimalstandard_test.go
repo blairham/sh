@@ -13,6 +13,7 @@ import "testing"
 // drifts from the recurrence it stands in for — and a loop is the definition, so
 // the two are compared rather than a table being written out.
 func TestTheClosedFormAgreesWithSteppingOneDrawAtATime(t *testing.T) {
+	t.Parallel()
 	step := func(seed, drawn uint64) uint64 {
 		state := seed
 		for range drawn {

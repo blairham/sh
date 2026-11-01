@@ -10,6 +10,7 @@ import "testing"
 // to, written as the text it came from, where an unset base names itself.
 // Measured 2026-10-03 on zsh 5.9.2 under `-f`.
 func TestAnUnsetIndirectionNamesWhatItResolvedTo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`(setopt nounset; s=a; print ${(P)s}); echo st=$?`, "zsh:1: a: parameter not set\nst=1\n"},
 		{`(setopt nounset; n=(a b); print ${(P)n}); echo st=$?`, "zsh:1: a b: parameter not set\nst=1\n"},

@@ -51,6 +51,7 @@ func runRangeSem(t *testing.T, dir, src string, set func(*Semantics)) (string, i
 // is: a run of digits whose *number* falls between the bounds. Every line is
 // a measurement from zsh 5.9.2, 2026-09-05.
 func TestANumericRangeMatchesTheValueAndNotTheText(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// Any number, and only a number.
 		{`[[ 1 = <-> ]] && echo hit || echo miss`, "hit\n"},
@@ -115,6 +116,7 @@ func TestANumericRangeMatchesTheValueAndNotTheText(t *testing.T) {
 // decides whether `a*` is a pattern, which is why the matcher is handed
 // escaped text rather than a plain string.
 func TestQuotingDecidesWhetherARangeIsARange(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`[[ 1 = "<->" ]] && echo hit || echo miss`, "miss\n"},
 		{`[[ 1 = '<->' ]] && echo hit || echo miss`, "miss\n"},
@@ -161,6 +163,7 @@ func TestQuotingDecidesWhetherARangeIsARange(t *testing.T) {
 // pattern like any other: matched per component, sorted with the rest, and a
 // miss handled by whatever the dialect does with an unmatched pattern.
 func TestANumericRangeNamesNumberedFiles(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, name := range []string{"0", "1", "2", "10", "007", "21", "22", "2x", "abc"} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {

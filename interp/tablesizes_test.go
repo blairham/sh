@@ -56,6 +56,7 @@ func TestAReservedTableDoesNotGrow(t *testing.T) {
 // A reservation made after a table exists leaves it alone, so a name already
 // in it is still there.
 func TestAReservationKeepsWhatATableHolds(t *testing.T) {
+	t.Parallel()
 	r := emptyRunner()
 	r.Register("early", func(*interp.Runner, context.Context, []string) int { return 7 })
 	r.SetVar("early", "kept")

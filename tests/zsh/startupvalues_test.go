@@ -35,6 +35,7 @@ func runZshStartupValue(t *testing.T, env []string, src string) (string, int) {
 // here for all ten before this, which is what says they were absent rather
 // than described with the wrong word — the distinction #4866 was filed on.
 func TestTheStartupValuesThisShellHadNoNameFor(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, word, row string }{
 		{"KEYTIMEOUT", "integer", "typeset -i KEYTIMEOUT=40"},
 		{"LISTMAX", "integer", "typeset -i LISTMAX=100"},
@@ -74,6 +75,7 @@ func TestTheStartupValuesThisShellHadNoNameFor(t *testing.T) {
 //	env PS3=7            export PS3=7
 //	env KEYBOARD_HACK=7  typeset KEYBOARD_HACK=''
 func TestAnInheritedStartupValueWinsExceptForTheKeyboardHack(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, env, want string }{
 		{"KEYTIMEOUT", "KEYTIMEOUT=7", "7"},
 		{"LISTMAX", "LISTMAX=7", "7"},
@@ -103,6 +105,7 @@ func TestAnInheritedStartupValueWinsExceptForTheKeyboardHack(t *testing.T) {
 // `1+1` is one where an *assigned* `1+1` is two, `0x2` is two, and `abc` is
 // zero rather than a refusal.
 func TestAnInheritedStartupIntegerIsScanned(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ env, want string }{
 		{"2x", "2"},
 		{"1+1", "1"},
@@ -130,6 +133,7 @@ func TestAnInheritedStartupIntegerIsScanned(t *testing.T) {
 // or none of them — moves both columns together and a row that moves alone is
 // this name's own.
 func TestTheLastStatusIsAParameter(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"status", "ARGC"} {
 		t.Run(name, func(t *testing.T) {
 			out, st := runZsh(t, t.TempDir(), `print -r -- ${(t)`+name+`}`)
@@ -182,6 +186,7 @@ func TestTheLastStatusIsAParameter(t *testing.T) {
 // is the half that has to be measured, since a rule read off the four
 // upper-case pairs would have added three names that are not there.
 func TestTheLowerCasePromptIsTheSameParameterAsPS1(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `prompt=PP; print -r -- "$PS1|$PROMPT"`)
 	if out != "PP|PP\n" || st != 0 {
 		t.Errorf("after prompt=PP, $PS1|$PROMPT = %q (status %d), want PP|PP", out, st)
@@ -206,6 +211,7 @@ func TestTheLowerCasePromptIsTheSameParameterAsPS1(t *testing.T) {
 // promptnames.go, so a shell with no `PS3` answered it with nothing where the
 // reference writes `?# `.
 func TestTheSelectionPromptReachesBothOfItsNames(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `print -r -- "[$PROMPT3][$PS3]"`)
 	if out != "[?# ][?# ]\n" || st != 0 {
 		t.Errorf("$PROMPT3 and $PS3 = %q (status %d), want both at '?# '", out, st)

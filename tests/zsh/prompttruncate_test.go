@@ -8,6 +8,7 @@ import "testing"
 // `%N<string<` and `%N>string>` truncate what follows them (#5150). Measured
 // 2026-10-01 on zsh 5.9.2 under `-c`; each row is what `print -P` wrote.
 func TestPromptTruncation(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, c := range []struct{ arg, want string }{
 		{"start %10<...<truncated at 10%<< Not truncated%3< ...<Not shown", "start ...d at 10 Not truncated ..."},

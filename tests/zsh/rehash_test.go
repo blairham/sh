@@ -21,6 +21,7 @@ import (
 // which is why these are builtins rather than prelude functions wrapping
 // `hash`: each has to refuse under **its own** name.
 func TestRehashAndUnhashAreBuiltins(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 		status          int

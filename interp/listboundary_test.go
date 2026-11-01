@@ -47,6 +47,7 @@ func listBoundaryRun(t *testing.T, src string, boundary Answer) (string, int) {
 // `[xb] [] [y]` differ by one empty field and by nothing else, and a word
 // whose boundary was lost reads back through `"$@"` as the text that went in.
 func TestTheBoundaryBetweenTwoElementsOfAnUnquotedList(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, setup, word  string
 		whitespace, break_ string
@@ -183,6 +184,7 @@ func TestTheBoundaryBetweenTwoElementsOfAnUnquotedList(t *testing.T) {
 // it, every `for f in $@` would demand a dialect for a question that has one
 // answer wherever IFS is left alone.
 func TestTheBoundaryIsAskedOnlyWhereTheReadingsDiffer(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, setup, word, want string }{
 		{"a whitespace IFS", `set -- b ' ' c`, `x${@}y`, `2[xb][cy]`},
 		{"no separator in any element", `IFS=:; set -- a b c`, `x${@}y`, `3[xa][b][cy]`},
@@ -214,6 +216,7 @@ func TestTheBoundaryIsAskedOnlyWhereTheReadingsDiffer(t *testing.T) {
 // rather than picking one. The mirror of the test above, and what says its
 // clean runs are a guard rather than an axis nothing consults.
 func TestTheBoundaryRefusesWhereTheReadingsDiffer(t *testing.T) {
+	t.Parallel()
 	src := "IFS=:; set -- b ':'\n" + wordFieldProbe(`x${@}y`)
 	out, st := axisRun(t, src, func(s *Semantics) {
 		s.SplitParamExpansion = Yes
@@ -247,6 +250,7 @@ func TestTheBoundaryRefusesWhereTheReadingsDiffer(t *testing.T) {
 // guard that looked only at the front of an element answers here without
 // asking, which is an axis decided by omission.
 func TestTheBoundaryIsAskedWhereATrailingSeparatorOpensAField(t *testing.T) {
+	t.Parallel()
 	src := "IFS=:; set -- 'b:' c\n" + wordFieldProbe(`x${@}y`)
 	out, _ := axisRun(t, src, func(s *Semantics) {
 		s.SplitParamExpansion = Yes
@@ -271,6 +275,7 @@ func TestTheBoundaryIsAskedWhereATrailingSeparatorOpensAField(t *testing.T) {
 // reaching the boundary reading without the splitting answer splits a list
 // the dialect said not to split.
 func TestTheBoundaryIsNotReachedWithTheSplittingOff(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, setup, word, want string }{
 		{"a separator element", `IFS=:; set -- b ':'`, `x${@}y`, `2[xb][:y]`},
 		{"a separator in the middle", `IFS=:; set -- b ':' c`, `x${@}y`, `3[xb][:][cy]`},
@@ -301,6 +306,7 @@ func TestTheBoundaryIsNotReachedWithTheSplittingOff(t *testing.T) {
 // that the dialect says is not a pattern is escaped whole and stays the
 // character it was.
 func TestTheBoundaryReadingEscapesEachElement(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, setup, word, want string }{
 		{"a value's backslash", `IFS=:; set -- 'a\b' ':'`, `x${@}y`, `2[xa\b][y]`},
 		{"a metacharacter", `IFS=:; set -- '*' ':'`, `x${@}y`, `2[x*][y]`},

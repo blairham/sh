@@ -19,6 +19,7 @@ import (
 // `printf '<%s>'` rather than a status check, because both columns are at 0
 // and the whole of the difference is which characters come out.
 func TestABracketRunABareSubscriptGaveBackIsKeptAsWritten(t *testing.T) {
+	t.Parallel()
 	const arr = "setopt noglob; a=(xx yy zz); "
 	for _, tc := range []struct{ name, src, want string }{
 		{"the `]` is inside the substitution", `printf "<%s>" $a[$(: ]; echo 2)]`, "<xx><yy><zz[$(: ]; echo 2)]>"},
@@ -58,6 +59,7 @@ func TestABracketRunABareSubscriptGaveBackIsKeptAsWritten(t *testing.T) {
 // where the two spellings of a substitution part: measured, zsh refuses
 // `$a[`: ]; echo 2`]` while keeping the `$( )` spelling of the same word.
 func TestABareSubscriptClosedOnlyInsideASubstitutionIsRefused(t *testing.T) {
+	t.Parallel()
 	const arr = "setopt noglob; a=(xx yy zz); "
 	for _, tc := range []struct{ name, src string }{
 		{"nothing after the substitution", `printf "<%s>" $a[$(: ]; echo 2)`},

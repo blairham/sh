@@ -15,6 +15,7 @@ import "testing"
 // read exactly like their `PROMPT` siblings and are two parameters each in
 // real zsh. A rule inferred from the four above would have tied all seven.
 func TestThePromptSpellingsAreOneParameter(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(
 		t,
 		t.TempDir(),
@@ -41,6 +42,7 @@ done`,
 // writer exists to prevent, asserted by writing twice through alternating
 // names and reading back through both each time.
 func TestWritingEitherPromptSpellingKeepsThemOne(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `PROMPT=one; print -r -- "[$PROMPT][$PS1]"
 PS1=two;     print -r -- "[$PROMPT][$PS1]"
 PROMPT=three; print -r -- "[$PROMPT][$PS1]"`)

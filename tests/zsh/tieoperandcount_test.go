@@ -17,6 +17,7 @@ import "testing"
 // another build of this one), script files under `env -i PATH=/usr/bin:/bin`
 // with a scratch HOME and standard input on the null device.
 func TestAFourthOperandToTieIsRefused(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name, src, want string
@@ -61,6 +62,7 @@ func TestAFourthOperandToTieIsRefused(t *testing.T) {
 // operands every other refusal this builtin has loses to it, and each of those
 // is the winner at three, where there is no count to refuse.
 func TestTheCountRefusalWinsOverTheOtherOperandRefusals(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const many = "f:typeset: too many arguments for -T\n"
 	for _, tc := range []struct{ name, tail, atThree, atFour string }{
@@ -97,6 +99,7 @@ func TestTheCountRefusalWinsOverTheOtherOperandRefusals(t *testing.T) {
 
 // Reported and run on, and the pair is not made.
 func TestTheCountRefusalLeavesNothingBehind(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{

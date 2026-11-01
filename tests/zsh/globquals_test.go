@@ -38,6 +38,7 @@ func qualifierDir(t *testing.T) string {
 // neither split nor globbed here, so a `(` arriving from a value is four
 // characters of text however it is written. Measured 2026-09-06 on zsh 5.9.2.
 func TestParenthesesFromAValueAreNotAGroup(t *testing.T) {
+	t.Parallel()
 	dir := qualifierDir(t)
 	for _, tc := range []struct{ src, want string }{
 		{`p="*(.)"; printf "[%s]" $p`, `[*(.)]`},
@@ -62,6 +63,7 @@ func TestParenthesesFromAValueAreNotAGroup(t *testing.T) {
 // Measured: `setopt no_glob; print -l MY ( x )` prints `MY` and `( x )` on
 // two lines there, and a function counting `$#` says 2.
 func TestWithGlobbingOffTheGroupIsOnlyText(t *testing.T) {
+	t.Parallel()
 	dir := qualifierDir(t)
 	out, st := runZsh(t, dir, "setopt no_glob\nprintf '[%s]' MY ( x )")
 	if want := `[MY][( x )]`; out != want || st != 0 {
@@ -77,6 +79,7 @@ func TestWithGlobbingOffTheGroupIsOnlyText(t *testing.T) {
 // promise: the character no qualifier claims is named, and a space is such a
 // character.
 func TestAQualifierListIsRefusedWithTheCharacterNamed(t *testing.T) {
+	t.Parallel()
 	dir := qualifierDir(t)
 	for _, tc := range []struct{ src, want string }{
 		{`echo MY ( x )`, "zsh:2: unknown file attribute:  "},

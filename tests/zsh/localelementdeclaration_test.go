@@ -19,6 +19,7 @@ import "testing"
 // another build of this one), script files under `env -i PATH=/usr/bin:/bin`
 // with a scratch HOME and standard input on the null device.
 func TestAnElementDeclaredOverALocalTheCallAlreadyMade(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -86,6 +87,7 @@ func TestAnElementDeclaredOverALocalTheCallAlreadyMade(t *testing.T) {
 // subscripted operand may *create* the local, and in every row below there is
 // one to create.
 func TestTheLocalElementRefusalStillFiresWhereThereIsALocalToMake(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const refused = "f:typeset: array[1]: can't create local array elements\n"
 	for _, tc := range []struct {
@@ -128,6 +130,7 @@ func TestTheLocalElementRefusalStillFiresWhereThereIsALocalToMake(t *testing.T) 
 // frozen name now reaches the one it should: with nothing to create, the write
 // goes on to the store and the freeze answers it.
 func TestTheOtherElementRefusalsAreUnmoved(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{

@@ -31,6 +31,7 @@ func frozenReadonly(s *Semantics) {
 // Where the scope is taken the declaration belongs to the call: the body
 // sees its own value and the name is gone when the function returns.
 func TestReadonlyInsideAFunctionCanDeclareALocal(t *testing.T) {
+	t.Parallel()
 	const src = `b() { readonly B=1; echo "in=[$B]"; }
 b
 echo "out=[${B-unset}]"`
@@ -49,6 +50,7 @@ echo "out=[${B-unset}]"`
 // And the caller's own value comes back, which is the half that says a scope
 // was taken rather than the name merely having been absent afterwards.
 func TestAScopedReadonlyLeavesTheCallerSValueAlone(t *testing.T) {
+	t.Parallel()
 	const src = `B=out
 b() { readonly B=1; echo "in=[$B]"; }
 b
@@ -65,6 +67,7 @@ echo "out=[$B]"`
 // went away with the scope, so a shadow that had merely hidden the value
 // while leaving the attribute standing is a different answer from this one.
 func TestAScopedReadonlySFreezeGoesAwayWithTheCall(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `B=out
 b() { readonly B=1; }
 b
@@ -83,6 +86,7 @@ echo "out=[$B]"`, scopedReadonly, Diagnostics{})
 // refusal — and the fatal answer to that is what makes such a function
 // callable exactly once.
 func TestAFunctionDeclaringAScopedReadonlyIsCallableTwice(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `rf() { readonly RF=fixed; echo "in=[$RF]"; }
 rf
 rf
@@ -97,6 +101,7 @@ echo after`, scopedReadonly, Diagnostics{})
 // rather than what the caller held: the cell the shadow made is new, which
 // is what `fresh` says everywhere else a declaration word takes one.
 func TestAValuelessScopedReadonlyDeclaresTheLocalRatherThanReadingTheCaller(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `B=out
 b() { readonly B; echo "in=[${B-unset}]"; }
 b
@@ -115,6 +120,7 @@ echo "out=[$B]"`, scopedReadonly, Diagnostics{})
 // doing only the first answers an empty array inside the function and the
 // elements outside it, at status 0.
 func TestAScopedReadonlySArrayLiteralLandsInTheLocal(t *testing.T) {
+	t.Parallel()
 	const src = `k() { readonly -a R=(a b); echo "in=[${R[*]}]"; }
 k
 echo "out=[${R[*]-unset}]"`
@@ -138,6 +144,7 @@ echo "out=[${R[*]-unset}]"`
 // refuses the line it is asked on, and every shell in the panel agrees about
 // this one.
 func TestReadonlyAtTheTopLevelDoesNotAskTheAxis(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `readonly T=1
 echo "[$T]"`, func(s *Semantics) {
 		s.ReadonlyDeclaresALocal = Unspecified

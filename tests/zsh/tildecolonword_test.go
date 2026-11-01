@@ -17,6 +17,7 @@ import (
 // Measured 2026-09-22, script files under `env -i PATH=/usr/bin:/bin LC_ALL=C`
 // with `HOME=/usr/xyz`, each word given to `printf` (#4251).
 func TestAColonAndAnOrdinaryWordsTildePrefix(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a colon closes nothing", `printf "[%s]" ~:x`, "[~:x]"},
 		{"nor before a path", `printf "[%s]" ~:x/y`, "[~:x/y]"},

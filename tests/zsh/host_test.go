@@ -30,6 +30,7 @@ import (
 // is checked against interp.MachineName, which is the question this dialect
 // asks, and every behavior below is checked on a name the test assigned.
 func TestTheMachineNameIsAParameterAtStartup(t *testing.T) {
+	t.Parallel()
 	r := zshRunnerForTest(t)
 	got, ok := r.GetVar("HOST")
 	if !ok {
@@ -47,6 +48,7 @@ func TestTheMachineNameIsAParameterAtStartup(t *testing.T) {
 // `typeset HOST=…`; and `unset HOST` removes it outright, after which
 // `typeset -p HOST` is `no such variable: HOST` at 1.
 func TestTheMachineNameParameterIsAnOrdinaryScalar(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`print -r -- ${(t)HOST}`, "scalar\n"},
 		{`unset HOST; print -r -- "[${HOST-no such parameter}]"`, "[no such parameter]\n"},
@@ -73,6 +75,7 @@ func TestTheMachineNameParameterIsAnOrdinaryScalar(t *testing.T) {
 // It is the opposite answer from `$UID` beside it, which is why it is measured
 // rather than assumed: `env UID=999 zsh -c 'print $UID'` writes the real uid.
 func TestAnInheritedMachineNameWins(t *testing.T) {
+	t.Parallel()
 	base := dialecttest.Base{Dir: t.TempDir(), Env: []string{"HOST=injected.example"}}
 	out, _, err := preset.Combined(t, base, `print -r -- "[$HOST]"`)
 	if err != nil {
@@ -96,6 +99,7 @@ func TestAnInheritedMachineNameWins(t *testing.T) {
 // from the one drawn a moment earlier, so the pair below is asked twice on one
 // runner rather than once each on two.
 func TestAssigningTheMachineNameMovesThePromptCodes(t *testing.T) {
+	t.Parallel()
 	r := zshRunnerForTest(t)
 	r.SetVar("HOST", "first.example.test")
 	if got, ok := r.PromptField(interp.FieldHost, "", false); !ok || got != "first" {
@@ -126,6 +130,7 @@ func TestAssigningTheMachineNameMovesThePromptCodes(t *testing.T) {
 // this one has been told where to look and a script emptied it, where a Runner
 // nobody told at all still refuses `%m` by name. See SetPromptHostParameter.
 func TestUnsettingTheMachineNameDrawsNothingRatherThanRefusing(t *testing.T) {
+	t.Parallel()
 	out, st, err := preset.Combined(t, dialecttest.Base{Dir: t.TempDir()},
 		`unset HOST; print -rP -- "[%m][%M]"; print -r -- "st=$?"`)
 	if err != nil {

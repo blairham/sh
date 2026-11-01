@@ -14,6 +14,7 @@ import (
 // terminal registers, lists, and removes them, and observes nothing else.
 
 func TestCompleteRegistersAndReadsBack(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `complete -W "a b" foo; complete -F _f bar; complete -p foo; complete`, nil)
 	if st != 0 {
 		t.Fatalf("status %d (out %q)", st, out)
@@ -27,6 +28,7 @@ func TestCompleteRegistersAndReadsBack(t *testing.T) {
 }
 
 func TestCompleteRemovesAndReportsAMiss(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `complete -W x foo; complete -r foo; echo "r=$?"; complete -p foo; echo "p=$?"`, nil)
 	if !strings.Contains(out, "r=0") || !strings.Contains(out, "p=1") {
 		t.Errorf("out = %q (st %d), want removal to succeed and the lookup to miss", out, st)
@@ -37,6 +39,7 @@ func TestCompleteRemovesAndReportsAMiss(t *testing.T) {
 }
 
 func TestCompleteIsRemovable(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `complete -W x foo`, func(r *Runner) { r.Unregister("complete") })
 	if st == 0 {
 		t.Errorf("status 0 (out %q), want the dialect without the builtin to refuse it", out)
@@ -44,6 +47,7 @@ func TestCompleteIsRemovable(t *testing.T) {
 }
 
 func TestCompleteSurvivesASubshellCopy(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `complete -W x foo; (complete -W y bar); complete`, nil)
 	if !strings.Contains(out, "foo") || strings.Contains(out, "bar") {
 		t.Errorf("out = %q, want the parent's spec kept and the subshell's its own", out)
@@ -59,6 +63,7 @@ func TestCompleteSurvivesASubshellCopy(t *testing.T) {
 // the option's name missing. Both halves are silent — a plausible listing,
 // and a spec for a command nobody named.
 func TestCompleteReadsTheOptionItIsGiven(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `complete -o nospace -F _f foo; complete -p`, nil)
 	if st != 0 {
 		t.Fatalf("status %d (out %q)", st, out)
@@ -73,6 +78,7 @@ func TestCompleteReadsTheOptionItIsGiven(t *testing.T) {
 // ahead of the rest of the spec, so `complete -F f -o nospace x` and
 // `complete -o nospace -F f x` list identically.
 func TestCompleteRendersTheOptionsFirstAndSorted(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`complete -F f -o nospace -o dirnames x`,
 		`complete -o nospace -o dirnames -F f x`,
@@ -94,6 +100,7 @@ func TestCompleteRendersTheOptionsFirstAndSorted(t *testing.T) {
 // An option name neither builtin has is refused at 2 before the table is
 // touched, so nothing is registered and nothing is changed.
 func TestAnUnknownCompletionOptionNameIsRefused(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `complete -o nosuchopt x; echo "st=$?"; complete -p x; echo "p=$?"`, nil)
 	if !strings.Contains(out, "complete: nosuchopt: invalid option name") {
 		t.Errorf("out = %q, want the name refused", out)
@@ -116,6 +123,7 @@ func TestAnUnknownCompletionOptionNameIsRefused(t *testing.T) {
 // those names out loud when nothing is registered, and prints the letter back
 // where a command's name would go.
 func TestTheThreeCompletionSpecsThatAreNotCommands(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ letter, internal string }{
 		{"-D", "_DefaultCmD_"}, {"-E", "_EmptycmD_"}, {"-I", "_InitialWorD_"},
 	} {
@@ -136,6 +144,7 @@ func TestTheThreeCompletionSpecsThatAreNotCommands(t *testing.T) {
 // `compopt` changes the options of a spec that is already registered, and
 // `complete -p` is where the change shows.
 func TestCompoptMovesTheOptionsOfARegisteredSpec(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `complete -F f x; compopt -o nospace -o dirnames x; complete -p x`, nil)
 	if st != 0 {
 		t.Fatalf("status %d (out %q)", st, out)
@@ -164,6 +173,7 @@ func TestCompoptMovesTheOptionsOfARegisteredSpec(t *testing.T) {
 // all nine, in bash's own order, each with the sign that says whether the
 // spec holds it.
 func TestCompoptListsEveryOptionsState(t *testing.T) {
+	t.Parallel()
 	const all = "compopt +o bashdefault +o default +o dirnames +o filenames " +
 		"+o fullquote +o noquote +o nosort +o nospace +o plusdirs x\n"
 	out, st := run(t, `complete -F f x; compopt x`, nil)
@@ -179,6 +189,7 @@ func TestCompoptListsEveryOptionsState(t *testing.T) {
 // And with no names at all it is the call bash means for inside a completion
 // function, which this shell never runs.
 func TestCompoptWithNoNameIsNotInACompletionFunction(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `complete -F f x; compopt -o nospace; echo "st=$?"`, nil)
 	if !strings.Contains(out, "compopt: not currently executing completion function") {
 		t.Errorf("out = %q, want the refusal", out)
@@ -192,6 +203,7 @@ func TestCompoptWithNoNameIsNotInACompletionFunction(t *testing.T) {
 // copy in clonetables.go is for: the options are a slice, and a shallow copy
 // would let the child write into the parent's backing array.
 func TestCompoptInASubshellStaysThere(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `complete -F f x; ( compopt -o nospace x ); complete -p x`, nil)
 	if got, want := out, "complete -F f x\n"; got != want {
 		t.Errorf("out = %q, want %q", got, want)

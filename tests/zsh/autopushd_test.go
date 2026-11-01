@@ -66,6 +66,7 @@ func runAutopushd(t *testing.T, dir, src string) (string, int) {
 // (aarch64-apple-darwin25.4.0), which `go version -m` calls *not a Go
 // executable* — run `-f` from a scratch directory, 2026-09-26.
 func TestAutoPushdMakesEveryCdAPushd(t *testing.T) {
+	t.Parallel()
 	// %s is where the one word the two states differ by goes.
 	for _, c := range []struct{ name, src, on, off string }{
 		{
@@ -163,6 +164,7 @@ func TestAutoPushdMakesEveryCdAPushd(t *testing.T) {
 // "when it starts" rather than "before the hook by luck": `chpwd` can already
 // see the pushed entry, so the push is done before the hook is told anything.
 func TestTheOptionIsReadWhenCdStartsAndNotWhenItFinishes(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			// On at the `cd`, off by the time it ends: pushed anyway.
@@ -207,6 +209,7 @@ func TestTheOptionIsReadWhenCdStartsAndNotWhenItFinishes(t *testing.T) {
 // mutation that kills it is moving either read back after the `cd`: with the
 // option on, `pushd` then reports two entries and `popd` one.
 func TestPushdAndPopdAreUnmovedByTheOption(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			name: "pushd pushes one entry and popd takes it away",
@@ -255,6 +258,7 @@ func TestPushdAndPopdAreUnmovedByTheOption(t *testing.T) {
 // read through `dirs`, and write through `pushd` and read through the
 // parameter, so a second copy behind either would show up as a disagreement.
 func TestTheDirstackParameterIsTheStack(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			// The refusal that used to be, in the shape the issue reported.

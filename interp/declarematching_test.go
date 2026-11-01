@@ -29,6 +29,7 @@ func withMatching(s *Semantics) {
 
 // The minus sense: each match's *value*, and no attribute word in front of it.
 func TestMatchingWithAMinusWritesEachMatchsValue(t *testing.T) {
+	t.Parallel()
 	src := "pa=1\npb=2\nqq=3\ntypeset -i pb\ntypeset -m 'p*'"
 	out, errs, st := declRun(t, src, withMatching, Diagnostics{})
 	want := "pa=\"1\"\npb=\"2\"\n"
@@ -41,6 +42,7 @@ func TestMatchingWithAMinusWritesEachMatchsValue(t *testing.T) {
 // row above is the control — a `+m` that wrote the whole listing row would
 // answer this one with `integer pb="2"`.
 func TestMatchingWithAPlusWritesEachMatchsAttributesAndName(t *testing.T) {
+	t.Parallel()
 	src := "pa=1\npb=2\nqq=3\ntypeset -i pb\ntypeset +m 'p*'"
 	out, errs, st := declRun(t, src, withMatching, Diagnostics{})
 	want := "pa\ninteger pb\n"
@@ -54,6 +56,7 @@ func TestMatchingWithAPlusWritesEachMatchsAttributesAndName(t *testing.T) {
 // carrying the `m` was given. This is the reading a completion-system dump
 // collects its function names with.
 func TestMatchingOverFunctionsIsNamedOrWrittenByTheFLetter(t *testing.T) {
+	t.Parallel()
 	src := "_b() { echo two; }\n_a() { echo one; }\nc() { echo three; }\n"
 	for _, tc := range []struct {
 		name, line, want string
@@ -75,6 +78,7 @@ func TestMatchingOverFunctionsIsNamedOrWrittenByTheFLetter(t *testing.T) {
 // A letter written with a *minus* alongside is a declaration over the matches
 // rather than a listing, and it reaches only the names that already exist.
 func TestMatchingWithAMinusLetterDeclaresOverTheMatches(t *testing.T) {
+	t.Parallel()
 	src := "pa=1\npb=2\nqq=3\ntypeset -mx 'p*'\ntypeset -p pa\ntypeset -p pb\ntypeset -p qq"
 	out, errs, st := declRun(t, src, withMatching, Diagnostics{})
 	want := "declare -x pa=\"1\"\ndeclare -x pb=\"2\"\ndeclare -- qq=\"3\"\n"
@@ -88,6 +92,7 @@ func TestMatchingWithAMinusLetterDeclaresOverTheMatches(t *testing.T) {
 // above is what makes the distinction load-bearing — the same letters under
 // the other sign take the attribute away.
 func TestMatchingWithPlusLettersListsTheMatchesCarryingThem(t *testing.T) {
+	t.Parallel()
 	src := "pa=1\npb=2\nqq=3\ntypeset -x pb\ntypeset +mx 'p*' 'q*'\ntypeset -p pb"
 	out, errs, st := declRun(t, src, withMatching, Diagnostics{})
 	want := "pb\ndeclare -x pb=\"2\"\n"
@@ -99,6 +104,7 @@ func TestMatchingWithPlusLettersListsTheMatchesCarryingThem(t *testing.T) {
 // An assignment takes the line out of the listing under either sign: the value
 // reaches every parameter the pattern picked out.
 func TestMatchingWithAnAssignmentSetsEveryMatch(t *testing.T) {
+	t.Parallel()
 	for _, sign := range []string{"-", "+"} {
 		t.Run(sign+"m", func(t *testing.T) {
 			src := "pa=1\npb=2\nqq=3\ntypeset " + sign + "m 'p*'=9\necho \"[$pa][$pb][$qq]\""
@@ -115,6 +121,7 @@ func TestMatchingWithAnAssignmentSetsEveryMatch(t *testing.T) {
 // A pattern that matches nothing declares nothing and is silent at 0 — a
 // listing that found nothing has answered the question.
 func TestMatchingNothingIsASilentSuccess(t *testing.T) {
+	t.Parallel()
 	for _, line := range []string{"typeset -m 'z*'", "typeset +m 'z*'", "typeset -mx 'z*'", "typeset +fm 'z*'"} {
 		out, errs, st := declRun(t, "pa=1\n"+line, withMatching, Diagnostics{})
 		if out != "" || errs != "" || st != 0 {
@@ -126,6 +133,7 @@ func TestMatchingNothingIsASilentSuccess(t *testing.T) {
 // A name two patterns reach is written once per pattern, which is the rule the
 // same walk follows for functions.
 func TestMatchingWritesANameOncePerPatternThatReachesIt(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, "pa=1\ntypeset +m 'p*' 'pa'", withMatching, Diagnostics{})
 	want := "pa\npa\n"
 	if out != want || errs != "" || st != 0 {
@@ -136,6 +144,7 @@ func TestMatchingWritesANameOncePerPatternThatReachesIt(t *testing.T) {
 // `-p` outranks the *listings* wherever it is written, so the matches come back
 // in the listing form rather than in either of the letter's own.
 func TestMatchingUnderThePrintLetterUsesThePrintForm(t *testing.T) {
+	t.Parallel()
 	for _, line := range []string{"typeset -pm 'p*'", "typeset +pm 'p*'"} {
 		out, errs, st := declRun(t, "pa=1\nqq=2\n"+line, withMatching, Diagnostics{})
 		want := "declare -- pa=\"1\"\n"
@@ -151,6 +160,7 @@ func TestMatchingUnderThePrintLetterUsesThePrintForm(t *testing.T) {
 // names writes the whole table, so one operand wrote the table out and
 // assigned nothing.
 func TestMatchingUnderThePrintLetterStillTakesAnAssignment(t *testing.T) {
+	t.Parallel()
 	for _, sign := range []string{"-", "+"} {
 		t.Run(sign+"pm", func(t *testing.T) {
 			src := "pa=1\npb=2\nqq=3\ntypeset " + sign + "pm 'p*'=9"
@@ -168,6 +178,7 @@ func TestMatchingUnderThePrintLetterStillTakesAnAssignment(t *testing.T) {
 // listing is what the word writes, values and all. A reading that treated no
 // patterns as no matches would answer with nothing.
 func TestMatchingWithNoPatternIsIgnored(t *testing.T) {
+	t.Parallel()
 	for _, line := range []string{"typeset -m", "typeset +m"} {
 		out, errs, st := declRun(t, "pa=1\n"+line, withMatching, Diagnostics{})
 		if errs != "" || st != 0 {
@@ -187,6 +198,7 @@ func TestMatchingWithNoPatternIsIgnored(t *testing.T) {
 // others: a dialect whose `local` is not given the letter refuses it there as
 // an option it does not have, rather than accepting it as a pattern.
 func TestTheMatchingLetterIsRefusedWhereTheDialectWithholdsIt(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) {
 		withMatching(s)
 		s.LocalOptions = "ailrx"
@@ -203,6 +215,7 @@ func TestTheMatchingLetterIsRefusedWhereTheDialectWithholdsIt(t *testing.T) {
 // it is pinned from here. See interp/localbuiltin.go for where each seam was
 // measured.
 func TestMatchingWithAPlusWritesTheAttributeWordsInOrder(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) {
 		withMatching(s)
 		s.DeclareOptions = "aAfgilmpruUxT"
@@ -231,6 +244,7 @@ func TestMatchingWithAPlusWritesTheAttributeWordsInOrder(t *testing.T) {
 // be tested together: one rule gives all three, and "exported always" — which
 // is what this listing did before — put the word on most of the environment.
 func TestMatchingWithAPlusNamesAnExportOnlyWhereItIsNotAPlainEnvironmentEntry(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) {
 		withMatching(s)
 		s.DeclareOptions = "aAfgilmpruUxT"
@@ -260,6 +274,7 @@ func TestMatchingWithAPlusNamesAnExportOnlyWhereItIsNotAPlainEnvironmentEntry(t 
 // The tie names the *other* half, from either end, and comes last of all the
 // words. It is the one word that carries a second name with it.
 func TestMatchingWithAPlusNamesTheOtherHalfOfATie(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) {
 		withMatching(s)
 		s.DeclareOptions = "aAfgilmpruUxT"
@@ -278,6 +293,7 @@ func TestMatchingWithAPlusNamesTheOtherHalfOfATie(t *testing.T) {
 // list them. A reading that asked which sign the last word carried would swap
 // the two, and both rows would still pass on their own.
 func TestMatchingReadsEachLettersSignAndNotTheLastWords(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) {
 		withMatching(s)
 		s.DeclareOptions = "aAfgilmpruUxT"
@@ -303,6 +319,7 @@ func TestMatchingReadsEachLettersSignAndNotTheLastWords(t *testing.T) {
 // swept them up answered with a read-only refusal for each, where the same
 // line over a script's own names is silent.
 func TestMatchingDeclaresOverNothingTheShellProduces(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) {
 		withMatching(s)
 		s.DeclareOptions = "aAfgilmpruUxT"

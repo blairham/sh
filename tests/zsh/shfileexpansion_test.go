@@ -10,6 +10,7 @@ import "testing"
 // to a lookup that fails. Measured 2026-10-02 on zsh 5.9.2 under `-f`
 // (#5155). PATH is /bin, so `=ls` is `/bin/ls`.
 func TestShFileExpansionPutsEqualsFirst(t *testing.T) {
+	t.Parallel()
 	cases := []struct{ src, want string }{
 		{"print =ls ={ls,}", "/bin/ls /bin/ls =\n"},
 		{"print ={cat,ls} {=ls,b}", "/bin/cat /bin/ls /bin/ls b\n"},

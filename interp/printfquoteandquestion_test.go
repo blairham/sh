@@ -22,6 +22,7 @@ import (
 // character comes out whatever this says, and that is exactly why ksh93's
 // column cannot measure this one.
 func TestCsQuoteAndQuestionEscapesInAFormat(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name            string
 		answer, unknown Answer

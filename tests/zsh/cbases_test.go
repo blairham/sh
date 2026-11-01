@@ -29,6 +29,7 @@ import (
 // (aarch64-apple-darwin25.4.0) — with `-f`, `setopt cbases` and `unsetopt
 // cbases` around each expression.
 func TestCBasesSpellsTheBaseMarkTheWayCDoes(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, on, off string
 	}{
@@ -96,6 +97,7 @@ func TestCBasesSpellsTheBaseMarkTheWayCDoes(t *testing.T) {
 //
 // Measured on zsh 5.9.2, 2026-09-25, `-f`.
 func TestTheOctalHalfOfCBasesNeedsOctalZeroesToo(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ cbases, octal, eight, zero, sixteen string }{
 		{"setopt cbases", "setopt octalzeroes", "010", "00", "0x6C"},
 		{"setopt cbases", "unsetopt octalzeroes", "8#10", "8#0", "0x6C"},
@@ -120,6 +122,7 @@ func TestTheOctalHalfOfCBasesNeedsOctalZeroesToo(t *testing.T) {
 // Measured on zsh 5.9.2, 2026-09-25: the expression inside the subshell is
 // C-spelled and the one after it is not.
 func TestCBasesIsSubshellLocal(t *testing.T) {
+	t.Parallel()
 	const src = "(setopt cbases; print $(( [#16] 108 )))\nprint $(( [#16] 108 ))\n"
 	const want = "0x6C\n16#6C\n"
 	out, st := answersRun(t, src)
@@ -135,6 +138,7 @@ func TestCBasesIsSubshellLocal(t *testing.T) {
 //
 // Measured on zsh 5.9.2, 2026-09-25, `-f` throughout.
 func TestCBasesReportsItsState(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"off by default", "[[ -o cbases ]] && print on || print off\n", "off\n"},
 		{
@@ -169,6 +173,7 @@ func TestCBasesReportsItsState(t *testing.T) {
 // Measured on zsh 5.9.2, 2026-09-25: `setopt cbases; setopt` writes `cbases`
 // among the deviations.
 func TestCBasesIsListedWhenItIsOn(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, "setopt cbases\nsetopt\n")
 	if st != 0 {
 		t.Fatalf("status %d: %q", st, out)

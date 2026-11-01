@@ -17,6 +17,7 @@ import (
 // word with no loop at all — and only the run shows which of the two answers
 // produced the output.
 func TestHowFarABreakReaches(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"through a function call",

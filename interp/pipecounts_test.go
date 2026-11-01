@@ -85,6 +85,7 @@ func compoundsIn(t *testing.T, src string) []syntax.Command {
 // for before the second ask, so a table that kept nothing cannot pass by
 // agreeing with itself.
 func TestAKeptCompoundAnswerIsTheReadItStandsFor(t *testing.T) {
+	t.Parallel()
 	scripts := []string{
 		`if [[ a ]]; then (( 1 )); elif [[ b ]]; then x=1; else y=(1); fi`,
 		`if [[ a ]]; then (( 1 )); elif [[ b ]]; then x=1; else echo hi; fi`,
@@ -123,6 +124,7 @@ func TestAKeptCompoundAnswerIsTheReadItStandsFor(t *testing.T) {
 // takes the table with it: `[[ … ]]` and `(( … ))` count under one answer and
 // not under the other, so the same `if` is two answers on one runner.
 func TestAKeptCompoundAnswerMovesWithTheAxes(t *testing.T) {
+	t.Parallel()
 	r := pipeCountsRunner(No, Yes, No)
 	c := compoundsIn(t, `if [[ a ]]; then (( 1 )); fi`)[0]
 	if r.countsForPipelineStatus(c) {
@@ -138,6 +140,7 @@ func TestAKeptCompoundAnswerMovesWithTheAxes(t *testing.T) {
 // refused out loud every time it is reached, and a policy that does not read
 // the body decides without a walk at all.
 func TestAnUnansweredAxisKeepsNoCompoundAnswer(t *testing.T) {
+	t.Parallel()
 	r := pipeCountsRunner(No, Yes, Unspecified)
 	c := compoundsIn(t, `if [[ a ]]; then (( 1 )); fi`)[0]
 	r.countsForPipelineStatus(c)

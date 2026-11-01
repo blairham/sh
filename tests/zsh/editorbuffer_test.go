@@ -23,6 +23,7 @@ import "testing"
 // have passed against a `read -z` that did nothing at all, which is why the
 // producer is in almost every row below.
 func TestTheEditorBufferStack(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			// The round trip, and the row the empty-stack measurement could

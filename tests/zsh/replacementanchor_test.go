@@ -13,6 +13,7 @@ import (
 // zsh answers bash's way here rather than ksh93's: `v=abcabc` gives
 // `Xabcabc` for `${v/#/X}` and `abcabcX` for `${v/%/X}` (#3272).
 func TestTheReplacementAnchorAnswers(t *testing.T) {
+	t.Parallel()
 	s := zsh.Semantics()
 	if got, want := s.ReplacementAnchors, interp.Yes; got != want {
 		t.Errorf("ReplacementAnchors = %v, want %v", got, want)

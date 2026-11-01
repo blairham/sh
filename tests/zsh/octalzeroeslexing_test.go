@@ -26,6 +26,7 @@ import (
 // under `env -i PATH=/usr/bin:/bin TERM=dumb` with a scratch `HOME` and
 // stdin at `/dev/null` (#4436).
 func TestOctalZeroesMovesWhereTheNumeralEnds(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		code            int

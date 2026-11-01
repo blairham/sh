@@ -28,6 +28,7 @@ func laggingSem(a Answer) Semantics {
 // The issue's own case: a cluster, then a lone option, then an operand, with
 // OPTIND read after every call and the operand count read at the end.
 func TestGetoptsCountsTheWordOnTheNextCallIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `set -- -ab -c rest
 OPTIND=1
 getopts abc o; printf '%s,%s ' "$o" "$OPTIND"
@@ -69,6 +70,7 @@ shift $((OPTIND-1)); echo "rest=$*"`
 // each other rather than agreeing on 2. An implementation that folded this
 // answer into the cluster question would pass the case above and fail here.
 func TestGetoptsCountsTheWordOnTheNextCallOverLoneOptions(t *testing.T) {
+	t.Parallel()
 	const src = `set -- -a -c rest
 OPTIND=1
 while getopts 'abc' o; do printf '[%s:%s]' "$o" "$OPTIND"; done
@@ -96,6 +98,7 @@ printf ' end=%s\n' "$OPTIND"`
 // occupies. So the two answers are one number here, and an implementation
 // that lagged on these too would be wrong in six columns out of seven.
 func TestGetoptsCountsTheWordOnTheNextCallSkipsAnArgument(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"attached", `set -- -Bval rest`, "[B:val:2] end=2\n"},
 		{"separate", `set -- -B val rest`, "[B:val:3] end=3\n"},
@@ -122,6 +125,7 @@ printf ' end=%s\n' "$OPTIND"`
 // that lags. Only reading OPTIND *on that call* tells the two apart — a
 // one-word list ends at the same number whichever way it got there.
 func TestGetoptsCountsTheWordOnTheNextCallOverAMissingArgument(t *testing.T) {
+	t.Parallel()
 	const src = `set -- -ab
 OPTIND=1
 getopts 'ab:c' o 2>/dev/null; printf '%s,%s ' "$o" "$OPTIND"
@@ -149,6 +153,7 @@ getopts 'ab:c' o 2>/dev/null; printf '%s,%s\n' "$o" "$OPTIND"`
 // the same number under both answers however the scan got there. A lag that
 // forgot to catch up would land here rather than in the rows above.
 func TestGetoptsCountsTheWordOnTheNextCallCatchesUpAtTheEnd(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"nothing to scan", `set --`, "1\n"},
 		{"an operand only", `set -- rest`, "1\n"},
@@ -179,6 +184,7 @@ echo "$OPTIND"`
 // handed a cursor it cannot be told apart by, so the call's own record is
 // never taken.
 func TestGetoptsCountsTheWordOnTheNextCallInsideACallWithItsOwnCursor(t *testing.T) {
+	t.Parallel()
 	const src = `g() { OPTIND=1; while getopts 'abc' o "$@" >/dev/null 2>&1; do printf '%s,%s ' "$o" "$OPTIND"; done; printf 'end=%s\n' "$OPTIND"; }
 g -a rest
 g -ab -c rest`
@@ -205,6 +211,7 @@ g -ab -c rest`
 // The name at the end of the options, which reads as "the last letter again"
 // to anyone whose probe scanned first.
 func TestGetoptsEndOfOptionsNamesItIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"nothing to scan at all", `set --`},
 		{"an operand", `set -- rest`},
@@ -240,6 +247,7 @@ func TestGetoptsEndOfOptionsNamesItIsAnAxis(t *testing.T) {
 // The letter a scan did read is written under both answers: this axis is
 // about the run that reports "no more options" and about nothing else.
 func TestGetoptsEndOfOptionsNamesItLeavesAFoundLetterAlone(t *testing.T) {
+	t.Parallel()
 	const src = `set -- -a rest
 OPTIND=1; o=PRESET; getopts ab o; printf '%s %s\n' "$o" "$?"`
 	for _, names := range []Answer{Yes, No} {

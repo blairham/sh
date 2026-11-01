@@ -24,6 +24,7 @@ import (
 // `'a b' is …` — which is what keeps this apart from
 // Diagnostics.NameReportQuoting, the field ksh93 answers (#3702).
 func TestTheSentenceQuotesThePathAndTheBareFormsDoNot(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	tool := filepath.Join(dir, "a b")
 	if err := os.WriteFile(tool, []byte("#!/bin/sh\n"), 0o700); err != nil {
@@ -60,6 +61,7 @@ func TestTheSentenceQuotesThePathAndTheBareFormsDoNot(t *testing.T) {
 // A pathname operand is quoted in the sentence too, and the word it was
 // written as is what the sentence says back.
 func TestAPathnameOperandIsQuotedInTheSentence(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "bb"), 0o700); err != nil {
 		t.Fatal(err)

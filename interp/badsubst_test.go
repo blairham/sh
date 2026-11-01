@@ -34,6 +34,7 @@ func badSubstRun(t *testing.T, src string, statusIsOne Answer) (string, string, 
 }
 
 func TestABadSubstitutionInABranchNeverTakenIsSilent(t *testing.T) {
+	t.Parallel()
 	out, errs, st := badSubstRun(t, `if false; then echo "${foo ~}"; fi; echo ok`, Yes)
 	if !strings.Contains(out, "ok") || errs != "" || st != 0 {
 		t.Errorf("out=%q errs=%q st=%d, want a silent ok", out, errs, st)
@@ -41,6 +42,7 @@ func TestABadSubstitutionInABranchNeverTakenIsSilent(t *testing.T) {
 }
 
 func TestABadSubstitutionReachedIsDiagnosedAndFatal(t *testing.T) {
+	t.Parallel()
 	out, errs, st := badSubstRun(t, `echo "${foo ~}"; echo after`, Yes)
 	if !strings.Contains(errs, "${foo ~}: bad substitution") {
 		t.Errorf("stderr = %q, want the construct named", errs)
@@ -54,6 +56,7 @@ func TestABadSubstitutionReachedIsDiagnosedAndFatal(t *testing.T) {
 }
 
 func TestTheFatalStatusAxisReachesABadSubstitution(t *testing.T) {
+	t.Parallel()
 	_, _, st := badSubstRun(t, `echo "${foo ~}"`, No)
 	if st != 2 {
 		t.Errorf("status = %d, want 2 when the axis says fatal errors are 2", st)

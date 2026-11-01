@@ -40,6 +40,7 @@ func blankOpSetup(r *Runner) {
 }
 
 func TestABlankOperandSubscriptKeepsTheCharactersItWasWrittenWith(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		key  string
@@ -70,6 +71,7 @@ func TestABlankOperandSubscriptKeepsTheCharactersItWasWrittenWith(t *testing.T) 
 // one space, so the blank-versus-empty distinction the trimming protects is
 // untouched.
 func TestASingleSpaceOperandSubscriptIsStillOneSpace(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A a; k=' '; a[$k]=Y; printf -v 'a[ ]' '%s' X; ` +
 		`printf '[%s]' "${a[$k]}" "${#a[@]}"`
 	out, st := runGrammar(t, src, blankOpGrammar, blankOpSetup)

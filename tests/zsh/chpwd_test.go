@@ -57,6 +57,7 @@ func chpwdTree(t *testing.T) string {
 //	A
 //	B
 func TestChpwdRunsItsFunctionAndThenItsArray(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, chpwdTree(t), `chpwd() { print CHPWDMARK-NAMED }
 a() { print CHPWDMARK-A }
 b() { print CHPWDMARK-B }
@@ -74,6 +75,7 @@ print "st=$?"`)
 // site that read only the named function would find a correctly registered
 // hook and run nothing — #1281 one level down.
 func TestChpwdRunsAnArrayWithNoNamedFunctionBehindIt(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, chpwdTree(t), `on_cd() { print CHPWDMARK-LIST }
 chpwd_functions=(on_cd)
 cd one
@@ -92,6 +94,7 @@ print "st=$?"`)
 //	zsh:cd:1: no such file or directory: /nope-nope
 //	st=1
 func TestChpwdDoesNotRunWhenTheCdFailed(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, chpwdTree(t), `chpwd() { print CHPWDMARK-NAMED }
 a() { print CHPWDMARK-A }
 chpwd_functions=(a)
@@ -111,6 +114,7 @@ print "st=$?"`)
 //	$ zsh -c 'cd /usr; chpwd() { print "SAME[$PWD][$OLDPWD]" }; cd /usr'
 //	SAME[/usr][/usr]
 func TestChpwdRunsForACdToTheDirectoryTheShellIsAlreadyIn(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, chpwdTree(t), `cd one
 chpwd() { print "CHPWDMARK[${PWD##*/}][${OLDPWD##*/}]" }
 cd .
@@ -127,6 +131,7 @@ print "st=$?"`)
 // Both halves in one case: a `-q` that suppressed by *not moving* would pass
 // a silence check on its own, which is exactly the misreading #1558 was.
 func TestCdQuietRunsNoChpwdAndStillMoves(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, chpwdTree(t), `chpwd() { print CHPWDMARK-NAMED }
 a() { print CHPWDMARK-A }
 chpwd_functions=(a)
@@ -141,6 +146,7 @@ print "st=$? at=${PWD##*/}"`)
 // The same line without the letter runs it — the pairing that stops the case
 // above passing because the hook never fires at all.
 func TestTheSameCdWithoutTheQuietLetterRunsChpwd(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, chpwdTree(t), `chpwd() { print CHPWDMARK-NAMED }
 cd one
 print "st=$? at=${PWD##*/}"`)
@@ -156,6 +162,7 @@ print "st=$? at=${PWD##*/}"`)
 //	$ zsh -c 'chpwd() { print "n=$# 1=[$1] 0=[$0]" }; cd /tmp'
 //	n=0 1=[] 0=[chpwd]
 func TestChpwdIsToldWhereAndNothingElse(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, chpwdTree(t), `cd one
 chpwd() { print "CHPWDMARK n=$# 1=[$1] pwd=${PWD##*/} old=${OLDPWD##*/}" }
 cd ../two`)
@@ -169,6 +176,7 @@ cd ../two`)
 // prompt-loop hook could not have reached at all: the shell is back where the
 // caller is by the time any prompt is drawn, and a `zsh -c` script draws none.
 func TestChpwdRunsForACdInsideAFunction(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, chpwdTree(t), `chpwd() { print "CHPWDMARK[${PWD##*/}]" }
 f() { cd one; }
 f
@@ -184,6 +192,7 @@ print "at=${PWD##*/}"`)
 //	$ zsh -c 'chpwd() { print "H[$PWD]" }; PWD=/tmp; echo "pwd=$PWD"'
 //	pwd=/tmp
 func TestAssigningToPwdRunsNoChpwd(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, chpwdTree(t), `chpwd() { print CHPWDMARK-NAMED }
 PWD=/nowhere
 print "pwd=$PWD"`)
@@ -205,6 +214,7 @@ print "pwd=$PWD"`)
 //	b st=5
 //	after=0
 func TestTheChpwdChainIsToldTheStatusAndCannotChangeIt(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, chpwdTree(t), `chpwd() { print "CHPWDMARK-NAMED=$?"; return 3 }
 a() { print "CHPWDMARK-A=$?"; return 9 }
 b() { print "CHPWDMARK-B=$?" }
@@ -228,6 +238,7 @@ print "after=$?"`)
 //	B2
 //	st=0
 func TestAChpwdArrayEntryThatIsNotAFunctionIsPassedOverInSilence(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, chpwdTree(t), `a() { print CHPWDMARK-A }
 b() { print CHPWDMARK-B }
 chpwd_functions=(a nosuchfn_zz print b)
@@ -248,6 +259,7 @@ print "st=$?"`)
 //	--
 //	H[/][/tmp]
 func TestPushdAndPopdRunChpwd(t *testing.T) {
+	t.Parallel()
 	out, st := runZshPrelude(t, chpwdTree(t), `chpwd() { print "CHPWDMARK[${PWD##*/}]" }
 pushd one
 print "pushed=${#dirstack[@]}"

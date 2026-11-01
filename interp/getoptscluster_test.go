@@ -23,6 +23,7 @@ import (
 // Both directions and the refusal, because an axis only ever taken cannot be
 // told from one that is always taken.
 func TestGetoptsClusterOptindAxis(t *testing.T) {
+	t.Parallel()
 	// Every letter and the number that was current when it was read, so a
 	// wrong answer at any position is visible rather than only at the end.
 	const src = `set -- -abc rest

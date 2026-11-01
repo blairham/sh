@@ -48,6 +48,7 @@ func printfUnitRun(t *testing.T, src string, plain, long Answer) (string, string
 const utf8Locale = "LC_ALL=en_US.UTF-8; "
 
 func TestAStringFieldIsCountedInTheUnitTheAxisNames(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src   string
 		chars, byts string
@@ -77,6 +78,7 @@ func TestAStringFieldIsCountedInTheUnitTheAxisNames(t *testing.T) {
 // Where the locale has no characters, both answers count bytes — so the
 // dialect's answer is not what decides the C column.
 func TestAStringFieldIsBytesWhereTheLocaleHasNoCharacters(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Yes, No} {
 		src := `LC_ALL=C; printf '[%.2s|%7s|%.2ls|%lc]' αβγ αβγ αβγ αβγ`
 		out, errs, st := printfUnitRun(t, src, answer, answer)
@@ -88,6 +90,7 @@ func TestAStringFieldIsBytesWhereTheLocaleHasNoCharacters(t *testing.T) {
 
 // The quoting conversion is bytes under both answers.
 func TestAQuotedFieldIsAlwaysBytes(t *testing.T) {
+	t.Parallel()
 	src := utf8Locale + `printf '[%.2q]' αβγ`
 	out, errs, st := printfUnitRun(t, src, Yes, Yes)
 	if want := "[α]"; out != want || errs != "" || st != 0 {
@@ -96,6 +99,7 @@ func TestAQuotedFieldIsAlwaysBytes(t *testing.T) {
 }
 
 func TestTheLongModifierCountsInTheUnitItsAxisNames(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src   string
 		chars, byts string
@@ -130,6 +134,7 @@ func TestTheLongModifierCountsInTheUnitItsAxisNames(t *testing.T) {
 // A column that ignores the letter falls back to the plain conversion's
 // reading, so `%ls` there is `%s`.
 func TestTheLongModifierFallsBackToThePlainReading(t *testing.T) {
+	t.Parallel()
 	src := utf8Locale + `printf '[%.2ls|%lc]' αβγ αβγ`
 	out, errs, st := printfUnitRun(t, src, Yes, No)
 	if want := "[αβ|\xce]"; out != want || errs != "" || st != 0 {
@@ -140,6 +145,7 @@ func TestTheLongModifierFallsBackToThePlainReading(t *testing.T) {
 // Neither axis is asked of an operand that is all ASCII or a field with no
 // width and no precision, so a dialect that answers neither still prints.
 func TestTheFieldUnitIsNotAskedWhereItCannotMatter(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`printf '[%.2s|%7ls|%lc]' abc abc abc`,
 		`printf '[%s|%ls|%b]' αβγ αβγ αβγ`,

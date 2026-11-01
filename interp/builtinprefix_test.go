@@ -40,6 +40,7 @@ func prefixRun(t *testing.T, dir, src string, dg Diagnostics) string {
 // TestTheBuiltinIsNamedInTheLocationOnlyWhenAsked covers the flag in both
 // directions. Off is the default and is what three of the four dialects want.
 func TestTheBuiltinIsNamedInTheLocationOnlyWhenAsked(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	missing := filepath.Join(dir, "nope.sh")
 
@@ -63,6 +64,7 @@ func TestTheBuiltinIsNamedInTheLocationOnlyWhenAsked(t *testing.T) {
 // "whose diagnostic is this" rather than "where did it happen". A command that
 // could not be found is the shell's failure, not a builtin's.
 func TestOnlyABuiltinsOwnDiagnosticIsNamed(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{Location: LocationTightLine, NamesBuiltinInLocation: true}
 	out := prefixRun(t, t.TempDir(), `nosuchcmd-xyz`, dg)
 	// On the *prefix*, not a colon count: the message carries colons of its
@@ -99,6 +101,7 @@ func TestTheNameIsNotSaidTwice(t *testing.T) {
 // builtin at all. Leaving the marker set would have put one on every line the
 // script produced.
 func TestABorrowedScriptIsNotTheBuiltinsDiagnostic(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	script := filepath.Join(dir, "s.sh")
 	if err := os.WriteFile(script, []byte("set -u\necho \"$NOPE\"\n"), 0o600); err != nil {
@@ -126,6 +129,7 @@ func TestABorrowedScriptIsNotTheBuiltinsDiagnostic(t *testing.T) {
 // marker for borrowed text must not clear it for the builtin's own errors,
 // which happen before any of that text runs.
 func TestTheBuiltinsOwnFailureIsStillNamedAfterRunningAScript(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out := prefixRun(t, dir, `. `+filepath.Join(dir, "absent.sh"), Diagnostics{
 		Location: LocationTightLine, NamesBuiltinInLocation: true,
@@ -138,6 +142,7 @@ func TestTheBuiltinsOwnFailureIsStillNamedAfterRunningAScript(t *testing.T) {
 // TestANestedBuiltinRestoresTheOuterName — a builtin can run another one, so
 // the marker is saved and put back rather than cleared.
 func TestANestedBuiltinRestoresTheOuterName(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	script := filepath.Join(dir, "inner.sh")
 	// The sourced file runs a builtin that fails, and then `.` itself fails on
@@ -169,6 +174,7 @@ func TestANestedBuiltinRestoresTheOuterName(t *testing.T) {
 // function and then calls what it defined, and every complaint from every
 // autoloaded body was named after the builtin that had loaded it (#1968).
 func TestAFunctionCalledByABuiltinIsNotTheBuiltinsDiagnostic(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		Location: LocationTightLine, NamesBuiltinInLocation: true,
 		LocationNamesTheFunction: true,

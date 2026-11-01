@@ -23,6 +23,7 @@ import (
 // reports *not a Go executable*), script files under `env -i
 // PATH=/usr/bin:/bin` with standard input on the null device.
 func TestARedirectionOnAPipelineElementJoinsThePipe(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the write side", "print one >foo | cat\nprint -r -- \"foo=[$(<foo)]\"\n",
@@ -68,6 +69,7 @@ func TestARedirectionOnAPipelineElementJoinsThePipe(t *testing.T) {
 // redirections of its own runs no list, so a rule written on the list let the
 // first command inside the group take the pipe.
 func TestOnlyTheElementsOwnListJoins(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"inside a brace group", "{ print one >foo } | cat\nprint -r -- \"foo=[$(<foo)]\"\n", "foo=[one]\n"},
 		{"inside a subshell", "( print one >foo ) | cat\nprint -r -- \"foo=[$(<foo)]\"\n", "foo=[one]\n"},
@@ -98,6 +100,7 @@ func TestOnlyTheElementsOwnListJoins(t *testing.T) {
 // have written — every column does something with it — so a shell with no
 // dialect chosen must go on writing the file rather than refusing by name.
 func TestWithoutMultiosThePipeIsReplacedAgain(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the write side", "unsetopt multios\nprint one >foo | cat\nprint -r -- \"foo=[$(<foo)]\"\n", "foo=[one]\n"},
 		{"the read side", "print AAA >a\nprint BBB >b\nunsetopt multios\ncat a | cat <b\n", "BBB\n"},

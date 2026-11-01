@@ -20,6 +20,7 @@ import (
 // the *next* line was going to meet anyway — and that refusal was **fatal**,
 // so undoing a `readonly` at a prompt cost the session.
 func TestTheReadonlyAttributeComesOffHere(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().ReadonlyAttributeCanBeRemoved; got != interp.Yes {
 		t.Errorf("ReadonlyAttributeCanBeRemoved = %v, want Yes", got)
 	}
@@ -51,6 +52,7 @@ echo after`)
 // A plus form on a name nothing froze is silent and reports 0, which is the
 // shape a script writes to make sure a name is writable.
 func TestAPlusFormOnAFreeNameIsSilentHere(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `a=1
 typeset +r a
 echo "d=$?"
@@ -65,6 +67,7 @@ echo "st=$? a=[$a]"`)
 // The letter carries its own sign: a plus word beside `-r` takes nothing off,
 // so the name is frozen and stays frozen.
 func TestAPlusWordBesideTheReadonlyLetterTakesNothingOffHere(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `n=1
 typeset -r +x n
 n=2

@@ -12,6 +12,7 @@ import "testing"
 // first row — their subscript is a quoting context — which is
 // Semantics.SubscriptIsAQuotingContext's other answer and not this one's.
 func TestASingleQuotedKeyIsSubstituted(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `b=X; typeset -A h
 h['a$b']=1; h['1$(echo Q)']=1; h['2\$b']=1; h['3${b}c']=1; h['4$((1+1))']=1
 h['5"$b"']=1; h['6`+"`echo T`"+`']=1; h['7a\"b']=1; h['8a\\b']=1; h['9 a  b ']=1; h['$b']=1

@@ -13,6 +13,7 @@ import "testing"
 // the arrangement that can be checked without a pipe, a kernel or a table,
 // and it is the part a reader has to trust for the rest to make sense.
 func TestTheShellEndFloorClearsEveryNumberTheDialectCouldPublish(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		want []int

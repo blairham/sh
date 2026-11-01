@@ -19,6 +19,7 @@ import (
 // ordinary word and blames the newline after it, which is #2964 and a change
 // to what the parser consumes rather than to how a refusal is worded.
 func TestAMissingConditionNamesTheTokenItStoppedOn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"[[ ]]", "zsh:1: parse error near `]]'\n"},
 		{"[[ ! ]]", "zsh:1: parse error near `]]'\n"},
@@ -46,6 +47,7 @@ func TestAMissingConditionNamesTheTokenItStoppedOn(t *testing.T) {
 // dialect names by the last token it read rather than by the closer it was
 // waiting for. Measured the same day, same shell.
 func TestACondtionThatNeverBeganAndRanOut(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"[[ ", "zsh:1: parse error near `[['\n"},
 		{"[[ !", "zsh:1: parse error near `!'\n"},

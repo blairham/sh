@@ -23,6 +23,7 @@ import (
 // answers the same expressions with its ordinary operand complaints, so an
 // empty field leaves those untouched.
 func TestAPointThatBeginsARefusedTokenIsAFloatConstant(t *testing.T) {
+	t.Parallel()
 	d := Diagnostics{
 		ArithError:            "%[1]s: %[2]s",
 		ArithOperandExpected:  "operand expected at `%[1]s'",
@@ -66,6 +67,7 @@ func TestAPointThatBeginsARefusedTokenIsAFloatConstant(t *testing.T) {
 // A dialect with no such sentence keeps its operand complaints, which is the
 // half that makes this a value rather than an axis.
 func TestADialectWithoutTheSentenceKeepsItsOperandComplaint(t *testing.T) {
+	t.Parallel()
 	d := Diagnostics{
 		ArithError:           "%[1]s: %[2]s",
 		ArithOperandExpected: "operand expected at `%[1]s'",

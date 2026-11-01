@@ -41,6 +41,7 @@ func withFunctionNames(s Semantics) func(*Runner) {
 // reaches both words. Seven times in this tree a second helper has quietly
 // missed a fix the first one carried.
 func TestTheSecondNamesAreTheSameCode(t *testing.T) {
+	t.Parallel()
 	for _, tc := range [][2]string{
 		{"f(){ echo hi; }\ntypeset -f f\necho st=$?", "f(){ echo hi; }\nfunctions f\necho st=$?"},
 		{"f(){ :; }\ng(){ :; }\ntypeset -f", "f(){ :; }\ng(){ :; }\nfunctions"},
@@ -60,6 +61,7 @@ func TestTheSecondNamesAreTheSameCode(t *testing.T) {
 // implementation safe to give a second name: nothing in it spells either
 // word, so the sentence a script reads names the builtin it actually ran.
 func TestTheComplaintFollowsTheInvokedName(t *testing.T) {
+	t.Parallel()
 	sem := functionsSem()
 	sem.UnsetFunctionReportsMissing = Yes
 	dg := Diagnostics{
@@ -95,6 +97,7 @@ func TestTheComplaintFollowsTheInvokedName(t *testing.T) {
 // neither `-f` nor `-v`. A shell that reused the renamed builtin's set would
 // take both and answer a listing where the real one refuses.
 func TestTheRenamedBuiltinsLettersAreNotTheirOwn(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"functions -f", "functions -a", "unfunction -f f", "unfunction -v f"} {
 		out, _ := run(t, "f(){ :; }\n"+src+"\necho \"st=$?\"", withFunctionNames(functionsSem()))
 		if strings.Contains(out, "f () ") {
@@ -115,6 +118,7 @@ func TestTheRenamedBuiltinsLettersAreNotTheirOwn(t *testing.T) {
 // TestMatchingIsAListingInOneWordAndARemovalInTheOther, including the status
 // they deliberately disagree about when nothing matched.
 func TestMatchingIsAListingInOneWordAndARemovalInTheOther(t *testing.T) {
+	t.Parallel()
 	defs := "fa(){ :; }\nfb(){ :; }\ngc(){ :; }\n"
 	out, _ := run(t, defs+"functions -m 'f*'\necho \"st=$?\"", withFunctionNames(functionsSem()))
 	if strings.Count(out, " () ") != 2 {
@@ -157,6 +161,7 @@ func TestMatchingIsAListingInOneWordAndARemovalInTheOther(t *testing.T) {
 // before `-f` was, so the first spelling removed variables and left every
 // function it named standing, in silence at 0.
 func TestTheMatchingLetterPicksTheNamespaceByF(t *testing.T) {
+	t.Parallel()
 	src := "fa(){ :; }\nfa=keep\n%s\necho \"[${fa-gone}]\"\ntypeset -f\n"
 	out, _ := run(t, strings.Replace(src, "%s", "unset -f -m 'f*'", 1), withFunctionNames(functionsSem()))
 	if !strings.Contains(out, "[keep]") {

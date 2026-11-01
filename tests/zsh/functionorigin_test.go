@@ -34,6 +34,7 @@ import (
 // `from zsh`. The fourth has no origin at all and drops the clause.
 
 func TestAFunctionDefinedInThisCommandStringComesFromTheShell(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`g(){ :; }; whence -v g`, "g is a shell function from zsh\n"},
 		{`g(){ :; }; type g`, "g is a shell function from zsh\n"},
@@ -58,6 +59,7 @@ func TestAFunctionDefinedInThisCommandStringComesFromTheShell(t *testing.T) {
 // the two rows together are what say the origin follows the definition rather
 // than the run.
 func TestAFunctionDefinedInASourcedFileNamesThatFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	lib := filepath.Join(dir, "lib.zsh")
 	if err := os.WriteFile(lib, []byte("sf() { :; }\n"), 0o600); err != nil {
@@ -87,6 +89,7 @@ whence -v own`)
 // text, and text carries no file. A stub that has not been called yet is still
 // the other sentence entirely.
 func TestAnAutoloadedFunctionNamesItsFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	fns := filepath.Join(dir, "fns")
 	if err := os.MkdirAll(fns, 0o700); err != nil {
@@ -112,6 +115,7 @@ type qf`)
 // A script file is the origin for what it defines, named as the script was
 // named rather than resolved.
 func TestAFunctionDefinedInAScriptNamesTheScript(t *testing.T) {
+	t.Parallel()
 	out := runZshScriptFile(t, "g(){ :; }\nwhence -v g\n", "s1.zsh")
 	if want := "g is a shell function from s1.zsh\n"; out != want {
 		t.Errorf("out %q, want %q", out, want)
@@ -122,6 +126,7 @@ func TestAFunctionDefinedInAScriptNamesTheScript(t *testing.T) {
 // absent rather than naming the shell — which is the row that makes the
 // fallback a measurement instead of a guess.
 func TestAFunctionDefinedOnStandardInputNamesNothing(t *testing.T) {
+	t.Parallel()
 	f, err := syntax.Parse("g(){ :; }\nwhence -v g\n", zsh.Dialect())
 	if err != nil {
 		t.Fatal(err)

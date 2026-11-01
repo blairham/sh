@@ -21,6 +21,7 @@ import (
 // element array answers the scalar's length here rather than the count —
 // #1097, which is the array store's own bug and nothing to do with a tie.
 func TestTheEightBuiltInPairsAreTied(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `CDPATH=a:b
 print -r -- "cdpath n=${#cdpath[@]} [${(j:|:)cdpath}]"
 cdpath=(x y)
@@ -45,6 +46,7 @@ print -r -- "PSVAR=[$PSVAR]"`)
 // write goes through. Nothing else here can see it — every other test sets
 // its scalar first and is then watching the mirror.
 func TestATieIsSeededFromTheValueTheShellArrivesWith(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(t, dir, `print -r -- "n=${#path[@]} [$path[1]]"`)
 	want := "n=1 [" + dir + "]\n"
@@ -59,6 +61,7 @@ func TestATieIsSeededFromTheValueTheShellArrivesWith(t *testing.T) {
 // half — a `$PATH` that merely reads right could still be resolving from the
 // old one.
 func TestWritingPathMovesWhereACommandIsFound(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	one, two := filepath.Join(dir, "one"), filepath.Join(dir, "two")
 	for _, d := range []string{one, two} {
@@ -87,6 +90,7 @@ whichone`)
 // And the other direction: writing the scalar moves the array, so a shell
 // that only mirrored one way would pass the test above and fail this.
 func TestWritingPATHMovesTheArray(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `PATH=/aa:/bb
 print -r -- "n=${#path[@]} [${(j:|:)path}]"
 PATH=/cc:$PATH
@@ -102,6 +106,7 @@ print -r -- "first=[$path[1]] n=${#path[@]}"`)
 // supplied it and as plain `typeset -T` when it did not, and writing `cdpath`
 // never puts `CDPATH` into a child's environment.
 func TestATieInheritsTheExportAttributeAndConfersNone(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `export CDPATH=a
 typeset -p CDPATH
 MANPATH=b
@@ -120,6 +125,7 @@ typeset -p MANPATH`)
 // names neither, and pointing this shell's `autoload` at another shell's
 // function library would be a wrong answer wearing a right one.
 func TestAPairTheEnvironmentDoesNotNameStartsEmpty(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `print -r -- "cdpath n=${#cdpath[@]} CDPATH=[${CDPATH-UNSET}]"
 print -r -- "fpath n=${#fpath[@]} FPATH=[${FPATH-UNSET}]"
 print -r -- "module_path n=${#module_path[@]}"`)
@@ -132,6 +138,7 @@ print -r -- "module_path n=${#module_path[@]}"`)
 // `unset` of either half of a built-in tie takes both *names*, the same rule
 // a `typeset -T` tie follows.
 func TestUnsettingHalfABuiltInTieTakesBoth(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `CDPATH=a:b
 unset cdpath
 print -r -- "CDPATH=[${CDPATH-UNSET}] n=${#cdpath[@]}"`)
@@ -151,6 +158,7 @@ print -r -- "CDPATH=[${CDPATH-UNSET}] n=${#cdpath[@]}"`)
 // path from scratch, and without this the rest of the run had an empty
 // `$path` that nothing would refill (#1631).
 func TestTheBuiltInPairingSurvivesAnUnset(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `unset PATH
 PATH=/y
 print -r -- "1=[${(j:,:)path}]"
@@ -175,6 +183,7 @@ print -r -- "3=[${#mys[@]}][$MYS]"`)
 //
 // Measured 2026-09-09 against zsh 5.9.2 under `-f` with a two-entry `PATH`.
 func TestALocalOfOneHalfOfABuiltInTieShadowsTheOther(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `PATH=/bin:/usr/bin
 f() { local PATH=/x; print -r -- "in=[$PATH][${(j:,:)path}]"; }
 f
@@ -196,6 +205,7 @@ print -r -- "after=[$PATH][${(j:,:)path}]"`)
 // of a copy of it. #1621 took the `+h` letter; this is what the line then has
 // to hold.
 func TestCompauditsFirstLineGetsAnEmptyLocalArray(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `FPATH=/usr/share/zsh/functions:/opt/extra
 comp() { local -a -U +h fpath; print -r -- "in n=$#fpath first=[${fpath[1]-NONE}] FPATH=[$FPATH]"; }
 comp
@@ -212,6 +222,7 @@ print -r -- "after n=$#fpath FPATH=[$FPATH]"`)
 // the mirror splits it into the single field it has; a valueless `local` of
 // the array sets no elements at all and the mirror joins them into nothing.
 func TestAValuelessLocalOfEachHalfEmptiesItInItsOwnKind(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `PATH=/bin:/usr/bin
 f() { local PATH; print -r -- "scalar=[$PATH] n=$#path first=[${path[1]-NONE}]"; }
 f
@@ -228,6 +239,7 @@ g`)
 // all, and the other half goes on naming the outer cell. A pair-shadow
 // applied to every tie would answer the first line `[zzz][zzz]`.
 func TestALocalOfHalfAScriptTieIsAnOrdinaryLocal(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -T SCA sca
 SCA=a:b:c
 f() { local SCA=zzz; print -r -- "in=[$SCA] n=$#sca"; }

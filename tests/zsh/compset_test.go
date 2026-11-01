@@ -14,6 +14,7 @@ import (
 // `(git foo=che)` and `$CURRENT` is 2. The table in compset.go's file comment
 // is this one.
 func TestCompsetMovesTheWordsBoundaries(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, call, want string }{
 		{"-p by count", "compset -p 2", "st=0 PREFIX=o=che IPREFIX=fo w=git|foo=che C=2"},
 		// More characters than `$PREFIX` has: 1, and nothing moves.
@@ -61,6 +62,7 @@ func TestCompsetMovesTheWordsBoundaries(t *testing.T) {
 // Measured on zsh 5.9.2: `compset -P '*='` then `compadd bar` against
 // `git foo=che` completes the word to `foo=bar`.
 func TestWhatCompsetMovedAsideIsStillInserted(t *testing.T) {
+	t.Parallel()
 	got := completionFor(t, widgetOf("compset -P '*='; compadd bar baz"), "git foo=b")
 	want := []string{"foo=bar", "foo=baz"}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
@@ -83,6 +85,7 @@ func TestWhatCompsetMovedAsideIsStillInserted(t *testing.T) {
 // one that matches, and both would be wrong the other way round on a line a
 // person really types — `--opt=a=b` and a command after a second `;`.
 func TestCompsetTakesTheLongestPrefixAndTheLastWord(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, call, line, want string }{
 		{
 			"-P takes the longest", "compset -P '*='", "git a=b=che",

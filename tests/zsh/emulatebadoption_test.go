@@ -16,6 +16,7 @@ import (
 // row but the controls reported something else first, or ran the code, or
 // left an option set.
 func TestABadEmulateOptionNameStopsTheCall(t *testing.T) {
+	t.Parallel()
 	rows := []struct{ name, src, want string }{
 		{
 			"before a surplus operand", "emulate zsh -o fixallmybugs 'print ran'",

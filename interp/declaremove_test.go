@@ -27,6 +27,7 @@ func withMoving(s *Semantics) {
 // The move itself, and the source left unset — which is the half that says
 // this is a move rather than a copy.
 func TestMovingTakesTheValueAndLeavesTheSourceUnset(t *testing.T) {
+	t.Parallel()
 	src := "qa=1\ntypeset -m qb=qa\necho \"[${qa-UNSET}][${qb-UNSET}]\""
 	out, errs, st := declRun(t, src, withMoving, Diagnostics{})
 	if want := "[UNSET][1]\n"; out != want || errs != "" || st != 0 {
@@ -37,6 +38,7 @@ func TestMovingTakesTheValueAndLeavesTheSourceUnset(t *testing.T) {
 // The array kind travels with the value. The control is the scalar row above:
 // a move that carried only the scalar view would leave one element behind.
 func TestMovingCarriesTheArray(t *testing.T) {
+	t.Parallel()
 	src := "qa=(x y z)\ntypeset -m qb=qa\necho \"[${qb[1]}] n=${#qb[@]} left=${#qa[@]}\""
 	out, errs, st := declRun(t, src, withMoving, Diagnostics{})
 	if want := "[y] n=3 left=0\n"; out != want || errs != "" || st != 0 {
@@ -47,6 +49,7 @@ func TestMovingCarriesTheArray(t *testing.T) {
 // A source nobody defined is not a refusal: it unsets the destination, which
 // is the same statement read from the other side.
 func TestMovingFromANameThatIsNotThereUnsetsTheDestination(t *testing.T) {
+	t.Parallel()
 	src := "qb=2\ntypeset -m qb=nosuch\necho \"st=$? [${qb-UNSET}]\""
 	out, errs, st := declRun(t, src, withMoving, Diagnostics{})
 	if want := "st=0 [UNSET]\n"; out != want || errs != "" || st != 0 {
@@ -59,6 +62,7 @@ func TestMovingFromANameThatIsNotThereUnsetsTheDestination(t *testing.T) {
 // bad name: a reading that took the operand as both halves would move nothing
 // and say nothing.
 func TestMovingWithNoEqualsReadsTheSourceOutOfTheValue(t *testing.T) {
+	t.Parallel()
 	src := "qa=hello\nhello=world\ntypeset -m qa\necho \"[${qa-UNSET}][${hello-UNSET}]\""
 	out, errs, st := declRun(t, src, withMoving, Diagnostics{})
 	if want := "[world][UNSET]\n"; out != want || errs != "" || st != 0 {
@@ -70,6 +74,7 @@ func TestMovingWithNoEqualsReadsTheSourceOutOfTheValue(t *testing.T) {
 // operand back and a bad source quotes only itself. Both rows in one test
 // because it is the *difference* that is the measurement.
 func TestMovingBlamesTheWholeOperandForADestinationAndOnlyTheSourceForASource(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		BuiltinBadName:           map[string]string{"typeset": "%[1]s: %[2]s: invalid variable name"},
 		BuiltinBadNameKeepsValue: true,
@@ -93,6 +98,7 @@ func TestMovingBlamesTheWholeOperandForADestinationAndOnlyTheSourceForASource(t 
 // a conflict nor an action: a reading that refused every companion letter
 // would fail that row and one that refused none would fail the others.
 func TestMovingTakesNoOtherLetterButThePrintOne(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{BuiltinUsage: map[string]string{"typeset": "Usage: typeset"}}
 	for _, tc := range []struct {
 		name, line, wantErr string
@@ -118,6 +124,7 @@ func TestMovingTakesNoOtherLetterButThePrintOne(t *testing.T) {
 // listed. Beside the row above because "status 0 with no output" is also what
 // a line that quietly did the move would look like from outside.
 func TestMovingUnderThePrintLetterAssignsNothing(t *testing.T) {
+	t.Parallel()
 	src := "qa=1\nqb=2\ntypeset -pm 'q*'=9\necho \"[$qa][$qb]\""
 	out, errs, st := declRun(t, src, withMoving, Diagnostics{})
 	if want := "[1][2]\n"; out != want || errs != "" || st != 0 {
@@ -128,6 +135,7 @@ func TestMovingUnderThePrintLetterAssignsNothing(t *testing.T) {
 // A bad operand stops the line, so the operands after it never move. The
 // control is the same two operands the other way about, which both move.
 func TestMovingStopsAtTheFirstBadOperand(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		BuiltinBadName:           map[string]string{"typeset": "%[1]s: %[2]s: invalid variable name"},
 		BuiltinBadNameKeepsValue: true,
@@ -147,6 +155,7 @@ func TestMovingStopsAtTheFirstBadOperand(t *testing.T) {
 // reading's bare form writes the whole parameter table. The pair is the row:
 // one axis value, two answers to the same line.
 func TestTheBareLetterIsAListingUnderOneReadingAndSilentUnderTheOther(t *testing.T) {
+	t.Parallel()
 	const src = "qa=1\ntypeset -m\necho done"
 	moving, errs, st := declRun(t, src, withMoving, Diagnostics{})
 	if want := "done\n"; moving != want || errs != "" || st != 0 {
@@ -162,6 +171,7 @@ func TestTheBareLetterIsAListingUnderOneReadingAndSilentUnderTheOther(t *testing
 // A dialect that spells the letter and has not said which reading it means is
 // refused by name rather than given one of them.
 func TestTheLetterWithNoReadingChosenIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	unanswered := func(s *Semantics) {
 		withMoving(s)
 		s.DeclareMatchingLetter = DeclareMatchingLetterUnspecified

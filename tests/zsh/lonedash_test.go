@@ -20,6 +20,7 @@ import (
 // alone is — that runs the null command and this is `redirection with no
 // command` (#3236).
 func TestACommandWordThatIsOnlyADashIsDiscarded(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 		status          int
@@ -57,6 +58,7 @@ func TestACommandWordThatIsOnlyADashIsDiscarded(t *testing.T) {
 // `>f` alone runs this shell's null command and succeeds, where `- >f` is
 // refused and ends the script.
 func TestADiscardedDashLeavesARedirectionWithNoCommand(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, _, err := preset.Combined(t, dialecttest.Base{Dir: dir}, "- >out1\nprint after\n")
 	if err != nil {

@@ -15,6 +15,7 @@ import (
 // declaration the way it always did. See
 // Semantics.DeclarationArrayOperandsAreStoredInTurn (#6798).
 func TestALiteralOperandIsPlacedInTurnWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	src := "a=(0)\ntypeset -a a=(1) b=(\"${a[0]}\")\necho \"${b[0]}\"\n"
 	for _, tc := range []struct {
 		name   string

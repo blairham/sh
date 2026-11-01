@@ -80,6 +80,7 @@ func TestWhetherAFatalBadNameDeclaresTheOperandsBehindIt(t *testing.T) {
 // The operands behind the refusal are collected in silence: one diagnostic is
 // what every column that stops writes, however many bad names follow.
 func TestAFatalBadNameReportsOnlyTheFirst(t *testing.T) {
+	t.Parallel()
 	out, _ := runBadName(t, `export ":" ok1=1 "1x" ok2=2`, Yes)
 	if want := "sh: export: `:': not a valid identifier\n"; out != want {
 		t.Errorf("two bad names = %q, want %q", out, want)
@@ -89,6 +90,7 @@ func TestAFatalBadNameReportsOnlyTheFirst(t *testing.T) {
 // The script still stops. The give-up is held back only for as long as the
 // builtin needs to declare what it was given.
 func TestAFatalBadNameStillEndsTheScript(t *testing.T) {
+	t.Parallel()
 	for _, after := range []Answer{Yes, No} {
 		out, status := runBadName(t, `export ok1=1 ":" ok2=2; echo NOT-FATAL`, after)
 		if want := "sh: export: `:': not a valid identifier\n"; out != want || status == 0 {
@@ -128,6 +130,7 @@ func TestAFatalBadNameToUnsetStillRemovesTheNames(t *testing.T) {
 // A refusal that is *not* fatal never asks the axis: the loop reaches every
 // operand by carrying on, which is what bash does.
 func TestASurvivableBadNameDeclaresEverythingWithoutAskingTheAxis(t *testing.T) {
+	t.Parallel()
 	out, status := run(t, `export ok1=1 ":" ok2=2; echo "[$ok1][$ok2] st=$?"`, func(r *Runner) {
 		s := permissive()
 		s.BadNameToDeclarationFatal = No
@@ -149,6 +152,7 @@ func TestASurvivableBadNameDeclaresEverythingWithoutAskingTheAxis(t *testing.T) 
 // library building its own vector can put them together, and the silence is
 // what every column that stops was measured to write.
 func TestASecondRefusedSubscriptIsJudgedInSilence(t *testing.T) {
+	t.Parallel()
 	out, status := runBadName(t, `export ok1=1 "a[1]=v" "b[2]=w" ok2=2`, Yes)
 	want := "sh: export: `a[1]': not a valid identifier\n"
 	if out != want || status == 0 {

@@ -22,6 +22,7 @@ import (
 // for a `k` holding the character the script meant. Status 0 throughout, which
 // is what made it a table with a key nobody could name (#2749).
 func TestADollarSingleQuotedSubscriptDecodesItsEscapes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ why, src, want string }{
 		{
 			"the key is the character, not the escape",
@@ -78,6 +79,7 @@ func TestADollarSingleQuotedSubscriptDecodesItsEscapes(t *testing.T) {
 // listed bare, so the output of `typeset -p` named a subscript the table did
 // not have (#2749).
 func TestAWholeArraySubscriptIsQuotedAsAKey(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.DeclareValueQuoting = ListingQuoteAlwaysDouble
 	sem.DeclareListing = DeclareListingClustered

@@ -40,6 +40,7 @@ func arithTextRun(t *testing.T, escapes, statusIsTwo Answer, src string) (string
 
 // Unanimous, so asked under both answers: the arithmetic does not run.
 func TestAFailedExpansionInAnArithmeticCommandStopsTheExpression(t *testing.T) {
+	t.Parallel()
 	for _, escapes := range []Answer{Yes, No} {
 		out, _ := arithTextRun(t, escapes, Yes, arithTextSrc)
 		if !strings.HasSuffix(out, "b=\n") {
@@ -64,6 +65,7 @@ func TestAFailedExpansionInAnArithmeticCommandStopsTheExpression(t *testing.T) {
 // failure, through the door a heading's takes; the other leaves the
 // construct's own status with the line running on.
 func TestWhatAFailedExpansionInAnArithmeticCommandEnds(t *testing.T) {
+	t.Parallel()
 	t.Run("given up as the expansion's", func(t *testing.T) {
 		out, _ := arithTextRun(t, Yes, Yes, arithTextSrc)
 		if strings.Contains(out, "same=") {
@@ -94,6 +96,7 @@ func TestWhatAFailedExpansionInAnArithmeticCommandEnds(t *testing.T) {
 // of its text is not read, so no second complaint follows the first and
 // nothing is stored (#7189).
 func TestAFailedExpansionInAnArithmeticExpansionStopsTheExpression(t *testing.T) {
+	t.Parallel()
 	const src = `echo $(( b = 15 $((1/0)) ))` + "\n" + `echo "b=$b"`
 	for _, escapes := range []Answer{Yes, No} {
 		out, _ := arithTextRun(t, escapes, Yes, src)

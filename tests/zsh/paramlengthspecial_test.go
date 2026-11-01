@@ -25,6 +25,7 @@ import (
 // the corpus row written that way could not see: `$-` is also two characters
 // in bash and ksh93.
 func TestALengthOverASpecialNameIsFinalHere(t *testing.T) {
+	t.Parallel()
 	if !zsh.Dialect().ParamLengthOverASpecialNameIsFinal {
 		t.Error("zsh keeps the length reading when text is left over behind the name")
 	}

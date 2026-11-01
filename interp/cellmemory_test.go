@@ -14,6 +14,7 @@ import (
 // position. The names deleted on the way to one are the last two the store
 // asked about, and once the slab is compacted they are not in it at all.
 func TestTheRememberedCellsAreForgottenWhenTheSlabMoves(t *testing.T) {
+	t.Parallel()
 	var out bytes.Buffer
 	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out})
 	r.varsPut("kept", "k")

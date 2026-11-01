@@ -12,6 +12,7 @@ import "testing"
 // (`-f`, a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C`), each row
 // the bytes that shell wrote.
 func TestTheDefaultIFSSplitsAtANUL(t *testing.T) {
+	t.Parallel()
 	const show = "show() { for x in \"$@\"; do printf '<%s>' \"$x\"; done; }\n"
 	dir := t.TempDir()
 	for _, c := range []struct{ name, src, want string }{

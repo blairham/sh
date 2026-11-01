@@ -25,6 +25,7 @@ import (
 // through `cd -` cannot tell "the value was dropped" from "`cd` refused it",
 // which is the confusion the issue was written out of.
 func TestAnInheritedOldpwdIsJudgedAtStartup(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	sub := filepath.Join(dir, "d")
 	if err := os.Mkdir(sub, 0o755); err != nil {
@@ -94,6 +95,7 @@ func TestAnInheritedOldpwdIsJudgedAtStartup(t *testing.T) {
 // re-ran per chunk would overwrite the OLDPWD a `cd` had just recorded. That
 // is the whole reason this is a flag rather than "is the name set".
 func TestTheStartupJudgementDoesNotOutliveTheFirstCd(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	sub := filepath.Join(dir, "d")
 	if err := os.Mkdir(sub, 0o755); err != nil {

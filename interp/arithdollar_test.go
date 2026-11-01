@@ -13,6 +13,7 @@ import (
 // tree until it runs — `$x$y` with x=`1+` and y=`2` is `1+2`, and no tree
 // built from `$x$y` could be.
 func TestAnExpansionInAnExpressionHappensFirst(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`x='1+'; y=2; echo $(( $x$y ))`, "3"},
 		// Two halves of an operator, which only works if the substitution is
@@ -42,6 +43,7 @@ func TestAnExpansionInAnExpressionHappensFirst(t *testing.T) {
 // The condition and the step are read again each time round, because what they
 // expand to can change between iterations.
 func TestALoopHeaderIsExpandedEachTime(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `limit=1; for ((i=0;i<$limit;i++)); do printf %s $i; limit=3; done; echo`, nil)
 	if got, want := strings.TrimSpace(out), "012"; got != want {
 		t.Errorf("got %q, want %q — the condition is re-read", got, want)
@@ -51,6 +53,7 @@ func TestALoopHeaderIsExpandedEachTime(t *testing.T) {
 // An expression that will not read is reported when it runs, which is the only
 // time it can be: until it is expanded there is nothing to read.
 func TestAnUnreadableExpandedExpressionFailsWhenItRuns(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `op='+'; echo before; echo $(( 1 $op ))`, nil)
 	if !strings.Contains(out, "before") {
 		t.Errorf("got %q, want the earlier command to have run", out)
@@ -65,6 +68,7 @@ func TestAnUnreadableExpandedExpressionFailsWhenItRuns(t *testing.T) {
 // initialiser does nothing, and a missing condition does the opposite of
 // what evaluating an empty expression would say.
 func TestAnAbsentLoopConditionIsEndless(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`for ((;;)); do break; done; echo ok`, "ok"},
 		{`for ((i=0;;i++)); do [ $i -gt 2 ] && break; done; echo $i`, "3"},

@@ -109,6 +109,7 @@ func TestABoldOffWritesTheColorBackAgain(t *testing.T) {
 // line changes nothing about what the next character looks like, so it has
 // no entry at all.
 func TestTheVisualTableIsWhatWasMeasured(t *testing.T) {
+	t.Parallel()
 	got := zsh.PromptStyle().Visual
 	want := map[rune]interp.PromptVisual{
 		'B': {Attribute: interp.AttributeBold, Restores: true},

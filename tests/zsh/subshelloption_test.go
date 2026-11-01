@@ -21,6 +21,7 @@ import (
 // reads, and one backed by a substrate `set -o` name. They are asserted
 // together because a fix to one entry's storage would move one row.
 func TestASubshellsOptionsAreReadInTheSubshell(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -78,6 +79,7 @@ func TestASubshellsOptionsAreReadInTheSubshell(t *testing.T) {
 // for the second left the subshell unchanged and turned the option on in the
 // *outer* shell — the same registration, read and written.
 func TestASubshellsOwnListingAndMove(t *testing.T) {
+	t.Parallel()
 	t.Run("the listing is the subshell's", func(t *testing.T) {
 		const src = `out=$( (setopt autocd; set +o) )
 case $out in

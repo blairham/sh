@@ -13,6 +13,7 @@ import (
 // writer of a table it reads, and both runner words in its key. A memo that
 // missed one would give the answer from before the change (#6353).
 func TestTheBuiltinMemoForgetsEveryTableWrite(t *testing.T) {
+	t.Parallel()
 	r := newTestRunner(t, &Runner{})
 	own := Builtin(func(*Runner, context.Context, []string) int { return 0 })
 	steps := []struct {

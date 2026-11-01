@@ -50,6 +50,7 @@ func emptyDir(t *testing.T) string {
 
 // TestAnUnmatchedPatternLeavesTheNameAlone is the issue as it was filed.
 func TestAnUnmatchedPatternLeavesTheNameAlone(t *testing.T) {
+	t.Parallel()
 	out, _ := runLiteralIn(t, emptyDir(t),
 		`reply=(keep); eval "reply=(zzznomatch*)"; echo "[${reply[*]}] n=${#reply[@]}"`)
 	if want := "[keep] n=1"; !strings.Contains(out, want) {
@@ -67,6 +68,7 @@ func TestAnUnmatchedPatternLeavesTheNameAlone(t *testing.T) {
 // starting state, and the half a fix reaches by keeping the old value: a name
 // that had none must stay unset rather than be created empty.
 func TestAnUnmatchedPatternCreatesNoName(t *testing.T) {
+	t.Parallel()
 	out, _ := runLiteralIn(t, emptyDir(t),
 		`eval "reply=(zzznomatch*)"; echo "n=${#reply[@]} set=${reply+yes}"`)
 	if want := "n=0 set="; !strings.Contains(out, want) {
@@ -82,6 +84,7 @@ func TestAnUnmatchedPatternCreatesNoName(t *testing.T) {
 // reasonable. The elements on either side of the miss are what make the two
 // readings differ.
 func TestOneUnmatchedElementAbandonsThemAll(t *testing.T) {
+	t.Parallel()
 	dir := emptyDir(t)
 	if err := os.WriteFile(filepath.Join(dir, "m1"), nil, 0o600); err != nil {
 		t.Fatal(err)
@@ -99,6 +102,7 @@ func TestOneUnmatchedElementAbandonsThemAll(t *testing.T) {
 // words *and reported success*, for a value the shell had just said it could
 // not compute.
 func TestAFailedExpansionAbandonsTheLiteral(t *testing.T) {
+	t.Parallel()
 	out, _ := runLiteralIn(t, emptyDir(t),
 		`reply=(keep); eval 'reply=(a $((1/0)) b)'; echo "st=$? [${reply[*]}] n=${#reply[@]}"`)
 	if want := "[keep] n=1"; !strings.Contains(out, want) {
@@ -113,6 +117,7 @@ func TestAFailedExpansionAbandonsTheLiteral(t *testing.T) {
 // same store. One of the three not abandoning would say the check sits at the
 // wrong level rather than being missing once.
 func TestAnUnsetNameUnderNounsetAbandonsTheLiteral(t *testing.T) {
+	t.Parallel()
 	out, _ := runLiteralIn(t, emptyDir(t),
 		`set -u; reply=(keep); eval 'reply=(a $NOPEVAR b)'; echo "[${reply[*]}] n=${#reply[@]}"`)
 	if want := "[keep] n=1"; !strings.Contains(out, want) {
@@ -124,6 +129,7 @@ func TestAnUnsetNameUnderNounsetAbandonsTheLiteral(t *testing.T) {
 // satisfied by refusing everything: an element list that expanded is stored,
 // and a pattern that matches is not a failure.
 func TestAMatchingPatternStillAssigns(t *testing.T) {
+	t.Parallel()
 	dir := emptyDir(t)
 	for _, n := range []string{"m1", "m2"} {
 		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {

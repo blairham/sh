@@ -30,6 +30,7 @@ import (
 // rather than two: the two shells that have this reading agree about it down
 // to the ordering of the redirection it stands for.
 func TestPipeBothStreamsCarriesStandardErrorIntoThePipe(t *testing.T) {
+	t.Parallel()
 	// **`setopt nomultios` is in the script and not only in the comment.**
 	// The measurement above was taken with it — deliberately, to isolate the
 	// ordering question — and the script ran without it, which made the
@@ -73,6 +74,7 @@ st=0 ps=7 0
 // Measured 2026-09-29 on zsh 5.9.2, the same script with and without the
 // `setopt` line; only the third block moves.
 func TestPipeBothStreamsUnderMultios(t *testing.T) {
+	t.Parallel()
 	const src = `f() { echo O; echo E >&2; }
 echo "-- plain"; f |& while read l; do echo "<$l>"; done
 echo "-- after 2>/dev/null"; f 2>/dev/null |& while read l; do echo "<$l>"; done
@@ -98,6 +100,7 @@ st=0 ps=7 0
 }
 
 func TestPipeBothStreamsIsOn(t *testing.T) {
+	t.Parallel()
 	if !zsh.Dialect().PipeBothStreams {
 		t.Error("zsh reads `a |& b` as `a 2>&1 | b`")
 	}
@@ -121,6 +124,7 @@ func TestPipeBothStreamsIsOn(t *testing.T) {
 // The operator is quoted whole, which a dialect without it could not say —
 // it never lexes one token there.
 func TestABarWithNoCommandNamesWhatItFound(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"echo one | & echo two\n", "parse error near `&'"},
 		{"echo one | | echo two\n", "parse error near `|'"},

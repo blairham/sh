@@ -23,6 +23,7 @@ func programGlobSem(a Answer) Semantics {
 // and the next one does. Answered the other way, the refusal ends what any
 // other does. See Semantics.UnmatchedPatternFailsOnlyTheProgram.
 func TestAnUnmatchedPatternInAProgramsWordsFailsTheProgram(t *testing.T) {
+	t.Parallel()
 	const src = `/nonexistent/prog zz[x]zz; echo "after st=$?"`
 	out, _ := run(t, src, withSem(programGlobSem(Yes)))
 	if !strings.Contains(out, "zz[x]zz") || !strings.Contains(out, "after st=1") {
@@ -42,6 +43,7 @@ func TestAnUnmatchedPatternInAProgramsWordsFailsTheProgram(t *testing.T) {
 // matched ask nothing, so a dialect that has not answered is not refused on
 // any of them.
 func TestAnUnmatchedPatternAsksOnlyInAProgramsWords(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`echo zz[x]zz; echo after`,
 		`zz[x]zz a; echo after`,

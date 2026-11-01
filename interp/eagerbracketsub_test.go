@@ -40,6 +40,7 @@ func eagerSubSem() Semantics {
 }
 
 func TestABracketASubExpressionLeftOpenIsRefusedWhateverTheSubject(t *testing.T) {
+	t.Parallel()
 	// Every surface that compiles a pattern, with a subject the pattern's
 	// first literal rules out — the row the lazy verdict could not produce.
 	for _, c := range []struct{ name, src string }{
@@ -70,6 +71,7 @@ func TestABracketASubExpressionLeftOpenIsRefusedWhateverTheSubject(t *testing.T)
 // first character does not rule out was refused before this change too, and
 // still is.
 func TestTheSameBracketIsStillRefusedWhenTheMatcherReachesIt(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `v=zzz; echo "${v#[[:alpha:]}"`+"\necho after", withSem(eagerSubSem()))
 	if !strings.Contains(out, "bad pattern") || strings.Contains(out, "after") {
 		t.Errorf("got %q, want the refusal and no line after it", out)
@@ -79,6 +81,7 @@ func TestTheSameBracketIsStillRefusedWhenTheMatcherReachesIt(t *testing.T) {
 // And the controls, which keep the verdict keyed on *this* axis and on a
 // bracket that is really left open.
 func TestTheEagerVerdictIsKeyedOnTheAxisAndOnTheShape(t *testing.T) {
+	t.Parallel()
 	t.Run("a closed class is not refused", func(t *testing.T) {
 		out, st := run(t, `v=azzz; echo "[${v#[[:alpha:]]}]"`, withSem(eagerSubSem()))
 		if out != "[zzz]\n" || st != 0 {
@@ -122,6 +125,7 @@ func TestTheEagerVerdictIsKeyedOnTheAxisAndOnTheShape(t *testing.T) {
 // one, which is the pair that says the scan asks the vector rather than
 // assuming.
 func TestACollatingDelimiterLeavesTheBracketOpenOnlyWhereItIsRead(t *testing.T) {
+	t.Parallel()
 	reads := eagerSubSem()
 	reads.CollatingElements = OneCharacterIsACollatingElement
 	out, _ := run(t, `v=zzz; echo "[${v#x[[.a.]}]"`+"\necho after", withSem(reads))
@@ -140,6 +144,7 @@ func TestACollatingDelimiterLeavesTheBracketOpenOnlyWhereItIsRead(t *testing.T) 
 // leaving it alone: `x[[:alpha}` holds no `:]`, so what it means is
 // Semantics.UnterminatedCharacterClass's question.
 func TestAnUnterminatedClassIsNotThisQuestion(t *testing.T) {
+	t.Parallel()
 	s := eagerSubSem()
 	s.UnterminatedCharacterClass = UnterminatedClassIsOrdinaryCharacters
 	out, st := run(t, `v=zzz; echo "[${v#x[[:alpha}]"`, withSem(s))

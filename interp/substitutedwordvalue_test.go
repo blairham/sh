@@ -48,6 +48,7 @@ func rejoinsOnASpace(r *interp.Runner) {
 // a test. rejoinsOnASpace is the answer two of the panel's columns give, and
 // it is what makes the space this fault left visible.
 func TestAStarInASubstitutedWordJoinsOnIFSWhereNothingIsSplit(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the default word",

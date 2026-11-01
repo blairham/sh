@@ -47,6 +47,7 @@ func exclusionFixture(t *testing.T) string {
 }
 
 func TestAGlobExclusionIsMatchedAgainstTheWholeWord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The startup's own pattern, one directory down. The two files the
 		// right side takes out are the ones a compiled or backed-up function
@@ -104,6 +105,7 @@ func TestAGlobExclusionIsMatchedAgainstTheWholeWord(t *testing.T) {
 // complaint an unmatched pattern earns and not a quieter one — measured,
 // `no matches found` naming the whole field, `~` and all.
 func TestAnExclusionThatEmptiesAPatternIsAMiss(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, exclusionFixture(t), "setopt extendedglob\necho d/p_*~*d*\necho after")
 	if !strings.Contains(out, "no matches found: d/p_*~*d*") || st == 0 {
 		t.Errorf("an emptied exclusion = %q (status %d), want a miss naming the field", out, st)

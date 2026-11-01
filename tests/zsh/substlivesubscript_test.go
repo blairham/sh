@@ -11,6 +11,7 @@ import "testing"
 // before (#5653). Measured 2026-10-03 on zsh 5.9.2 under -f, beside `xay` and
 // `xby`.
 func TestASubscriptOnANestingKeepsTheLiveCharacters(t *testing.T) {
+	t.Parallel()
 	const setup = "print -n >xay; print -n >xby; s=xQy\n"
 	for _, tc := range []struct{ src, want string }{
 		{`print ${${s:s/Q/?/}[1,3]}`, "xay xby\n"},

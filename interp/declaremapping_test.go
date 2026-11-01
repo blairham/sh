@@ -33,6 +33,7 @@ var mappingDiagnostics = Diagnostics{
 // The mapping is the attribute letter under another name, in both spellings of
 // where the name is written.
 func TestAMappingIsTheAttributeLetterUnderAnotherName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, line, want string }{
 		{"detached", "typeset -M tolower v", "[abc]\n"},
 		{"attached", "typeset -Mtolower v", "[abc]\n"},
@@ -51,6 +52,7 @@ func TestAMappingIsTheAttributeLetterUnderAnotherName(t *testing.T) {
 // The attribute holds for every later write, which is what says the mapping
 // was recorded as one rather than applied to the value standing there.
 func TestAMappingReachesALaterAssignment(t *testing.T) {
+	t.Parallel()
 	src := "v=AbC\ntypeset -M tolower v\nv=XyZ\necho \"[$v]\""
 	out, errs, st := declRun(t, src, withMapping, mappingDiagnostics)
 	if want := "[xyz]\n"; out != want || errs != "" || st != 0 {
@@ -60,6 +62,7 @@ func TestAMappingReachesALaterAssignment(t *testing.T) {
 
 // A name outside the two is refused and named.
 func TestAnUnknownMappingIsNamed(t *testing.T) {
+	t.Parallel()
 	_, errs, st := declRun(t, "v=1\ntypeset -M nosuch v", withMapping, mappingDiagnostics)
 	if want := "testsh: typeset: nosuch: unknown mapping name\n"; errs != want || st != 1 {
 		t.Errorf("an unknown mapping = stderr %q status %d, want %q at 1", errs, st, want)
@@ -70,6 +73,7 @@ func TestAnUnknownMappingIsNamed(t *testing.T) {
 // and the line is refused. The control is the same line without the dashes,
 // where `nosuch` *is* the name and the complaint is the other one.
 func TestADoubleDashTakesTheNameAwayFromTheLetter(t *testing.T) {
+	t.Parallel()
 	_, errs, st := declRun(t, "typeset -M -- nosuch v", withMapping, mappingDiagnostics)
 	if want := "testsh: typeset: -M requires argument when operands are specified\n"; errs != want || st != 1 {
 		t.Errorf("`-M --` = stderr %q status %d, want %q at 1", errs, st, want)
@@ -83,6 +87,7 @@ func TestADoubleDashTakesTheNameAwayFromTheLetter(t *testing.T) {
 // A bare letter is a listing of the mapped names, and this engine keeps no
 // mapping apart from the attribute, so it is silent at 0 rather than refused.
 func TestTheBareMappingLetterIsSilent(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, "typeset -M\necho done", withMapping, mappingDiagnostics)
 	if want := "done\n"; out != want || errs != "" || st != 0 {
 		t.Errorf("a bare `typeset -M` = %q (stderr %q, status %d), want %q", out, errs, st, want)
@@ -93,6 +98,7 @@ func TestTheBareMappingLetterIsSilent(t *testing.T) {
 // judged, which is the order measured and the only thing that tells the two
 // refusals apart on a `-f` line.
 func TestTheFunctionLetterIsRefusedAfterTheNameIsJudged(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, line, want string
 		status           int
@@ -114,6 +120,7 @@ func TestTheFunctionLetterIsRefusedAfterTheNameIsJudged(t *testing.T) {
 // letter means the other thing it is more letters, and a refusal of one of
 // them has to survive — which is the row a swallowed name would have run.
 func TestTheRestOfTheWordIsLettersUnderTheOtherReading(t *testing.T) {
+	t.Parallel()
 	other := func(s *Semantics) {
 		withMapping(s)
 		s.DeclareMappingLetter = DeclareMappingLetterRegistersAMathFunction
@@ -126,6 +133,7 @@ func TestTheRestOfTheWordIsLettersUnderTheOtherReading(t *testing.T) {
 
 // A dialect that spells the letter and has not said which reading it means.
 func TestTheMappingLetterWithNoReadingChosenIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	unanswered := func(s *Semantics) {
 		withMapping(s)
 		s.DeclareMappingLetter = DeclareMappingLetterUnspecified

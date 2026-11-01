@@ -17,6 +17,7 @@ import (
 // like a length and is not one — `a=(1 2); $((#a))` is 49, the code of the
 // `1`, where the count is `$(( $#a ))`, which #846 made spellable.
 func TestTheCharacterCodeOperator(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an array is not a count", `a=(1 2); echo $((#a)) $(( $#a ))`, "49 2\n"},
 		{"a string's first character", `b=zebra; echo $((#b))`, "122\n"},
@@ -47,6 +48,7 @@ func TestTheCharacterCodeOperator(t *testing.T) {
 // the escapes `$'…'` decodes — where a single `#` before a backslash takes the
 // next character as itself. Measured: `$((##\n))` is 10 and `$((#\n))` is 110.
 func TestTheCharacterCodeOperatorOnACharacter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a letter", `echo $((##a)) $((##A)) $((##0))`, "97 65 48\n"},
 		{"a space", `echo $((## ))`, "32\n"},
@@ -76,6 +78,7 @@ func TestTheCharacterCodeOperatorOnACharacter(t *testing.T) {
 // the rest of arithmetic uses — and one character and no more is taken, so
 // anything past it is left over and refused as text where an operator belonged.
 func TestTheCharacterCodeOperatorRefusals(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`##`, "bad math expression: character missing after ##"},
 		{`##ab`, "bad math expression: operator expected at `b'"},
@@ -101,6 +104,7 @@ func TestTheCharacterCodeOperatorRefusals(t *testing.T) {
 // The `base#digits` literal is not this operator and keeps working, which is
 // the one place the two spellings could have collided.
 func TestTheRadixLiteralStillReads(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `echo $((16#ff)) $((2#101)) $((8#17))`)
 	if want := "255 5 15\n"; out != want || st != 0 {
 		t.Errorf("got %q at %d, want %q at 0", out, st, want)
@@ -122,6 +126,7 @@ func TestTheRadixLiteralStillReads(t *testing.T) {
 // as `bad character after ##` where we answer 0, which is its own wording and
 // was the answer before this change too.
 func TestTheCharacterCodeOperatorReadsTheCaretEscapes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"control", `echo $((##\C-a))`, "1\n"},
 		{"control, uppercase", `echo $((##\C-A))`, "1\n"},

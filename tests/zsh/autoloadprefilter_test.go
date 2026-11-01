@@ -25,6 +25,7 @@ import (
 // its own `$fpath` directory and called once under `autoload -Uz`:
 // `ka:[A] kb:[B] kc:[C] kd:[D] ke:[] kf:[F] kg:[G]`.
 func TestAFunctionFileThatIsOneDefinitionIsStillFound(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	fns := filepath.Join(dir, "fns")
 	if err := os.Mkdir(fns, 0o755); err != nil {

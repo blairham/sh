@@ -18,6 +18,7 @@ import (
 // script carried on — and an empty string is a plausible value for a real
 // element, so nothing downstream could tell.
 func TestABadSubscriptIsReportedWhereverOneIsWritten(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		// Reading an element.
 		`a=(x y z); echo "[${a[b c]}]"; echo after`,
@@ -53,6 +54,7 @@ func TestABadSubscriptIsReportedWhereverOneIsWritten(t *testing.T) {
 // expression, and it went on to the next command — so an array a script
 // thought it had written was untouched and nothing stopped.
 func TestABadSubscriptInAnAssignmentEndsTheScript(t *testing.T) {
+	t.Parallel()
 	out, st := runBadSubscript(t, `a=(x y z); a[1+]=v; printf "[%s]" "${a[@]}"; echo " after"`)
 	if !strings.Contains(out, "1+") {
 		t.Errorf("output %q does not name the expression", out)
@@ -71,6 +73,7 @@ func TestABadSubscriptInAnAssignmentEndsTheScript(t *testing.T) {
 // the same nothing on one line, which is how bash came to be recorded as
 // ending a script it runs to the end (#3485).
 func TestABadSubscriptToUnsetGivesUpAsMuchAsTheDialectDoes(t *testing.T) {
+	t.Parallel()
 	const src = "a=(x y z)\n" +
 		`unset "a[1+]"; echo "same=$? n=${#a[@]}"` + "\n" +
 		`echo "next=$?"`
@@ -129,6 +132,7 @@ func TestABadSubscriptToUnsetGivesUpAsMuchAsTheDialectDoes(t *testing.T) {
 // which is the one place it and the fatal answer coincide. Measured on bash,
 // where a script file resumes at the next command and `-c` does not.
 func TestGivingUpACommandGivesUpACommandStringWhole(t *testing.T) {
+	t.Parallel()
 	const src = "a=(x y z)\n" + `unset "a[1+]"` + "\n" + `echo "next=$?"`
 	out, st := runGrammar(t, src, nil, func(r *Runner) {
 		sem := *r.Semantics
@@ -146,6 +150,7 @@ func TestGivingUpACommandGivesUpACommandStringWhole(t *testing.T) {
 
 // An axis nobody answered is refused by name rather than guessed.
 func TestABadSubscriptToUnsetRefusesAnUnspecifiedAxis(t *testing.T) {
+	t.Parallel()
 	out, _ := runGrammar(t, `a=(x y z); unset "a[1+]"; echo "st=$?"`, nil, func(r *Runner) {
 		sem := *r.Semantics
 		sem.BadSubscriptToUnset = BadSubscriptUnspecified
@@ -163,6 +168,7 @@ func TestABadSubscriptToUnsetRefusesAnUnspecifiedAxis(t *testing.T) {
 // like this is likeliest to break: the reporting must be reached only by a
 // subscript that actually failed.
 func TestASubscriptThatReadsIsUnaffected(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(x y z); echo "[${a[1+1]}]"`, "[z]"},
 		{`a=(x y z); i=1; echo "[${a[i+1]}]"`, "[z]"},

@@ -28,6 +28,7 @@ import (
 // pattern: [a` the same shell writes for a glob: two sentences one byte
 // apart, and sharing one string would tie a change to either to the other.
 func TestABadSelectionPatternIsRefusedAtEverySurface(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, complaint string
 	}{
@@ -66,6 +67,7 @@ func TestABadSelectionPatternIsRefusedAtEverySurface(t *testing.T) {
 // whatever status that surface already gives a miss. Without these rows a
 // mutant that refused every pattern would pass the grid above.
 func TestAnUnmatchedSelectionPatternIsNotRefused(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src string
 		status    int
@@ -109,6 +111,7 @@ func TestAnUnmatchedSelectionPatternIsNotRefused(t *testing.T) {
 // matching surface, which is why a close with nothing open is a rule of its
 // own rather than the mirror of the unterminated-group test.
 func TestWhichSelectionPatternsAreRefused(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		pattern string
 		refused bool
@@ -175,6 +178,7 @@ func singleQuoted(s string) string {
 // gave up the whole line on the first bad pattern would be wrong in the
 // direction that loses output.
 func TestOneBadSelectionPatternDoesNotDiscardTheGoodOnes(t *testing.T) {
+	t.Parallel()
 	src := "zq=1\nzr=2\ntypeset -m 'zq*' '[' 'zr*'\n"
 	out, st, errs := runZshSplit(t, t.TempDir(), src)
 	if want := "zq=1\nzr=2\n"; out != want {
@@ -193,6 +197,7 @@ func TestOneBadSelectionPatternDoesNotDiscardTheGoodOnes(t *testing.T) {
 // separates them turns `typeset -m '['` into a dump of every parameter in the
 // shell, which is a listing at 1 and reads as an answer.
 func TestARefusedSelectionLineDoesNotListTheWholeTable(t *testing.T) {
+	t.Parallel()
 	out, st, errs := runZshSplit(t, t.TempDir(), "zq=1\ntypeset -m '['\n")
 	if out != "" {
 		t.Errorf("stdout = %q, want nothing at all", out)
@@ -217,6 +222,7 @@ func TestARefusedSelectionLineDoesNotListTheWholeTable(t *testing.T) {
 // complaint at 1 either way — the pair that says this rule is not keyed on
 // the option a reader would reach for first.
 func TestTheBadPatternOptionDoesNotReachASelectionPattern(t *testing.T) {
+	t.Parallel()
 	for _, state := range []string{"setopt badpattern", "unsetopt badpattern"} {
 		t.Run(state, func(t *testing.T) {
 			out, st, errs := runZshSplit(t, t.TempDir(), state+"\ntypeset -m '['\n")

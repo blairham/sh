@@ -35,6 +35,7 @@ func pipefailRun(t *testing.T, a Answer, src string) (string, int) {
 // *failing* element — which is a different thing from its first failure, and
 // the difference only shows when two elements fail with different statuses.
 func TestPipefailReportsTheLastFailure(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src    string
 		with   int
@@ -60,6 +61,7 @@ func TestPipefailReportsTheLastFailure(t *testing.T) {
 
 // `set +o` puts it back.
 func TestPipefailCanBeTurnedOff(t *testing.T) {
+	t.Parallel()
 	if _, st := pipefailRun(t, Yes, "set -o pipefail\nset +o pipefail\n(exit 3) | true"); st != 0 {
 		t.Errorf("after set +o, status %d, want 0", st)
 	}
@@ -70,6 +72,7 @@ func TestPipefailCanBeTurnedOff(t *testing.T) {
 // then goes on reporting its last element, which is the answer the option
 // exists to avoid.
 func TestWithoutTheOptionTheNameIsRefused(t *testing.T) {
+	t.Parallel()
 	out, st := pipefailRun(t, No, "set -o pipefail\necho st=$?\n(exit 3) | true\necho p=$?")
 	if !strings.Contains(out, "invalid option name") {
 		t.Errorf("said %q, want it refused as a name", out)
@@ -84,6 +87,7 @@ func TestWithoutTheOptionTheNameIsRefused(t *testing.T) {
 // complaint that would follow is a consequence of the refusal rather than
 // anything the script wrote.
 func TestAnUnansweredPipefailIsRefusedOnce(t *testing.T) {
+	t.Parallel()
 	out, _ := pipefailRun(t, Unspecified, "set -o pipefail")
 	if n := strings.Count(out, "\n"); n != 1 {
 		t.Errorf("said %q (%d lines), want one", out, n)

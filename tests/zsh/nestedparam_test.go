@@ -17,6 +17,7 @@ import (
 // is a construct nobody can write, and nothing in `syntax` or `interp` can
 // notice that.
 func TestNestedExpansionsAreThisDialects(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -91,6 +92,7 @@ func TestNestedExpansionsAreThisDialects(t *testing.T) {
 // *empty* for a search that found nothing satisfies a text comparison in
 // some spellings and still leaves `(( … == 0 ))` a bad math expression.
 func TestTheHookInstallerIdiomRuns(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -ga precmd_functions
 precmd_functions=(other_hook)
 add_one() {
@@ -121,6 +123,7 @@ print -r -- "hooks=${precmd_functions[*]}"`
 //
 // Measured 2026-09-10 against zsh 5.9.2 (#976, #1697).
 func TestAnUnquotedSubstitutionInTheNamePositionIsFieldSplit(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -193,6 +196,7 @@ func TestAnUnquotedSubstitutionInTheNamePositionIsFieldSplit(t *testing.T) {
 // `cc` is in the listing and not on disk, which is what says the glob is
 // doing the filtering rather than the join alone.
 func TestTheAlternationACompletionDumpBuilds(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, name := range []string{"aa", "bb"} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o644); err != nil {

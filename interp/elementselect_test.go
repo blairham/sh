@@ -28,6 +28,7 @@ func selecting(d *syntax.Dialect) {
 // so returned the array unchanged, because the shape of that route is one
 // output per input and this operator has fewer.
 func TestExclusionDropsMatchingElements(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -99,6 +100,7 @@ func TestExclusionDropsMatchingElements(t *testing.T) {
 // checked `:#` in isolation would pass for an implementation that had quietly
 // become prefix removal.
 func TestExclusionMatchesAWholeValueNotAPrefix(t *testing.T) {
+	t.Parallel()
 	const src = `v=hello; printf "[%s][%s][%s]" "${v:#hel*}" "${v#hel*}" "${v:#xyz}"`
 	out, _ := runGrammar(t, src, selecting, nil)
 	if want := "[][lo][hello]"; out != want {
@@ -109,6 +111,7 @@ func TestExclusionMatchesAWholeValueNotAPrefix(t *testing.T) {
 // A value that is one string is the one-element list it is: the operator
 // leaves it or empties it, and never returns part of it.
 func TestExclusionOnAScalarIsAllOrNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -145,6 +148,7 @@ func TestExclusionOnAScalarIsAllOrNothing(t *testing.T) {
 // implementation that handed the matcher a plain string would remove `two`
 // under both answers and match the shell under neither.
 func TestTheExclusionPatternFollowsTheGlobbingAxis(t *testing.T) {
+	t.Parallel()
 	const src = `p='t*'; a=(one two); printf "[%s]" "${(@)a:#$p}"`
 	for _, tc := range []struct {
 		name string
@@ -182,6 +186,7 @@ func TestTheExclusionPatternFollowsTheGlobbingAxis(t *testing.T) {
 // Without it, an implementation that routed all three through the matcher
 // would pass every other row here.
 func TestTheSetOperatorsCompareElementsForEquality(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -229,6 +234,7 @@ func TestTheSetOperatorsCompareElementsForEquality(t *testing.T) {
 // catch an operator wired into the wrong branch of the evaluator, where the
 // parse is right and the answer is not.
 func TestTheOtherColonFormsStillEvaluateAsBefore(t *testing.T) {
+	t.Parallel()
 	const src = `v=abcdef; printf "[%s][%s][%s][%s][%s]" "${v:2}" "${v:2:2}" "${v: -2}" "${v:-alt}" "${v:+set}"`
 	out, _ := runGrammar(t, src, selecting, nil)
 	if want := "[cdef][cd][ef][abcdef][set]"; out != want {
@@ -239,6 +245,7 @@ func TestTheOtherColonFormsStillEvaluateAsBefore(t *testing.T) {
 // The real line this change was made for, whole rather than reduced: a startup
 // file taking its own hook out of the hook list and assigning the rest back.
 func TestTheRealHookListLine(t *testing.T) {
+	t.Parallel()
 	const src = `precmd_functions=(a fig_precmd b); ` +
 		`precmd_functions=(${(@)precmd_functions:#fig_precmd}); ` +
 		`printf "[%s]" "${precmd_functions[@]}"`

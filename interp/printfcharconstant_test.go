@@ -33,6 +33,7 @@ func charConst(t *testing.T, src string, vars map[string]string) (string, int) {
 }
 
 func TestAQuotedOperandIsTheCharactersValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, want string
 	}{
@@ -65,6 +66,7 @@ func TestAQuotedOperandIsTheCharactersValue(t *testing.T) {
 // and it matters because the operand is *not* trimmed before this reading
 // where a plain numeral is.
 func TestTheQuoteHasToBeTheFirstCharacter(t *testing.T) {
+	t.Parallel()
 	out, st := charConst(t, `printf '%d' " 'A"`, nil)
 	if out != "sh: printf:  'A: invalid number\n0" || st != 1 {
 		t.Errorf(`printf '%%d' " 'A" = %q status %d, want the complaint, a zero, and 1`, out, st)
@@ -77,6 +79,7 @@ func TestTheQuoteHasToBeTheFirstCharacter(t *testing.T) {
 // panel's — `printf '%d' "'é"` is 233 under a UTF-8 locale and 195 under
 // LC_ALL=C, in bash and zsh alike.
 func TestTheCharacterIsTheLocalesOwn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		locale, want string
 	}{

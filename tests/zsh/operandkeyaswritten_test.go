@@ -10,6 +10,7 @@ import "testing"
 // own does, while any expansion in it is still performed (#5152). Measured
 // 2026-10-02 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f`, `LC_ALL=C`).
 func TestAnOperandsKeyIsReadAsWritten(t *testing.T) {
+	t.Parallel()
 	const setup = "typeset -A h; x=V\nkeys() { for k in \"${(@ok)h}\"; do print -rn -- \"<$k>\"; done; print }\n"
 	for _, tc := range []struct{ src, want string }{
 		{`typeset -g "h[a\"b]"=1; keys`, "<a\"b>\n"},
@@ -39,6 +40,7 @@ func TestAnOperandsKeyIsReadAsWritten(t *testing.T) {
 // quoted or not, and its search pattern with it spent only inside double
 // quotes (#5152). Measured 2026-10-02 on zsh 5.9.2.
 func TestAnExpansionInASubscriptSpendsAnEscapedQuote(t *testing.T) {
+	t.Parallel()
 	const setup = "typeset -A h; h=('k\"m' A 'k\\\"m' B A fromA B fromB 'k\\m' P P fromP)\n"
 	for _, tc := range []struct{ src, want string }{
 		{`print -r -- $h[k\"m] "$h[k\"m]"`, "B A\n"},

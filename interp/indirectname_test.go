@@ -67,6 +67,7 @@ func indirectNameRun(t *testing.T, src string) (string, int) {
 // rows are in the corpus under
 // `param/expansion-flags-indirection-names-the-front-of-its-base`.
 func TestTheIndirectionFlagNamesTheFrontOfItsBase(t *testing.T) {
+	t.Parallel()
 	// x and y are the parameters the bases below name, and n and s are two
 	// spellings of the same base: a list of names and a string of them.
 	const setup = `x=(p q); y=(r s); z=(t u); n=(x y z); s="x y"; `
@@ -168,6 +169,7 @@ func TestTheIndirectionFlagNamesTheFrontOfItsBase(t *testing.T) {
 // Measured on zsh 5.9.2; the corpus row is
 // `param/expansion-flags-indirection-keeps-the-resolved-shape`.
 func TestTheIndirectionFlagKeepsTheResolvedShape(t *testing.T) {
+	t.Parallel()
 	const setup = `arr=(x y z); na=arr; typeset -A tab; tab=(k1 v1); n=tab; typeset -A one; one=(a arr); `
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -273,6 +275,7 @@ func referenceRun(t *testing.T, src string) (string, int) {
 //
 // Measured on zsh 5.9.2, 2026-09-12.
 func TestTheIndirectionReadsItsTextAsAReference(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a whole-array subscript", `x=(p q); v='x[@]'; printf "[%s]" "${(P)v}"`, "[p][q]"},
 		{"and the joining spelling", `x=(p q); v='x[*]'; printf "[%s]" "${(P)v}"`, "[p q]"},
@@ -356,6 +359,7 @@ func TestTheIndirectionReadsItsTextAsAReference(t *testing.T) {
 // An element that is not there is still *unset*, which is what keeps the
 // reference reading from making every miss look like an empty value.
 func TestAReferenceThatNamesNothingIsUnset(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an index past the last element", `x=(p q); v='x[9]'; printf "[%s]" "${(P)v-D}"`, "[D]"},
 		{"an absent key", `typeset -A m=(k v1); v='m[zz]'; printf "[%s]" "${(P)v-D}"`, "[D]"},
@@ -378,6 +382,7 @@ func TestAReferenceThatNamesNothingIsUnset(t *testing.T) {
 // A corner no script can depend on, reproduced rather than left because the
 // alternative is a plausible empty at status 0 (#1852).
 func TestTheIndexNoElementHasResolvesTheWholeBase(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the index before the first", `n=(x y z); x=(p q); printf "[%s]" "${(P)n[0]}"`, "[p q]"},
 		{"which is the value and not the numeral", `n=(x y z); x=(p q); printf "[%s]" "${(P)n[1-1]}"`, "[p q]"},

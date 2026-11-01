@@ -12,6 +12,7 @@ import "testing"
 //
 // Every row measured 2026-10-02 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f`).
 func TestTheTypeFlagDescribesANameDeclaredHoldingNothing(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`setopt typesettounset; f() { local var; print ${(t)var} $+var; }; f`, "scalar-local 0\n"},
 		{`setopt typesettounset; typeset top; print ${(t)top} $+top`, "scalar 0\n"},

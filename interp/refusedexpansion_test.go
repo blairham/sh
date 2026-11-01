@@ -26,6 +26,7 @@ func runCarriedRefusal(t *testing.T, src string) (string, int) {
 // whose only flag group stood in a branch it never took was refused for a
 // word it would never have expanded.
 func TestACarriedRefusalIsWrittenWhenTheWordExpands(t *testing.T) {
+	t.Parallel()
 	out, st := runCarriedRefusal(t, `echo one; echo "${(f)x}"; echo two`)
 	if !strings.Contains(out, "one") {
 		t.Errorf("got %q, want the command in front of the word to have run", out)
@@ -45,6 +46,7 @@ func TestACarriedRefusalIsWrittenWhenTheWordExpands(t *testing.T) {
 // never reached is never refused, where a read-time refusal would have taken
 // the whole input.
 func TestACarriedRefusalInABranchNeverTakenSaysNothing(t *testing.T) {
+	t.Parallel()
 	out, st := runCarriedRefusal(t, `echo one; if false; then echo "${(f)x}"; fi; echo two`)
 	if !strings.Contains(out, "one") || !strings.Contains(out, "two") {
 		t.Errorf("got %q, want both commands to run", out)
@@ -62,6 +64,7 @@ func TestACarriedRefusalInABranchNeverTakenSaysNothing(t *testing.T) {
 // the text of the expansion reaches the reader the same way it would have.
 // What the *dialect* words around it is that dialect's own test.
 func TestACarriedRefusalWritesTheParsesOwnSentence(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`echo "${(f)x}"`, "${(f)x}"},
 		{`echo a${(U)x}b c`, "${(U)x}"},
@@ -77,6 +80,7 @@ func TestACarriedRefusalWritesTheParsesOwnSentence(t *testing.T) {
 // rule is on the expansion rather than on a statement: a subshell, a
 // function, a command substitution, a pipeline and an `eval` all write it.
 func TestEveryRouteToACarriedRefusalWritesIt(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`( echo "${(f)x}" )`,
 		`f() { echo "${(f)x}"; }; f`,

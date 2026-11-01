@@ -19,6 +19,7 @@ import "testing"
 // `${=v}`, and against bash 5.3.20, dash 0.5.12 and ksh93u+ on the unquoted
 // path: all four agree on every row, so this is core with no axis.
 func TestAValuesBackslashIsNotASeparatorBecauseIFSHoldsTheMark(t *testing.T) {
+	t.Parallel()
 	mark := string(valueBackslashMark)
 	// zsh's default IFS, which is the whole point: the fourth byte is the
 	// mark's own.
@@ -78,6 +79,7 @@ func TestAValuesBackslashIsNotASeparatorBecauseIFSHoldsTheMark(t *testing.T) {
 // position and they pull in opposite directions, so neither test is evidence
 // without the other.
 func TestABackslashWrittenIntoIFSStillSeparates(t *testing.T) {
+	t.Parallel()
 	mark := string(valueBackslashMark)
 	r := newTestRunner(t, &Runner{})
 	got := r.splitFieldsAsking("b"+mark+"\\c", nil, "\\", true, false, true)
@@ -104,6 +106,7 @@ func TestABackslashWrittenIntoIFSStillSeparates(t *testing.T) {
 // reach — the splitter had already been made right and `${=v}` was still two
 // fields, which is what sent the search here.
 func TestTrailingRunSeparatesReadsTheBackslashAndNotTheMark(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		s    string

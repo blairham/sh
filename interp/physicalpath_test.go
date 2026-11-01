@@ -124,6 +124,7 @@ func askedAbout(asked []string, path string) bool {
 // it was refusing could be walked through and reported on. The check that
 // followed was gated and too late: the resolved path was already in hand.
 func TestThePhysicalWalkPassesTheGateAtEveryComponent(t *testing.T) {
+	t.Parallel()
 	root := physicalTree(t)
 	link := filepath.Join(root, "link")
 	real := filepath.Join(root, "real")
@@ -166,6 +167,7 @@ func TestThePhysicalWalkPassesTheGateAtEveryComponent(t *testing.T) {
 // the script walked through what it was denied, learned where the link
 // pointed, and ended up standing there.
 func TestARefusedComponentStopsAPhysicalCd(t *testing.T) {
+	t.Parallel()
 	root := physicalTree(t)
 	hidden := filepath.Join(root, "hidden")
 	open := filepath.Join(root, "open")
@@ -197,6 +199,7 @@ func TestARefusedComponentStopsAPhysicalCd(t *testing.T) {
 // it refuses the answer. What is printed then is the name as held, which is
 // what every shell in the panel prints for a path it cannot resolve.
 func TestARefusedComponentLeavesPwdPhysicalWithTheName(t *testing.T) {
+	t.Parallel()
 	root := physicalTree(t)
 	logical := filepath.Join(root, "link", "sub")
 	physical := filepath.Join(root, "real", "sub")
@@ -220,6 +223,7 @@ func TestARefusedComponentLeavesPwdPhysicalWithTheName(t *testing.T) {
 // The gate assertion is the half that could only pass with the walk gated:
 // reaching the second link at all means the first one's target was read.
 func TestAPhysicalCdIntoASymlinkCycleEndsAndFails(t *testing.T) {
+	t.Parallel()
 	root := physicalTree(t)
 
 	out, errs, _, asked := physicalRun(t, root, "cd -P cyc_a\necho st=$?\n", nil)
@@ -241,6 +245,7 @@ func TestAPhysicalCdIntoASymlinkCycleEndsAndFails(t *testing.T) {
 // here because making `-P` resolve component by component is exactly the
 // change that could quietly make `-L` do it too.
 func TestALogicalCdDoesNotWalkThePath(t *testing.T) {
+	t.Parallel()
 	root := physicalTree(t)
 	logical := filepath.Join(root, "link", "sub")
 

@@ -16,6 +16,7 @@ import (
 // The stack is the core's and the names are the dialect's, so this asks the
 // core's question: what frames is the shell inside, innermost first.
 func TestTheCallStackFollowsWhereTheShellIs(t *testing.T) {
+	t.Parallel()
 	t.Run("nothing called, and no file", func(t *testing.T) {
 		// `-c` has no script frame, which is measured rather than assumed:
 		// bash reports no frames at all outside a function there.
@@ -72,6 +73,7 @@ func TestTheCallStackFollowsWhereTheShellIs(t *testing.T) {
 // stack that only counted function calls would name the wrong file for every
 // library a script uses, which is the case that matters.
 func TestASourcedFileIsAFrame(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	lib := filepath.Join(dir, "lib.sh")
 	if err := os.WriteFile(lib, []byte("stack\ng(){ stack; }\n"), 0o600); err != nil {

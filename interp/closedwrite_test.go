@@ -40,6 +40,7 @@ func failingWrites() (Semantics, Diagnostics) {
 }
 
 func TestFailedWriteFailsTheBuiltin(t *testing.T) {
+	t.Parallel()
 	sem, diag := failingWrites()
 	out, errOut, _ := runClosedWrite(t, `echo hi >&-; echo st=$?`, sem, diag)
 	if out != "st=1\n" {
@@ -51,6 +52,7 @@ func TestFailedWriteFailsTheBuiltin(t *testing.T) {
 }
 
 func TestFailedWriteNamesTheBuiltinThatWrote(t *testing.T) {
+	t.Parallel()
 	sem, diag := failingWrites()
 	_, errOut, st := runClosedWrite(t, `printf x >&-`, sem, diag)
 	if st != 1 {
@@ -62,6 +64,7 @@ func TestFailedWriteNamesTheBuiltinThatWrote(t *testing.T) {
 }
 
 func TestFailedWriteIsSilentWithoutAWording(t *testing.T) {
+	t.Parallel()
 	sem, _ := failingWrites()
 	// No BuiltinWriteError: the status carries the failure and nothing is
 	// said, which is a wording rather than a behavior.
@@ -75,6 +78,7 @@ func TestFailedWriteIsSilentWithoutAWording(t *testing.T) {
 }
 
 func TestFailedWriteKeptAsSuccessWhereTheAxisSaysNo(t *testing.T) {
+	t.Parallel()
 	sem, diag := failingWrites()
 	sem.BuiltinWriteErrorFailsTheCommand = No
 	out, errOut, _ := runClosedWrite(t, `echo hi >&-; echo st=$?`, sem, diag)
@@ -87,6 +91,7 @@ func TestFailedWriteKeptAsSuccessWhereTheAxisSaysNo(t *testing.T) {
 }
 
 func TestFailedWriteRefusedWhereNoDialectAnswered(t *testing.T) {
+	t.Parallel()
 	// The axis is asked only at the disagreement: `echo hi` on an open
 	// stream needs no dialect, and the same echo on a closed one does.
 	out, errOut, st := runClosedWrite(t, `echo hi >&-`, Semantics{}, Diagnostics{})
@@ -99,6 +104,7 @@ func TestFailedWriteRefusedWhereNoDialectAnswered(t *testing.T) {
 }
 
 func TestStreamClosedByExecFailsEachLaterBuiltin(t *testing.T) {
+	t.Parallel()
 	sem, diag := failingWrites()
 	_, errOut, _ := runClosedWrite(t, `exec >&-; echo a; echo st=$? >&2; echo b; echo st=$? >&2`, sem, diag)
 	if got := strings.Count(errOut, "echo: write error:"); got != 2 {
@@ -110,6 +116,7 @@ func TestStreamClosedByExecFailsEachLaterBuiltin(t *testing.T) {
 }
 
 func TestGroupRedirectFailsEveryWriteInside(t *testing.T) {
+	t.Parallel()
 	sem, diag := failingWrites()
 	out, errOut, _ := runClosedWrite(t, `{ echo a; echo b; } >&-; echo st=$?`, sem, diag)
 	if got := strings.Count(errOut, "echo: write error:"); got != 2 {
@@ -121,6 +128,7 @@ func TestGroupRedirectFailsEveryWriteInside(t *testing.T) {
 }
 
 func TestFailedWriteDoesNotStopTheScript(t *testing.T) {
+	t.Parallel()
 	sem, diag := failingWrites()
 	out, _, _ := runClosedWrite(t, `echo a >&-; echo still-here`, sem, diag)
 	if out != "still-here\n" {
@@ -129,6 +137,7 @@ func TestFailedWriteDoesNotStopTheScript(t *testing.T) {
 }
 
 func TestNothingToWriteCannotFail(t *testing.T) {
+	t.Parallel()
 	sem, diag := failingWrites()
 	out, errOut, _ := runClosedWrite(t, `echo -n "" >&-; echo st=$?; printf "" >&-; echo st=$?`, sem, diag)
 	if out != "st=0\nst=0\n" {
@@ -140,6 +149,7 @@ func TestNothingToWriteCannotFail(t *testing.T) {
 }
 
 func TestWrappedBuiltinBlamesTheOneThatWrote(t *testing.T) {
+	t.Parallel()
 	sem, diag := failingWrites()
 	// `command echo` writes through a wrapper, and the complaint names the
 	// builtin whose write it was rather than the wrapper.
@@ -206,6 +216,7 @@ func TestTheWritingBuiltinsFollowTheAxisWhenItSaysNo(t *testing.T) {
 // questions are one change and one test: the listing is there, and it is the
 // same listing `-p` asks for.
 func TestExportAndReadonlyWithNoOperandsList(t *testing.T) {
+	t.Parallel()
 	sem, diag := failingWrites()
 	sem.ExportListing = DeclareListingCommandWord
 	sem.ReadonlyListing = DeclareListingCommandWord
@@ -237,6 +248,7 @@ func TestExportAndReadonlyWithNoOperandsList(t *testing.T) {
 // An operand is not a listing: `export V=1` sets and says nothing, which is
 // the line the bare form has to stop at.
 func TestExportWithOperandsDoesNotList(t *testing.T) {
+	t.Parallel()
 	sem, diag := failingWrites()
 	sem.ExportListing = DeclareListingCommandWord
 	sem.DeclareValueQuoting = ListingQuoteWhenNeededPlain

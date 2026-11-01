@@ -20,6 +20,7 @@ import (
 // Every row measured against zsh 5.9.2 on 2026-09-08 and again on 2026-09-11,
 // each probe in a script file of its own under `env -i`.
 func TestATopLevelBarFromAValueIsAnAlternation(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The three routes a live bar arrives by: the flag, a `case` arm
 		// expanded from a value, and the option that makes every expansion
@@ -72,6 +73,7 @@ func TestATopLevelBarFromAValueIsAnAlternation(t *testing.T) {
 // a field a pattern all by itself — which is the half `hasUnescapedMeta` must
 // not answer for the dialects where a bar only means something inside a group.
 func TestATopLevelBarGeneratesOneWordPerArm(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, name := range []string{"a", "b", "c"} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {

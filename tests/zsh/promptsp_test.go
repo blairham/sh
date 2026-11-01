@@ -20,6 +20,7 @@ import (
 // Three answers, and they are asserted here because repl names no shell and a
 // dialect that gave none would leave the whole thing off with nothing failing.
 func TestThisShellMarksUnfinishedOutput(t *testing.T) {
+	t.Parallel()
 	style := zsh.EditorStyle()
 	if style.MarkUnfinishedOutputOption != "PROMPT_SP" {
 		t.Errorf("marking option = %q, want PROMPT_SP", style.MarkUnfinishedOutputOption)
@@ -66,6 +67,7 @@ func TestThisShellMarksUnfinishedOutput(t *testing.T) {
 // `PROMPT_SP` and `PROMPT_CR` and the option table records `promptsp` and
 // `promptcr`.
 func TestTheMarkingOptionsAreReadableThroughTheNamespace(t *testing.T) {
+	t.Parallel()
 	style := zsh.EditorStyle()
 	for _, tc := range []struct {
 		named string

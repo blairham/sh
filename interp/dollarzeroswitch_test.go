@@ -18,6 +18,7 @@ import (
 // that never turns it off agrees with the fixed reading on every row and
 // shows nothing (#4436).
 func TestARunTimeSwitchMovesWhatDollarZeroNames(t *testing.T) {
+	t.Parallel()
 	// A switch a test can throw, standing in for the dialect's option.
 	off := false
 	setup := func(r *Runner) {

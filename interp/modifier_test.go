@@ -45,6 +45,7 @@ func runWithoutModifiers(t *testing.T, src string) (string, int) {
 // refused. Answering it the first way in every dialect was silent — a
 // plausible substring where the script should have stopped.
 func TestASubstringRangeIsAModifierListOrAnExpression(t *testing.T) {
+	t.Parallel()
 	const src = `x=abcdef; i=2; echo "[${x:i:2}]"; echo after`
 	out, _ := runWithoutModifiers(t, src)
 	if got := strings.TrimSpace(out); got != "[cd]\nafter" {
@@ -66,6 +67,7 @@ func TestASubstringRangeIsAModifierListOrAnExpression(t *testing.T) {
 // which is why a name is not what makes a modifier. Each of these holds a name
 // and each is still a range.
 func TestOnlyALeadingLetterMakesAModifier(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`x=abcdef; _q=1; echo "[${x:_q:2}]"`,
 		`x=abcdef; i=1; echo "[${x: i:2}]"`,
@@ -85,6 +87,7 @@ func TestOnlyALeadingLetterMakesAModifier(t *testing.T) {
 // trailing slash, a name with no slash at all, a leading dot, and a dot in a
 // directory rather than in the last part.
 func TestTheModifiersThatAreAFunctionOfTheString(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ value, mod, want string }{
 		{"/tmp/Dir/File.Txt", "h", "/tmp/Dir"},
 		{"/tmp/Dir/File.Txt", "t", "File.Txt"},
@@ -124,6 +127,7 @@ func TestTheModifiersThatAreAFunctionOfTheString(t *testing.T) {
 // and a word holding the rest — so the rest has to be split again rather than
 // evaluated whole.
 func TestModifiersChainLeftToRight(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`x=/tmp/Dir/File.Txt; echo "[${x:h:t}]"`, "[Dir]"},
 		{`x=/tmp/Dir/File.Txt; echo "[${x:t:r}]"`, "[File]"},
@@ -139,6 +143,7 @@ func TestModifiersChainLeftToRight(t *testing.T) {
 // An offset and then a modifier: the two readings are segments of one range
 // rather than alternatives, so the modifier applies to what the offset left.
 func TestAModifierAfterAnOffsetAppliesToTheSlice(t *testing.T) {
+	t.Parallel()
 	out, st := runWithModifiers(t, `x=/tmp/Dir/File.Txt; echo "[${x:2:t}]"`)
 	if got := strings.TrimSpace(out); got != "[File.Txt]" || st != 0 {
 		t.Errorf("got %q (status %d), want %q", got, st, "[File.Txt]")
@@ -149,6 +154,7 @@ func TestAModifierAfterAnOffsetAppliesToTheSlice(t *testing.T) {
 // letter is named; a known letter with something after it is the same
 // complaint with nothing named, which is why the refusal is two wordings.
 func TestARefusedModifierIsNamedOnlyWhenTheLetterIsTheProblem(t *testing.T) {
+	t.Parallel()
 	out, _ := runWithModifiers(t, `x=/tmp/a.b; echo "[${x:i}]"`)
 	if !strings.Contains(out, "no such modifier <i>") {
 		t.Errorf("got %q, want the letter named", out)
@@ -167,6 +173,7 @@ func TestARefusedModifierIsNamedOnlyWhenTheLetterIsTheProblem(t *testing.T) {
 // needs no working directory, a path under `/no/such` exists nowhere, and a
 // name holding a slash is never searched for.
 func TestTheModifiersThatNeedMoreThanTheStringArePerformed(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// `:a` is lexical — `..` and `.` canceled by name, no link followed.
 		{"absolute", `x=/x/y/../z/.; echo "[${x:a}]"`, "[/x/z]\n"},
@@ -206,6 +213,7 @@ func TestTheModifiersThatNeedMoreThanTheStringArePerformed(t *testing.T) {
 // The substitution is remembered for the shell rather than for the parameter,
 // which is what an empty pattern and `:&` both reach for.
 func TestASubstitutionIsRememberedForTheShell(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an empty pattern reuses it", `x=aXbXc; echo "[${x:s/X/-/}][${x:s//+/}]"`, "[a-bXc][a+bXc]\n"},
 		{"across parameters", `x=aXbXc; y=aXd; echo "[${x:s/X/-/}][${y:s//+/}]"`, "[a-bXc][a+d]\n"},
@@ -231,6 +239,7 @@ func TestASubstitutionIsRememberedForTheShell(t *testing.T) {
 // right respectively — not repetitions of the modifier, which is what it
 // looks like and is a different answer at almost every count.
 func TestACountAfterHeadOrTailCountsSeparators(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// `:h` three times over would be `/a/b`, which is `:h3`'s answer by
 		// coincidence and nothing else's.
@@ -257,6 +266,7 @@ func TestACountAfterHeadOrTailCountsSeparators(t *testing.T) {
 // own: a range is split once, so `5:t` arrived whole and reached the
 // evaluator as an expression.
 func TestAModifierMayFollowBothAnOffsetAndALength(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`x=/tmp/Dir/File.Txt.gz; echo "[${x:1:5:t}]"`, "[D]\n"},
 		{`x=abcdefgh; echo "[${x:1:5:u}]"`, "[BCDEF]\n"},
@@ -278,6 +288,7 @@ func TestAModifierMayFollowBothAnOffsetAndALength(t *testing.T) {
 // complaint about `z`; the second `z` has not been looked at, and naming both
 // would say the pair is the modifier that is missing.
 func TestAnUnrecognizedModifierNamesOneByte(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`x=/tmp/a.b; echo "[${x:zz}]"`, "no such modifier <z>"},
 		{`x=/tmp/a.b; echo "[${x:iq}]"`, "no such modifier <i>"},

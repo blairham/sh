@@ -22,6 +22,7 @@ import (
 // the field — and the rows below move one of them at a time, because a row
 // that varied all three could not say which one decides.
 func TestARefusedCaseArmPatternMayAnswerByHowTheShellStarted(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
 		src    string
@@ -66,6 +67,7 @@ func TestARefusedCaseArmPatternMayAnswerByHowTheShellStarted(t *testing.T) {
 // **reports** rather than copies, so it keeps the ordinary number, inside a
 // subshell as well as out of one.
 func TestTheCaseArmNoughtIsWhatTheRefusalLeaves(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name             string
 		src              string
@@ -96,6 +98,7 @@ func TestTheCaseArmNoughtIsWhatTheRefusalLeaves(t *testing.T) {
 // the boundary. Without it the subshell rows above would read the same for a
 // shell that simply lost the status at a boundary.
 func TestWithoutTheFieldEveryBoundaryCarriesTheOrdinaryStatus(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		caseArm,
 		"( case '[a' in ([a) :;; esac )\n",
@@ -114,6 +117,7 @@ func TestWithoutTheFieldEveryBoundaryCarriesTheOrdinaryStatus(t *testing.T) {
 // what the status costs a caller is the status, and a row that read output
 // would be reading the same silence in every cell.
 func TestARefusedCaseArmPatternStillEndsTheShell(t *testing.T) {
+	t.Parallel()
 	for _, route := range []Route{RouteCommandString, RouteScriptFile} {
 		var buf strings.Builder
 		runCaseArm(t, &buf, "case '[a' in ([a) echo ONE;; (*) echo STAR;; esac\necho AFTER\n", route, true)

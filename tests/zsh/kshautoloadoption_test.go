@@ -14,6 +14,7 @@ import (
 // whether the file is run and the definition it leaves called. Measured
 // 2026-10-02 on zsh 5.9.2 under `-f` (#5155).
 func TestKshAutoloadIsReadAsTheFunctionLoads(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(
 		filepath.Join(dir, "foo"),

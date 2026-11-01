@@ -27,6 +27,7 @@ func historyNumberTable() PromptStyle {
 // whichever dialect it got wrong, which is the failure the by-name refusal
 // exists to prevent.
 func TestTheHistoryNumberEscapeIsRefusedWhenNobodyTold(t *testing.T) {
+	t.Parallel()
 	// A second command on the line, to say the refusal abandons the list:
 	// the whole output is the one diagnostic and no more.
 	const src = `echo "[${(%):-%h}]"; echo reached`
@@ -49,6 +50,7 @@ func TestTheHistoryNumberEscapeIsRefusedWhenNobodyTold(t *testing.T) {
 // newest event and one from the line after it, and this package holds
 // neither reading.
 func TestTheHistoryNumberEscapeDrawsWhatTheDialectCounts(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		n    int

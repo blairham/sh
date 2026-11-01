@@ -10,6 +10,7 @@ import (
 )
 
 func TestBraceExpansionRunsBeforeParameterExpansion(t *testing.T) {
+	t.Parallel()
 	// Measured, and the reason braces are scanned across spans rather than
 	// within one: `{$a,2}` is a literal, an expansion and another literal,
 	// and its braces are in the first and last. A brace range with a variable
@@ -38,6 +39,7 @@ func TestBraceExpansionRunsBeforeParameterExpansion(t *testing.T) {
 // dialect's TestABraceRangeHasNoLengthBound (#5140).
 
 func TestTildeExpansion(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ src, want string }{
 		{`HOME=/h; echo ~`, "/h\n"},
 		{`HOME=/h; echo ~/bin`, "/h/bin\n"},
@@ -58,6 +60,7 @@ func TestTildeExpansion(t *testing.T) {
 }
 
 func TestCdIsACorePrimitive(t *testing.T) {
+	t.Parallel()
 	// It changes the runner's own directory — the definition of a primitive,
 	// and why it belongs here rather than in a dialect.
 	dir := t.TempDir()
@@ -85,6 +88,7 @@ func TestCdIsACorePrimitive(t *testing.T) {
 }
 
 func TestCdDoesNotMoveTheProcess(t *testing.T) {
+	t.Parallel()
 	// Calling os.Chdir would move every Runner in the program, which is wrong
 	// for an interpreter something else embeds.
 	before, err := filepath.Abs(".")
@@ -102,6 +106,7 @@ func TestCdDoesNotMoveTheProcess(t *testing.T) {
 }
 
 func TestReadSetsVariablesInTheCallingShell(t *testing.T) {
+	t.Parallel()
 	// The other test of a primitive: a child process could not do this.
 	got, _ := run(t, `printf 'a b c\n' | { read x y; printf "[%s][%s]" "$x" "$y"; }`, nil)
 	// The last variable takes the remainder, which is what makes `read a b`

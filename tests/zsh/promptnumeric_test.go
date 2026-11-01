@@ -30,6 +30,7 @@ import (
 //     path under a home is six things and `%6~` is the whole of it, tilde and
 //     all.
 func TestACountKeepsThatManyTrailingComponents(t *testing.T) {
+	t.Parallel()
 	deep := t.TempDir() + "/a/b/c/d"
 	if err := os.MkdirAll(deep, 0o755); err != nil {
 		t.Fatal(err)
@@ -87,6 +88,7 @@ func TestACountKeepsThatManyTrailingComponents(t *testing.T) {
 //   - A bare minus is minus one, which is the reading the conditional already
 //     took.
 func TestANegativeCountKeepsThatManyLeadingComponents(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ pwd, home, code, want string }{
 		{"/tmp/a/b/c", "/nowhere", "%-1~", "/tmp"},
 		{"/tmp/a/b/c", "/nowhere", "%-2~", "/tmp/a"},
@@ -145,6 +147,7 @@ func TestANegativeCountKeepsThatManyLeadingComponents(t *testing.T) {
 // The directory is the shell's own rather than an assigned `PWD`, for the
 // reason on the test above this one.
 func TestTheBaseDirectoryCodesTakeACount(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ pwd, home, code, want string }{
 		{"/tmp/a/b/c", "/nowhere", "%c", "c"},
 		{"/tmp/a/b/c", "/nowhere", "%0c", "c"},

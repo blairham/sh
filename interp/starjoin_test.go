@@ -47,6 +47,7 @@ func starRun(t *testing.T, src string, split, join Answer) (string, int) {
 // and no later stage can put it back — which is why zsh's reading cannot be
 // produced by joining and then declining to split: that gives one field.
 func TestAnUnquotedStarSubscriptAsksTheSplittingAxis(t *testing.T) {
+	t.Parallel()
 	const src = `a=("x y" z); set -- ${a[*]}; printf "%d" "$#"; printf "[%s]" "$@"`
 
 	if out, st := starRun(t, src, Yes, Yes); out != "3[x][y][z]" || st != 0 {
@@ -71,6 +72,7 @@ func TestAnUnquotedStarSubscriptAsksTheSplittingAxis(t *testing.T) {
 // `[x][y]` in ksh93 and dash, which split each element and lose the trailing
 // separator. Nothing here is empty, so no rule about empty elements reaches it.
 func TestAnUnquotedStarSubscriptAsksTheJoinAxis(t *testing.T) {
+	t.Parallel()
 	const src = `IFS=:; a=("x:" y); set -- ${a[*]}; printf "%d" "$#"; printf "[%s]" "$@"`
 
 	if out, st := starRun(t, src, Yes, Yes); out != "3[x][][y]" || st != 0 {
@@ -89,6 +91,7 @@ func TestAnUnquotedStarSubscriptAsksTheJoinAxis(t *testing.T) {
 // One answer settles both, the way #1009's one fix settled `$@`, `${a[@]}` and
 // a bare `$a` at once.
 func TestABareUnquotedStarAsksTheSameAxes(t *testing.T) {
+	t.Parallel()
 	// The issue's row: one field `x:y` in the zsh dialect, where the shell
 	// gives two. The join happened on the scalar path and the split that
 	// would have undone it never ran, because zsh does not split.
@@ -129,6 +132,7 @@ func TestABareUnquotedStarAsksTheSameAxes(t *testing.T) {
 // is `[zz*][other]` there and `[zz1][other]` in bash and ksh93 — and ours
 // matched the directory in every dialect.
 func TestAnUnquotedStarSubscriptAsksTheGlobbingAxis(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "zz1"), nil, 0o600); err != nil {
 		t.Fatal(err)
@@ -158,6 +162,7 @@ func TestAnUnquotedStarSubscriptAsksTheGlobbingAxis(t *testing.T) {
 // `"$*"` are one field holding the elements joined on the first character of
 // IFS in every shell measured, whatever this axis answers.
 func TestTheQuotedStarAlwaysJoins(t *testing.T) {
+	t.Parallel()
 	const sub = `IFS=-; a=("x y" z); set -- "${a[*]}"; printf "%d" "$#"; printf "[%s]" "$@"`
 	const bare = `IFS=-; set -- "x y" z; set -- "$*"; printf "%d" "$#"; printf "[%s]" "$@"`
 
@@ -175,6 +180,7 @@ func TestTheQuotedStarAlwaysJoins(t *testing.T) {
 // the pair the join must never reach: the two spellings exist to differ inside
 // quotes, and this change is about what they do outside.
 func TestTheQuotedAtStillKeepsItsFields(t *testing.T) {
+	t.Parallel()
 	const src = `IFS=-; set -- "x y" z; set -- "$@"; printf "%d" "$#"; printf "[%s]" "$@"`
 
 	for _, join := range []Answer{Yes, No, Unspecified} {
@@ -189,6 +195,7 @@ func TestTheQuotedAtStillKeepsItsFields(t *testing.T) {
 // like any other. Quoted, it is one joined field — measured, `"${a[1,2]}"` is
 // `x y-z` under `IFS=-` exactly as `"$a"` is.
 func TestAnUnquotedRangeReachesTheListPath(t *testing.T) {
+	t.Parallel()
 	const src = `IFS=-; a=("x y" z w); set -- ${a[1,2]}; printf "%d" "$#"; printf "[%s]" "$@"`
 
 	if out, st := starRun(t, src, No, No); out != "2[x y][z]" || st != 0 {

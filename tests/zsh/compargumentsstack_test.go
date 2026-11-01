@@ -23,6 +23,7 @@ const stackSpecs = `'-a[all]' '-f+[file]:fname:(f1)' '--opt=[o]:oo:(o1)' ` +
 // pseudo-terminal. The names `-O` and `-s` fill are set to `MARK` first, so
 // "assigned nothing" shows.
 func TestCompargumentsReadsTheLineAsZshDoes(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ switches, line, want string }{
 		{"-s", "cmd -afz", `D=0 s=(option-f-1) [-af|z] line=('') opt=(-a= -f=afz) O=0 n=(-n:n -T:t -q:q) s=1 v=MARK`},
 		{"-s", "cmd -afz ", `D=0 s=(argument-1) [|] line=('') opt=(-a= -f=afz) O=0 n=(-n:n -T:t -q:q) s=1 v=MARK`},

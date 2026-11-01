@@ -17,6 +17,7 @@ import (
 // Both directions are needed: one row alone is satisfied by doing the passes
 // the wrong way round.
 func TestPrintDashPRunsAfterTheBackslashEscapesAndNotOverThem(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `print -P '\045\045'
 print -P '%%%%'
 print -P 'a\tb'
@@ -39,6 +40,7 @@ print -rP 'a\tb%%'`)
 // spellings, because it is one expansion. It used to be written through here,
 // which was the one place this said more than the shell it copies.
 func TestATrailingPercentIsDroppedInBothSpellings(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `print -P 'x%'
 v='x%'
 print -r -- "[${(%)v}]"
@@ -57,6 +59,7 @@ print -r -- "[${(%)u}]"`)
 // expansion route quotes the construct back, because `${(%)…}` can hold
 // several words.
 func TestBothSpellingsRefuseTheSameEscapeByName(t *testing.T) {
+	t.Parallel()
 	// The builtin's refusal is a status the script goes on from, and the
 	// expansion's ends the script — which is not this change's doing but the
 	// expansion's own rule for a word it could not produce. Two runs rather
@@ -81,6 +84,7 @@ print -r -- "after"`)
 // managed and then complained would leave a script holding a line it could
 // not tell apart from a whole one.
 func TestARefusedEscapeWritesNoPartialLine(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `print -lP 'first' 'second%e' 'third' 2>/dev/null
 print -r -- "st=$?"`)
 	want := "st=1\n"
@@ -92,6 +96,7 @@ print -r -- "st=$?"`)
 // The escapes that are carried, in the spelling a script uses to find its own
 // path. `%N` is the shell's own name under `-c`, where there is no file.
 func TestPrintDashPCarriesTheEscapesTheExpansionCarries(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(t, dir, `print -P '%N'
 v='%N'
@@ -111,6 +116,7 @@ print -r -- "[${(%)v}]"`)
 // (#5957); the control is `-a`, which this shell spells and this engine does
 // not.
 func TestPrintDashPIsNoLongerRefusedAsMissing(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `print -P 'x' 2>&1
 print -a 'x' 2>&1
 print -r -- "st=$?"`)
@@ -133,6 +139,7 @@ print -r -- "st=$?"`)
 // pins is the behavior a reader would want to check first, which is that
 // one refusal does not disarm the next.
 func TestTheBuiltinsRefusalDoesNotDisarmTheNextExpansionFailure(t *testing.T) {
+	t.Parallel()
 	// The second refusal is written before the redirection on its own line
 	// takes effect — a word is expanded before the command it belongs to is
 	// set up — so it stands in the output. What this asserts is the line
@@ -149,6 +156,7 @@ print -r -- "reached"`)
 
 // Each operand is expanded on its own, the way the backslash pass already is.
 func TestPrintDashPExpandsEachOperandSeparately(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `print -lP '%%' '%N' '%%'`)
 	want := "%\nzsh\n%\n"
 	if out != want || st != 0 {

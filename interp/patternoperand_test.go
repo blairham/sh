@@ -23,6 +23,7 @@ import (
 // zsh 5.9 all answer the right-hand column, in every position that has the
 // operator at all — dash has neither `/` nor arrays.
 func TestAPatternOperandIsExpanded(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -75,6 +76,7 @@ func patternGrammar(d *syntax.Dialect) {
 // The same word, applied to every element of an array: the substitution runs
 // once and the pattern it produced is applied to each.
 func TestAPatternOperandOverAnArrayIsExpandedOnce(t *testing.T) {
+	t.Parallel()
 	// The count is kept in a file because a substitution runs in a subshell
 	// and a variable it set would not come back — which is also why the
 	// wrong answer here would be a quiet `n=x` either way if the marks were
@@ -97,6 +99,7 @@ func TestAPatternOperandOverAnArrayIsExpandedOnce(t *testing.T) {
 // ksh93 and `abcdabcd` in zsh — the same split as `p='a*a'; ${v##$p}`, which
 // is one axis observed twice rather than two behaviors.
 func TestAnExpandedPatternsMetacharactersFollowTheAxis(t *testing.T) {
+	t.Parallel()
 	const src = `v=abcdabcd; printf "[%s]" "${v##$(echo 'a*a')}"`
 	if out, st := runPatternAxis(t, Yes, src); out != "[bcd]" || st != 0 {
 		t.Errorf("globbing the result: got %q (status %d), want %q at 0", out, st, "[bcd]")
@@ -109,6 +112,7 @@ func TestAnExpandedPatternsMetacharactersFollowTheAxis(t *testing.T) {
 // And where the axis is unanswered it is refused by name, rather than one
 // shell's answer being picked.
 func TestAnExpandedPatternWithAMetacharacterRefusesAnUnansweredAxis(t *testing.T) {
+	t.Parallel()
 	out, st := runPatternAxis(t, Unspecified, `v=abcdabcd; printf "[%s]" "${v##$(echo 'a*a')}"`)
 	want := "sh: globbing the result of an expansion: " +
 		"the shells disagree here and no dialect was chosen\n"
@@ -125,6 +129,7 @@ func TestAnExpandedPatternWithAMetacharacterRefusesAnUnansweredAxis(t *testing.T
 // dialect answers rather than refusing — which matters because this is the
 // common spelling: every shell in the panel prints `cd` for both of these.
 func TestAnExpandedPatternWithoutAMetacharacterAsksNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"out of a command substitution", `v=abcd; printf "[%s]" "${v#$(echo ab)}"`, "[cd]"},
 		{"out of a parameter", `v=abcd; p=ab; printf "[%s]" "${v#$p}"`, "[cd]"},
@@ -226,6 +231,7 @@ func runPatternAxis(t *testing.T, glob Answer, src string) (out string, status i
 // operator, which is what makes this the core's answer and not a dialect's.
 // dash has neither `/` nor `$'…'`.
 func TestAHashInAPatternOperandIsNotAComment(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string

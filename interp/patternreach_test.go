@@ -176,6 +176,7 @@ func TestPreparingThePatternChangesNoAnswer(t *testing.T) {
 // go, because the bound is only sound while this is right and the test above
 // would pass a reach that is merely *too large*.
 func TestPatternReach(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		pattern string
 		want    int
@@ -237,6 +238,7 @@ func TestPatternReach(t *testing.T) {
 // million, a ratio of five thousand against an allowance of eight — and small
 // enough that the failing side still returns in under a second.
 func TestATrimOverALongValueAsksALinearNumberOfQuestions(t *testing.T) {
+	t.Parallel()
 	const n = 10_000
 	value := strings.Repeat(`\`, n)
 	for _, c := range []struct {

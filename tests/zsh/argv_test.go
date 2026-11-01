@@ -16,6 +16,7 @@ import "testing"
 // Measured against zsh 5.9.2, 2026-09-10; the corpus row is
 // `param/argv-is-the-positional-parameters`.
 func TestArgvIsThePositionalParameters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"reading it reads the parameters",

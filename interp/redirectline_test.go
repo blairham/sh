@@ -25,6 +25,7 @@ import (
 // `while read` on line 5 and redirects it on line 11, and we said 5 where
 // bash says 11.
 func TestWhichLineAFailedOpenIsReportedAt(t *testing.T) {
+	t.Parallel()
 	// The redirect is on line 4 and the command begins on line 2.
 	const src = "echo one\nwhile read -r x\ndo\n  echo $x\ndone < /nonexistent/x\n"
 	for _, tc := range []struct {
@@ -65,6 +66,7 @@ func TestWhichLineAFailedOpenIsReportedAt(t *testing.T) {
 
 // The command is still reported where it was written: only the opening moves.
 func TestOnlyTheOpeningTakesTheRedirectsLine(t *testing.T) {
+	t.Parallel()
 	var errs strings.Builder
 	sem := PosixSemantics()
 	dg := Diagnostics{RedirectFailureLine: LineOfRedirect, Location: LocationTightLine}
@@ -115,6 +117,7 @@ func redirLine(t *testing.T, at RedirectLine, src string) string {
 // lines below, every shell names line 2, and reading the redirect's own
 // position gave bash line 4.
 func TestASimpleCommandMayBeReportedWhereItBegan(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 	}{
@@ -150,6 +153,7 @@ func TestASimpleCommandMayBeReportedWhereItBegan(t *testing.T) {
 // itself and so cannot see a missing restore. This one has the diagnostic come
 // from *inside* the command whose redirect moved the line.
 func TestTheMovedLineDoesNotOutlastTheOpening(t *testing.T) {
+	t.Parallel()
 	// The redirect is on line 4 and succeeds; the failing command is on 3.
 	got := redirLine(t, LineOfRedirect, "echo one\n{\n  nosuchcommand\n} > /dev/null\n")
 	if !strings.Contains(got, ":3:") {

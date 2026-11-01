@@ -21,6 +21,7 @@ import (
 // the thing that makes this a test of the dialect: an alias a test wrote
 // itself would pass with the prelude empty.
 func TestTheTwoStartupAliases(t *testing.T) {
+	t.Parallel()
 	out, st := runZshPrelude(t, t.TempDir(), `alias`)
 	want := "run-help=man\nwhich-command=whence\n"
 	if out != want || st != 0 {
@@ -39,6 +40,7 @@ func TestTheTwoStartupAliases(t *testing.T) {
 // the refusal is correctly worded and correctly numbered for a name that
 // really is absent, so what these rows show is that these two names are not.
 func TestUnaliasReachesTheStartupAliases(t *testing.T) {
+	t.Parallel()
 	out, st := runZshPrelude(t, t.TempDir(), `unalias run-help;      print "A=$?"
 unalias which-command; print "B=$?"
 unalias run-help;      print "C=$?"
@@ -54,6 +56,7 @@ alias;                 print "D=$?"`)
 // They expand, which is the half a table consulted only by `alias` would not
 // reach: `which-command` is `whence` and `run-help` is `man`.
 func TestTheStartupAliasesExpand(t *testing.T) {
+	t.Parallel()
 	// Parsed with the runner's alias tables in hand, which is the only route
 	// that takes the alias at all — see
 	// dialecttest.Preset.CombinedThroughTheAliases.

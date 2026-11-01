@@ -22,6 +22,7 @@ import (
 // Named for the field rather than for a shell, which is this package's rule.
 // What each shell actually prints is pinned in its own package.
 func TestUnmatchedArithSubstWordsBothSpellingsAndFallsBackToTheSubstrate(t *testing.T) {
+	t.Parallel()
 	bracket := syntax.Core()
 	bracket.DollarBracketArith = true
 	for _, tc := range []struct {
@@ -97,6 +98,7 @@ func TestUnmatchedArithSubstWordsBothSpellingsAndFallsBackToTheSubstrate(t *test
 // is the mistake that would move the line, and this is the test that catches
 // it.
 func TestAnUnmatchedArithSubstTakesTheOpenerLineNotTheEndOfInput(t *testing.T) {
+	t.Parallel()
 	const src = "echo $((1+2\n"
 	_, err := syntax.Parse(src, syntax.Core())
 	if err == nil {

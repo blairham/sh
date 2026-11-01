@@ -21,6 +21,7 @@ import (
 // them the claim that the two move together is checked at both ends rather
 // than asserted once.
 func TestTheUnmatchedConstructsQuoteEscapesControlCharactersToo(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	_, err := syntax.Parse("v=$(echo\ta\n", d)
 	if err == nil {

@@ -9,6 +9,7 @@ import "testing"
 // this shell's reading of `unset` on a span rather than a rule for `[@]`.
 // Measured against zsh 5.9.2 (2026-09-05).
 func TestUnsetOfEveryElementLeavesOneEmptyElement(t *testing.T) {
+	t.Parallel()
 	for _, sub := range []string{"@", "*"} {
 		src := `a=(p q r); unset "a[` + sub + `]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`
 		out, st := runZsh(t, t.TempDir(), src)
@@ -21,6 +22,7 @@ func TestUnsetOfEveryElementLeavesOneEmptyElement(t *testing.T) {
 // The empty element is a real one, so an append goes after it — the reading a
 // count alone cannot distinguish from an array that was emptied outright.
 func TestUnsetOfEveryElementKeepsAPlaceForAnAppend(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`a=(p q); unset "a[@]"; a+=(z); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
 	if out != "[][z] n=2\n" || st != 0 {
@@ -31,6 +33,7 @@ func TestUnsetOfEveryElementKeepsAPlaceForAnAppend(t *testing.T) {
 // A scalar is one such span and comes back empty, quietly and at 0 — where
 // the shell that takes elements away refuses it, having none to take.
 func TestUnsetOfEveryElementEmptiesAScalar(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `a=hello; unset "a[@]"; echo "st=$? [$a]"`)
 	if out != "st=0 []\n" || st != 0 {
 		t.Errorf("got %q (status %d), want %q", out, st, "st=0 []\n")
@@ -43,6 +46,7 @@ func TestUnsetOfEveryElementEmptiesAScalar(t *testing.T) {
 // reads back empty anyway — and plain at the end, which is where this was
 // found. Measured against zsh 5.9.2 (2026-09-05).
 func TestUnsetOfTheLastElementBlanksItInPlace(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`a=(x y z); unset "a[3]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
 	if out != "[x][y][] n=3\n" || st != 0 {
@@ -53,6 +57,7 @@ func TestUnsetOfTheLastElementBlanksItInPlace(t *testing.T) {
 // So the next append goes after the blank rather than into its place, which
 // is the half a count cannot show and the half a script feels.
 func TestUnsetOfTheLastElementKeepsThePlaceAnAppendGoesAfter(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`a=(p q r); unset "a[3]"; a+=(z); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
 	if out != "[p][q][][z] n=4\n" || st != 0 {
@@ -64,6 +69,7 @@ func TestUnsetOfTheLastElementKeepsThePlaceAnAppendGoesAfter(t *testing.T) {
 // every element where it was, where the shells that take a subscript away
 // remove the middle one. Measured, not reasoned.
 func TestUnsetFromTheEndReachesOnlyTheLastElement(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ sub, want string }{
 		{"-1", "[x][y][] n=3\n"},
 		{"-2", "[x][y][z] n=3\n"},
@@ -80,6 +86,7 @@ func TestUnsetFromTheEndReachesOnlyTheLastElement(t *testing.T) {
 // removed from the table, and reading it back finds nothing rather than an
 // empty element left standing.
 func TestUnsetOfOneKeyRemovesIt(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`typeset -A m; m[k]=v; m[j]=w; unset "m[k]"; echo "n=${#m[@]} [${m[k]}]"`)
 	if out != "n=1 []\n" || st != 0 {

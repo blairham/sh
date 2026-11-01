@@ -47,6 +47,7 @@ const stagedSrc = "for $n in a b; do echo body; done\necho \"reached-after st=$?
 // script differs, which is the whole reason the wording is one Diagnostics
 // field and the consequence is an axis.
 func TestTheThreeAnswersToARefusedLoopName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		form ForNameRunForm
 		out  string
@@ -71,6 +72,7 @@ func TestTheThreeAnswersToARefusedLoopName(t *testing.T) {
 // `select` answers the same as `for`, in every form. #1110 recorded ksh93 as
 // fatal for `for` and not for `select`; re-measured, both end the script.
 func TestTheMenuLoopTakesTheSameAnswer(t *testing.T) {
+	t.Parallel()
 	const src = "select $n in a b; do echo body; done\necho \"reached-after st=$?\"\n"
 	for _, tc := range []struct {
 		form ForNameRunForm
@@ -96,6 +98,7 @@ func TestTheMenuLoopTakesTheSameAnswer(t *testing.T) {
 // first guess was wrong: a loop that never runs looked as though it should not
 // open its own file. All four panel columns that reach the loop create it.
 func TestARedirectionOnTheClauseChangesOnlyTheFatalForm(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	src := "for $n in a b; do echo body; done > " + dir + "/out\necho \"reached-after st=$?\"\n"
 	// The form that ends the script does not, with a redirection there.
@@ -120,6 +123,7 @@ func TestARedirectionOnTheClauseChangesOnlyTheFatalForm(t *testing.T) {
 // promise this repository makes everywhere else and which a *form* makes
 // reachable: a dialect can turn the grammar flag on and leave this unset.
 func TestARefusedLoopNameWithNoAnswerIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	// Nothing after the loop, so the status is the refusal's own rather than
 	// whatever ran next: an unanswered axis reports and leaves the caller to
 	// notice, exactly as every other one does.
@@ -161,6 +165,7 @@ func TestARefusedLoopNameWithNoAnswerIsRefusedByName(t *testing.T) {
 // mutant above is what caught. SetPosixMode is exported for a front end that
 // was invoked as `sh`, which is the same door.
 func TestPosixModeDoesNotAnswerAnUnansweredLoopNameAxis(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ForNameCheckedWhenTheLoopRuns = true
 	f, err := syntax.Parse("for $n in a b; do echo body; done\n", d)

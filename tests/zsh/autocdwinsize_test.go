@@ -22,6 +22,7 @@ import (
 // interactive-only in both shells and a `-c` probe shows neither doing
 // anything.
 func TestAutoCdMovesTheShellInSilence(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o755); err != nil {
 		t.Fatal(err)
@@ -67,6 +68,7 @@ func TestAutoCdMovesTheShellInSilence(t *testing.T) {
 // changes under a running script — needs a pseudo-terminal and is measured in
 // interp, where the parameter is produced. See TestWindowSizeFollowsTheTerminal.
 func TestThisShellHasTheWindowSizeAsParametersOfItsOwn(t *testing.T) {
+	t.Parallel()
 	out, st, err := preset.Combined(t, dialecttest.Base{Dir: t.TempDir()},
 		`print -r -- "[${COLUMNS-UNSET}][${LINES-UNSET}][${(t)COLUMNS}][${(t)LINES}]"; `+
 			`COLUMNS="3+4"; print -r -- "[$COLUMNS]"`)

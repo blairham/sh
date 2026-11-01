@@ -17,6 +17,7 @@ import (
 // measurement moves `equals` and `banghist` *off* to show an unset is a move
 // and not a reset. An option already off could not have demonstrated that.
 func TestBangHistIsOnInAFreshShell(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"the condition", "[[ -o banghist ]] && print -r -- on || print -r -- off\n", "on\n"},
 		{
@@ -48,6 +49,7 @@ func TestBangHistIsOnInAFreshShell(t *testing.T) {
 // another. `hashcmds` is the entry that fails this test and is why it was left
 // alone.
 func TestBangHistIsListedTheWayZshListsIt(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "unsetopt\n")
 	if st != 0 {
 		t.Fatalf("status %d", st)
@@ -72,6 +74,7 @@ func TestBangHistIsListedTheWayZshListsIt(t *testing.T) {
 // no prompt, where nothing expands, because zsh gates the expander on being
 // interactive and leaves the option alone.
 func TestBangHistCanStillBeTurnedOff(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"unsetopt banghist\n"+
 			"[[ -o banghist ]] && print -r -- on || print -r -- off\n"+

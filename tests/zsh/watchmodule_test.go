@@ -26,6 +26,7 @@ import "testing"
 // `unset` mention `WATCH` and load nothing, and the module's *other* two names
 // load nothing either.
 func TestAReferenceToTheWatchPairLoadsItsModule(t *testing.T) {
+	t.Parallel()
 	const probe = "\nzmodload -e zsh/watch; print -r -- \"loaded=$?\""
 	for _, tc := range []struct {
 		name, src string
@@ -62,6 +63,7 @@ func TestAReferenceToTheWatchPairLoadsItsModule(t *testing.T) {
 // writable. So what is modeled is the arrival and the values — there is no
 // login watch in this shell for them to configure.
 func TestTheWatchModuleBringsItsTwoParameters(t *testing.T) {
+	t.Parallel()
 	const probe = "\nprint -r -- \"+WF=${+WATCHFMT} +LC=${+LOGCHECK} " +
 		"WF=[$WATCHFMT] LC=[$LOGCHECK] tWF=[${(t)WATCHFMT}] tLC=[${(t)LOGCHECK}]\""
 	const want = "+WF=1 +LC=1 WF=[%n has %a %l from %m.] LC=[60] " +
@@ -90,6 +92,7 @@ func TestTheWatchModuleBringsItsTwoParameters(t *testing.T) {
 // The listing and the writes, which say the two are ordinary parameters
 // rather than views of anything.
 func TestTheWatchModulesParametersAreOrdinary(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the listing", "zmodload zsh/watch\ntypeset -p WATCHFMT LOGCHECK",
@@ -115,6 +118,7 @@ func TestTheWatchModulesParametersAreOrdinary(t *testing.T) {
 // to the module's own parameters, so a gate keyed on "is this name still
 // waiting" says yes once and no afterwards.
 func TestLoadingTheWatchModuleTwiceIsSilent(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"zmodload zsh/watch\nzmodload zsh/watch\nprint -r -- \"st=$?\"")
 	if out != "st=0\n" || st != 0 {

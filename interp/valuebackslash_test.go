@@ -72,6 +72,7 @@ func TestAValueKeepsItsBackslashThroughAWord(t *testing.T) {
 // which is what made an earlier row here pass with the axis wired to nothing
 // (#1367, #1370).
 func TestWhatAValueBackslashDoesToWhatFollowsIt(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, name := range []string{`a\b`, `a*`, `a\bc`, `ab`} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {
@@ -182,6 +183,7 @@ func TestWhatAValueBackslashDoesToWhatFollowsIt(t *testing.T) {
 // and nothing live beside it, a backslash at the end of one, a value with no
 // backslash at all, and text written literally.
 func TestTheValueBackslashAxisIsAskedOnlyWhereTheReadingsPart(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, name := range []string{`a\b`, `a*`} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {
@@ -226,6 +228,7 @@ func TestTheValueBackslashAxisIsAskedOnlyWhereTheReadingsPart(t *testing.T) {
 // unanswered, which is what would report the question if it were still being
 // put.
 func TestTheValueBackslashAxisIsNotAskedWhereNothingIsGlobbed(t *testing.T) {
+	t.Parallel()
 	out, st := axisRun(t, `v='a\*'; set -- $v; printf '[%s]' "$@"`, func(s *Semantics) {
 		s.GlobExpansionResults = No
 		s.ValueBackslashInAPattern = ValueBackslashUnspecified
@@ -251,6 +254,7 @@ func TestTheValueBackslashAxisIsNotAskedWhereNothingIsGlobbed(t *testing.T) {
 // `a\bc` and `ab`: zsh 5.9.2 prints `a\b*` for `v='a\b*'; set -- $v`, since
 // it globs no expansion result at all.
 func TestAValueBackslashSurvivesWhereTheResultIsNotAPattern(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a backslash beside a live metacharacter", `v='a\b*'; set -- $v; printf '[%s]' "$@"`, `[a\b*]`},
 		{"a metacharacter with no backslash", `v='a*'; set -- $v; printf '[%s]' "$@"`, `[a*]`},
@@ -290,6 +294,7 @@ func TestAValueBackslashSurvivesWhereTheResultIsNotAPattern(t *testing.T) {
 // — the last under `setopt shwordsplit`, since it splits no parameter
 // expansion otherwise and answers every row with the value whole.
 func TestAValueBackslashBeforeASeparatorLosesOnlyTheSeparator(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a marked separator cuts and leaves one backslash",
@@ -369,6 +374,7 @@ func TestAValueBackslashBeforeASeparatorLosesOnlyTheSeparator(t *testing.T) {
 // shwordsplit` with `IFS='*'` answers `2[a][b]` for `v='a*b'`, measured
 // 2026-09-12.
 func TestAMarkedSeparatorCutsWhereTheResultIsNotAPattern(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a separator that is also a metacharacter",

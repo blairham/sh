@@ -13,6 +13,7 @@ import (
 // file that does not parse earns: the parser's own, at the function's name
 // and the file's line. Measured 2026-10-02 on zsh 5.9.2 under `-f` (#5148).
 func TestAnAutoloadFileThatWillNotParseSaysWhere(t *testing.T) {
+	t.Parallel()
 	cases := []struct{ body, pre, want string }{
 		{"if true; then\n", "", "ff:2: parse error near `\\n'\nst=1\n"},
 		{"echo a )\n", "", "ff:1: parse error near `)'\nst=1\n"},

@@ -72,6 +72,7 @@ func flagsRun(t *testing.T, src string) (string, string, int) {
 }
 
 func TestExpansionFlagValues(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ name, src, want string }{
 		{"U uppercases", `x=abC; printf "[%s]" "${(U)x}"`, "[ABC]"},
 		{"L lowercases", `x=abC; printf "[%s]" "${(L)x}"`, "[abc]"},
@@ -119,6 +120,7 @@ func TestExpansionFlagValues(t *testing.T) {
 }
 
 func TestExpansionFlagFields(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ name, src, want string }{
 		{
 			"f splits at newlines",
@@ -256,6 +258,7 @@ func TestExpansionFlagFields(t *testing.T) {
 // A character the group cannot carry is a runtime error with the measured
 // wording and position — and no error at all in a branch never taken.
 func TestExpansionFlagErrors(t *testing.T) {
+	t.Parallel()
 	out, errs, st := flagsRun(t, `x=a; echo "${(!)x}"; echo after`)
 	// The rest of the word, which is the closing quote here — see
 	// ParamExpr.FlagsErrTail.
@@ -288,6 +291,7 @@ func TestExpansionFlagErrors(t *testing.T) {
 // vocabulary, and this runner has been given none — see SetParameterTypeWord,
 // and interp/typeflag_test.go for the same flag with a vocabulary supplied.
 func TestAnUnimplementedExpansionFlagIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	out, errs, st := flagsRun(t, `x=b; echo "${(t)x}"; echo after`)
 	if !strings.Contains(errs, "the (t) expansion flag is not implemented") {
 		t.Errorf("stderr = %q, want the flag named", errs)
@@ -307,6 +311,7 @@ func TestAnUnimplementedExpansionFlagIsRefusedByName(t *testing.T) {
 // The `%` flag carries the escapes a script uses to find its own path, and
 // refuses the rest of the prompt language by name.
 func TestThePercentFlagNamesTheFileBeingRead(t *testing.T) {
+	t.Parallel()
 	// Under a command string there is no file, so the shell names itself —
 	// measured; the wild idiom `${(%):-%x}` reads the *sourced* file's path,
 	// which the source test below pins.
@@ -332,6 +337,7 @@ func TestThePercentFlagNamesTheFileBeingRead(t *testing.T) {
 // The wild idiom: `${(%):-%x}` inside a sourced file is that file's path —
 // how a script finds its own directory in the dialect that has the construct.
 func TestThePercentFlagNamesTheSourcedFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := write(t, dir, "inner.sh", `printf "[%s][%s]" "${(%):-%x}" "${(%):-%N}"`+"\n")
 	out, errs, st := flagsRun(t, ". "+path)

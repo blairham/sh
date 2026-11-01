@@ -62,6 +62,7 @@ func runDeclareElement(t *testing.T, src string, set func(*Semantics)) (out stri
 // store as though the brackets were part of the name: status 0, nothing
 // created, and every read of the array empty afterwards (#1203).
 func TestADeclarationWritesTheElementItsOperandNames(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t, `typeset a[1]=v; echo "[${a[1]}] n=${#a[@]} st=$?"`, nil)
 	if want := "[v] n=1 st=0\n"; out != want || status != 0 {
 		t.Errorf("typeset a[1]=v = %q (status %d), want %q at 0", out, status, want)
@@ -71,6 +72,7 @@ func TestADeclarationWritesTheElementItsOperandNames(t *testing.T) {
 // The element it names and not the first one: an array standing before the
 // declaration keeps its other elements.
 func TestADeclaredElementLeavesTheRestOfTheArray(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t,
 		`a=(x y z); typeset a[1]=v; echo "[${a[0]}][${a[1]}][${a[2]}] n=${#a[@]}"`, nil)
 	if want := "[x][v][z] n=3\n"; out != want || status != 0 {
@@ -81,6 +83,7 @@ func TestADeclaredElementLeavesTheRestOfTheArray(t *testing.T) {
 // The subscript is an expression, as it is everywhere else a subscript is
 // written — so the operand is not a name with brackets in it.
 func TestADeclaredElementsSubscriptIsAnExpression(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t, `typeset a[1+1]=v; echo "[${a[2]}] n=${#a[@]}"`, nil)
 	if want := "[v] n=1\n"; out != want || status != 0 {
 		t.Errorf("typeset a[1+1]=v = %q (status %d), want %q at 0", out, status, want)
@@ -90,6 +93,7 @@ func TestADeclaredElementsSubscriptIsAnExpression(t *testing.T) {
 // A declared table takes its subscript as a key rather than as an expression,
 // which is the same switch the attribute throws for a bare `m[k]=v`.
 func TestADeclaredElementOfATableIsKeyed(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t, `typeset -A m; typeset m[k]=v; echo "[${m[k]}]"`, nil)
 	if want := "[v]\n"; out != want || status != 0 {
 		t.Errorf("typeset m[k]=v = %q (status %d), want %q at 0", out, status, want)
@@ -103,6 +107,7 @@ func TestADeclaredElementOfATableIsKeyed(t *testing.T) {
 // same text either way — and is why this went unnoticed until a shell that
 // refuses an unmatched pattern ran the same line.
 func TestADeclarationsSubscriptedOperandIsNotAPattern(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t,
 		`: > 'a1=v'; typeset a[1]=v; echo "[${a[1]}] a1=[$a1]"`, nil)
 	if want := "[v] a1=[]\n"; out != want || status != 0 {
@@ -113,6 +118,7 @@ func TestADeclarationsSubscriptedOperandIsNotAPattern(t *testing.T) {
 // And its value half expands as an assignment's, so it is neither split nor
 // matched against the filesystem.
 func TestADeclaredElementsValueIsNotSplit(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t,
 		`x="p q"; typeset a[1]=$x; echo "[${a[1]}] n=${#a[@]}"`, nil)
 	if want := "[p q] n=1\n"; out != want || status != 0 {
@@ -124,6 +130,7 @@ func TestADeclaredElementsValueIsNotSplit(t *testing.T) {
 // own — so the `=` that ends the name is in the last of them rather than the
 // first. Reading only the first span made this an ordinary word again.
 func TestADeclaredElementsSubscriptMayExpand(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t, `i=1; typeset a[$i]=v; echo "[${a[1]}]"`, nil)
 	if want := "[v]\n"; out != want || status != 0 {
 		t.Errorf("typeset a[$i]=v = %q (status %d), want %q at 0", out, status, want)
@@ -133,6 +140,7 @@ func TestADeclaredElementsSubscriptMayExpand(t *testing.T) {
 // A word that only looks like one is still an ordinary operand: the name half
 // has to be a name for any of this to apply.
 func TestAnOperandThatIsNotANameWithASubscriptIsNotAnAssignment(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t, `typeset 1x[0]=v`, nil)
 	if !strings.Contains(out, "1x[0]") || status == 0 {
 		t.Errorf("typeset 1x[0]=v = %q (status %d), want the operand reported and a failure", out, status)
@@ -142,6 +150,7 @@ func TestAnOperandThatIsNotANameWithASubscriptIsNotAnAssignment(t *testing.T) {
 // The attributes land on the array, which is what they are about, and the
 // value on the element.
 func TestADeclaredElementTakesTheDeclarationsAttribute(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t, `typeset -i a[1]=0x10; echo "[${a[1]}]"`, nil)
 	if want := "[16]\n"; out != want || status != 0 {
 		t.Errorf("typeset -i a[1]=0x10 = %q (status %d), want %q at 0", out, status, want)
@@ -151,6 +160,7 @@ func TestADeclaredElementTakesTheDeclarationsAttribute(t *testing.T) {
 // A shell that will not put an attribute on an element refuses the operand
 // rather than doing half of it, and ends the script.
 func TestAnElementRefusedByTheIntegerAttributeEndsTheScript(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t, `typeset -i a[1]=5; echo after`, func(s *Semantics) {
 		s.SubscriptedOperandTakesTheIntegerAttribute = No
 	})
@@ -162,6 +172,7 @@ func TestAnElementRefusedByTheIntegerAttributeEndsTheScript(t *testing.T) {
 // The same for a declaration that would make the array local, and it is a
 // separate axis: a dialect may take one and refuse the other.
 func TestAnElementRefusedByALocalDeclarationEndsTheScript(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t, `f() { typeset a[1]=v; }; f; echo after`, func(s *Semantics) {
 		s.SubscriptedOperandTakesALocalDeclaration = No
 	})
@@ -173,6 +184,7 @@ func TestAnElementRefusedByALocalDeclarationEndsTheScript(t *testing.T) {
 // And only where there is a scope to take: the same axis answered No leaves a
 // declaration at the top level alone.
 func TestTheLocalElementAxisIsNotAskedOutsideAFunction(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t, `typeset a[1]=v; echo "[${a[1]}]"`, func(s *Semantics) {
 		s.SubscriptedOperandTakesALocalDeclaration = No
 	})
@@ -184,6 +196,7 @@ func TestTheLocalElementAxisIsNotAskedOutsideAFunction(t *testing.T) {
 // The declaration that freezes the array has three answers rather than two,
 // so it is a policy and not an Answer. Written is one of them.
 func TestAReadonlyElementIsWrittenAndTheArrayFrozenOverIt(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t,
 		`readonly a[1]=v; echo "[${a[1]}]"; a[2]=q; echo after`, func(s *Semantics) {
 			s.ReadonlyReassignmentFatal = No
@@ -200,6 +213,7 @@ func TestAReadonlyElementIsWrittenAndTheArrayFrozenOverIt(t *testing.T) {
 // Semantics.ValuelessSubscriptedOperand says — the column that never reads
 // them declares the name instead and has no element to refuse.
 func TestARefusedReadonlyElementIsRefusedWithoutAValueToo(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`readonly a[1]=v; echo after`, `readonly "a[1]"; echo after`} {
 		out, status := runDeclareElement(t, src, func(s *Semantics) {
 			s.ReadonlyElement = ReadonlyElementRefused
@@ -215,6 +229,7 @@ func TestARefusedReadonlyElementIsRefusedWithoutAValueToo(t *testing.T) {
 // and one column refuses it — in the same words a whole-name kind change
 // gets, and whatever the letter would actually change.
 func TestAContainerLetterOnASubscriptedOperandCanBeRefused(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`typeset -A m[k]=v; echo after`,
 		`typeset -a n[2]=v; echo after`,
@@ -238,6 +253,7 @@ func TestAContainerLetterOnASubscriptedOperandCanBeRefused(t *testing.T) {
 // refuse and the integer refusal is what speaks, which is what keeps the
 // three from ordering into a cycle.
 func TestTheContainerRefusalStandsInFrontOfTheReadonlyOne(t *testing.T) {
+	t.Parallel()
 	// Three wordings that differ, because the default is one sentence for
 	// all three refusals and could not say which of them spoke.
 	d := Diagnostics{
@@ -276,6 +292,7 @@ func TestTheContainerRefusalStandsInFrontOfTheReadonlyOne(t *testing.T) {
 // `a]b` instead, at status 0 and in every dialect: a script reading
 // `${m[a]}` back found nothing (#1380).
 func TestADeclarationOperandsSubscriptHasToCloseAtTheEnd(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, name string }{
 		{`typeset -A m; typeset "m[a]b]"=v; echo "[${m[a]}]"`, "m[a]b]"},
 		{`typeset -A m; typeset "m[x[y]"=v; echo "[${m[x]}]"`, "m[x[y]"},
@@ -297,6 +314,7 @@ func TestADeclarationOperandsSubscriptHasToCloseAtTheEnd(t *testing.T) {
 // Measured, `b=(3 4); typeset "a[b[0]]"=v` writes element 3 in bash 5.3 and
 // ksh93u+ alike.
 func TestASubscriptMayHoldABracketOfItsOwn(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t,
 		`b=(3 4); typeset "a[b[0]]"=v; echo "[${a[3]}]"`, nil)
 	if want := "[v]\n"; out != want || status != 0 {
@@ -307,6 +325,7 @@ func TestASubscriptMayHoldABracketOfItsOwn(t *testing.T) {
 // An unanswered policy is refused by name rather than guessed at, which is
 // what one column's third answer is left as.
 func TestAnUnansweredReadonlyElementPolicyRefusesTheDeclaration(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t, `typeset -r a[1]=v; echo "[${a[1]}]"`, func(s *Semantics) {
 		s.ReadonlyElement = ReadonlyElementUnspecified
 	})
@@ -319,6 +338,7 @@ func TestAnUnansweredReadonlyElementPolicyRefusesTheDeclaration(t *testing.T) {
 // A name already frozen refuses the element by the *base* name, which is the
 // rule `unset a[0]` follows: the subscript is never reached.
 func TestADeclaredElementOfAFrozenArrayIsRefusedByItsBase(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t,
 		`readonly a=z; typeset a[1]=v; echo "st=$? [$a][${a[1]}]"`, func(s *Semantics) {
 			s.ReadonlyReassignmentFatal = No
@@ -336,6 +356,7 @@ func TestADeclaredElementOfAFrozenArrayIsRefusedByItsBase(t *testing.T) {
 // `local` reads the declaration's subscript question and not `export`'s,
 // which is a per-builtin split rather than a per-dialect one.
 func TestLocalReadsTheDeclarationsSubscriptQuestion(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t, `f() { local a[1]=v; echo "[${a[1]}]"; }; f`, func(s *Semantics) {
 		s.TypesetTakesASubscript = Yes
 		s.DeclarationTakesASubscript = No
@@ -348,6 +369,7 @@ func TestLocalReadsTheDeclarationsSubscriptQuestion(t *testing.T) {
 // `export` and `readonly` read theirs, and a dialect that refuses one there
 // still refuses it after this.
 func TestExportKeepsItsOwnSubscriptQuestion(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t, `export a[1]=v`, func(s *Semantics) {
 		s.DeclarationTakesASubscript = No
 	})
@@ -358,6 +380,7 @@ func TestExportKeepsItsOwnSubscriptQuestion(t *testing.T) {
 
 // And where it is taken, the element is written.
 func TestExportWritesTheElementItsOperandNames(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t, `export a[1]=v; echo "[${a[1]}] st=$?"`, nil)
 	if want := "[v] st=0\n"; out != want || status != 0 {
 		t.Errorf("export a[1]=v = %q (status %d), want %q at 0", out, status, want)
@@ -368,6 +391,7 @@ func TestExportWritesTheElementItsOperandNames(t *testing.T) {
 // survives the function's return — which is the whole of what the letter
 // means, and it is also why the local axis is not asked when it is written.
 func TestAGlobalElementDeclarationTakesNoShadow(t *testing.T) {
+	t.Parallel()
 	for _, local := range []Answer{Yes, No} {
 		out, status := runDeclareElement(t,
 			`a=(x y); f() { typeset -g a[1]=v; }; f; echo "[${a[1]}]"`, func(s *Semantics) {
@@ -384,6 +408,7 @@ func TestAGlobalElementDeclarationTakesNoShadow(t *testing.T) {
 // `typeset +r a[1]=v` and `typeset +i a[1]=5` write the element in every
 // column, including the one that refuses both minus forms.
 func TestAPlusFormAsksNeitherElementRefusal(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset +r a[1]=v; echo "[${a[1]}]"`, "[v]\n"},
 		{`typeset +i a[1]=5; echo "[${a[1]}]"`, "[5]\n"},
@@ -402,6 +427,7 @@ func TestAPlusFormAsksNeitherElementRefusal(t *testing.T) {
 // read is itself an axis, and only one of the two shells that reach the shape
 // says yes — see Semantics.TableLetterReachesItsOwnOperandsSubscript.
 func TestAnAssociativeAttributeOnTheSameDeclarationKeysTheSubscript(t *testing.T) {
+	t.Parallel()
 	reaches := func(s *Semantics) { s.TableLetterReachesItsOwnOperandsSubscript = Yes }
 
 	// Two keys rather than one, because one cannot tell the readings apart:
@@ -437,6 +463,7 @@ func TestAnAssociativeAttributeOnTheSameDeclarationKeysTheSubscript(t *testing.T
 // is split and matched like any other word — which is what every column does
 // with `typeset 1x=$y`: the complaint names `1x=p`, not `1x=p q`.
 func TestAnOperandWithABadNameIsSplitLikeAnyOtherWord(t *testing.T) {
+	t.Parallel()
 	// Two bad names in the value rather than one, so the *number* of
 	// complaints says whether the word was split: unsplit it is one operand
 	// and one line, split it is two of each.
@@ -454,6 +481,7 @@ func TestAnOperandWithABadNameIsSplitLikeAnyOtherWord(t *testing.T) {
 // assignment in any column, so the value splits and only the first field
 // reaches the name.
 func TestAnOperandWhoseNameHoldsAnExpansionIsSplitToo(t *testing.T) {
+	t.Parallel()
 	out, status := runDeclareElement(t, `n=x; y="p q"; typeset a$n=$y; echo "[$ax]"`, nil)
 	if want := "[p]\n"; out != want || status != 0 {
 		t.Errorf("typeset a$n=$y = %q (status %d), want %q at 0", out, status, want)
@@ -472,6 +500,7 @@ func TestAnOperandWhoseNameHoldsAnExpansionIsSplitToo(t *testing.T) {
 // The second half is the control that says the fix is not simply dropping the
 // second fold: the view still has to read back as the number.
 func TestAnIntegerElementIsEvaluatedOnce(t *testing.T) {
+	t.Parallel()
 	diags := func(r *Runner) {
 		d := Diagnostics{ArithError: "%[1]s: %[2]s", ArithOperandExpected: "arithmetic syntax error"}
 		r.Diagnostics = &d
@@ -523,6 +552,7 @@ func TestAnIntegerElementIsEvaluatedOnce(t *testing.T) {
 // reaches `REACHED`, so the three above are refusals rather than a harness
 // that prints nothing (#4163).
 func TestAFrozenNameRefusesASubscriptedDeclarationInsideAFunction(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"inside a function",

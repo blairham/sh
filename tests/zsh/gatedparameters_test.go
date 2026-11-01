@@ -77,6 +77,7 @@ print -r -- "st=$?"`)
 // it where `langinfo` is `no such variable` at 1 and `neverheardof` is the
 // same — three states, told apart in one shell.
 func TestTheThreeStatesAreToldApartInOneShell(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -p funcstack; print -r -- "deferred=$?"
 typeset -p langinfo
 print -r -- "gated=$?"
@@ -101,6 +102,7 @@ print -r -- "invented=$?"`)
 // rather than at the parameter, which is a different bug wearing this one's
 // output.
 func TestAGatedParametersModuleStillLoads(t *testing.T) {
+	t.Parallel()
 	for _, module := range []string{"zsh/langinfo", "zsh/mapfile", "zsh/system", "zsh/datetime"} {
 		t.Run(module, func(t *testing.T) {
 			out, st := runZsh(t, t.TempDir(), `zmodload `+module+` 2>&1

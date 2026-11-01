@@ -98,6 +98,7 @@ func TestTheGateSeesEveryWayIn(t *testing.T) {
 // directory read is an enumeration, so each is an action with a kind of its
 // own rather than a detail of whatever asked.
 func TestTheGateSeesTheProbes(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	file := filepath.Join(dir, "present")
 	if err := testenv.WriteExecutable(file, []byte(":\n"), 0o700); err != nil {
@@ -527,6 +528,7 @@ func lastJobPID(t *testing.T, r *Runner) int {
 // A pipeline asks about both halves, which is worth its own case: each is a
 // process of its own and one of them is not the one being waited for.
 func TestTheGateSeesBothHalvesOfAPipeline(t *testing.T) {
+	t.Parallel()
 	// Each half runs on its own goroutine, so the record of what was asked
 	// is shared and has to be guarded — the contract on Gate, demonstrated.
 	var mu sync.Mutex
@@ -566,6 +568,7 @@ func TestTheGateSeesBothHalvesOfAPipeline(t *testing.T) {
 // and how `ENV=$HOME/.shrc` is turned into a path — both of them run commands
 // on behalf of a caller who never wrote a script.
 func TestTheGateSeesAnExpansionAskedForDirectly(t *testing.T) {
+	t.Parallel()
 	var seen []string
 	sem := PosixSemantics()
 	r := newTestRunner(t, &Runner{

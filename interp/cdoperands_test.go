@@ -26,6 +26,7 @@ import (
 // "some permission": a directory that may be read and not entered is refused,
 // and one that may be entered and not read is not.
 func TestCdAsksWhetherTheDirectoryCanBeEntered(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name    string
 		mode    os.FileMode
@@ -78,6 +79,7 @@ func TestCdAsksWhetherTheDirectoryCanBeEntered(t *testing.T) {
 // the neighbor the change above must not have taken with it: the errno now
 // comes from the kernel where it used to be written here by hand.
 func TestCdOntoSomethingThatIsNotADirectory(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "f"), nil, 0o600); err != nil {
 		t.Fatal(err)
@@ -109,6 +111,7 @@ func TestCdOntoSomethingThatIsNotADirectory(t *testing.T) {
 // a move nobody asked for, from a shell that had been handed a destination
 // (#1491).
 func TestCdWithAnEmptyOperand(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name     string
 		isError  Answer
@@ -149,6 +152,7 @@ func TestCdWithAnEmptyOperand(t *testing.T) {
 // the previous directory says: the shell records where it was, exactly as it
 // does for a `cd` that went somewhere else.
 func TestAnEmptyOperandIsAMoveToWhereTheShellAlreadyIs(t *testing.T) {
+	t.Parallel()
 	dir, _ := cdTree(t)
 	out := &strings.Builder{}
 	sem := PosixSemantics()
@@ -169,6 +173,7 @@ func TestAnEmptyOperandIsAMoveToWhereTheShellAlreadyIs(t *testing.T) {
 // same branch and a shell whose HOME was set to nothing was told HOME was not
 // set. Five of the six panel columns separate them.
 func TestCdWithAnEmptyHome(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name     string
 		isError  Answer
@@ -213,6 +218,7 @@ func TestCdWithAnEmptyHome(t *testing.T) {
 // A HOME that is absent is still the other question, and still answered by
 // the axis that has always answered it.
 func TestCdWithNoHomeAtAllIsStillTheOtherQuestion(t *testing.T) {
+	t.Parallel()
 	dir, _ := cdTree(t)
 	errs := &strings.Builder{}
 	sem := PosixSemantics()
@@ -234,6 +240,7 @@ func TestCdWithNoHomeAtAllIsStillTheOtherQuestion(t *testing.T) {
 // many in one, and one operand plus something ignored in the rest. We gave the
 // last of those to all four dialects.
 func TestCdWithTwoOperands(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name        string
 		substitutes Answer
@@ -307,6 +314,7 @@ func TestCdWithTwoOperands(t *testing.T) {
 // it was. Its own wording, because it is neither a directory that would not
 // open nor an operand count.
 func TestARewriteOfSomethingNotInTheCurrentDirectory(t *testing.T) {
+	t.Parallel()
 	dir, _ := cdTree(t)
 	out, errs := &strings.Builder{}, &strings.Builder{}
 	sem := PosixSemantics()
@@ -332,6 +340,7 @@ func TestARewriteOfSomethingNotInTheCurrentDirectory(t *testing.T) {
 // And a rewrite that arrived somewhere may be announced, the way `cd -` is —
 // one of the two shells with the form prints and the other does not.
 func TestARewriteMayAnnounceWhereItWent(t *testing.T) {
+	t.Parallel()
 	for _, prints := range []Answer{Yes, No} {
 		dir := t.TempDir()
 		for _, p := range []string{"alpha", "beta"} {
@@ -360,6 +369,7 @@ func TestARewriteMayAnnounceWhereItWent(t *testing.T) {
 // the form say different things about it: one a sentence, one its usage block.
 // Neither implies the other, which is why they are two fields.
 func TestARewriteTakesExactlyTwoOperands(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		dg    Diagnostics
@@ -401,6 +411,7 @@ func TestARewriteTakesExactlyTwoOperands(t *testing.T) {
 
 // A shell with no answer refuses rather than guessing, and names the question.
 func TestCdOperandAxesRefuseWhenUnanswered(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 		set             func(*Semantics)

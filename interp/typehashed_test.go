@@ -36,6 +36,7 @@ import (
 // the line said `ls is /bin/ls`. A report that asked the table after its own
 // search would never write the first of the two sentences at all.
 func TestTypeHasAThirdSentenceOnceTheNameIsHashed(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := testenv.WriteExecutable(filepath.Join(dir, "zzprog"),
 		[]byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {

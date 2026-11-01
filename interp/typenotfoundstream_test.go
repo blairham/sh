@@ -32,6 +32,7 @@ func notFoundRun(t *testing.T, src string, dg Diagnostics) (string, string, int)
 // TestNotFoundOnStderrByDefault: unanswered, the line is a diagnostic, and it
 // carries the location prefix every other diagnostic carries.
 func TestNotFoundOnStderrByDefault(t *testing.T) {
+	t.Parallel()
 	out, errs, _ := notFoundRun(t, `type nothing-at-all`, Diagnostics{})
 	if out != "" {
 		t.Errorf("stdout = %q, want nothing on it", out)
@@ -46,6 +47,7 @@ func TestNotFoundOnStderrByDefault(t *testing.T) {
 
 // TestNotFoundOnStdoutWhenAnswered: the same line, same wording, other stream.
 func TestNotFoundOnStdoutWhenAnswered(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{TypeNotFoundOnStdout: true, TypeNotFoundUnprefixed: true}
 	out, errs, _ := notFoundRun(t, `type nothing-at-all`, dg)
 	if want := "type: nothing-at-all: nothing here\n"; out != want {
@@ -60,6 +62,7 @@ func TestNotFoundOnStdoutWhenAnswered(t *testing.T) {
 // the status axis put it. The two travel together in the panel and are
 // nonetheless separate answers.
 func TestNotFoundStreamIsNotTheStatus(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		dg   Diagnostics
@@ -80,6 +83,7 @@ func TestNotFoundStreamIsNotTheStatus(t *testing.T) {
 // other. A dialect that reports on standard output and still names itself is
 // not in the panel, and the code must not assume it away.
 func TestNotFoundStreamIsNotThePrefix(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{TypeNotFoundOnStdout: true}
 	out, errs, _ := notFoundRun(t, `type nothing-at-all`, dg)
 	if !strings.HasPrefix(out, "testsh") {
@@ -95,6 +99,7 @@ func TestNotFoundStreamIsNotThePrefix(t *testing.T) {
 // was asked for — misses and hits in one stream — rather than splitting into
 // two that a reader has to interleave.
 func TestNotFoundOnStdoutKeepsOneOrder(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{TypeNotFoundOnStdout: true, TypeNotFoundUnprefixed: true}
 	out, errs, _ := notFoundRun(t, `type -- nothing-at-all if`, dg)
 	want := "type: nothing-at-all: nothing here\nif is a shell keyword\n"
@@ -110,6 +115,7 @@ func TestNotFoundOnStdoutKeepsOneOrder(t *testing.T) {
 // something was always an answer on standard output and stays one, whichever
 // way the value goes.
 func TestNotFoundStreamLeavesAResolvedNameAlone(t *testing.T) {
+	t.Parallel()
 	for _, onStdout := range []bool{false, true} {
 		dg := Diagnostics{TypeNotFoundOnStdout: onStdout, TypeNotFoundUnprefixed: onStdout}
 		out, errs, st := notFoundRun(t, `type if`, dg)
@@ -127,6 +133,7 @@ func TestNotFoundStreamLeavesAResolvedNameAlone(t *testing.T) {
 // about a name that is nothing, so there is no line for the stream to carry
 // and neither stream gains one.
 func TestNotFoundStreamLeavesDashTSilent(t *testing.T) {
+	t.Parallel()
 	for _, onStdout := range []bool{false, true} {
 		dg := Diagnostics{TypeNotFoundOnStdout: onStdout, TypeNotFoundUnprefixed: onStdout}
 		out, errs, _ := notFoundRun(t, `type -t nothing-at-all`, dg)
@@ -141,6 +148,7 @@ func TestNotFoundStreamLeavesDashTSilent(t *testing.T) {
 // with a complaint of its own, and the stream is the builtins' shared answer
 // rather than one held twice.
 func TestCommandVNotFoundSharesTheStream(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{TypeNotFoundOnStdout: true, TypeNotFoundUnprefixed: true}
 	out, errs, _ := notFoundRun(t, `command -V nothing-at-all`, dg)
 	if want := "command: nothing-at-all: nothing here\n"; out != want {

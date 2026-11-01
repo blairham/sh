@@ -22,6 +22,7 @@ import (
 // dialect/zsh/shellownparameters.go for the table and for the one row of the
 // issue that was wrong.
 func TestTheDirectoryStackDescribesItself(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			// The sharpest row: nothing declared the name here until the

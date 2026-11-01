@@ -29,6 +29,7 @@ import (
 // publishes is a fact about somebody's machine, and this row is about this
 // dialect's reading of it. interp/localeradix.go holds the layout.
 func TestTheRadixCharacterFollowsTheLocale(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want, refuses string
 	}{

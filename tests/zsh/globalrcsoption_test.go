@@ -27,6 +27,7 @@ import (
 // correctly when a script wrote it, and a test that called the resolver would
 // have passed throughout.
 func TestTheSystemStartupHatchReachesTheOptionNamespace(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		argv []string

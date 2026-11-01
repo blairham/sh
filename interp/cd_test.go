@@ -17,6 +17,7 @@ import (
 // This reported "no such directory" for both — a sentence no shell in the
 // panel prints, and an answer two of them can tell is wrong.
 func TestCdReportsTheReasonTheSystemGave(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "afile", "")
 	sem := CoreSemantics()
@@ -43,6 +44,7 @@ func TestCdReportsTheReasonTheSystemGave(t *testing.T) {
 // Two dialects call `cd` with nowhere to go an error and two stay where they
 // are and report success.
 func TestCdWithNowhereToGoIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -71,6 +73,7 @@ func TestCdWithNowhereToGoIsAnAxis(t *testing.T) {
 
 // `cd -` announces where it went in three of the four.
 func TestCdDashPrintsTheDirectoryIsAnAxis(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name   string
@@ -97,6 +100,7 @@ func TestCdDashPrintsTheDirectoryIsAnAxis(t *testing.T) {
 // from the shell's own table does not do: a lookup reads both, so `unset PATH`
 // left PATH exactly where it was.
 func TestUnsetRemovesAnEnvironmentName(t *testing.T) {
+	t.Parallel()
 	// A real PATH, because two of these run `env` — with a made-up one the
 	// command is not found and the assertions pass for the wrong reason,
 	// which is what they did until this line changed.
@@ -129,6 +133,7 @@ func TestUnsetRemovesAnEnvironmentName(t *testing.T) {
 // `pwd` the name it was reached by, and the last of `-L -P` decides. All
 // three are unanimous across the panel.
 func TestPwdPathOptions(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "a", "b"), 0o755); err != nil {
 		t.Fatal(err)

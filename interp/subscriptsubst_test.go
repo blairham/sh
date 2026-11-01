@@ -116,6 +116,7 @@ func TestASubscriptRunsItsSubstitutionAgainOnEachExpansion(t *testing.T) {
 // read the first one's answer — which is the same wrong-value failure the loop
 // row guards, in the shape a single command can hold.
 func TestTwoSubscriptsInOneWordRunTheirOwnSubstitutions(t *testing.T) {
+	t.Parallel()
 	src := `a=(x y z); b=(P Q R); printf '<%s><%s>' "${a[` + subscriptMark +
 		`]}" "${b[` + subscriptMark + `]}"`
 	out, st := runSubscriptSubst(t, src)
@@ -145,6 +146,7 @@ func TestTwoSubscriptsInOneWordRunTheirOwnSubstitutions(t *testing.T) {
 // to this one and visible to the marks above, and a reader that moves without
 // running a command is the other way round.
 func TestAnArithmeticSubstitutionInASubscriptIsEvaluatedOnce(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, spec, want string }{
 		{"a word for an element that is there", `${a[$((i++))]-D}`, "<x>"},
 		{"a plain element", `${a[$((i++))]}`, "<x>"},
@@ -172,6 +174,7 @@ func TestAnArithmeticSubstitutionInASubscriptIsEvaluatedOnce(t *testing.T) {
 // outer one back, which is the only thing keeping the outer brackets from
 // re-running once the inner had finished.
 func TestASubscriptNestedInsideASubscriptRunsItsOwnSubstitution(t *testing.T) {
+	t.Parallel()
 	src := `a=(x y z); b=(P Q R); printf '<%s>' "${a[$(printf . >&2; echo "${b[` +
 		subscriptMark + `]:+1}")]}"`
 	out, st := runSubscriptSubst(t, src)

@@ -34,6 +34,7 @@ import (
 // **the name does not matter** — `declare X`, `integer N` and `local X` inside
 // a function all answer the same way as `typeset X` — and **the mode does**.
 func TestTheEmulationDecidesWhetherAValuelessDeclarationSetsTheName(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().DeclaredNameWithoutValueIsEmpty; got != interp.Yes {
 		t.Errorf("the preset answers %v, want interp.Yes", got)
 	}
@@ -71,6 +72,7 @@ func TestTheEmulationDecidesWhetherAValuelessDeclarationSetsTheName(t *testing.T
 // declaration never creates the name": `typeset X=` is an assignment of the
 // empty string and reads `set` under every mode, in the reference and here.
 func TestAValuelessDeclarationPerModeAndSpelling(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src       string
 		zshWant, shWant string

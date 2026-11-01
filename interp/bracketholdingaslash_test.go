@@ -25,6 +25,7 @@ import (
 // The rows name the axis and no shell. What each column prints is in
 // tests/bash/bracketholdingaslash_test.go and its zsh sibling.
 func TestABracketHoldingASlashIsStillABracket(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	// A name `[zQ]` could match and a name `[a/b]` cannot exist, so the second
 	// field of each row is the control: a bracket that is a bracket under both
@@ -72,6 +73,7 @@ func TestABracketHoldingASlashIsStillABracket(t *testing.T) {
 // mark at face value would lose the component boundary — and every one of these
 // words would become a single name with a backslash in it.
 func TestAQuotedSeparatorStillSeparates(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "qwe"), 0o700); err != nil {
 		t.Fatal(err)

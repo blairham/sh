@@ -35,6 +35,7 @@ func letterRetypeRun(t *testing.T, src string, a Answer) (string, string, int) {
 // carries out its own assignment over the freeze and the script carries on,
 // under No it is refused and the name keeps what it had.
 func TestANumericTypeLetterRetypingAFrozenNameIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, letter := range []string{"i", "F"} {
 		src := "readonly q=1; typeset -g" + letter + " q=4; typeset -p q; echo tail"
 		out, errs, st := letterRetypeRun(t, src, Yes)
@@ -55,6 +56,7 @@ func TestANumericTypeLetterRetypingAFrozenNameIsAnAxis(t *testing.T) {
 // not being retyped, so the ordinary refusal stands — the row that separates
 // this from "a type letter is a free hand over a frozen name".
 func TestATypeLetterOverANameAlreadyThatTypeIsStillRefused(t *testing.T) {
+	t.Parallel()
 	out, errs, _ := letterRetypeRun(t,
 		`typeset -ir q=1; typeset -gi q=4; typeset -p q; echo tail`, Yes)
 	if strings.Contains(out, "tail") || !strings.Contains(errs, "q: readonly variable") {
@@ -66,6 +68,7 @@ func TestATypeLetterOverANameAlreadyThatTypeIsStillRefused(t *testing.T) {
 // a guard that asked only whether the name carried some numeric type would
 // refuse a line the shell takes.
 func TestAFrozenIntegerIsRetypedByTheFloatLetter(t *testing.T) {
+	t.Parallel()
 	out, errs, st := letterRetypeRun(t,
 		`typeset -ir q=1; typeset -gF q=4; typeset -p q; echo tail`, Yes)
 	if !strings.Contains(out, "tail") || st != 0 || errs != "" {
@@ -76,6 +79,7 @@ func TestAFrozenIntegerIsRetypedByTheFloatLetter(t *testing.T) {
 // The freeze stays on. A retype that quietly unfroze the name would satisfy
 // every row above and hand the script a writable name.
 func TestALetterRetypedFrozenNameIsStillFrozen(t *testing.T) {
+	t.Parallel()
 	_, errs, _ := letterRetypeRun(t, "readonly q=1; typeset -gi q=4\nq=9\n", Yes)
 	if !strings.Contains(errs, "q: readonly variable") {
 		t.Errorf("stderr %q, want the later assignment still refused", errs)
@@ -94,6 +98,7 @@ func TestALetterRetypedFrozenNameIsStillFrozen(t *testing.T) {
 // 5.3.15 and `typeset -r -i q=1` in ksh93u+, and this engine takes it in both
 // — a divergence that predates this axis and is not what it decides.
 func TestAValuelessTypeLetterOverAFrozenNameIsExemptToo(t *testing.T) {
+	t.Parallel()
 	out, errs, st := letterRetypeRun(t, `readonly q=1; typeset -gi q; typeset -p q`, Yes)
 	if st != 0 || errs != "" {
 		t.Errorf("got %q/%d stderr %q, want the declaration taken", out, st, errs)
@@ -106,6 +111,7 @@ func TestAValuelessTypeLetterOverAFrozenNameIsExemptToo(t *testing.T) {
 // A declaration naming no type keeps the refusal it had, so the exemption is
 // the letter's rather than the builtin's.
 func TestAPlainDeclarationOverAFrozenNameIsStillRefused(t *testing.T) {
+	t.Parallel()
 	out, errs, _ := letterRetypeRun(t, `readonly q=1; typeset -g q=4; echo tail`, Yes)
 	if strings.Contains(out, "tail") || !strings.Contains(errs, "q: readonly variable") {
 		t.Errorf("got %q stderr %q, want the refusal and no tail", out, errs)
@@ -116,6 +122,7 @@ func TestAPlainDeclarationOverAFrozenNameIsStillRefused(t *testing.T) {
 // unfrozen one is declared, which is the row a single flag set for the whole
 // builtin would pass by exempting both.
 func TestOnlyTheFrozenNameOnTheLineIsExempt(t *testing.T) {
+	t.Parallel()
 	out, errs, st := letterRetypeRun(t,
 		"readonly f=1\ntypeset -gi f s=2\ntypeset -p f\ntypeset -p s\n", Yes)
 	if st != 0 || errs != "" {
@@ -128,6 +135,7 @@ func TestOnlyTheFrozenNameOnTheLineIsExempt(t *testing.T) {
 
 // An unanswered axis refuses rather than picking a shell.
 func TestAnUnansweredLetterRetypeAxisRefuses(t *testing.T) {
+	t.Parallel()
 	_, errs, st := letterRetypeRun(t, `readonly q=1; typeset -gi q=4`, Unspecified)
 	if st == 0 || !strings.Contains(errs, "numeric type letter") {
 		t.Errorf("got %d stderr %q, want the unanswered refusal", st, errs)
@@ -137,6 +145,7 @@ func TestAnUnansweredLetterRetypeAxisRefuses(t *testing.T) {
 // And nothing else asks it. A type letter over a name nobody froze must reach
 // no question at all, or every `typeset -i` in every script would meet one.
 func TestAnUnfrozenTypeLetterAsksTheRetypeAxisNothing(t *testing.T) {
+	t.Parallel()
 	out, errs, st := letterRetypeRun(t, `typeset -gi q=4; typeset -p q`, Unspecified)
 	if st != 0 || errs != "" || !strings.Contains(out, "q=") {
 		t.Errorf("got %q/%d stderr %q, want the ordinary declaration", out, st, errs)
@@ -148,6 +157,7 @@ func TestAnUnfrozenTypeLetterAsksTheRetypeAxisNothing(t *testing.T) {
 // refuses over a compound cell. Written against both values of *that* axis so
 // the row cannot pass by the refusal being off.
 func TestATypeLetterIsNotAPlainWordOverACompound(t *testing.T) {
+	t.Parallel()
 	run := func(src string, inconsistent Answer) (string, string, int) {
 		t.Helper()
 		return declRun(t, src, func(s *Semantics) {

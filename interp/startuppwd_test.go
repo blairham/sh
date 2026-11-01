@@ -36,6 +36,7 @@ func linkedDir(t *testing.T) (real, via string) {
 }
 
 func TestTheNameAShellGivesItsStartingDirectory(t *testing.T) {
+	t.Parallel()
 	real, via := linkedDir(t)
 	elsewhere := filepath.Dir(real)
 
@@ -140,6 +141,7 @@ func TestTheNameAShellGivesItsStartingDirectory(t *testing.T) {
 // The other policy that reads the environment drops such a name outright,
 // which is the control the pair is worth stating for.
 func TestAKeptNameThatSaysNowhereLeavesPwdAlone(t *testing.T) {
+	t.Parallel()
 	real, _ := linkedDir(t)
 	for _, c := range []struct {
 		policy    StartupPwdNamePolicy
@@ -171,6 +173,7 @@ func TestAKeptNameThatSaysNowhereLeavesPwdAlone(t *testing.T) {
 // The name taken at startup is the one a later relative `cd` is written in,
 // which is what says it became the shell's own and not only a parameter.
 func TestTheNameTakenAtStartupCarriesIntoALaterCd(t *testing.T) {
+	t.Parallel()
 	real, via := linkedDir(t)
 	if err := os.Mkdir(filepath.Join(real, "sub"), 0o755); err != nil {
 		t.Fatal(err)
@@ -198,6 +201,7 @@ func TestTheNameTakenAtStartupCarriesIntoALaterCd(t *testing.T) {
 // where its value came from, and the two that read the environment would
 // otherwise be passing only because an inherited name is exported anyway.
 func TestTheStartupPwdCarriesTheExportAttribute(t *testing.T) {
+	t.Parallel()
 	real, via := linkedDir(t)
 	for _, c := range []struct {
 		name   string

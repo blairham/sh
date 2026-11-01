@@ -45,6 +45,7 @@ func collates(t *testing.T, a CollatingElementPolicy, unknown UnknownClassPolicy
 // literal `]` behind it, so it matches `a]` and not `a`. With it on it
 // matches `a` and not `a]`. Every row below separates the two answers.
 func TestACollatingElementIsOneMemberOfTheBracket(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		pattern, subject string
 		on, off          bool
@@ -96,6 +97,7 @@ func TestACollatingElementIsOneMemberOfTheBracket(t *testing.T) {
 // `[a[.nosuch.]b]`: the inert column matches a and b, the one that ends its
 // scan matches a alone, the one that empties the bracket matches neither.
 func TestABodyThatIsNotAnElementIsTheUnknownNameQuestion(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		pattern, subject     string
 		inert, ends, empties bool
@@ -137,6 +139,7 @@ func TestABodyThatIsNotAnElementIsTheUnknownNameQuestion(t *testing.T) {
 // `[x[.a]y]`, whose closing `]` is the bracket's: bash matches `xy]`, `[y]`,
 // `.y]` and `ay]`, dash matches `xy]` alone, ksh93 matches none of them.
 func TestAnUnclosedCollatingDelimiterIsOrdinaryWhereTheReadingIsInert(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		subject              string
 		inert, ends, empties bool
@@ -168,6 +171,7 @@ func TestAnUnclosedCollatingDelimiterIsOrdinaryWhereTheReadingIsInert(t *testing
 // a `[.` standing on its own in a pattern is an ordinary bracket and a period
 // whichever way the axis reads.
 func TestTheDelimitersAreSpecialOnlyInsideABracket(t *testing.T) {
+	t.Parallel()
 	for _, a := range []CollatingElementPolicy{
 		OneCharacterIsACollatingElement, NoCollatingElements,
 		CollatingElementsHoldNothing, ACollatingElementMayBeNamed,
@@ -193,6 +197,7 @@ func TestTheDelimitersAreSpecialOnlyInsideABracket(t *testing.T) {
 // nothing, still matches an ordinary bracket and refuses only the pattern
 // that poses the question.
 func TestTheCollatingAxisIsAskedOnlyWhenItApplies(t *testing.T) {
+	t.Parallel()
 	if out, st := run(t, `case b in [abc]) echo in;; *) echo out;; esac`,
 		withSem(CoreSemantics())); out != "in\n" || st != 0 {
 		t.Errorf("an ordinary bracket in the core: got %q status %d", out, st)
@@ -218,6 +223,7 @@ func TestTheCollatingAxisIsAskedOnlyWhenItApplies(t *testing.T) {
 // delimiters were read rather than the bracket having simply failed — a
 // member written behind the element still counts.
 func TestTheDelimitersMayBeReadWithNoBodyEverAnElement(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		pattern, subject            string
 		nothing, oneChar, noneAtAll bool
@@ -263,6 +269,7 @@ func TestTheDelimitersMayBeReadWithNoBodyEverAnElement(t *testing.T) {
 // bodies as bodies that are not elements, so `[[.hyphen.]]` matches no `-`
 // there. The roster and the sweep behind it are in interp/collatingname.go.
 func TestACollatingElementMayBeWrittenAsAName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		pattern, subject string
 		named, oneChar   bool
@@ -338,6 +345,7 @@ func TestACollatingElementMayBeWrittenAsAName(t *testing.T) {
 // locale against a shell whose reading is inert, over `a b c d z - . ~` and
 // four characters past ASCII.
 func TestABoundThatIsNotAnElementMakesNoRange(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		pattern, subject string
 		inert            bool

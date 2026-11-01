@@ -18,6 +18,7 @@ import (
 // the assertions are two-sided because the interesting failure is the style
 // leaking onto the messages a builtin is *not* speaking.
 func TestABuiltinCanNameThePlaceItsOwnWay(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		Location:        LocationLineWord,
 		BuiltinLocation: LocationBracketLine,
@@ -45,6 +46,7 @@ func TestABuiltinCanNameThePlaceItsOwnWay(t *testing.T) {
 // four dialects want: a builtin names the place the same way as everything
 // else, and the second field is simply not set.
 func TestOneStyleIsTheDefault(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{Location: LocationLineWord}
 	out := prefixRun(t, t.TempDir(), "cd /no/such/dir-xyz", dg)
 	if !strings.HasPrefix(out, "testsh: line 1: ") {
@@ -59,6 +61,7 @@ func TestOneStyleIsTheDefault(t *testing.T) {
 // half: under `-c` the dialect names no line on line 1, in either of its two
 // styles, so the bracketed one needs its own "after the first" spelling.
 func TestTheBracketedLineIsAlsoLeftOutOnTheFirstLine(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		Location:        LocationLineWordAfterFirst,
 		BuiltinLocation: LocationBracketLineAfterFirst,
@@ -85,6 +88,7 @@ func TestTheBracketedLineIsAlsoLeftOutOnTheFirstLine(t *testing.T) {
 // line 1 like any other — in both of its styles, which is why resolving one
 // of them was not enough.
 func TestAScriptCanNameThePlaceDifferentlyAgain(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		Location:              LocationLineWordAfterFirst,
 		BuiltinLocation:       LocationBracketLineAfterFirst,
@@ -114,6 +118,7 @@ func TestAScriptCanNameThePlaceDifferentlyAgain(t *testing.T) {
 // distinguishes the two dialects asking about builtins, and it is why the
 // question is "is a builtin speaking" rather than "is the builtin named".
 func TestARedirectionOpenedForABuiltinCountsAsTheBuiltins(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		Location:        LocationLineWord,
 		BuiltinLocation: LocationBracketLine,
@@ -142,6 +147,7 @@ func TestARedirectionOpenedForABuiltinCountsAsTheBuiltins(t *testing.T) {
 // here, so answering "the builtin is speaking" by setting the name would
 // have been wrong for it.
 func TestTheBuiltinIsStillNotNamedForItsRedirection(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{Location: LocationTightLine, NamesBuiltinInLocation: true}
 	out := prefixRun(t, t.TempDir(), "echo hi > /nonexistent-dir-xyz/x", dg)
 	if !strings.HasPrefix(out, "testsh:1:") {
@@ -156,6 +162,7 @@ func TestTheBuiltinIsStillNotNamedForItsRedirection(t *testing.T) {
 // one does not inherit it — the redirection is open by then and the builtin
 // itself is on the record instead.
 func TestTheMarkerIsPutBackAfterTheRedirections(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		Location:        LocationLineWord,
 		BuiltinLocation: LocationBracketLine,
@@ -181,6 +188,7 @@ func TestTheMarkerIsPutBackAfterTheRedirections(t *testing.T) {
 // Diagnostics.BuiltinLocationIsTheSpeakersOnly for the rows it is read off
 // (#2761).
 func TestTheBuiltinLocationCanBeTheSpeakersOnly(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		Location:                         LocationLineWord,
 		BuiltinLocation:                  LocationBracketLine,
@@ -214,6 +222,7 @@ func TestTheBuiltinLocationCanBeTheSpeakersOnly(t *testing.T) {
 // whole rule while one dialect asked, wrote `/s.sh:shift: line 1:` for the
 // second (#2761).
 func TestTheBuiltinSegmentIsPunctuatedByTheStyle(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		style LocationStyle
 		want  string

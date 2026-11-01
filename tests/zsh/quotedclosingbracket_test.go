@@ -14,6 +14,7 @@ import (
 // directory where nothing matches; the controls keep a bracket the source
 // closed, and a value's `]` with no bracket in front of it.
 func TestAQuotedClosingBracketClosesNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"written quoted", `echo nos[a"]"`, "bad pattern: nos[a]"},
 		{"from a value", `k="]"; echo nos[a$k`, "bad pattern: nos[a]"},

@@ -20,6 +20,7 @@ import (
 // empty-array rule would predict — `a=()` is the row with no field — which is
 // why the axis is named for existence (#1379).
 func TestAQuotedAtAsksWhetherTheNameExists(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		// The half this shell is alone on.
@@ -64,6 +65,7 @@ func TestAQuotedAtAsksWhetherTheNameExists(t *testing.T) {
 // Asserted as bytes for that reason. Real zsh cannot reach the state at all:
 // its stack parameter is an array from startup.
 func TestTheDirectoryStackIsNotGivenAnEmptyEntryByAnUndeclaredName(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZshPrelude(t, dir, `cd `+dir+` && pushd / && dirs && popd && echo "p=$?"`)
 	if st != 0 {

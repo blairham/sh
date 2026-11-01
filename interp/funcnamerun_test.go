@@ -50,6 +50,7 @@ const stagedFuncSrc = "function _p_${w} { echo HI; }\necho \"reached-after st=$?
 // complaint at all, and that is why it is a value here rather than a silent
 // spelling of the first: the status differs too.
 func TestTheFourAnswersToARefusedFunctionName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		form FuncNameRunForm
 		out  string
@@ -86,6 +87,7 @@ func TestTheFourAnswersToARefusedFunctionName(t *testing.T) {
 // nothing and ends at 0, so a run that bound `_p_w` under it would look
 // exactly like a run that bound nothing (#2590).
 func TestARefusedFunctionNameDefinesNothing(t *testing.T) {
+	t.Parallel()
 	const src = "function _p_${w} { echo HI; }\n_p_w 2>/dev/null || echo nolit\n" +
 		"_p_ 2>/dev/null || echo noempty\n"
 	for _, form := range []FuncNameRunForm{FuncNameFailsTheDefinition, FuncNameDefinesNothing} {
@@ -105,6 +107,7 @@ func TestARefusedFunctionNameDefinesNothing(t *testing.T) {
 // Measured in the shell this models — `g() { echo old; }; 'g'() { echo new;
 // }; g` prints `old` — so the earlier body has to survive.
 func TestASilentlyRefusedNameLeavesAnEarlierDefinitionStanding(t *testing.T) {
+	t.Parallel()
 	const src = "function g { echo old; }\nfunction _p_${w} { echo new; }\ng\n"
 	out, st := runStagedFuncName(t, src, FuncNameDefinesNothing)
 	if out != "old\n" || st != 0 {
@@ -127,6 +130,7 @@ func TestASilentlyRefusedNameLeavesAnEarlierDefinitionStanding(t *testing.T) {
 // as readily as with one they do not — so this asserts the definition and not
 // the refusal.
 func TestARedirectionOnTheDefinitionChangesNothing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	src := "function _p_${w} { echo HI; } > " + dir + "/out\necho \"reached-after st=$?\"\n"
 	out, st := runStagedFuncName(t, src, FuncNameEndsTheScript)
@@ -142,6 +146,7 @@ func TestARedirectionOnTheDefinitionChangesNothing(t *testing.T) {
 // promise this repository makes everywhere else and which a *form* makes
 // reachable: a dialect can turn the grammar flag on and leave this unset.
 func TestARefusedFunctionNameWithNoAnswerIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	out, st := runStagedFuncName(t, "function _p_${w} { echo HI; }\n", FuncNameRunUnspecified)
 	if !strings.Contains(out, "the shells disagree here and no dialect was chosen") {
 		t.Errorf("got %q, want the axis refused by name", out)
@@ -163,6 +168,7 @@ func TestARefusedFunctionNameWithNoAnswerIsRefusedByName(t *testing.T) {
 // loop's axis makes, asserted here because the swap is a second copy of the
 // same four lines and a copy is exactly what drifts.
 func TestPosixModeDoesNotAnswerAnUnansweredFunctionNameAxis(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.FunctionNameCheckedWhenTheDefinitionRuns = true
 	f, err := syntax.Parse("function _p_${w} { echo HI; }\n", d)
@@ -193,6 +199,7 @@ func TestPosixModeDoesNotAnswerAnUnansweredFunctionNameAxis(t *testing.T) {
 // standard's opposite, which is the half a saved field exists for: a shell
 // that stops at 1 must not come out of the mode stopping at 2.
 func TestLeavingPosixModePutsTheFunctionNameAnswerBack(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.FunctionNameCheckedWhenTheDefinitionRuns = true
 	f, err := syntax.Parse(stagedFuncSrc, d)

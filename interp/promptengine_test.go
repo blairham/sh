@@ -117,6 +117,7 @@ func TestARedefinedPromptFunctionCannotReachTheEngine(t *testing.T) {
 // prompt engine, and the honest answer is the one every other absent command
 // gets.
 func TestWithNoEngineInstalledTheWordIsNotACommand(t *testing.T) {
+	t.Parallel()
 	pre := "prompt() { " + PromptEngineName + ` "$@"; }` + "\n"
 	out, _, st := engineRun(t, pre, "prompt show\n", nil)
 	if out != "" {

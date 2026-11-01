@@ -54,6 +54,7 @@ func collectEvents(t *testing.T, src string, arrange func(*Runner)) []Event {
 // permission prompt or an audit trail stands on, and until this test nothing
 // asserted the event at all — the deny tests grep the prose.
 func TestADenialIsAnEventNotOnlyASentence(t *testing.T) {
+	t.Parallel()
 	events := collectEvents(t, "/usr/bin/false", func(r *Runner) {
 		r.Gate = GateFunc(func(_ context.Context, a Action) Decision {
 			if a.Kind == ActionExec {
@@ -83,6 +84,7 @@ func TestADenialIsAnEventNotOnlyASentence(t *testing.T) {
 // The end of a command carries its status and its position, so a consumer
 // can know what failed and where without re-parsing prose diagnostics.
 func TestAnEventCarriesStatusAndPosition(t *testing.T) {
+	t.Parallel()
 	events := collectEvents(t, ":\n/usr/bin/false", nil)
 	var end *Event
 	for i, e := range events {
@@ -107,6 +109,7 @@ func TestAnEventCarriesStatusAndPosition(t *testing.T) {
 // Inside a sourced file, an event names the file and counts lines within it
 // — the same answer a diagnostic would give, carried structurally.
 func TestAnEventInsideASourcedFileNamesTheFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	sourced := filepath.Join(dir, "inc.sh")
 	if err := os.WriteFile(sourced, []byte(":\n/usr/bin/true\n"), 0o600); err != nil {
@@ -154,6 +157,7 @@ func TestASuccessfulOpenIsAnEvent(t *testing.T) {
 // A probe is recorded as an access of its own kind, whichever answer it got:
 // an existence probe is the auditable act whether or not the file exists.
 func TestAProbeIsAnEvent(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	absent := filepath.Join(dir, "absent")
 	events := collectEvents(t, "test -f "+absent, nil)

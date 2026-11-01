@@ -14,6 +14,7 @@ import (
 // directory holding the names each row names. The option *off* is the control
 // on every row and already agreed before this was wired (#4555).
 func TestNumericGlobSortOrdersOnTheNumbersInTheNames(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, f := range []string{"f1", "f2", "f10", "b2x", "b10x"} {
 		writeFile(t, dir, f, "")
@@ -31,6 +32,7 @@ func TestNumericGlobSortOrdersOnTheNumbersInTheNames(t *testing.T) {
 // this order at an expansion is `n` and is written there, so `${(o)a}` is the
 // plain order in both states of the option.
 func TestNumericGlobSortDoesNotReachTheOrderFlags(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"a=(f10 f2 f1)\nsetopt numericglobsort\nprint -r -- ${(o)a}\n"+
 			"unsetopt numericglobsort\nprint -r -- ${(o)a}\n")
@@ -42,6 +44,7 @@ func TestNumericGlobSortDoesNotReachTheOrderFlags(t *testing.T) {
 // And the state is reported back on the three surfaces a script reads, which
 // is the half that was already right and must stay so.
 func TestNumericGlobSortIsReportedBackInBothStates(t *testing.T) {
+	t.Parallel()
 	const src = `[[ -o numericglobsort ]] && print a=on || print a=off
 setopt numericglobsort
 [[ -o numericglobsort ]] && print b=on || print b=off

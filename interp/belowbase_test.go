@@ -36,6 +36,7 @@ func runBelowBase(t *testing.T, zeroBased, inserts Answer, src string) (string, 
 // element is 1, `a[0]` is below it; where the first element is 0, no
 // non-negative subscript can be.
 func TestASubscriptBelowTheFirstElementIsRefused(t *testing.T) {
+	t.Parallel()
 	const src = `a=(p q); a[0]=x; printf "[%s]" "${a[@]}"; echo " ok"`
 	out, st := runBelowBase(t, No, No, src)
 	if !strings.Contains(out, "a[0]") {
@@ -57,6 +58,7 @@ func TestASubscriptBelowTheFirstElementIsRefused(t *testing.T) {
 // `+=` is the same assignment and reaches the same refusal, rather than
 // joining a position that does not exist.
 func TestAppendingBelowTheFirstElementIsRefused(t *testing.T) {
+	t.Parallel()
 	out, st := runBelowBase(t, No, No, `a=(p q); a[0]+=Q; printf "[%s]" "${a[@]}"; echo " ok"`)
 	if !strings.Contains(out, "a[0]") || strings.Contains(out, "ok") || st == 0 {
 		t.Errorf("got %q (status %d), want a refusal that stops", out, st)
@@ -72,6 +74,7 @@ func TestAppendingBelowTheFirstElementIsRefused(t *testing.T) {
 // back as written whichever text the refusal was handed, and it is what made
 // the gap look closed: only `$i` can tell the source from the value (#1373).
 func TestARefusedSubscriptIsNamedAsWritten(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an expression with no expansion in it", `x=1; a[x-2]=v`, `a[x-2]`},
 		{"a plain numeral", `a=(p q); a[-3]=v`, `a[-3]`},
@@ -98,6 +101,7 @@ func TestARefusedSubscriptIsNamedAsWritten(t *testing.T) {
 // both say `a[-9]`, where the bare `a[$i]=q` beside them says `a[$i]`. The
 // operand was expanded by the caller before any of it was source text.
 func TestASubscriptThatArrivedAsAStringIsNamedByItsValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`i=-9; a=(x); typeset "a[$i]"=q`, `a[-9]`},
 		{`i=-9; a=(x); read "a[$i]" < /dev/null`, `a[-9]`},
@@ -112,6 +116,7 @@ func TestASubscriptThatArrivedAsAStringIsNamedByItsValue(t *testing.T) {
 // And an expression that will not *evaluate* is quoted back expanded, in every
 // column — so the written text reaches the boundary refusals and stops there.
 func TestASubscriptThatWillNotEvaluateIsNamedByItsValue(t *testing.T) {
+	t.Parallel()
 	const src = `i=1; a[$i/0]=x`
 	out, _ := runBelowBase(t, Yes, No, src)
 	if !strings.Contains(out, "division by zero") {
@@ -127,6 +132,7 @@ func TestASubscriptThatWillNotEvaluateIsNamedByItsValue(t *testing.T) {
 // other it places an element in front of every other. However far past, the
 // array grows by exactly one.
 func TestANegativeSubscriptPastTheStartIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`a=(p q); a[-3]=x; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
 		`a=(p q); a[-5]=x; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
@@ -159,6 +165,7 @@ func TestANegativeSubscriptPastTheStartIsAnAxis(t *testing.T) {
 // The axis is asked only where a negative subscript actually ran past the
 // start: one that lands on a real element needs no answer from anyone.
 func TestANegativeSubscriptInsideTheArrayAsksNothing(t *testing.T) {
+	t.Parallel()
 	for _, base := range []Answer{Yes, No} {
 		out, st := runBelowBase(t, base, Unspecified, `a=(p q); a[-1]=x; a[-2]=y; printf "[%s]" "${a[@]}"`)
 		if out != "[y][x]" || st != 0 {
@@ -170,6 +177,7 @@ func TestANegativeSubscriptInsideTheArrayAsksNothing(t *testing.T) {
 // An unanswered axis is refused by name rather than guessed, and refusing
 // leaves the array alone.
 func TestANegativeSubscriptPastTheStartRefusesAnUnspecifiedAxis(t *testing.T) {
+	t.Parallel()
 	out, _ := runBelowBase(t, Yes, Unspecified,
 		`a=(p q); a[-3]=x; echo "st=$?"; printf "[%s]" "${a[@]}"`)
 	if !strings.Contains(out, "no dialect was chosen") {
@@ -189,6 +197,7 @@ func TestANegativeSubscriptPastTheStartRefusesAnUnspecifiedAxis(t *testing.T) {
 // word differently from the plain form — so it is a wording of its own rather
 // than the same sentence in a second place.
 func TestASubscriptBelowTheFirstElementInALiteral(t *testing.T) {
+	t.Parallel()
 	const src = `a=([0]=p); printf "[%s]" "${a[@]}"; echo " ok"`
 	out, st := runBelowBase(t, No, No, src)
 	if strings.Contains(out, "ok") || st == 0 {

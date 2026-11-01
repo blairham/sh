@@ -15,6 +15,7 @@ import (
 // 2026-10-02 on zsh 5.9.2 under `-f` (#5155), in a directory M holding `t`
 // and `n`, with `dirs` written M-relative.
 func TestPushdOptionsMoveTheStack(t *testing.T) {
+	t.Parallel()
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

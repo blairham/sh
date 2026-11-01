@@ -53,6 +53,7 @@ func wordStyleRows(t *testing.T, name string) [][]string {
 // TestMatchWordsByStyleSplitsTheLineAsZshDoes: the seven parts, for every row
 // measured.
 func TestMatchWordsByStyleSplitsTheLineAsZshDoes(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(
 		t,
 		"fpath=("+shippedFunctionDir(t)+")\n"+wordCharsDefault+`autoload -Uz select-word-style match-words-by-style
@@ -86,6 +87,7 @@ zle -N w
 // row measured. The function is called directly rather than through `zle`,
 // which here answers 0 whatever the function returned (#5939).
 func TestTheWordWidgetsMoveKillAndChangeAsZshDoes(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "fpath=("+shippedFunctionDir(t)+")\n"+wordCharsDefault+`autoload -Uz select-word-style
 w() {
 	zstyle -d ':zle:*'; select-word-style $S
@@ -154,6 +156,7 @@ zle -N down-case-word down-case-word-match
 // documentation, which is not copied, so what is pinned is the stream, the
 // status and the synopsis.
 func TestSelectWordStyleUsage(t *testing.T) {
+	t.Parallel()
 	out, _ := runShipped(t, `autoload -Uz select-word-style
 select-word-style foo 2>/dev/null; print -r -- "stdout above, st=$?"
 select-word-style foo 2>&1 >/dev/null | { read -r first; print -r -- "first: $first" }`)

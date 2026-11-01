@@ -12,6 +12,7 @@ import "testing"
 // The letter this shell has and this engine used to name as missing. Every
 // line is one this shell's own output, taken side by side.
 func TestTypesetUniqueKeepsTheFirstOfEachElement(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -U a
 a=(1 1 2 2 3 1)
 print -r -- "write: ${(j:,:)a} n=${#a}"
@@ -47,6 +48,7 @@ print -r -- "plusU: ${(j:,:)g} n=${#g}"`)
 
 // `local -U` too — the letter is in both sets here.
 func TestLocalUniqueDedupesInAFunction(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `f() { local -U u=(1 1 2); print -r -- "local: ${(j:,:)u}"; }
 f
 print -r -- "st=$?"`)
@@ -59,6 +61,7 @@ print -r -- "st=$?"`)
 // And it lists back, last of the letters — with `export` taking `x`'s place
 // wherever `x` stood rather than only at the end of the word.
 func TestTypesetUniqueListsBackLastOfTheLetters(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -aUxr A1=(1 2)
 typeset -p A1
 typeset -Uxi n1=5
@@ -81,6 +84,7 @@ typeset -p e1`)
 // and a scalar named in the same command, and the array prepended to
 // afterwards. It was seven refusals and an array left unmade.
 func TestTypesetGlobalExportUniqueBuildsAPathArray(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `mypath=(/usr/bin /bin)
 typeset -gxU mypath MYPATH
 mypath=( /usr/bin "${mypath[@]}" )

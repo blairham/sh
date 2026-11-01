@@ -19,6 +19,7 @@ import "testing"
 // held nowhere would each agree with half of these, so every letter has a
 // subject it holds at and one it does not.
 func TestATildeGlobGroupReadsTheZeroWidthEscapes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The control that makes the `\b` rows evidence: a backspace
 		// subject really is one matchable character wide, so a row where
@@ -106,6 +107,7 @@ func TestATildeGlobGroupReadsTheZeroWidthEscapes(t *testing.T) {
 // every one of the first six wrong: it would find no boundary at offset 1 of
 // `aab`, where the trim finds one because that is where the piece begins.
 func TestAZeroWidthEscapeAsksAboutThePiece(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the piece's front is a boundary", `v=aab; echo "[${v%~(K)\bab}]"`, "[a]"},
 		{"so the complement declines it", `v=aab; echo "[${v%~(K)\Bab}]"`, "[aab]"},
@@ -154,6 +156,7 @@ func TestAZeroWidthEscapeAsksAboutThePiece(t *testing.T) {
 // other way, while leaving the first two rows right — so varying only the
 // locale and only looking ahead would confirm the wrong rule.
 func TestAWordBoundaryReadsOneUnitAheadAndOneByteBehind(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a two-byte letter ahead is one word character",

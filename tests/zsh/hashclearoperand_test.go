@@ -23,6 +23,7 @@ import (
 
 // Every shape of operand the builtin takes, and each is the same refusal.
 func TestHashClearRefusesAnOperandBesideIt(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src string }{
 		{"a name", `hash -r ls`},
 		{"an assignment", `hash -r q=/bin/ls`},
@@ -51,6 +52,7 @@ func TestHashClearRefusesAnOperandBesideIt(t *testing.T) {
 // because the named-directory one is reached by a different branch and the
 // guard sits in front of both.
 func TestHashClearLeavesTheTableStandingWhenItRefuses(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"the command table",
@@ -85,6 +87,7 @@ func TestHashClearLeavesTheTableStandingWhenItRefuses(t *testing.T) {
 // second row is the positive control for the first — without it, a `-r` that
 // had quietly stopped clearing would pass.
 func TestHashClearOnItsOwnStillEmptiesTheTable(t *testing.T) {
+	t.Parallel()
 	out, st, errs := runZshSplit(t, t.TempDir(), "hash q=/bin/ls\nhash -r\nhash\n")
 	if out != "" || st != 0 || errs != "" {
 		t.Errorf("hash -r = %q status %d stderr %q, want an empty table at 0", out, st, errs)
@@ -99,6 +102,7 @@ func TestHashClearOnItsOwnStillEmptiesTheTable(t *testing.T) {
 // so the refusal is keyed on a word left over after the options, not on `-r`
 // standing beside anything at all.
 func TestHashClearIsNotRefusedByAnotherLetter(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`hash -r`, `hash -r -m`, `hash -rd`, `hash -d -r`} {
 		t.Run(src, func(t *testing.T) {
 			out, st, errs := runZshSplit(t, t.TempDir(), src+"\n")

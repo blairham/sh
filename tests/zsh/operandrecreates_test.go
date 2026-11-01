@@ -10,6 +10,7 @@ import "testing"
 // goes, and an export stays. Measured 2026-10-03 on zsh 5.9.2; see
 // interp/operandrecreates.go.
 func TestADeclarationsLiteralReCreatesATypedScalar(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"typeset -i z; typeset z=(1 2); typeset -p z", "typeset -a z=( 1 2 )\n"},
 		{"typeset -i z; typeset -a z=(1 2); typeset -p z", "typeset -a z=( 1 2 )\n"},

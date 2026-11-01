@@ -64,6 +64,7 @@ caller
 // show: reading past the caller's local means the name is *unset*, not that
 // it holds some other value.
 func TestACalleeWithNoGlobalToSeeReadsNothing(t *testing.T) {
+	t.Parallel()
 	const src = `function callee { printf '[%s]\n' "${v-UNSET}"; }
 function caller { typeset v=local; callee; }
 caller
@@ -81,6 +82,7 @@ caller
 // the write has to outlive the seal — and the caller's local has to be
 // untouched by it.
 func TestReadingPastACallerLocalIsASwapAndNotAHiding(t *testing.T) {
+	t.Parallel()
 	const src = `function writes { v=written; }
 function around { typeset v=local; writes; printf 'kept [%s]\n' "$v"; }
 v=global
@@ -106,6 +108,7 @@ printf 'global [%s]\n' "$v"
 // scope of its own and is not a boundary — it shares the caller's, so it sees
 // the local whatever the axis says.
 func TestOnlyACallWithAScopeOfItsOwnReadsPastTheCaller(t *testing.T) {
+	t.Parallel()
 	const src = `posix() { printf '[%s]\n' "${v-UNSET}"; }
 function caller { typeset v=local; posix; }
 v=global
@@ -127,6 +130,7 @@ caller
 // attributes. Each is a store of its own, and a seal over the scalar alone
 // would pass the tests above and fail every row here.
 func TestMoreThanTheValueTravelsPastACallerLocal(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"an array",
@@ -182,6 +186,7 @@ caller
 // inside another one still reads the shell's own name, so the parent of a
 // sealed scope is the global and not wherever the body was written.
 func TestTheSealIsTheShellsNamesAndNotTheDefinitionSite(t *testing.T) {
+	t.Parallel()
 	const src = `function outer {
   typeset v=hidden
   function inner { printf '[%s]\n' "${v-UNSET}"; }
@@ -199,6 +204,7 @@ outer
 // declarations of one name, read from a third call. A seal that undid only
 // the innermost would print the outer function's local.
 func TestASealedCallReachesPastEveryCallerAndNotOnlyTheNearest(t *testing.T) {
+	t.Parallel()
 	const src = `function deep { printf '[%s]\n' "${v-UNSET}"; }
 function mid { typeset v=two; deep; }
 function top { typeset v=one; mid; }
@@ -214,6 +220,7 @@ top
 // each depth: the seal is lifted in the reverse of the order it went up, so
 // the two nested locals come back to the calls that made them.
 func TestEveryCallerGetsItsOwnDeclarationBack(t *testing.T) {
+	t.Parallel()
 	const src = `function deep { v=written; }
 function mid { typeset v=two; deep; printf 'mid [%s]\n' "$v"; }
 function top { typeset v=one; mid; printf 'top [%s]\n' "$v"; }

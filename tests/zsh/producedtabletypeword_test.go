@@ -112,6 +112,7 @@ func TestEveryProducedParameterCarriesTheHidingLetters(t *testing.T) {
 // Measured in the same run on zsh 5.9.2. Without this every row above would
 // still pass in a shell that described every parameter as the shell's own.
 func TestAnOrdinaryNameCarriesNeitherHidingLetter(t *testing.T) {
+	t.Parallel()
 	const src = `v=1
 typeset -H h=2
 print -r -- "v=[${(t)v}] h=[${(t)h}]"`
@@ -144,6 +145,7 @@ print -r -- "v=[${(t)v}] h=[${(t)h}]"`
 // such line, because an assignment is itself a reference — which is the pair
 // that says the read is arming the freeze rather than hiding a refusal.
 func TestAProducedViewRefusesAWriteAndAnUnset(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"assignment", `funcstack=(a b); print "unreached"`},
 		{"unset after a reference", `: ${+funcstack}` + "\n" + `unset funcstack; print "unreached"`},
@@ -164,6 +166,7 @@ func TestAProducedViewRefusesAWriteAndAnUnset(t *testing.T) {
 // same `unset` is a silent 0 and the script goes on, exactly as it does in the
 // reference (#4895).
 func TestAProducedViewTakesAnUnsetNothingHasReferredTo(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `unset funcstack`+"\n"+`print -r -- "reached=${+funcstack}"`)
 	if want := "reached=0\n"; out != want || st != 0 {
 		t.Errorf("= %q (status %d), want %q at 0", out, st, want)

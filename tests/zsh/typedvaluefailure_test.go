@@ -11,6 +11,7 @@ import "testing"
 // 5.9.2 under `-fc` (#5677). See
 // interp.Semantics.DeclaredTypedValueFailureLeavesZero.
 func TestATypedDeclarationThatWillNotEvaluateEndsAtZero(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src, want string
 		status    int

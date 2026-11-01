@@ -42,6 +42,7 @@ func runBareDiag(t *testing.T, src string, subscript Answer, d Diagnostics) (str
 // fail exactly one of these two and neither could be seen from the other side
 // alone.
 func TestAnUnclosedBareSubscriptAnswersByAxis(t *testing.T) {
+	t.Parallel()
 	const src = bareArray + `printf "[%s]" $a[1 2]` + "\nprintf after\n"
 
 	t.Run("read as a subscript, it is unfinished", func(t *testing.T) {
@@ -66,6 +67,7 @@ func TestAnUnclosedBareSubscriptAnswersByAxis(t *testing.T) {
 // is the same refusal with nothing between the bracket and the word's end,
 // and it is the shape a `for` list or an argument most often takes.
 func TestABareSubscriptEndingWithTheWordIsUnfinished(t *testing.T) {
+	t.Parallel()
 	out, st := runBare(t, bareArray+`printf "[%s]" $a[`+"\nprintf after\n", Yes)
 	if !strings.Contains(out, "invalid subscript") || st == 0 || strings.Contains(out, "after") {
 		t.Errorf("= %q (status %d), want the refusal and the input ended", out, st)
@@ -97,6 +99,7 @@ func TestAnUnclosedBareSubscriptIsReportedOncePerSpan(t *testing.T) {
 // from three directions. None of them is an error in the shell this was
 // measured on.
 func TestWhatDoesNotCountAsAnUnclosedBareSubscript(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// Closed, so it is the ordinary subscript this file's neighbor
 		// already covers — and the control for every row below it.
@@ -134,6 +137,7 @@ func TestWhatDoesNotCountAsAnUnclosedBareSubscript(t *testing.T) {
 // for the same reason: a wording hard-coded at the report site would pass
 // every test above.
 func TestAnUnclosedBareSubscriptTakesTheDialectsOwnSentence(t *testing.T) {
+	t.Parallel()
 	out, st := runBareDiag(t, bareArray+`printf "[%s]" $a[1 2]`, Yes,
 		Diagnostics{BareSubscriptUnclosed: "no such subscript, and this is the dialect's words"})
 	if !strings.Contains(out, "no such subscript, and this is the dialect's words") {
@@ -154,6 +158,7 @@ func TestAnUnclosedBareSubscriptTakesTheDialectsOwnSentence(t *testing.T) {
 // 5.9.2, 2026-09-14, `$a[$(: ]; echo 2)` is `invalid subscript` where
 // `$a[$(: ]; echo 2)]` is kept as text (#2786).
 func TestABareSubscriptClosedOnlyInsideASubstitutionIsUnfinished(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"nothing after the substitution", `printf "[%s]" $a[$(: ]; echo 2)`},
 		{"text after it", `printf "[%s]" $a[$(: ]; echo 2)x`},

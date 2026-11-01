@@ -19,6 +19,7 @@ import (
 // commands, and of the functions defined — and everything else is refused
 // rather than guessed at.
 func TestCompgenGeneratesWhatThisShellKnows(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want, gone string
 		status                int
@@ -103,6 +104,7 @@ func TestCompgenGeneratesWhatThisShellKnows(t *testing.T) {
 // offered as a completion either — it is not what running the word would
 // find.
 func TestCompgenDoesNotOfferABuiltinThatIsSwitchedOff(t *testing.T) {
+	t.Parallel()
 	out, st := compgenRun(t, "enable -n cd\ncompgen -b cd\n")
 	if strings.Contains(out, "cd") {
 		t.Errorf("said %q, want a switched-off builtin left out", out)
@@ -182,6 +184,7 @@ func compgenRunIn(t *testing.T, dir, src string) (string, int) {
 // answers in readdir order and there is nothing stable to copy. See
 // compgenfilenames.go.
 func TestCompgenCompletesFilenames(t *testing.T) {
+	t.Parallel()
 	dir := compgenTree(t)
 	for _, c := range []struct {
 		name, src, want string

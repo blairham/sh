@@ -20,6 +20,7 @@ import (
 // prompt escape is not implemented` — so an explicit `PS4='+%N:%i> '` already
 // drew the wrong prefix before the default was one (#2928).
 func TestTheLineNumberEscapeIsDrawn(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, "print -P '[%i]'\nf() { print -P '[fn %i]'; }\nf\n")
 	if st != 0 {
 		t.Fatalf("status %d, want 0: %q", st, out)
@@ -36,6 +37,7 @@ func TestTheLineNumberEscapeIsDrawn(t *testing.T) {
 // the whole reason the escape is here: the two used to be different things
 // that happened to agree.
 func TestThePS4DefaultDrawsTheTracePrefix(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, "PS4='+%N:%i> '\nset -x\necho one\nset +x\n")
 	if st != 0 {
 		t.Fatalf("status %d, want 0: %q", st, out)

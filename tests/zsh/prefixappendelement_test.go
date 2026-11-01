@@ -12,6 +12,7 @@ import "testing"
 //
 // Measured 2026-10-16 on zsh 5.9.2 `-f` from a file, byte for byte.
 func TestAPrefixAppendOverAnArrayAddsAnElement(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{"a=(x y); a+=z /usr/bin/printenv a; echo st=$?", "st=1\n"},
 		{"a=(x y); f(){ typeset -p a; }; a+=z f; typeset -p a", "typeset -g -a a=( x y z )\ntypeset -a a=( x y )\n"},

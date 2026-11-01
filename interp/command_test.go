@@ -14,6 +14,7 @@ import (
 
 // `command -v` says what would run without running it.
 func TestCommandVSaysWhatWouldRun(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`command -v echo`, "echo"},
 		{`f() { :; }; command -v f`, "f"},
@@ -37,6 +38,7 @@ func TestCommandVSaysWhatWouldRun(t *testing.T) {
 // host: `sh` is /bin/sh on a Mac and /usr/bin/sh on Ubuntu, so a test that
 // named a real one would be asserting where the machine keeps its shell.
 func TestCommandVNamesAnExternalByItsPath(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "onlyhere")
 	if err := testenv.WriteExecutable(exe, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
@@ -57,6 +59,7 @@ func TestCommandVNamesAnExternalByItsPath(t *testing.T) {
 // The whole reason `command` exists: a function may wrap the thing it is
 // named after without calling itself.
 func TestCommandBypassesAFunction(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`echo() { echo overridden; }; command echo hi`, "hi"},
 		{`echo() { command echo wrapped "$@"; }; echo hi`, "wrapped hi"},
@@ -72,6 +75,7 @@ func TestCommandBypassesAFunction(t *testing.T) {
 
 // What `command -v` reports when the name is nothing at all.
 func TestCommandNotFoundStatusIsAnAxis(t *testing.T) {
+	t.Parallel()
 	answer := func(a Answer) func(*Runner) {
 		return func(r *Runner) {
 			s := *r.Semantics
@@ -100,6 +104,7 @@ func TestCommandNotFoundStatusIsAnAxis(t *testing.T) {
 
 // `builtin` runs a builtin and only a builtin.
 func TestBuiltinRunsOnlyABuiltin(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src    string
 		want   string
@@ -126,6 +131,7 @@ func TestBuiltinRunsOnlyABuiltin(t *testing.T) {
 // TestAnOptionCommandDoesNotHaveIsRefusedOrRun. All four read -v and -p;
 // what splits them is anything else, and both answers are a real dialect's.
 func TestAnOptionCommandDoesNotHaveIsRefusedOrRun(t *testing.T) {
+	t.Parallel()
 	answer := func(a Answer) func(*Runner) {
 		return func(r *Runner) {
 			s := *r.Semantics
@@ -164,6 +170,7 @@ func TestAnOptionCommandDoesNotHaveIsRefusedOrRun(t *testing.T) {
 // TestABundleGivenToCommandIsNamedByItsFirstLetter, so `--version` comes back
 // as `--` — the rule printf's options here already follow.
 func TestABundleGivenToCommandIsNamedByItsFirstLetter(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `command --version`, func(r *Runner) {
 		s := *r.Semantics
 		s.CommandRejectsUnknownOption = Yes
@@ -183,6 +190,7 @@ func TestABundleGivenToCommandIsNamedByItsFirstLetter(t *testing.T) {
 // names a builtin in the location says `sh:1: command not found: -x` and not
 // `sh:command:1:`, which is the rule `.` and `eval` already follow.
 func TestWhatCommandRunsReportsAsItself(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `command nosuchcmd-xyz`, func(r *Runner) {
 		s := *r.Semantics
 		s.CommandRejectsUnknownOption = Yes
@@ -202,6 +210,7 @@ func TestWhatCommandRunsReportsAsItself(t *testing.T) {
 // `command -V` answers the same question as a sentence — `type`'s wordings
 // for what was found, its own complaint for what was not.
 func TestCommandCapitalVSaysItAsASentence(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`command -V echo`, "echo is a shell builtin"},
 		{`command -V if`, "if is a shell keyword"},
@@ -246,6 +255,7 @@ func TestCommandCapitalVSaysItAsASentence(t *testing.T) {
 // and where the word cannot reach a builtin it is 127 and the builtin never
 // ran at all.
 func TestCommandReachesABuiltinOrOnlyAnExternal(t *testing.T) {
+	t.Parallel()
 	answer := func(a Answer) func(*Runner) {
 		return func(r *Runner) {
 			s := *r.Semantics

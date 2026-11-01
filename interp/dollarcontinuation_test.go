@@ -20,6 +20,7 @@ import (
 // blank or the end of the word behind it leaves the `$` alone — and those two
 // are unanimous, so a change that simply deleted the pair would break them.
 func TestADollarReachesAcrossALineContinuationOnEveryRoute(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a braced parameter", "x=5; echo \"[$\\\n{x}]\"", "[5]"},
 		{"a bare parameter", "x=5; echo \"[$\\\nx]\"", "[5]"},

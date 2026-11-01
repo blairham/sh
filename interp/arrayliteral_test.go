@@ -18,6 +18,7 @@ import (
 // elements reading `[2]=c` and `[0]=a` — the array is the right length and
 // only its contents are nonsense, which is why nothing noticed.
 func TestALiteralPlacesItsSubscripts(t *testing.T) {
+	t.Parallel()
 	out, st := runArray(t, `a=([2]=c [1]=b); printf "[%s]" "${a[@]}"; echo " keys=${!a[@]} n=${#a[@]}"`)
 	if strings.TrimSpace(out) != "[b][c] keys=1 2 n=2" {
 		t.Errorf("got %q, want the values placed at 1 and 2", strings.TrimSpace(out))
@@ -33,6 +34,7 @@ func TestALiteralPlacesItsSubscripts(t *testing.T) {
 // Placing above what has been filled leaves a gap rather than padding one:
 // the store is sparse and only the reading of it is a question.
 func TestALiteralLeavesAGap(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `a=([2]=c); echo "keys=${!a[@]} n=${#a[@]}"`)
 	if strings.TrimSpace(out) != "keys=2 n=1" {
 		t.Errorf("got %q, want one element at subscript 2", strings.TrimSpace(out))
@@ -42,6 +44,7 @@ func TestALiteralLeavesAGap(t *testing.T) {
 // A bare element after a subscripted one continues from that subscript rather
 // than from where the count had reached.
 func TestALiteralContinuesFromTheSubscript(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `a=(x [3]=y z); echo "keys=${!a[@]} n=${#a[@]}"`)
 	if strings.TrimSpace(out) != "keys=0 3 4 n=3" {
 		t.Errorf("got %q, want the bare element one past the subscripted one", strings.TrimSpace(out))
@@ -51,6 +54,7 @@ func TestALiteralContinuesFromTheSubscript(t *testing.T) {
 // The same subscript twice is one element holding the later value, which is
 // the only answer under which the elements are placed in the order written.
 func TestALiteralRepeatingASubscript(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `a=([2]=c [2]=d); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
 	if strings.TrimSpace(out) != "[d] n=1" {
 		t.Errorf("got %q, want the later value alone", strings.TrimSpace(out))
@@ -60,6 +64,7 @@ func TestALiteralRepeatingASubscript(t *testing.T) {
 // `+=` keeps what is there and a subscripted element still places, rather than
 // landing after the end — the combination, because each half works alone.
 func TestAppendingALiteralWithASubscript(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `a=([2]=c); a+=([5]=f); echo "keys=${!a[@]} n=${#a[@]}"`)
 	if strings.TrimSpace(out) != "keys=2 5 n=2" {
 		t.Errorf("got %q, want the appended element at its own subscript", strings.TrimSpace(out))
@@ -75,6 +80,7 @@ func TestAppendingALiteralWithASubscript(t *testing.T) {
 // split; a bare element in the same parentheses is a word and is. One set of
 // parentheses, two expansion rules, and the subscript chooses.
 func TestALiteralValueIsAnAssignmentValue(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `x="p q"; a=([2]=$x); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
 	if strings.TrimSpace(out) != "[p q] n=1" {
 		t.Errorf("subscripted element gave %q, want one unsplit element", strings.TrimSpace(out))
@@ -88,6 +94,7 @@ func TestALiteralValueIsAnAssignmentValue(t *testing.T) {
 // The written subscript goes through the array base, so the same literal
 // fills the same *positions* whichever number the first element answers to.
 func TestALiteralSubscriptInheritsTheBase(t *testing.T) {
+	t.Parallel()
 	// Sparse answered because the literal leaves a gap and how a gap reads is
 	// a different axis from where the values went.
 	vectors := baseVectors()
@@ -122,6 +129,7 @@ func TestALiteralSubscriptInheritsTheBase(t *testing.T) {
 // A subscript a script assigns *through* is an arithmetic expression and not
 // only a numeral, in the literal and in a plain element assignment alike.
 func TestAWrittenSubscriptIsAnExpression(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `i=2; a=([1+1]=c); echo "keys=${!a[@]} v=${a[2]}"`)
 	if strings.TrimSpace(out) != "keys=2 v=c" {
 		t.Errorf("literal gave %q, want the expression evaluated", strings.TrimSpace(out))
@@ -136,6 +144,7 @@ func TestAWrittenSubscriptIsAnExpression(t *testing.T) {
 // and two spellings of 2 are the same element; under the other it is the key
 // and they are two.
 func TestALiteralSubscriptAsAKey(t *testing.T) {
+	t.Parallel()
 	src := `i=2; a=([1+1]=c [i]=d); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`
 
 	expr := permissive()
@@ -160,6 +169,7 @@ func TestALiteralSubscriptAsAKey(t *testing.T) {
 // so the ordinary sparse literal is available in a core that has chosen no
 // shell.
 func TestALiteralSubscriptAsksOnlyWhereItMatters(t *testing.T) {
+	t.Parallel()
 	none := permissive()
 	none.ArrayBaseIsZero = Yes
 	none.ArraysAreSparse = Yes
@@ -184,6 +194,7 @@ func TestALiteralSubscriptAsksOnlyWhereItMatters(t *testing.T) {
 // accident: read as an expression `05` and `5` are one slot and both answer
 // `q`, and read as keys they are two keys and `${a[5]}` is empty.
 func TestADecimalLiteralSubscriptIsAKeyWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	key := permissive()
 	key.ArrayBaseIsZero = Yes
 	key.ArraysAreSparse = Yes

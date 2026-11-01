@@ -18,6 +18,7 @@ func runCaseContinue(t *testing.T, src string) (string, int) {
 }
 
 func TestGroupSharesStateAndSubshellDoesNot(t *testing.T) {
+	t.Parallel()
 	// The whole difference between them, and the only thing a caller can
 	// observe about which one ran.
 	if got, _ := run(t, `x=1; { x=2; }; printf "[%s]" "$x"`, nil); got != "[2]" {
@@ -29,6 +30,7 @@ func TestGroupSharesStateAndSubshellDoesNot(t *testing.T) {
 }
 
 func TestIfChainAndListCondition(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ src, want string }{
 		{`if true; then echo a; fi`, "a\n"},
 		{`if false; then echo a; else echo b; fi`, "b\n"},
@@ -49,6 +51,7 @@ func TestIfChainAndListCondition(t *testing.T) {
 }
 
 func TestLoopsAndZeroIterations(t *testing.T) {
+	t.Parallel()
 	if got, _ := run(t, `i=0; while [ $i -lt 3 ]; do printf "%s" $i; i=$((i+1)); done`, nil); got != "" && got != "012" {
 		t.Logf("while with arithmetic gave %q; arithmetic evaluation is a later slice", got)
 	}
@@ -63,6 +66,7 @@ func TestLoopsAndZeroIterations(t *testing.T) {
 }
 
 func TestForDistinguishesAbsentFromEmptyList(t *testing.T) {
+	t.Parallel()
 	// The measured difference the AST kept HasItems for: without `in` the
 	// loop iterates the positional parameters; with `in` and nothing after
 	// it, nothing.
@@ -75,6 +79,7 @@ func TestForDistinguishesAbsentFromEmptyList(t *testing.T) {
 }
 
 func TestCaseMatching(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ name, src, want string }{
 		{"literal", `case x in x) echo m;; esac`, "m\n"},
 		{"pattern", `case abc in a*) echo m;; esac`, "m\n"},
@@ -103,6 +108,7 @@ func TestCaseMatching(t *testing.T) {
 }
 
 func TestCaseSubjectIsNeitherSplitNorGlobbed(t *testing.T) {
+	t.Parallel()
 	// The subject expands but keeps the exemption `[[ ]]` operands and a
 	// scalar assignment value have: no field splitting and no pathname
 	// expansion, even unquoted. The ordinary word pipeline split a
@@ -135,6 +141,7 @@ func TestCaseSubjectIsNeitherSplitNorGlobbed(t *testing.T) {
 }
 
 func TestCaseFallthroughFollowsEachArmsTerminator(t *testing.T) {
+	t.Parallel()
 	// A body reached by `;&` still owns its terminator: another `;&`
 	// keeps falling, `;;` stops, and the end of the item list stops.
 	// Honoring only the matched arm's terminator ran one extra body and
@@ -192,6 +199,7 @@ func runSemiPipe(t *testing.T, src string) (string, int) {
 // could not tell the three apart, because with three arms and a matching
 // subject `;&` and `;|` give the same output.
 func TestSemiPipeIsTheOtherSpellingOfCaseContinue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"later patterns keep being tested",
@@ -253,6 +261,7 @@ func TestSemiPipeIsTheOtherSpellingOfCaseContinue(t *testing.T) {
 }
 
 func TestPipelines(t *testing.T) {
+	t.Parallel()
 	if got, _ := run(t, `echo hi | cat`, nil); got != "hi\n" {
 		t.Errorf("got %q", got)
 	}
@@ -273,6 +282,7 @@ func TestPipelines(t *testing.T) {
 }
 
 func TestFunctions(t *testing.T) {
+	t.Parallel()
 	if got, _ := run(t, `f() { echo "in $1"; }; f arg`, nil); got != "in arg\n" {
 		t.Errorf("got %q", got)
 	}
@@ -292,6 +302,7 @@ func TestFunctions(t *testing.T) {
 }
 
 func TestBreakAndContinue(t *testing.T) {
+	t.Parallel()
 	if got, _ := run(t, `for i in a b c; do case $i in b) break;; esac; printf "%s" $i; done`, nil); got != "a" {
 		t.Errorf("break gave %q, want a", got)
 	}
@@ -306,6 +317,7 @@ func TestBreakAndContinue(t *testing.T) {
 }
 
 func TestCompoundRedirections(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	// A redirection on a compound command applies to everything inside it.
 	if _, st := run(t, `{ echo a; echo b; } >`+dir+`/f`, nil); st != 0 {
@@ -325,6 +337,7 @@ func TestCompoundRedirections(t *testing.T) {
 // output that went nowhere and output that went to the file look the same from
 // here, and only one of them is right.
 func TestACStyleForRedirectsEveryIteration(t *testing.T) {
+	t.Parallel()
 	got, _ := run(t, `for ((i=0;i<2;i++)); do echo "$i"; done > f; echo end; cat f`, nil)
 	if got != "end\n0\n1\n" {
 		t.Errorf("got %q, want the loop's lines in the file and only `end` before them", got)
@@ -342,6 +355,7 @@ func TestACStyleForRedirectsEveryIteration(t *testing.T) {
 // iteration: the second `read` continues where the first left off, which it
 // could not do if the file were opened again each time round.
 func TestACStyleForReadsThroughOneRedirection(t *testing.T) {
+	t.Parallel()
 	got, _ := run(t,
 		`printf 'L1\nL2\n' > d; for ((i=0;i<2;i++)); do read x; echo "got=$x"; done < d`, nil)
 	if got != "got=L1\ngot=L2\n" {

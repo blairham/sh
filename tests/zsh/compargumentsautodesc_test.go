@@ -15,6 +15,7 @@ const autoDescSpecs = `'-v:verbosity level:(1 2)' '-a[all]' '-q' ` +
 	`'-k:first:(a):second:(b)' '-j[]:jm:'`
 
 func TestTheAutoDescriptionStyleDescribesAnOptionByItsArgument(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ style, want string }{
 		{"", "-v -a:all -q -e -y -u -k -j:|-w|--long|r:|[_-]=* r:|=*"},
 		{"%d", "-v:verbosity level -a:all -q -e -y -u:opt msg -k -j:|-w:width|--long:lval|r:|[_-]=* r:|=*"},
@@ -41,6 +42,7 @@ func TestTheAutoDescriptionStyleDescribesAnOptionByItsArgument(t *testing.T) {
 // comparguments and compvalues alike, and the colon is what files it among
 // the described names.
 func TestAnEmptyBracketIsStillADescription(t *testing.T) {
+	t.Parallel()
 	got := reported(t, `comparguments -i '' : '-j[]:jm:' '-k[]' '-l[ ]' '-m[x]:mm:' '-n'
 		local -a n d o e
 		comparguments -O n d o e

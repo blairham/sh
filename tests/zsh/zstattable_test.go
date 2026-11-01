@@ -19,6 +19,7 @@ import (
 // Measured 2026-10-02 on zsh 5.9.2 with an empty file `e` and a three-byte
 // file `x` (#5153).
 func TestZstatStoresIntoATable(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "x"), []byte("abc"), 0o600); err != nil {
 		t.Fatal(err)
@@ -47,6 +48,7 @@ func TestZstatStoresIntoATable(t *testing.T) {
 // carries on past a fatal error: measured, under `setopt continueonerror` in
 // a script file `print st=$?` after it writes `st=1`.
 func TestZstatsRefusalLeavesItsStatus(t *testing.T) {
+	t.Parallel()
 	src := "setopt continueonerror\nzmodload zsh/stat\nprint -n abc > x\ntypeset -A h\nzstat -A h +size -- x\nprint st=$?\n"
 	out, _, errs := runZshSplitOnRoute(t, interp.RouteScriptFile, src)
 	if out != "st=1\n" || !strings.Contains(errs, "bad set of key/value pairs") {

@@ -11,6 +11,7 @@ import "testing"
 // `a=(x y z)` (#5567). See
 // interp.Semantics.SubscriptExpressionStopsAtAnUnreadableByte.
 func TestAnUnreadableByteEndsASubscriptsExpression(t *testing.T) {
+	t.Parallel()
 	const arr = "a=(x y z); "
 	for _, c := range []struct{ src, want string }{
 		{`i=2; echo ${a[2@]} ${a[i@]} ${a[1'x']}`, "y y x\n"},
@@ -31,6 +32,7 @@ func TestAnUnreadableByteEndsASubscriptsExpression(t *testing.T) {
 // expression is evaluated rather than by the parser that read the line.
 // Measured 2026-10-03 on zsh 5.9.2 under `-f -c` (#5583).
 func TestAnUnreadableByteEndsASubscriptInArithmetic(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(1 2 3); echo $(( a[2@] + 1 )); i=2; echo $(( a[i@] )); k="2@"; echo $(( a[$k] ))`, "3\n2\n2\n"},
 		{`a=(1 2 3); (( a[2@] = 9 )); echo ${a[@]}`, "1 9 3\n"},

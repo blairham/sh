@@ -32,6 +32,7 @@ func TestTakeProcSubsForgetsWhatItHandedOver(t *testing.T) {
 // and not the other would leave the guard reporting nothing, forever and
 // silently, which is the failure mode a guard cannot have.
 func TestTheGuardLooksForTheNameThisPackageWrites(t *testing.T) {
+	t.Parallel()
 	if procSubDirPrefix != childguard.PipeMarker {
 		t.Errorf("this package writes %q and the guard looks for %q; they have to be the same string",
 			procSubDirPrefix, childguard.PipeMarker)

@@ -51,6 +51,7 @@ func prefixOrderRun(t *testing.T, src string, first FrozenPrefixCheckOrder) (std
 // a quirk of arithmetic — a redirection that cannot be opened reaches the
 // same order with no expression in it at all (#1943).
 func TestWhenAFrozenPrefixIsChecked(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src            string
 		firstOut, firstErr   string
@@ -135,6 +136,7 @@ func TestWhenAFrozenPrefixIsChecked(t *testing.T) {
 // with a prefix that names nothing frozen, and an assignment with no command
 // after it are the shapes a script is actually made of.
 func TestThePrefixOrderAxisIsAskedOnlyOverAFrozenName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		refused   bool
@@ -197,6 +199,7 @@ func TestThePrefixOrderAxisIsAskedOnlyOverAFrozenName(t *testing.T) {
 // orders tell themselves apart: under the first the file is never reached and
 // under the second the name is never mentioned (#3314).
 func TestAFrozenPrefixCheckedFirstOnlyWhereThePrefixPersists(t *testing.T) {
+	t.Parallel()
 	const (
 		file = "testsh: line 3: cannot create /nope/f: No such file or directory\n"
 		// The three refusal axes are held permissive by prefixOrderRun, so

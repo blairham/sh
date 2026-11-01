@@ -16,6 +16,7 @@ import (
 // so `$PREFIX` is `che` — and the status and `$compstate[nmatches]` printed
 // after each call. The table in compadd.go's file comment is this one.
 func TestCompaddOffersWhatItMatched(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, call string
 		want       []string
@@ -109,6 +110,7 @@ func TestCompaddOffersWhatItMatched(t *testing.T) {
 // a row — see computil.go — and reads the status of none of them, so a 0
 // there is a claim that something reached the line.
 func TestCompaddReportsWhetherAnythingMatched(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ call, want string }{
 		{"compadd checkout cherry commit", "st=0 nm=2"},
 		{"compadd zzz yyy", "st=1 nm=0"},
@@ -136,6 +138,7 @@ func TestCompaddReportsWhetherAnythingMatched(t *testing.T) {
 // assertion cannot see: a call that withholds everything and stores nothing
 // would pass it.
 func TestCompaddStoresWhatItWithheld(t *testing.T) {
+	t.Parallel()
 	got := completionFor(t, widgetOf(
 		"local -a kept; compadd -O kept -- checkout commit cherry; "+
 			`compadd -U -Q -- "kept=${(j:,:)kept}"`,
@@ -153,6 +156,7 @@ func TestCompaddStoresWhatItWithheld(t *testing.T) {
 // filtered, which is the shape of non-discriminating probe this repository
 // keeps finding.
 func TestCompaddReadsAnOrderOnlyWhenTheWordIsOne(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, call string
 		want       []string
@@ -183,6 +187,7 @@ func TestCompaddReadsAnOrderOnlyWhenTheWordIsOne(t *testing.T) {
 // ppalways`, `x p` becomes `x ppa`, `x ppa` lists both, and `x pa` and `x
 // ppx` ring with the line unchanged. See pastThePrefix.
 func TestCompaddMatchesPastThePrefixTheWordHolds(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		typed string
 		want  []string
@@ -215,6 +220,7 @@ func TestCompaddMatchesPastThePrefixTheWordHolds(t *testing.T) {
 // table at typedForMatching. Each row is the word after `x `, so a blank in it
 // is part of the word.
 func TestCompaddMatchesAWordTypedWithQuoting(t *testing.T) {
+	t.Parallel()
 	const body = `compadd 'a b' 'a d' '$aa' '$ab' '\x1' '\x2'`
 	for _, c := range []struct {
 		word string
@@ -255,6 +261,7 @@ func TestCompaddMatchesAWordTypedWithQuoting(t *testing.T) {
 // widget writing `$PREFIX` to a file; the rows are the word typed after `x `.
 // See prefixAsTyped and prefixInDoubleQuotes for the whole measurement.
 func TestPrefixHoldsTheQuotingThatQuotesSomething(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ word, want string }{
 		{`\a`, `a`},
 		{`\-a`, `-a`},
@@ -302,6 +309,7 @@ func TestPrefixHoldsTheQuotingThatQuotesSomething(t *testing.T) {
 // the `-J users -X ' -- user --'` `_users` adds. Measured 2026-10-06 through
 // a pseudo-terminal against zsh 5.9.2; see compaddFirstWins.
 func TestCompaddTakesTheFirstOfARepeatedOption(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		body, group, heading, word string
 	}{

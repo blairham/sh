@@ -19,6 +19,7 @@ import (
 // comment said one shell did not recurse, the preset said it did, and the
 // preset was right — what that shell really does differently is *this*.
 func TestAnUnsetNameReachedThroughAValue(t *testing.T) {
+	t.Parallel()
 	recursing := func(must Answer) Semantics {
 		s := testSemantics()
 		s.ArithNameValueRecurses = Yes
@@ -93,6 +94,7 @@ func TestAnUnsetNameReachedThroughAValue(t *testing.T) {
 // The probe is `a=b; b=a` and not `x=x`, because the two subjects are the same
 // name in the second and a fix tested on it cannot tell them apart.
 func TestTheArithmeticRecursionBoundIsWordedAndBlamedByTheDialect(t *testing.T) {
+	t.Parallel()
 	const src = `a=b; b=a; echo "v=$(( a ))"`
 	sem := testSemantics()
 	sem.ArithNameValueRecurses = Yes

@@ -43,6 +43,7 @@ func frozenAttrRun(t *testing.T, src string, a Answer) (string, string, int) {
 // refused and the name keeps exactly the attributes it had, under No the
 // letter lands and the declaration is silent.
 func TestAnAttributeOverAFrozenNameIsAnAxis(t *testing.T) {
+	t.Parallel()
 	src := `readonly q=1; typeset -gi q; echo st=$?; typeset -p q`
 	out, errs, _ := frozenAttrRun(t, src, No)
 	if !strings.Contains(out, "st=0") || errs != "" {
@@ -66,6 +67,7 @@ func TestAnAttributeOverAFrozenNameIsAnAxis(t *testing.T) {
 // way past — so the name came out carrying an attribute the declaration never
 // managed to make. Under Yes nothing of the operand happens.
 func TestARefusedDeclarationOverAFrozenNameRecordsNoAttribute(t *testing.T) {
+	t.Parallel()
 	src := `readonly q=1; typeset -gi q=4; typeset -p q; echo tail`
 	out, errs, _ := frozenAttrRun(t, src, Yes)
 	if !strings.Contains(errs, "q: readonly variable") {
@@ -81,6 +83,7 @@ func TestARefusedDeclarationOverAFrozenNameRecordsNoAttribute(t *testing.T) {
 // as the addition — a guard that asked whether a type was being *added* would
 // let this through.
 func TestTheRefusalCoversALetterUnderAPlus(t *testing.T) {
+	t.Parallel()
 	src := `typeset -gir q=1; typeset -g +i q; typeset -p q; echo tail`
 	out, errs, _ := frozenAttrRun(t, src, Yes)
 	if !strings.Contains(errs, "q: readonly variable") {
@@ -95,6 +98,7 @@ func TestTheRefusalCoversALetterUnderAPlus(t *testing.T) {
 // frozen name refuses every declaration": a permission and a placement are not
 // what a value looks like, and all four columns take them.
 func TestAPermissionLetterOverAFrozenNameIsStillTaken(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"export", `readonly q=1; typeset -gx q; typeset -p q`, "-rx"},
 		{"readonly", `readonly q=1; typeset -gr q; typeset -p q`, "-r"},
@@ -116,6 +120,7 @@ func TestAPermissionLetterOverAFrozenNameIsStillTaken(t *testing.T) {
 // retype a frozen name never reaches this refusal — the two fields would
 // otherwise be a pair that can be set to contradict each other.
 func TestARetypeExemptionOutranksTheAttributeRefusal(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `readonly q=1; typeset -gi q=4; typeset -p q; echo tail`,
 		func(s *Semantics) {
 			s.DeclareOptions = "aAFgiprxul"

@@ -19,6 +19,7 @@ import "testing"
 // the span bound, and both readers are handed the whole pattern with the
 // group still on it. Narrow either set and this test is what says so.
 func TestTheSpanReadersDeclineATildeGroup(t *testing.T) {
+	t.Parallel()
 	o := patternOpts{classEscapes: true, tildeGlobRead: true, tildeFold: true}
 	for _, p := range []string{
 		`~(K)\d`,

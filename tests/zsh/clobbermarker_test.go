@@ -53,6 +53,7 @@ func markerRun(t *testing.T, src string) (string, int, func(string) string) {
 // is on and the target already exists, so a plain `>` would refuse and a
 // spelling read as `>` plus a word would write `!` instead.
 func TestTheOverrideMarkerWritesTheFileItNames(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		op   string
 		want string
@@ -87,6 +88,7 @@ func TestTheOverrideMarkerWritesTheFileItNames(t *testing.T) {
 // let `>>` create a missing file, so `>>|` and `>>!` are the only spellings
 // that can produce one.
 func TestAnOverriddenAppendCreatesTheFile(t *testing.T) {
+	t.Parallel()
 	for _, op := range []string{">>|", ">>!", "&>>|", "&>>!"} {
 		out, st, file := markerRun(t, "setopt noclobber\necho two "+op+" f\n")
 		if st != 0 || out != "" {
@@ -113,6 +115,7 @@ func TestAnOverriddenAppendCreatesTheFile(t *testing.T) {
 // test above: the divergence is about *creating* a file and not about
 // appending, so this cell must pass with no override at all.
 func TestNoclobberLetsAnAppendToAnExistingFileThrough(t *testing.T) {
+	t.Parallel()
 	out, st, file := markerRun(t, "setopt noclobber\necho one > f\necho two >> f\n")
 	if st != 0 || out != "" {
 		t.Errorf("status %d and output %q, want a silent 0", st, out)
@@ -126,6 +129,7 @@ func TestNoclobberLetsAnAppendToAnExistingFileThrough(t *testing.T) {
 // tree — `done >>! …` — which is where the parse rather than the open is what
 // the operator has to survive.
 func TestTheOverrideMarkerOnACompoundCommand(t *testing.T) {
+	t.Parallel()
 	out, st, file := markerRun(t,
 		"setopt noclobber\nfor i in 1 2; do echo $i; done >>! f\n")
 	if st != 0 || out != "" {
@@ -137,12 +141,14 @@ func TestTheOverrideMarkerOnACompoundCommand(t *testing.T) {
 }
 
 func TestClobberOverrideMarkerIsOn(t *testing.T) {
+	t.Parallel()
 	if !zsh.Dialect().ClobberOverrideMarker {
 		t.Error("zsh reads `>!`, `>>|`, `>>!` and the same four behind `&>`")
 	}
 }
 
 func TestNoclobberBlocksAppendCreateIsYes(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().NoclobberBlocksAppendCreate; got != interp.Yes {
 		t.Errorf("NoclobberBlocksAppendCreate = %v, want Yes: noclobber reaches `>>` here", got)
 	}

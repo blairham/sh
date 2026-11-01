@@ -43,6 +43,7 @@ import (
 // pair that holds the ownership fixed and changes the errno, and a pair that
 // holds the errno fixed and changes the ownership.
 func TestTheSilenceIsForTheOwnerOfTheRedirectionNotTheErrno(t *testing.T) {
+	t.Parallel()
 	const said = "zsh:1: write error: no space left on device\n"
 	own := func(b string) string { return "zsh:" + b + ":1: write error: no space left on device\n" }
 	for _, tc := range []struct{ name, src, wantErr string }{

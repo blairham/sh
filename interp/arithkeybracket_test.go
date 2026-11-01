@@ -35,6 +35,7 @@ func keyBracketRun(t *testing.T, src string, answer Answer) (string, int) {
 // is a second name with an empty subscript, and the element is left alone.
 // The pair is the axis (#2581).
 func TestAnExpandedSubscriptIsReadAgainOrNot(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; key='x],b['; m[$key]=1; (( m[$key]++ )); printf "[%s]" "${m[$key]}"`
 	if out, st := keyBracketRun(t, src, No); out != `[2]` || st != 0 {
 		t.Errorf("protecting = %q status %d, want %q at 0", out, st, `[2]`)
@@ -58,6 +59,7 @@ func TestAnExpandedSubscriptIsReadAgainOrNot(t *testing.T) {
 // A key holding the other two characters a subscript scanner reads, and the
 // comma that made the expanded text a list of two expressions.
 func TestAProtectedSubscriptKeepsEveryCharacterOfTheKey(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ key, want string }{
 		{`x],b[`, `[2]`},
 		{`a,b`, `[2]`},
@@ -75,6 +77,7 @@ func TestAProtectedSubscriptKeepsEveryCharacterOfTheKey(t *testing.T) {
 // about it being an expansion. Both rows below hold under either answer,
 // which is what says the axis was asked in the right place.
 func TestAnExpansionOutsideBracketsIsStillReadAsSyntax(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Yes, No} {
 		// No bracket of the script's anywhere, so the value's brackets are
 		// the subscript.
@@ -92,6 +95,7 @@ func TestAnExpansionOutsideBracketsIsStillReadAsSyntax(t *testing.T) {
 // The expression around the subscript is still expanded and read as one, so
 // the protection has not turned the whole text into data.
 func TestTheExpressionAroundAProtectedSubscriptStillReads(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`x="1+"; y="2"; printf "[%s]" "$(( $x$y ))"`, `[3]`},
 		{`a=(9 8 7); i=2; printf "[%s]" "$(( a[$i] + 1 ))"`, `[8]`},
@@ -110,6 +114,7 @@ func TestTheExpressionAroundAProtectedSubscriptStillReads(t *testing.T) {
 // run a second time from the arithmetic evaluator — measured, no column in
 // the panel does.
 func TestAProtectedSubscriptExpandsItsKeyOnce(t *testing.T) {
+	t.Parallel()
 	src := `typeset -A m; key="k$(printf RAN)"; m[$key]=1; (( m[$key]++ )); printf "[%s]" "${m[kRAN]}"`
 	if out, st := keyBracketRun(t, src, No); out != `[2]` || st != 0 {
 		t.Errorf("= %q status %d, want %q at 0", out, st, `[2]`)

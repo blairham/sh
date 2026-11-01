@@ -29,6 +29,7 @@ import (
 // `LongOptionNamesASetOption` was dropped and every Go test stayed green. So
 // these go through driver.MainArgs, the way the suite rows do.
 func TestTheInvocationTakesTheFourOptionsAScriptCannotMove(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		argv []string
@@ -92,6 +93,7 @@ func TestTheInvocationTakesTheFourOptionsAScriptCannotMove(t *testing.T) {
 // And a running script still may not move any of them, which is the half that
 // was always right and is what the rows above are a difference against.
 func TestAScriptStillCannotMoveAnyOfThem(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"interactive", "monitor", "shinstdin", "singlecommand", "zle"} {
 		t.Run(name, func(t *testing.T) {
 			var out, errs bytes.Buffer

@@ -20,6 +20,7 @@ func arithZeroSem(a Answer) Semantics {
 }
 
 func TestAZeroArithmeticCommandIsJudgedByTheAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, body string
 		// survives under Yes and under No
@@ -79,6 +80,7 @@ func TestAZeroArithmeticCommandFiresTheErrTrapByTheAxis(t *testing.T) {
 }
 
 func TestAZeroArithmeticCommandAsksNothingWithNothingToJudge(t *testing.T) {
+	t.Parallel()
 	s := errSem()
 	s.ArithCommandZeroIsAFailure = Unspecified
 	if out, st := runGrammar(t, "(( 0 )); echo $?", enableTestAndArith, withSem(s)); out != "1\n" || st != 0 {

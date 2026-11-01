@@ -58,6 +58,7 @@ func storesTheElement(taken Answer) Semantics {
 }
 
 func TestASubscriptedPrefixStoresTheElementItNames(t *testing.T) {
+	t.Parallel()
 	// A function, so the store is visible inside the command as well as
 	// after it — and the first element is read alongside, because the
 	// defect this pins was a *scalar* `a` standing in for the element it
@@ -77,6 +78,7 @@ func TestASubscriptedPrefixStoresTheElementItNames(t *testing.T) {
 // the name would pass the row above for `a[1]` in a one-based reading and
 // still be writing the wrong cell.
 func TestASubscriptedPrefixLeavesTheOtherElementsAlone(t *testing.T) {
+	t.Parallel()
 	sem := storesTheElement(No)
 	out, _, _ := subscriptPrefixRun(t,
 		`a=(p q r); a[1]=v eval ':'; echo "[${a[0]}][${a[1]}][${a[2]}]"`, sem)
@@ -90,6 +92,7 @@ func TestASubscriptedPrefixLeavesTheOtherElementsAlone(t *testing.T) {
 // under the subscript would leave `pv` in element 1 of `(p q r)` rather than
 // `qv`.
 func TestASubscriptedPrefixAppendJoinsTheElement(t *testing.T) {
+	t.Parallel()
 	sem := storesTheElement(No)
 	out, _, _ := subscriptPrefixRun(t,
 		`a=(p q r); a[1]+=v eval ':'; echo "[${a[1]}]"`, sem)
@@ -101,6 +104,7 @@ func TestASubscriptedPrefixAppendJoinsTheElement(t *testing.T) {
 // The subscript is an expression the store evaluates, the same as a written
 // `a[$i]=v`, so a prefix cannot be right by treating the brackets as text.
 func TestASubscriptedPrefixEvaluatesItsSubscript(t *testing.T) {
+	t.Parallel()
 	sem := storesTheElement(No)
 	out, _, _ := subscriptPrefixRun(t,
 		`i=1; a=(p q r); a[$i+1]=v eval ':'; echo "[${a[1]}][${a[2]}]"`, sem)
@@ -114,6 +118,7 @@ func TestASubscriptedPrefixEvaluatesItsSubscript(t *testing.T) {
 // a scalar back; zsh gives back neither, because its scalar prefix outlives
 // nothing at all and its element write outlives everything this shell runs.
 func TestASubscriptedPrefixTakeBackFollowsItsAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		taken Answer
@@ -137,6 +142,7 @@ func TestASubscriptedPrefixTakeBackFollowsItsAxis(t *testing.T) {
 // question of its own: under the keeping answer the element outlives the call
 // even where AssignmentPrefixPersistsAfterAFunction says a prefix does not.
 func TestASubscriptedPrefixIsKeptPastAFunctionWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	sem := storesTheElement(No)
 	sem.AssignmentPrefixPersistsAfterAFunction = No
 	out, _, _ := subscriptPrefixRun(t,
@@ -150,6 +156,7 @@ func TestASubscriptedPrefixIsKeptPastAFunctionWhereTheAxisSaysSo(t *testing.T) {
 // beside it must reach the same place with the question never put, or an
 // unanswered vector would refuse on an ordinary line.
 func TestTheTakeBackAxisIsNotAskedOfAScalarPrefix(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.SubscriptedPrefixIsTakenBack = Unspecified
 	out, errs, _ := subscriptPrefixRun(t,
@@ -162,6 +169,7 @@ func TestTheTakeBackAxisIsNotAskedOfAScalarPrefix(t *testing.T) {
 // The refusing reading: the word is named, nothing is assigned, and **the
 // command runs anyway** at its own status.
 func TestARefusedSubscriptedPrefixNamesTheWordAndRunsTheCommand(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.SubscriptedAssignmentPrefix = SubscriptedPrefixIsRefused
 	out, errs, st := subscriptPrefixRun(t,
@@ -182,6 +190,7 @@ func TestARefusedSubscriptedPrefixNamesTheWordAndRunsTheCommand(t *testing.T) {
 // is a *function*, since a prefix to a regular builtin is taken back whatever
 // happened to it.
 func TestARefusedSubscriptedPrefixLeavesTheRestOfThePrefixAlone(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.SubscriptedAssignmentPrefix = SubscriptedPrefixIsRefused
 	out, _, _ := subscriptPrefixRun(t,
@@ -193,6 +202,7 @@ func TestARefusedSubscriptedPrefixLeavesTheRestOfThePrefixAlone(t *testing.T) {
 
 // A line each, in written order, for a prefix carrying more than one.
 func TestEveryRefusedSubscriptedPrefixGetsALine(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.SubscriptedAssignmentPrefix = SubscriptedPrefixIsRefused
 	_, errs, _ := subscriptPrefixRun(t, `f() { :; }; a[1]=1 b[2]=2 f`, sem)
@@ -208,6 +218,7 @@ func TestEveryRefusedSubscriptedPrefixGetsALine(t *testing.T) {
 // refusal that expanded first would report `a[1]` here, and would print
 // `side`.
 func TestARefusedSubscriptedPrefixEvaluatesNothing(t *testing.T) {
+	t.Parallel()
 	// Once for each route that applies a prefix, because each of them
 	// expands a value on its own and each has to be kept from doing it here.
 	// The substitution writes to standard error, which is the only place a
@@ -238,6 +249,7 @@ func TestARefusedSubscriptedPrefixEvaluatesNothing(t *testing.T) {
 // in every column that raises one, so a shell reaching the expression at all
 // would end the script instead of running the command.
 func TestARefusedSubscriptedPrefixNeverReachesABadSubscript(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.SubscriptedAssignmentPrefix = SubscriptedPrefixIsRefused
 	out, errs, _ := subscriptPrefixRun(t, `f() { :; }; a[$((1/0))]=v f; echo "done"`, sem)
@@ -256,6 +268,7 @@ func TestARefusedSubscriptedPrefixNeverReachesABadSubscript(t *testing.T) {
 // puts it: `a[1]=v f >/nope/x` writes the identifier complaint and *then* the
 // file's.
 func TestARefusedSubscriptedPrefixIsReportedBeforeARedirection(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.SubscriptedAssignmentPrefix = SubscriptedPrefixIsRefused
 	_, errs, _ := subscriptPrefixRun(t, `f() { :; }; a[1]=v f > /nope/nowhere/x`, sem)
@@ -269,6 +282,7 @@ func TestARefusedSubscriptedPrefixIsReportedBeforeARedirection(t *testing.T) {
 // And the refused word is left out of the trace, where the entries beside it
 // are written as usual.
 func TestARefusedSubscriptedPrefixIsNotTraced(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.SubscriptedAssignmentPrefix = SubscriptedPrefixIsRefused
 	_, errs, _ := subscriptPrefixRun(t, `f() { :; }; set -x; w=1 a[1]=v f`, sem)
@@ -285,6 +299,7 @@ func TestARefusedSubscriptedPrefixIsNotTraced(t *testing.T) {
 // not this shell's to keep. Unanimous, so it is done in the routes rather
 // than asked.
 func TestASubscriptedPrefixIsUnseenByAnExternalCommand(t *testing.T) {
+	t.Parallel()
 	for _, taken := range []Answer{Yes, No} {
 		sem := storesTheElement(taken)
 		out, _, _ := subscriptPrefixRun(t,
@@ -299,6 +314,7 @@ func TestASubscriptedPrefixIsUnseenByAnExternalCommand(t *testing.T) {
 // `a[1]=$(echo side >&2; echo v) /bin/echo` writes `side` in ksh93 and zsh and
 // leaves the element where it was.
 func TestASubscriptedPrefixToAnExternalStillExpandsItsValue(t *testing.T) {
+	t.Parallel()
 	sem := storesTheElement(No)
 	out, _, _ := subscriptPrefixRun(t,
 		`a=(p q r); a[1]=$(echo side) /bin/echo ran; echo "[${a[1]}]"`, sem)
@@ -311,6 +327,7 @@ func TestASubscriptedPrefixToAnExternalStillExpandsItsValue(t *testing.T) {
 // route that would otherwise have stored it: `command` is handled as a
 // builtin here and the loop that applies a prefix is the builtin route's.
 func TestASubscriptedPrefixThroughCommandBeforeAnExternalIsUnseen(t *testing.T) {
+	t.Parallel()
 	sem := storesTheElement(No)
 	out, _, _ := subscriptPrefixRun(t,
 		`a=(p q r); a[1]=v command /bin/echo ran; echo "[${a[1]}]"`, sem)
@@ -322,6 +339,7 @@ func TestASubscriptedPrefixThroughCommandBeforeAnExternalIsUnseen(t *testing.T) 
 // An unanswered reading refuses by name, once for the command, and the axis
 // is not asked at all by a prefix with no subscript in it.
 func TestAnUnansweredSubscriptedPrefixRefuses(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.SubscriptedAssignmentPrefix = SubscriptedPrefixReadingUnspecified
 	_, errs, _ := subscriptPrefixRun(t, `f() { :; }; a[1]=v f`, sem)
@@ -331,6 +349,7 @@ func TestAnUnansweredSubscriptedPrefixRefuses(t *testing.T) {
 }
 
 func TestTheSubscriptedPrefixAxisIsNotAskedOfAPlainPrefix(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.SubscriptedAssignmentPrefix = SubscriptedPrefixReadingUnspecified
 	out, errs, _ := subscriptPrefixRun(t, `f() { echo "[$v]"; }; v=9 f`, sem)
@@ -343,6 +362,7 @@ func TestTheSubscriptedPrefixAxisIsNotAskedOfAPlainPrefix(t *testing.T) {
 // in the code, which is what the default above asserts; this pins that a
 // dialect can word it otherwise.
 func TestTheSubscriptedPrefixRefusalTakesTheDialectsWording(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.SubscriptedAssignmentPrefix = SubscriptedPrefixIsRefused
 	f, err := syntax.Parse(`f() { :; }; a[1]=v f`, syntax.Core())
@@ -367,6 +387,7 @@ func TestTheSubscriptedPrefixRefusalTakesTheDialectsWording(t *testing.T) {
 // bash 5.3, ksh93 and zsh show it nothing at all. Under the refusing reading
 // as well, since the word is refused before the environment is built.
 func TestASubscriptedPrefixPutsNothingInAChildsEnvironment(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		sem  Semantics

@@ -38,6 +38,7 @@ import (
 // housekeeping: every path is reachable to root, so both readings agree on
 // every row and the test would pass against the code it is here to refuse.
 func TestAPermissionTestAsksTheKernelNotTheModeBits(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("running as root: both readings agree on every path, so nothing here can fail")
 	}
@@ -91,6 +92,7 @@ func TestAPermissionTestAsksTheKernelNotTheModeBits(t *testing.T) {
 // anything, so a platform where the ACL silently did not take skips rather
 // than asserting against a file that is simply read-only.
 func TestAGrantTheModeBitsDoNotCarryIsHonored(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS != "darwin" {
 		t.Skip("the ACL spelling here is macOS's")
 	}
@@ -140,6 +142,7 @@ func TestAGrantTheModeBitsDoNotCarryIsHonored(t *testing.T) {
 // existence half already went through the gate, and a path the gate hides
 // never reaches the access call at all.
 func TestAPermissionProbeIsOneEventLikeTheExistenceProbeIs(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "own")
 	if err := os.WriteFile(path, []byte("x\n"), 0o600); err != nil {
@@ -164,6 +167,7 @@ func TestAPermissionProbeIsOneEventLikeTheExistenceProbeIs(t *testing.T) {
 // to `-e`: the refusal is quiet and indistinguishable from the file not being
 // there, which is what ActionStat's deny semantics promise.
 func TestAHiddenPathIsNotReadableWritableOrExecutable(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "own")
 	if err := os.WriteFile(path, []byte("x\n"), 0o700); err != nil {

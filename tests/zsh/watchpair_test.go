@@ -21,6 +21,7 @@ import "testing"
 // for it — under `-f` from a script file with `env -i PATH=/usr/bin:/bin
 // TERM=dumb` and a scratch `HOME`.
 func TestTheWatchPairIsJoinedAndNotTied(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			// The join, both ways round, in one shell.

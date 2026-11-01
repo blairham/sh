@@ -15,6 +15,7 @@ import (
 // which is the same boundary OpenEndedAndOr has here, and the row that tells
 // this reach from bash's. Measured 2026-09-12 on zsh 5.9.2.
 func TestABareNegationStandsWhereAListEndsHere(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Dialect().BareNegationReach; got != syntax.BareNegationWhereAListEnds {
 		t.Errorf("reach = %v, want BareNegationWhereAListEnds", got)
 	}

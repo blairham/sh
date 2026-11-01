@@ -35,6 +35,7 @@ func echoRun(t *testing.T, src string, set func(*Semantics)) string {
 }
 
 func TestEchoFlagLettersAreTheDialects(t *testing.T) {
+	t.Parallel()
 	full := func(s *Semantics) {
 		s.EchoOptions = "neE"
 		s.EchoLastEscapeFlagWins = Yes
@@ -66,6 +67,7 @@ func TestEchoFlagLettersAreTheDialects(t *testing.T) {
 }
 
 func TestEchoHexStaysLiteralWhereNotAdmitted(t *testing.T) {
+	t.Parallel()
 	got := echoRun(t, `echo -e 'A\x41B'`, func(s *Semantics) {
 		s.EchoOptions = "ne"
 		s.EchoExpandsHexEscapes = No
@@ -76,6 +78,7 @@ func TestEchoHexStaysLiteralWhereNotAdmitted(t *testing.T) {
 }
 
 func TestTheOrderOfEAndCapitalEIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -107,6 +110,7 @@ func TestTheOrderOfEAndCapitalEIsAnAxis(t *testing.T) {
 // and not `\e`, zsh has `\e` and not `\E`. One answer for both letters is
 // wrong for half the panel (#908).
 func TestEchoEscAndCapitalEscAreTwoQuestions(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		esc, capEs Answer
@@ -133,6 +137,7 @@ func TestEchoEscAndCapitalEscAreTwoQuestions(t *testing.T) {
 // Each letter is asked only where its own spelling appears, so a `\E` alone
 // needs no answer about `\e` and the other way round.
 func TestEchoEscLettersAreAskedSeparately(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		esc, capEs Answer
@@ -166,6 +171,7 @@ func TestEchoEscLettersAreAskedSeparately(t *testing.T) {
 
 // An unanswered letter is refused by name rather than guessed.
 func TestEchoEscUnansweredIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, axis, rest string }{
 		{"the lowercase", `echo -e 'a\eZ'`, "echo expanding \\e", `a\eZ`},
 		{"the capital", `echo -e 'a\EZ'`, "echo expanding \\E", `a\EZ`},

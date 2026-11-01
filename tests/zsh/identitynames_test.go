@@ -19,6 +19,7 @@ import (
 // asserted here is the type word, the listing row and the presence — none of
 // which depends on who is running.
 func TestTheNineIdentityNamesDescribeThemselves(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `
 		for n in CPUTYPE MACHTYPE VENDOR OSTYPE ZSH_PATCHLEVEL LOGNAME USERNAME TTY; do
 			print -r -- "$n ${(P)+n} ${(tP)n}"
@@ -45,6 +46,7 @@ func TestTheNineIdentityNamesDescribeThemselves(t *testing.T) {
 
 // The five stored ones are ordinary scalars a script may write and unset.
 func TestTheBuildValuesAreOrdinaryScalars(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `
 		OSTYPE=zz; print -r -- "written=$OSTYPE ${(t)OSTYPE}"
 		unset CPUTYPE; print -r -- "unset=${+CPUTYPE}"
@@ -61,6 +63,7 @@ func TestTheBuildValuesAreOrdinaryScalars(t *testing.T) {
 // version in one place cannot leave the other behind — which is the failure
 // `zshVersion`'s own comment guards against for `--version`.
 func TestThePatchLevelIsTheVersionUnderTheReferencesShape(t *testing.T) {
+	t.Parallel()
 	// The prelude, because `$ZSH_VERSION` is set there: this is a test of the
 	// two claims agreeing, so a run where one of them was empty would be
 	// comparing against nothing.
@@ -86,6 +89,7 @@ func TestThePatchLevelIsTheVersionUnderTheReferencesShape(t *testing.T) {
 // interp.Runner.TerminalName is where the lookup is, on the package the gate
 // already uses to ask a descriptor its name.
 func TestTheTerminalNameIsEmptyWithNoTerminal(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `print -r -- "[$TTY]"; typeset -p TTY`)
 	if st != 0 {
 		t.Fatalf("status %d, output %q", st, out)
@@ -102,6 +106,7 @@ func TestTheTerminalNameIsEmptyWithNoTerminal(t *testing.T) {
 // nothing would make `${ZSH_SCRIPT-nope}` take the wrong arm, and measured on
 // zsh 5.9.2 `${+ZSH_SCRIPT}` is 0 under `-c` and on standard input.
 func TestTheScriptNameIsAbsentOffAScriptFile(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`print -r -- "there=${+ZSH_SCRIPT} word=[${(t)ZSH_SCRIPT}] default=${ZSH_SCRIPT-nope}"`)
 	if st != 0 {
@@ -113,6 +118,7 @@ func TestTheScriptNameIsAbsentOffAScriptFile(t *testing.T) {
 // And the path it holds is the operand as written, which is the fact a
 // resolved path would lose.
 func TestTheScriptNameIsThePathAsWritten(t *testing.T) {
+	t.Parallel()
 	// The path is only a word here: the file is not read, the runner is told
 	// what it was called, which is exactly what the front end does.
 	path := filepath.Join(t.TempDir(), "s.zsh")

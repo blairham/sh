@@ -14,6 +14,7 @@ import (
 // the table alone in bash and zsh. The expansion `${m[q]}` adds nothing in
 // either reading, which is what places the rule on the expression's read.
 func TestAnExpressionReadingAMissingKeyCanCreateIt(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; m[k]=9; : $(( m[x] )); echo "${#m[@]}"; : "${m[q]}"; echo "${#m[@]}"; echo "[$(( m[*] ))][${#m[@]}]"`
 	for _, tc := range []struct {
 		a    Answer

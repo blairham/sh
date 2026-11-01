@@ -38,6 +38,7 @@ import (
 // **not** a fifth field on the emulation table (#4753 put the field that does
 // move there).
 func TestTheTwoValuelessRecordRoutesPartUnderAnEmulation(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().ValuelessDeclarationRecordsTheName; got != interp.Yes {
 		t.Errorf("the declaration's route answers %v, want interp.Yes", got)
 	}
@@ -88,6 +89,7 @@ func TestTheTwoValuelessRecordRoutesPartUnderAnEmulation(t *testing.T) {
 // gives the row its value back. All three measured in the same run, and all
 // three unmoved by the mode.
 func TestTheValuelessRecordControlsUnderTheShEmulation(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a name that is not there",

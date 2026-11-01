@@ -23,6 +23,7 @@ import "testing"
 // table alone cannot put it back — it is saved by name, and the sweep below
 // covers it like everything else.
 func TestLocalDashRestoresEverySetOption(t *testing.T) {
+	t.Parallel()
 	r := newTestRunner(t, &Runner{})
 	// The dialect-declared names beside the substrate's own, so the sweep is
 	// over more than one table.

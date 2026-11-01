@@ -24,6 +24,7 @@ import (
 // means. Reading them as one switch would have made three of these four rows
 // wrong here, silently and in the permissive direction (#2622).
 func TestCasematchReachesTheRegexOperatorAndNothingElse(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the regex operator folds",

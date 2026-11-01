@@ -33,6 +33,7 @@ func runStackTilde(t *testing.T, param, src string) (string, int) {
 }
 
 func TestANumberedTildeNamesADirectoryStackEntry(t *testing.T) {
+	t.Parallel()
 	const stack = "stack=(top mid bot)\n"
 	for _, c := range []struct {
 		word string
@@ -81,6 +82,7 @@ func TestANumberedTildeNamesADirectoryStackEntry(t *testing.T) {
 // Without it the rule would be on in every preset and the field would be
 // documentation rather than a switch.
 func TestANumberedTildeIsTextWithNoDirectoryStackNamed(t *testing.T) {
+	t.Parallel()
 	out, status := runStackTilde(t, "", "stack=(top mid bot)\necho ~1")
 	if status != 0 {
 		t.Fatalf("status %d, output %q", status, out)

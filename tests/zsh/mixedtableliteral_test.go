@@ -24,6 +24,7 @@ import (
 // bash lets the first element choose the reading instead, which is what makes
 // this an axis. This shell paired every shape off and stored them all (#4241).
 func TestAMixedTableLiteralIsRefusedHere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a bare element after a head", "typeset -A a\na=([zero]=5 four)\nprintf reached"},
 		{"a head after a bare element", "typeset -A b\nb=(one 1 [two]=2)\nprintf reached"},
@@ -50,6 +51,7 @@ func TestAMixedTableLiteralIsRefusedHere(t *testing.T) {
 // The listing and not a read of the key: `${g[""]}` is empty in real zsh as well,
 // so a read could not tell a stored empty key from an absent one.
 func TestAnEmptyKeyInATableLiteralIsStoredHere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"among bare words",
@@ -74,6 +76,7 @@ func TestAnEmptyKeyInATableLiteralIsStoredHere(t *testing.T) {
 // Both policies, pinned so that no preset here drifts off the column they were
 // measured from.
 func TestTheTableLiteralPoliciesAreThisDialects(t *testing.T) {
+	t.Parallel()
 	s := zsh.Semantics()
 	if got := s.MixedTableLiteral; got != interp.MixedTableLiteralRefused {
 		t.Errorf("MixedTableLiteral = %v, want refused", got)
@@ -88,6 +91,7 @@ func TestTheTableLiteralPoliciesAreThisDialects(t *testing.T) {
 // element has run by the time the refusal is written. Measured 2026-10-04 on
 // zsh 5.9.2.
 func TestAMixedTableLiteralIsExpandedBeforeItIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a bad pattern among the words", "typeset -A m\nm=( [one]=1 [two words]=2 )", "bad pattern: [two"},
 		{"a pattern with no match", "typeset -A m\nm=( [one]=1 two nomatch-zz* )", "no matches found: nomatch-zz*"},

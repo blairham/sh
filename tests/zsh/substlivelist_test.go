@@ -10,6 +10,7 @@ import "testing"
 // array name and over `$@` and `$*`, as over `${a[@]}` (#5639). Measured
 // 2026-10-03 on zsh 5.9.2 under `-f`, beside `xay` and `xby`.
 func TestASubstitutionsLiveCharactersReachABareArrayAndTheParameters(t *testing.T) {
+	t.Parallel()
 	const setup = "print -n >xay; print -n >xby\n"
 	for _, tc := range []struct{ src, want string }{
 		{`a=(xQy); print ${a:gs/Q/?/}; set -- xQy; print ${@:s/Q/?/}`, "xay xby\nxay xby\n"},

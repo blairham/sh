@@ -19,6 +19,7 @@ import "testing"
 // `za1b` would pass for a shell reading `\d` as the letter and handed a
 // subject with a `d` in it.
 func TestATildeGlobGroupReadsTheClassEscapes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The controls. With no group at all the escape is the shell's, so
 		// `\d` is the letter — and that pair is what says the rows below it
@@ -135,6 +136,7 @@ func TestATildeGlobGroupReadsTheClassEscapes(t *testing.T) {
 // the two rows at the bottom stopped trimming because the other operators do
 // not read it. See patternOpts.tildeGlobRead.
 func TestASpanChoosingSurfaceReadsTheClassEscapesOnlyWhereItReadsTheGroup(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a prefix trim", `v=1abc1; printf "[%s]" "${v#~(K)\d}"`, "[1abc1]"},
 		{"the longest prefix trim", `v=1abc1; printf "[%s]" "${v##~(K)\d}"`, "[1abc1]"},

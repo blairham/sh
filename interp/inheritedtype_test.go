@@ -38,6 +38,7 @@ func withInheritedType(survives, rereads Answer) func(*Semantics) {
 // one that cannot be argued about, and the middle one is what tells the two
 // wrong answers apart — an emptied name would still be SET.
 func TestAnInheritedValueMeetingADeclaredType(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name              string
 		survives, rereads Answer
@@ -71,6 +72,7 @@ env`, withInheritedType(tc.survives, tc.rereads), Diagnostics{},
 // canonical-spelling predicate rather than ahead of it, every one of them
 // would have gone unanswered.
 func TestADeclaredTypeDiscardsAnInheritedValueAFoldWouldNotTouch(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, env string }{
 		{"already upper", "typeset -u A\necho \"[${A+SET}][$A]\"", "A=UPPER"},
 		{"already canonical", "typeset -i B\necho \"[${B+SET}][$B]\"", "B=7"},
@@ -92,6 +94,7 @@ func TestADeclaredTypeDiscardsAnInheritedValueAFoldWouldNotTouch(t *testing.T) {
 // Every shell in the panel agrees here, so a discarding answer that fired for
 // these letters would be wrong in all of them.
 func TestADeclarationWithNoTypeLeavesAnInheritedValueAlone(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"bare", "typeset INHERITED"},
 		{"exported", "typeset -x INHERITED"},
@@ -117,6 +120,7 @@ func TestADeclarationWithNoTypeLeavesAnInheritedValueAlone(t *testing.T) {
 // exported when the type arrives gets the second case wrong — the name is
 // exported there by the line before, and is discarded all the same.
 func TestTheExportAndFrozenLettersKeepAnInheritedValueOnTheirOwnCommand(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"exported on the same command", "typeset -ix G", "[SET][7]\n"},
 		{"frozen on the same command", "typeset -ir G", "[SET][7]\n"},
@@ -137,6 +141,7 @@ func TestTheExportAndFrozenLettersKeepAnInheritedValueOnTheirOwnCommand(t *testi
 // than about the export attribute: the script assigns the name its own value
 // first — the very same value — and the plain re-read answers instead.
 func TestAValueTheScriptAssignedIsNotAnInheritedOne(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunEnv(t, `D=$D
 typeset -i D
 echo "[${D+SET}][$D]"
@@ -154,6 +159,7 @@ env`, withInheritedType(No, Yes), Diagnostics{}, append(testPATH(), "D=bar"))
 // attribute and no value, and a later assignment does not put the export
 // back. That is what makes it one answer rather than a special case.
 func TestAnInheritedNameStartedOverIsAFreshOne(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunEnv(t, `typeset -u E
 typeset -p E
 E=mix
@@ -172,6 +178,7 @@ env`, withInheritedType(No, Yes), Diagnostics{}, append(testPATH(), "E=jj"))
 // leave three different names behind — and one of them tells a child nothing
 // where another tells it a value.
 func TestAnUnansweredInheritedTypeAxisIsRefused(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunEnv(t, `typeset -i INHERITED
 echo "st=$?"
 echo "[${INHERITED+SET}][$INHERITED]"`, withInheritedType(Unspecified, Yes),
@@ -200,6 +207,7 @@ echo "[${INHERITED+SET}][$INHERITED]"`, withInheritedType(Unspecified, Yes),
 // back. `${m[k]}` cannot see it — an element read does not consult the
 // removal mark — which is why the row asserts both.
 func TestACompoundValueIsNotAnInheritedOne(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a keyed table",
@@ -227,6 +235,7 @@ func TestACompoundValueIsNotAnInheritedOne(t *testing.T) {
 // and then declaring the names after it is the silent wrong answer with a
 // diagnostic stapled to it.
 func TestAnUnansweredInheritedTypeAxisRefusesTheNamesAfterItToo(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunEnv(t, `typeset -i INHERITED OTHER=5
 echo "st=$?"
 echo "other=[${OTHER-UNSET}]"`, withInheritedType(Unspecified, Yes),

@@ -19,6 +19,7 @@ import "testing"
 // the shell refuses. Rows five and six are the other two controls — a letter
 // is not a value, and an ordinary readonly still thaws.
 func TestAProducedParameterStaysFrozenBehindAShadow(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const refused = "f: read-only variable: ARGC\n"
 	for _, tc := range []struct {
@@ -110,6 +111,7 @@ func TestAProducedParameterStaysFrozenBehindAShadow(t *testing.T) {
 // `+h` has to be able to take it off again, which only means something if
 // `-h` put it on.
 func TestTheHideLetterOverAProducedNameWithNoShadowIsTaken(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name, src, want string

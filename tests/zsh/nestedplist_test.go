@@ -14,6 +14,7 @@ import (
 // is a name and none is none (#5151, a chunk of D04parameter.ztst). Measured
 // 2026-10-03 on zsh 5.9.2 under `-f`.
 func TestANestedNameReferenceToAListIsRefused(t *testing.T) {
+	t.Parallel()
 	const setup = "x1=abc; v=(x1 x2)\n"
 	for _, tc := range []struct{ src, want string }{
 		{`print ${${(P)v}}; print after`, "zsh:2: parameter name reference used with array\n"},
@@ -44,6 +45,7 @@ func TestANestedNameReferenceToAListIsRefused(t *testing.T) {
 // Measured 2026-10-06 on zsh 5.9.2 under `-f -c` — see
 // interp's refusesANestedNonName for the whole table.
 func TestANestedNameReferenceThatIsNotOneIsRefused(t *testing.T) {
+	t.Parallel()
 	const setup = "a=xyz; x=(p q)\n"
 	for _, tc := range []struct{ src, want string }{
 		{`e=' '; print -r -- "[${${(P)e}}]"; print after`, "zsh:2: bad substitution\n"},
@@ -81,6 +83,7 @@ func TestANestedNameReferenceThatIsNotOneIsRefused(t *testing.T) {
 // (#6227). Measured 2026-10-06 on zsh 5.9.2 under `-f -c`, with `a=xyz`, each
 // quoted and unquoted — see interp's nestedOperatorText for the whole table.
 func TestANestedNameReferenceGoesOnWithItsOperator(t *testing.T) {
+	t.Parallel()
 	const setup = "a=xyz; x=(p q)\n"
 	for _, tc := range []struct{ text, want string }{
 		{"a+b", "b"},

@@ -20,6 +20,7 @@ import (
 // around the assignment *prefix* — which is what the shape invites — agrees
 // with every other row here and is wrong on both of them.
 func TestAnExportedArgv0NamesTheCommand(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		// The one row that needs `export` to have its `-n`, which is an
@@ -74,6 +75,7 @@ func TestAnExportedArgv0NamesTheCommand(t *testing.T) {
 // named the child and passed the variable on as well would satisfy the test
 // above and still not be doing what the reference does.
 func TestAnExportedArgv0IsSpentOnTheNameRatherThanHandedOver(t *testing.T) {
+	t.Parallel()
 	const src = `ARGV0=chosen sh -c 'echo "[$0][${ARGV0-unset}]"'`
 	for _, tc := range []struct {
 		name   string
@@ -101,6 +103,7 @@ func TestAnExportedArgv0IsSpentOnTheNameRatherThanHandedOver(t *testing.T) {
 // This shell's own copy survives the command, which is what says only the
 // child's environment is touched.
 func TestAnExportedArgv0SurvivesTheCommandItNamed(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `export ARGV0=kept; sh -c : ; echo "[$ARGV0]"`, argv0Named(interp.Yes))
 	if st != 0 {
 		t.Fatalf("status %d: %s", st, out)
@@ -114,6 +117,7 @@ func TestAnExportedArgv0SurvivesTheCommandItNamed(t *testing.T) {
 // rather than on the shape: every other assignment prefix goes on doing
 // exactly what it did, naming nothing and reaching the child as a variable.
 func TestAnOrdinaryPrefixStillReachesTheChildAndNamesNothing(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `V=1 sh -c 'echo "[$0][$V]"'`, argv0Named(interp.Yes))
 	if st != 0 {
 		t.Fatalf("status %d: %s", st, out)
@@ -130,6 +134,7 @@ func TestAnOrdinaryPrefixStillReachesTheChildAndNamesNothing(t *testing.T) {
 // variable still names the replacement, so a shell that had simply stopped
 // reading ARGV0 at `exec` would pass the first row and fail this one.
 func TestExecPrefersItsOwnNameOverAnExportedArgv0(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// In a subshell, so the test's own process survives being replaced.
 		{"the option wins", `( export ARGV0=fromenv; exec -a chosen sh -c 'echo "[$0]"' )`, "[chosen]"},
@@ -157,6 +162,7 @@ func argv0Named(a interp.Answer) func(*interp.Runner) {
 // answers no — and an axis only one shell says yes to is exactly the kind a
 // preset change could switch on everywhere with no test noticing.
 func TestTheStandardHasNoNameForTheCommand(t *testing.T) {
+	t.Parallel()
 	if got, want := interp.PosixSemantics().ExportedArgv0NamesTheCommand, interp.No; got != want {
 		t.Errorf("PosixSemantics().ExportedArgv0NamesTheCommand = %v, want %v", got, want)
 	}
@@ -171,6 +177,7 @@ func TestTheStandardHasNoNameForTheCommand(t *testing.T) {
 // It also pins the other half: every entry of that name goes, so nothing is
 // left for the child to find.
 func TestTheLastExportedArgv0IsTheNameAndNoneOfThemReachTheChild(t *testing.T) {
+	t.Parallel()
 	const src = `export ARGV0=first; ARGV0=second sh -c 'echo "[$0][${ARGV0-unset}]"'`
 	out, st := run(t, src, argv0Named(interp.Yes))
 	if st != 0 {

@@ -43,6 +43,7 @@ func frozenSideEffects(out string) string {
 // that will not expand is what is reported. Unanimous, so core, and the same
 // traced and untraced (#6674).
 func TestAFrozenScalarIsRefusedOnceItsValueIsExpanded(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{"readonly x=1\nx=$(echo VAL >&2)y\n", "VAL RO"},
 		{"readonly x=1\nx+=$(echo VAL >&2)y\n", "VAL RO"},
@@ -66,6 +67,7 @@ func TestAFrozenScalarIsRefusedOnceItsValueIsExpanded(t *testing.T) {
 // expanded, or at the store, after the subscript's words — in the order the
 // element-order axis gives them — and its arithmetic.
 func TestTheFrozenElementOrderIsTheAxis(t *testing.T) {
+	t.Parallel()
 	sub := `$(echo SUB >&2; echo 1)`
 	val := `$(echo VAL >&2)`
 	for _, c := range []struct {
@@ -125,6 +127,7 @@ func TestTheFrozenElementOrderIsTheAxis(t *testing.T) {
 // the other axis, and the trace does not expand it where the refusal would
 // not — even in the trace that prints what the elements came to.
 func TestTheFrozenLiteralOrderIsTheAxis(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, first, refused string }{
 		{"readonly a=(1 2)\na=($(echo VAL >&2))\n", "VAL RO", "RO"},
 		{"readonly a=(1 2)\na+=($(echo VAL >&2))\n", "VAL RO", "RO"},
@@ -157,6 +160,7 @@ func TestTheFrozenLiteralOrderIsTheAxis(t *testing.T) {
 // sequence — and the reading that refuses the construct does so first,
 // without running the subscript to quote it.
 func TestAFrozenElementLiteralIsRefusedAtItsStore(t *testing.T) {
+	t.Parallel()
 	src := "readonly a=(1 2)\na[$(echo SUB >&2; echo 1)]=(p $(echo VAL >&2))\n"
 	for _, c := range []struct {
 		policy SubscriptedArrayLiteralPolicy
@@ -189,6 +193,7 @@ func TestAFrozenElementLiteralIsRefusedAtItsStore(t *testing.T) {
 // subscript's arithmetic included, and which side is first is the element
 // order's answer — under both stores (#6675).
 func TestAnElementLiteralFollowsTheElementOrder(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src            string
 		valueFirst, subFirst string
@@ -242,6 +247,7 @@ func TestAnElementLiteralFollowsTheElementOrder(t *testing.T) {
 // With every freeze axis unanswered, a frozen write whose order nobody could
 // see asks nothing and is refused, and one whose order shows is the question.
 func TestAnOrdinaryFrozenWriteAsksNothing(t *testing.T) {
+	t.Parallel()
 	sem := frozenOrderSem(No, Unspecified, Unspecified)
 	for _, src := range []string{
 		"readonly a=(1 2)\na[1]=x\n",
@@ -279,6 +285,7 @@ func TestAnOrdinaryFrozenWriteAsksNothing(t *testing.T) {
 // output-only check cannot tell a refused write from one that was made and
 // then complained about.
 func TestAFrozenNameRefusedAtItsStoreKeepsItsElements(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
 		policy SubscriptedArrayLiteralPolicy

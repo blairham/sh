@@ -48,6 +48,7 @@ func globalLiteral(reaches, fresh Answer) func(*Semantics) {
 // so a difference in the other two is about the shadow and not about the
 // operand.
 func TestAGlobalArrayLiteralWritesUnderWhatStandsOnTheName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		src     string
@@ -129,6 +130,7 @@ w=7 h; echo "[${w[@]}]"`,
 // does not — a table, and an append — because the store branches on both and
 // each branch chooses its cell separately (#4163).
 func TestAGlobalQuotedArrayLiteralWritesUnderWhatStandsOnTheName(t *testing.T) {
+	t.Parallel()
 	rereads := func(reaches, fresh Answer) func(*Semantics) {
 		return func(s *Semantics) {
 			globalLiteral(reaches, fresh)(s)
@@ -209,6 +211,7 @@ f; echo "2[${y[@]}]"`,
 // The first row is the control that keeps this about the letter: without it
 // the prefix's value goes away in both columns, and nothing is left.
 func TestAGlobalDeclarationWritesUnderItsOwnAssignmentPrefix(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		src     string
@@ -266,6 +269,7 @@ func TestAGlobalDeclarationWritesUnderItsOwnAssignmentPrefix(t *testing.T) {
 // binding, so there is nothing for it to keep, and what is left behind is
 // what the declaration put on the cell underneath.
 func TestTheGlobalLetterTakesThePromotionQuestionAway(t *testing.T) {
+	t.Parallel()
 	promotes := func(reaches Answer) func(*Semantics) {
 		return func(s *Semantics) {
 			globalLetter(reaches)(s)

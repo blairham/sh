@@ -23,6 +23,7 @@ import (
 // the two trimming readings part there and nowhere else, which is why one
 // axis with three values and not one boolean (#1360).
 func TestWhatReadDoesWithAnEscapedSeparatorAtTheEnd(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src                     string
 		kept, fromARemainder, trimmed string
@@ -137,6 +138,7 @@ func TestWhatReadDoesWithAnEscapedSeparatorAtTheEnd(t *testing.T) {
 // escaped separator is not whitespace at all. Reporting there would refuse a
 // line all six shells answer the same way.
 func TestTheReadTrimAxisIsAskedOnlyAtAnEscapedClosingSeparator(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		refused   bool

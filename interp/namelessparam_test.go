@@ -33,6 +33,7 @@ func nameless(d *syntax.Dialect) {
 // identical until a field count is asked for, which is what the last row
 // does.
 func TestAnExpansionWithNoNameAtAll(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a default over the name that is not there", `printf "[%s]" "${:-abc}"`, "[abc]"},
 		{"and its alternate never fires", `printf "[%s]" "${:+abc}"`, "[]"},
@@ -82,6 +83,7 @@ func TestAnExpansionWithNoNameAtAll(t *testing.T) {
 // silent — the parameter reading answers the option letters and the nameless
 // one answers the empty string, both at status 0.
 func TestACharacterThatIsAParameterIsNotAMissingName(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(
 		t,
 		`set -u; case "${-}" in *u*) echo the-parameter;; *) echo a-missing-name;; esac`,
@@ -113,6 +115,7 @@ func TestACharacterThatIsAParameterIsNotAMissingName(t *testing.T) {
 // letting the assignment through answers `abc` at status 0 and carries on,
 // which is a plausible value where the shell stopped.
 func TestTheNameThatIsNotThereCannotBeAssignedToOrBeSet(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the conditional assignment", `echo "[${:=abc}]"`, "not an identifier: "},
 		{"the unconditional one", `echo "[${::=abc}]"`, "not an identifier: "},
@@ -152,6 +155,7 @@ func TestTheNameThatIsNotThereCannotBeAssignedToOrBeSet(t *testing.T) {
 // implementation that read every `:` operator the new way would answer the
 // empty string for `${#:+w}` and 0 for the two after it, all at status 0.
 func TestALengthOverANamelessExpansion(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the operand is what is measured", `set -- p q; printf "[%s]" "${#:-word}"`, "[4]"},
 		{"and an empty one measures zero", `set -- p q; printf "[%s]" "${#:-}"`, "[0]"},
@@ -177,6 +181,7 @@ func TestALengthOverANamelessExpansion(t *testing.T) {
 // answers differ, so the flag is what decides which — the parameter `$#` with
 // a default that never fires, and 2.
 func TestWithoutTheFlagANamelessExpansionIsUnreadable(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`echo "${:-abc}"`, `echo "${}"`, `echo "${%x}"`, `echo "${:=abc}"`} {
 		out, st := runGrammar(t, src+`; echo AFTER`, nil, nil)
 		if st == 0 || strings.Contains(out, "AFTER") {

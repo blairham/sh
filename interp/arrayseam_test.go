@@ -26,6 +26,7 @@ import (
 // only one of them would leave the other three landing nowhere: the whole
 // array, an append, one element, and an `unset`.
 func TestAWriteToAProducedArrayReachesItsWriter(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	held := []string{"a", "b"}
@@ -52,6 +53,7 @@ printf '[%s]' "${view[@]}"`)
 // produced name began at nothing, so the write landed at the subscript it
 // named and every element the producer would have reported was gone.
 func TestEveryWriteToAProducedArrayStartsFromWhatItHolds(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		restores        Answer
@@ -112,6 +114,7 @@ func TestEveryWriteToAProducedArrayStartsFromWhatItHolds(t *testing.T) {
 // producer going on answering every read, so nothing said the write had gone
 // nowhere.
 func TestASubscriptOnAProducedArrayIsAnElement(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	held := []string{"aa", "bb"}
@@ -149,6 +152,7 @@ printf '[%s]' "${view[@]}"`)
 // pass none of them; a reading that inserted after the element would pass the
 // first and fail the rest.
 func TestAnArrayLiteralThroughASubscriptSplicesAProducedArray(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"one element becomes two", `view[2]=(p q)`, "[a][p][q][c]"},
 		{"one element becomes none", `view[2]=()`, "[a][c]"},

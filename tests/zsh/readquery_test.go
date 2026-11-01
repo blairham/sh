@@ -31,6 +31,7 @@ import (
 // reads the terminal by default, and a here-string on standard input does not
 // redirect it.
 func TestReadQueryAnswersYesOrNo(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"a small yes", `read -q -u0 <<<y`, "st=0 [y]"},
 		{"a capital yes is normalized", `read -q -u0 <<<Y`, "st=0 [y]"},
@@ -66,6 +67,7 @@ print -r -- "st=$? [$REPLY]"
 // print it, so it would read the same whether or not the builtin had also
 // written `REPLY` itself.
 func TestReadQueryWithANameLeavesTheDefaultAlone(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `REPLY=seed; ans=unset
 read -q -u0 ans <<<Y
 print -r -- "st=$? [$ans][$REPLY]"
@@ -82,6 +84,7 @@ print -r -- "st=$? [$ans][$REPLY]"
 // The same sentence `read -k` makes, and carrying no location and no builtin
 // name for the same measured reason.
 func TestReadQueryWithNoTerminalSaysSo(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `REPLY=seed
 read -q <<<y
 print -r -- "st=$? [$REPLY]"
@@ -98,6 +101,7 @@ print -r -- "st=$? [$REPLY]"
 // With no count the read is one character and the two readings agree on every
 // row above, so this is the only place the noun is pinned.
 func TestReadQueryJudgesTheTextItRead(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"one character of yy", `read -q -k1 -u0 <<<yy`, "st=0 [y]"},
 		{"two characters of yy", `read -q -k2 -u0 <<<yy`, "st=1 [n]"},
@@ -132,6 +136,7 @@ print -r -- "st=$? [$REPLY]"
 // directly is the only place the claim can be made, because the behavior they
 // are supposed to agree about is exactly what one of them cannot reach.
 func TestReadsTwoLetterTablesDoNotOverlap(t *testing.T) {
+	t.Parallel()
 	accepted := zsh.Semantics().ReadOptions
 	missing := diagTable(zsh.Diagnostics()).UnimplementedOptionLetters["read"]
 	if accepted == "" || missing == "" {

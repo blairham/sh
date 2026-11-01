@@ -16,6 +16,7 @@ import "testing"
 // xterm-256color): every row writes exactly the sentence for its last
 // assignment and nothing else (#6422).
 func TestScopeLintsAreSilentAboutTheEnginesOwnState(t *testing.T) {
+	t.Parallel()
 	const create = "f: scalar parameter x created globally in function f\n"
 	const nested = "f: scalar parameter x set in enclosing scope in function f\n"
 	for _, tc := range []struct{ name, src, want string }{

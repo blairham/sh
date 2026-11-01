@@ -23,6 +23,7 @@ import (
 // actions are. This is the half that belongs to this package: which of this
 // shell's names reach them.
 func TestTheCompletionWidgetNamesReachTheEditor(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		want repl.Widget
@@ -63,6 +64,7 @@ func TestTheCompletionWidgetNamesReachTheEditor(t *testing.T) {
 // nothing, and naming a source of candidates for a completion that will not
 // happen would be a table saying something untrue.
 func TestACompletionWidgetOverTheNewCompletersKeepsItsFunction(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		completer string
 		want      repl.Binding
@@ -89,6 +91,7 @@ func TestACompletionWidgetOverTheNewCompletersKeepsItsFunction(t *testing.T) {
 // The listing prints the name back, which is what a person who ran `bindkey`
 // then asks for.
 func TestTheNewCompletionWidgetsAreNamedBackByAListing(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{
 		"list-choices", "delete-char-or-list", "menu-complete",
 		"reverse-menu-complete", "expand-or-complete-prefix",

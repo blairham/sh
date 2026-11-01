@@ -13,6 +13,7 @@ import (
 // shell selects none. Measured 2026-10-07 on bash 5.3.20; see
 // Semantics.InsideEmacsTurnsEditingOff for the table (#6310).
 func TestInsideEmacsTurnsTheEditingModeOff(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name        string
 		vars        map[string]string

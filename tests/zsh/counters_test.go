@@ -18,6 +18,7 @@ import (
 // altogether fails the control rather than passing this against an empty
 // haystack.
 func TestTheThreeCountersAreFrozenProducedIntegers(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `
 		for n in HISTCMD ZSH_SUBSHELL TTYIDLE ARGC; do
 			print -r -- "$n ${(P)+n} ${(tP)n} ${(P)n}"
@@ -40,6 +41,7 @@ func TestTheThreeCountersAreFrozenProducedIntegers(t *testing.T) {
 
 // The four listing forms, which the three answer exactly as `$ARGC` does.
 func TestTheThreeCountersAnswerTheFourListingForms(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"HISTCMD", "ZSH_SUBSHELL", "TTYIDLE", "ARGC"} {
 		t.Run(name, func(t *testing.T) {
 			// `typeset -p NAME` writes nothing, at 0.
@@ -79,6 +81,7 @@ func TestTheThreeCountersAnswerTheFourListingForms(t *testing.T) {
 // moves both. Asserted with a list that has something in it — an empty list
 // makes both spellings 0 and the row would agree about nothing.
 func TestTheHistoryCounterIsTheNumberThePromptDraws(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "h")
 	if err := os.WriteFile(path, []byte("one\ntwo\nthree\n"), 0o600); err != nil {

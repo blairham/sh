@@ -55,6 +55,7 @@ func TestAWithdrawnBuiltinIsNotThere(t *testing.T) {
 // a withdrawn one is not there, and must not appear in the list of names
 // somebody switched off.
 func TestAWithdrawnBuiltinIsNotADisabledOne(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, "enable -n\necho end", func(r *Runner) {
 		r.Register("zzmark", func(_ *Runner, _ context.Context, _ []string) int { return 0 })
 		r.SetBuiltinWithdrawn("zzmark", true)
@@ -67,6 +68,7 @@ func TestAWithdrawnBuiltinIsNotADisabledOne(t *testing.T) {
 // The state is per-Runner and goes into a subshell with the rest of the
 // tables, and a withdrawal made inside one does not reach back out.
 func TestWithdrawalIsClonedIntoASubshellAndDoesNotEscapeIt(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, "( zzmark; echo in=$? )\nzzmark; echo out=$?", func(r *Runner) {
 		r.Register("zzmark", func(_ *Runner, _ context.Context, _ []string) int { return 7 })
 	})

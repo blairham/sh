@@ -16,6 +16,7 @@ import (
 // Reversed it would be `a\\tb`, which is a plausible answer and the wrong
 // one.
 func TestTheVisibleFlagMakesControlCharactersVisible(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `s=$'a\tb'
 print -r -- "[${(V)s}]"
 n=$'a\nb'

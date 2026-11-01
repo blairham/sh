@@ -18,6 +18,7 @@ import (
 // The here-document row is the route the parser does not see: an unquoted
 // body is read into words when it runs, through the same scanner.
 func TestALineContinuationInArithmeticIsRemovedOnEveryRoute(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an expansion", "echo \"[$(( 1\\\n+1 ))]\"", "[2]"},
 		{"an assignment's value", "x=$((3 \\\n+ 3)); echo \"[$x]\"", "[6]"},

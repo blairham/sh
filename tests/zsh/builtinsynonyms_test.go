@@ -14,6 +14,7 @@ import "testing"
 // outside completion; `bye`; and `logout`, which refuses a shell that is not a
 // login one and ends it anyway.
 func TestTheBuiltinsZshListsAreHere(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(
 		t,
 		t.TempDir(),
@@ -42,6 +43,7 @@ logout; print -r -- unreached`,
 // **`getln` is `read -zr`**, so what was pushed comes back with its
 // backslashes.
 func TestGetlnKeepsABackslash(t *testing.T) {
+	t.Parallel()
 	// Measured on zsh 5.9.2: `[a\b]` and `[c\]`.
 	out, st := runZsh(
 		t,
@@ -59,6 +61,7 @@ func TestGetlnKeepsABackslash(t *testing.T) {
 // `too many arguments`, `co` is 80, `am` is yes, `bw` no, an unknown code is
 // `no such capability`, and with no terminal at all `echotc md` is silent at 1.
 func TestEchotcReadsTheTermcapNames(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), xtermLikeTerminal(t)+`echotc md; print " $?"
 echotc cm 3 4; print " $?"
 echotc cm; print " $?"

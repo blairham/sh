@@ -33,6 +33,7 @@ func substitutingNothing(d *syntax.Dialect) {
 // first block below and fail the second, and the reading that was here before
 // — quote everything empty as `”` — passes the second and fails the first.
 func TestAWordBranchThatSubstitutedNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The bug as reported: nested, with a default, everything empty.
 		{"a nested expansion with an empty default", `x=(); y=""; printf "[%s]" "${(q)${x}:-$y}"`, "[]"},

@@ -34,6 +34,7 @@ func zleParam(t *testing.T, src string) string {
 // shell will run and then the function it calls, in that order — measured, so
 // a shell that wrote them the other way round is caught by the same row.
 func TestAWidgetSaysWhichKindItIs(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"one the editor performs itself",
@@ -77,6 +78,7 @@ func TestAWidgetSaysWhichKindItIs(t *testing.T) {
 // is a name that is not a widget. Nothing is being hidden by the empty string,
 // and `${+widgets[nosuch]}` of 0 is a true answer rather than a guess.
 func TestANameThatIsNotAWidgetReadsEmpty(t *testing.T) {
+	t.Parallel()
 	got := zleParam(t, `print -r -- "${+widgets[nosuch]} [${widgets[nosuch]}]"`)
 	if want := "0 []\n"; got != want {
 		t.Errorf("output = %q, want %q", got, want)
@@ -90,6 +92,7 @@ func TestANameThatIsNotAWidgetReadsEmpty(t *testing.T) {
 // Read, define, read again in one shell — the only shape that tells a view
 // from a snapshot taken early.
 func TestWidgetsIsAViewAndNotASnapshot(t *testing.T) {
+	t.Parallel()
 	got := zleParam(t, `print -r -- "[${widgets[later]}]"`+"\n"+
 		"f(){ }\nzle -N later f\n"+
 		`print -r -- "[${widgets[later]}]"`)
@@ -107,6 +110,7 @@ func TestWidgetsIsAViewAndNotASnapshot(t *testing.T) {
 // `bindkey -l` in the same shell prints the same nine sorted. A list with no
 // stated order is not one to imitate.
 func TestKeymapsIsTheSameListBindkeyPrints(t *testing.T) {
+	t.Parallel()
 	got := zleParam(t, `print -r -- "$keymaps"`+"\nbindkey -l\n")
 	names := ".safe command emacs isearch main vicmd viins viopp visual"
 	want := names + "\n" + strings.ReplaceAll(names, " ", "\n") + "\n"
@@ -129,6 +133,7 @@ func TestKeymapsIsTheSameListBindkeyPrints(t *testing.T) {
 // a reference, so the two assignment rows arm their own refusal and are left
 // as they were. Measured 2026-09-27; see interp/deferredparam.go (#4895).
 func TestBothAreReadonlyAndHidden(t *testing.T) {
+	t.Parallel()
 	const refer = ": ${+widgets} ${+keymaps}\n"
 	for _, c := range []struct{ name, src, want string }{
 		{"a widget assignment", "widgets[x]=y", "zsh:1: read-only variable: widgets\n"},
@@ -168,6 +173,7 @@ func TestBothAreReadonlyAndHidden(t *testing.T) {
 // all. The listing is asserted with it, because a module that loads while
 // naming nothing would pass a bare status check.
 func TestTheZleParameterModuleLoads(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"zmodload zsh/zleparameter && zmodload -lF zsh/zleparameter\n")
 	if want := "+p:keymaps\n+p:widgets\n"; out != want || st != 0 {
@@ -184,6 +190,7 @@ func TestTheZleParameterModuleLoads(t *testing.T) {
 //
 // Pinned as a *set* rather than a count, because a count agrees by accident.
 func TestTheWidgetsParameterIsTheListingRoster(t *testing.T) {
+	t.Parallel()
 	got := zleParam(t, "zmodload zsh/zleparameter\n"+
 		`print -rl -- ${(ko)widgets}`+"\n")
 	listed := zleParam(t, "zle -la\n")
@@ -200,6 +207,7 @@ func TestTheWidgetsParameterIsTheListingRoster(t *testing.T) {
 // against zsh 5.9: `zle -N end-of-line f` makes `$widgets[end-of-line]` read
 // `user:f` while `$widgets[.end-of-line]` goes on reading `builtin`.
 func TestARedefinitionLeavesTheDottedSpellingAlone(t *testing.T) {
+	t.Parallel()
 	got := zleParam(t, "zmodload zsh/zleparameter\nf() { :; }\nzle -N end-of-line f\n"+
 		`print -r -- "[$widgets[end-of-line]] [$widgets[.end-of-line]]"`+"\n")
 	if want := "[user:f] [builtin]\n"; got != want {
@@ -214,6 +222,7 @@ func TestARedefinitionLeavesTheDottedSpellingAlone(t *testing.T) {
 // lists — the editor's actions bare and dotted, a user widget, one written
 // over an action, a completion widget — and some it does not.
 func TestOneWidgetReadsWhatTheTableHolds(t *testing.T) {
+	t.Parallel()
 	out := zleParam(t, `f(){ }
 zle -N mywidget
 zle -N backward-char f

@@ -33,6 +33,7 @@ func withExponentLetter(format FloatFormatPolicy) func(*Semantics) {
 // The letter is a **format** and not a width, which is the whole of why it is
 // an axis: the two readings agree on almost no value a script would write.
 func TestTheExponentLetterRendersByTheAxis(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src   string
 		exponent    string
@@ -77,6 +78,7 @@ func TestTheExponentLetterRendersByTheAxis(t *testing.T) {
 // refuses by name, the way every unanswered axis does — rather than picking
 // one shell's numbers and reporting success.
 func TestAnUnansweredFloatFormatRefuses(t *testing.T) {
+	t.Parallel()
 	_, errs, st := floatRun(t, `typeset -E 3 v=1.5`,
 		withExponentLetter(FloatFormatUnspecified), Diagnostics{})
 	if st == 0 || !strings.Contains(errs, "the `E` letter of a declaration") {
@@ -87,6 +89,7 @@ func TestAnUnansweredFloatFormatRefuses(t *testing.T) {
 // The plain letter is unaffected by the axis, which is what says the two
 // letters are one attribute with two renderings rather than two attributes.
 func TestThePlainFloatLetterIgnoresTheFormat(t *testing.T) {
+	t.Parallel()
 	for _, p := range []FloatFormatPolicy{FloatFormatExponentWithPlaces, FloatFormatSignificantDigits} {
 		out, errs, st := floatRun(t, `typeset -F 3 v=100; echo "$v"`, withExponentLetter(p), Diagnostics{})
 		if st != 0 || errs != "" {
@@ -102,6 +105,7 @@ func TestThePlainFloatLetterIgnoresTheFormat(t *testing.T) {
 // word, which is the rule that makes any numeric letter reachable under the
 // stricter dialect's name.
 func TestADetachedNumberAndTheWordEnd(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{BuiltinBadNameNumeric: map[string]string{"typeset": "not an identifier: %[2]s"}}
 	for _, c := range []struct {
 		name, src    string
@@ -162,6 +166,7 @@ func TestADetachedNumberAndTheWordEnd(t *testing.T) {
 // so only what the *next* assignment renders as says which attribute the name
 // now carries.
 func TestABareFloatLetterAndAStandingPrecision(t *testing.T) {
+	t.Parallel()
 	for _, p := range []struct {
 		name  string
 		reset Answer
@@ -189,6 +194,7 @@ func TestABareFloatLetterAndAStandingPrecision(t *testing.T) {
 
 // Whether the integer letter and a float letter may stand on one declaration.
 func TestTheNumericLettersTogether(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{BuiltinUsage: map[string]string{"typeset": "typeset: usage: typeset [-aAiEFprx]"}}
 	for _, c := range []struct{ name, src, read, taken string }{
 		// The first letter written wins where the pair is taken, which the

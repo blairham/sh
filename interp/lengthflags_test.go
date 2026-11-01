@@ -12,6 +12,7 @@ import "testing"
 // the element count, and `"a b  c"` separates `w` from `W` by the empty field
 // between the two spaces. Single-word data would have hidden all of it.
 func TestTheLengthFlags(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The plain answers first, so the modifiers are read against them.
 		{"without a flag a list counts elements", `a=(abc de f); printf "[%s]" "${#a}"`, "[3]"},
@@ -106,6 +107,7 @@ func TestTheLengthFlags(t *testing.T) {
 // left. A `j` separator makes it visible from the other side: it changes the
 // join and does not change the count.
 func TestALengthIsTakenBeforeTheQuotedJoin(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a quoted list still counts elements", `a=(abc de f); printf "[%s]" "${(U)#a}"`, "[3]"},
 		{"a join separator does not reach the count", `a=(abc de f); printf "[%s]" "${(Uj.-.)#a}"`, "[3]"},
@@ -139,6 +141,7 @@ func TestALengthIsTakenBeforeTheQuotedJoin(t *testing.T) {
 // that says nothing. Measured on zsh 5.9.2, 2026-09-26, with the escape set
 // this package installs.
 func TestThePrintFlagReachesTheCountedSeparator(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The control: the same count without the flag, which both readings
 		// answer alike and which is what says the count itself is not moving.

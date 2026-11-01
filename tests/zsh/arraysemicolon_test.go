@@ -21,12 +21,14 @@ import (
 //	$ zsh s.sh          # a=( x; y ); echo "n=${#a[@]}"
 //	n=2
 func TestASemicolonSeparatesArrayElementsHere(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Dialect().SemicolonInAnArrayLiteral; got != syntax.SemicolonSeparatesArrayElementsLikeANewline {
 		t.Errorf("SemicolonInAnArrayLiteral = %v, want SemicolonSeparatesArrayElementsLikeANewline", got)
 	}
 }
 
 func TestTheSeparatorStandsWhereANewlineDoesHere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, out string
 	}{
@@ -53,6 +55,7 @@ func TestTheSeparatorStandsWhereANewlineDoesHere(t *testing.T) {
 // The controls, by the token each refusal names: `;;` is still its own token
 // here, and no other control operator stands between elements.
 func TestTheSeparatorIsTheSemicolonAloneHere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, token string }{
 		{`a=( x;; y )`, ";;"},
 		{`a=( x & )`, "&"},

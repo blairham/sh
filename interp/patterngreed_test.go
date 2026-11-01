@@ -29,6 +29,7 @@ import (
 // gave back every value with a leading blank — `[[:blank:]]#` matched none of
 // the space and the `(*)` after it took the space along with the value.
 func TestARepetitionTakesAsMuchAsItCan(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a closure takes every repetition, not none",
@@ -106,6 +107,7 @@ func TestARepetitionTakesAsMuchAsItCan(t *testing.T) {
 // merely reporting a different split — the failure that would not show up in
 // a capture at all.
 func TestGreedDoesNotDecideWhetherAPatternMatches(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// A closure that has to stop early so the rest can match.
 		{`[[ aab == a#ab ]] && echo hit || echo miss`, "hit"},
@@ -172,6 +174,7 @@ func runGreedInCharacters(t *testing.T, src string) (string, int) {
 // in one repetition, read shortest-first it takes `é` twice and reports the
 // last one. Both match, and only the capture tells them apart. #2531.
 func TestAnAlternationOverCharactersTakesTheLongerArm(t *testing.T) {
+	t.Parallel()
 	const src = `[[ 'ééX' == (#b)(éé|é)#(*) ]] && echo "[${match[1]}][${match[2]}]"`
 	out, _ := runGreedInCharacters(t, src)
 	if got := strings.TrimSpace(out); got != "[éé][X]" {
@@ -180,6 +183,7 @@ func TestAnAlternationOverCharactersTakesTheLongerArm(t *testing.T) {
 }
 
 func TestAStarOverCharactersTakesAsMuchAsItCan(t *testing.T) {
+	t.Parallel()
 	const src = `[[ 'éé9' == (#b)*(*) ]] && echo "[${match[1]}]"`
 	out, _ := runGreedInCharacters(t, src)
 	if got := strings.TrimSpace(out); got != "[]" {

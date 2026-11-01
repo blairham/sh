@@ -37,6 +37,7 @@ import "testing"
 // option takes the attribute away and the value stored becomes the
 // expression's own rendering.
 func TestPosixIdentifiersOverTheGridInBothStates(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, c := range []struct{ name, src, off, on string }{
 		{
@@ -139,6 +140,7 @@ func TestPosixIdentifiersOverTheGridInBothStates(t *testing.T) {
 // a reading under which `xx` would be unset and `$(( xx = 5 ))` would have no
 // value.
 func TestPosixIdentifiersWithholdsTheAttributeAndNotTheName(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, c := range []struct{ name, src, want string }{
 		{"the name exists", `(( xx = 5 )); print -r -- "[${xx-UNSET}]"`, "[5]\n"},
@@ -169,6 +171,7 @@ func TestPosixIdentifiersWithholdsTheAttributeAndNotTheName(t *testing.T) {
 // what keeps the rule from reading as "the option switches arithmetic
 // attributes off".
 func TestPosixIdentifiersReachesOnlyADeclarationItWouldHaveMade(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, c := range []struct{ name, src, want string }{
 		{
@@ -231,6 +234,7 @@ typeset -p b`,
 // refused identically in both states on this shell and on zsh 5.9.2, so the
 // declaration effect cannot be a consequence of it.
 func TestPosixIdentifiersIsNotAboutWhatTheNameIsSpelledWith(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	// The name held fixed at a plain POSIX identifier, the option varied.
 	for _, c := range []struct{ name, setopt, want string }{
@@ -276,6 +280,7 @@ func TestPosixIdentifiersIsNotAboutWhatTheNameIsSpelledWith(t *testing.T) {
 // whatever the first assignment left it, because the second assignment
 // declares nothing at all.
 func TestPosixIdentifiersIsReadWhenTheAssignmentRuns(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, c := range []struct{ name, src, want string }{
 		{
@@ -332,6 +337,7 @@ func TestPosixIdentifiersIsReadWhenTheAssignmentRuns(t *testing.T) {
 // `localoptions` puts it back at the function's return. All measured on zsh
 // 5.9.2, 2026-09-26.
 func TestPosixIdentifiersThroughEmulationAndScope(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, c := range []struct{ name, src, want string }{
 		{"emulate sh", "emulate sh\n(( xx = 5 ))\nprint -r -- \"${(t)xx}\"", "scalar\n"},

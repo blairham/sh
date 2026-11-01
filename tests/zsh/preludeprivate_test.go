@@ -21,6 +21,7 @@ import "testing"
 // #1117's trade and not this one's: whatever that ends up saying, a name the
 // shell does not have says `none`.
 func TestAPrivatePreludeHelperIsNotAName(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		src, want string
@@ -45,6 +46,7 @@ func TestAPrivatePreludeHelperIsNotAName(t *testing.T) {
 // helper and `pushd -q` reads its option letters through the other one, so
 // both have to keep working while neither has a name a script can ask about.
 func TestThePrivateHelpersStillDoTheWork(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZshPrelude(t, dir, "cd "+dir+"\npushd -q /usr\npushd +1\ndirs -l -p\n")
 	if st != 0 {

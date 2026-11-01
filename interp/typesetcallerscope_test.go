@@ -14,6 +14,7 @@ import (
 // it declares into the keyword call it runs in, and onto the shell's own name
 // only where there is none. Tests name the axis, never shells.
 func TestTypesetLocalNeedsKeywordFunctionDeclaresIntoTheKeywordCaller(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 	}{
@@ -68,6 +69,7 @@ func TestTypesetLocalNeedsKeywordFunctionDeclaresIntoTheKeywordCaller(t *testing
 // Where every function has a scope of its own, the same line declares into
 // the function it is written in, and nothing is lent.
 func TestTypesetLocalNeedsKeywordFunctionNoKeepsItsOwnScope(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) {
 		callFreeze(Yes)(s)
 		s.TypesetLocalNeedsKeywordFunction = No

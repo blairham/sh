@@ -16,6 +16,7 @@ import "testing"
 // `(P)` reads what it was handed, and the same `(P)` not nested runs its
 // operator on the value.
 func TestANestedPInnerIsAReference(t *testing.T) {
+	t.Parallel()
 	const pre = "b=(yy x); B=(Q R); n=b\n"
 	for _, c := range []struct{ src, want string }{
 		{`print -r -- "${(j:|:)${(P)n}}"`, "yy|x"},
@@ -50,6 +51,7 @@ func TestANestedPInnerIsAReference(t *testing.T) {
 // on a `(P)` of a name nothing declared is a bad substitution nested as it is
 // not, and the word never runs. Recorded from zsh 5.9.2 on 2026-10-05.
 func TestANestedPInnerOnAnUndeclaredNameIsRefusedBeforeItsWord(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `print -r -- "[${${(P)nope-$(echo RAN)}}]"; print -r -- after`)
 	if want := "zsh:1: bad substitution\n"; out != want || st != 1 {
 		t.Errorf("got %q, %d, want %q, 1", out, st, want)

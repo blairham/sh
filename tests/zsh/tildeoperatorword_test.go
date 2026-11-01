@@ -10,6 +10,7 @@ import "testing"
 // under `emulate sh` (#5151, a chunk of D04parameter.ztst). Measured
 // 2026-10-02 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f`, `LC_ALL=C`).
 func TestALeadingTildeInASplitOperatorWordIsOneField(t *testing.T) {
+	t.Parallel()
 	const setup = "l() { print -rn -- \"$#:\"; for w; print -rn -- \"<$w>\"; print }\nf() { emulate -L sh; local HOME='/a b'; "
 	for _, tc := range []struct{ src, want string }{
 		{`l ${1:-~}; }; f`, "1:</a b>\n"},

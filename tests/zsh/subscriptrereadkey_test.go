@@ -18,6 +18,7 @@ import "testing"
 // here and a quotation there, which is
 // Semantics.SubscriptIsAQuotingContext (#3902).
 func TestASubscriptReReadOutOfAValueNamesTheKeyItHolds(t *testing.T) {
+	t.Parallel()
 	const table = `typeset -A m; k="q'r'z"; m[$k]=4; b='a\c'; m[$b]=11; `
 	for _, tc := range []struct{ name, src, want string }{
 		{"apostrophes", `e='m[$k]'; printf "[%s]" "$(( $e ))"`, "[4]"},

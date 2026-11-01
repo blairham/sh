@@ -26,6 +26,7 @@ import (
 // Semantics.UnsetReachesTheFunctionTable, and it is asked at the
 // disagreement: only where the name has a function and holds no parameter.
 func TestPlainUnsetReachingTheFunctionTable(t *testing.T) {
+	t.Parallel()
 	const fn = "f() { echo ran; }\n"
 	for _, c := range []struct {
 		name    string
@@ -61,6 +62,7 @@ func TestPlainUnsetReachingTheFunctionTable(t *testing.T) {
 // answer runs every `unset` that is not the disagreement — which is nearly
 // all of them — and refuses only the one shape the panel splits over.
 func TestAnUnansweredPresetOnlyRefusesTheDisagreement(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name    string
 		src     string
@@ -88,6 +90,7 @@ func TestAnUnansweredPresetOnlyRefusesTheDisagreement(t *testing.T) {
 // reaches a prelude function standing in for a builtin, and a builtin is not
 // what a plain `unset` removes in any column.
 func TestAPreludeFunctionIsNotRemovedByAPlainUnset(t *testing.T) {
+	t.Parallel()
 	out, st := unsetTableRun(t, "unset pushd\necho \"st=$?\"\ntype pushd\n", 0)
 	if st == 2 && strings.Contains(out, "unset") {
 		t.Errorf("said %q at status %d, want no question asked about a name the shell provides", out, st)

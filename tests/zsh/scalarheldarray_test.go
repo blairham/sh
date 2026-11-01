@@ -10,6 +10,7 @@ import "testing"
 // on zsh 5.9 under `-c` (#5643). See
 // interp.Semantics.ScalarHeldUnderTheArrayLetterListsAsAScalar.
 func TestAScalarStoreIntoAnEmptyArrayListsAsAnArray(t *testing.T) {
+	t.Parallel()
 	if out, st := runZsh(t, t.TempDir(), `typeset -a x; x=/y; typeset -p x`); out != "typeset x=/y\n" || st != 0 {
 		t.Errorf("got %q at %d", out, st)
 	}

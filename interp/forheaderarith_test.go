@@ -26,6 +26,7 @@ import (
 // branches because both shells give up for both — the same pairing
 // ArithCommandErrorStatusIsTwo found one construct over.
 func TestAForHeaderStopsTheInputOnlyWhenItIsFatal(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, header string }{
 		{"the condition", `for (( i=0; i<1/0; i++ )); do :; done`},
 		{"the initializer", `for (( i=1/0;; )); do break; done`},
@@ -66,6 +67,7 @@ func TestAForHeaderStopsTheInputOnlyWhenItIsFatal(t *testing.T) {
 // A header that evaluates never reaches the question, which is what keeps
 // `for ((;;))` an endless loop rather than a fatal one.
 func TestAForHeaderThatEvaluatesIsNotFatal(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	sem.ForHeaderArithmeticErrorIsFatal = Yes
 	out, st := run(t, `for (( i=0; i<2; i++ )); do echo body; done; echo two`,
@@ -83,6 +85,7 @@ func TestAForHeaderThatEvaluatesIsNotFatal(t *testing.T) {
 // single field could not carry both, so the two answers have to be reachable
 // independently — which is what this asserts, in each direction.
 func TestTheForHeaderAxisIsNotTheArithmeticCommandsOne(t *testing.T) {
+	t.Parallel()
 	header := PosixSemantics()
 	header.ForHeaderArithmeticErrorIsFatal = Yes
 	header.ArithCommandErrorIsFatal = No
@@ -107,6 +110,7 @@ func TestTheForHeaderAxisIsNotTheArithmeticCommandsOne(t *testing.T) {
 // and measured to be the same: ksh93 and zsh both print `after` over a sourced
 // file whose only line is a failing header.
 func TestAFatalForHeaderEndsTheSourcedFileAlone(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	script := filepath.Join(dir, "s.sh")
 	if err := os.WriteFile(script, []byte("for (( i=1/0;; )); do :; done\necho insrc\n"), 0o600); err != nil {
@@ -145,6 +149,7 @@ func TestAFatalForHeaderEndsTheSourcedFileAlone(t *testing.T) {
 // It fails loudly if a later change hoists the ask, which is the whole reason
 // it is written down.
 func TestACleanForHeaderAsksNothing(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src string }{
 		{"three parts that evaluate", `for (( i=0; i<2; i++ )); do :; done; echo "ok=$?"`},
 		{"a body that breaks out of an endless header", `for ((;;)); do break; done; echo "ok=$?"`},
@@ -165,6 +170,7 @@ func TestACleanForHeaderAsksNothing(t *testing.T) {
 // disagreement, so an unanswered vector refuses it by name rather than quietly
 // picking a side. Both failure branches, because the axis answers for both.
 func TestAFailedForHeaderIsRefusedWhenNothingAnswered(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`for (( i=0; i<1/0; i++ )); do :; done`,
 		`for (( i=1/0;; )); do break; done`,

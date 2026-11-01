@@ -18,6 +18,7 @@ import (
 // (`/opt/homebrew/bin/zsh -f` under `env -i PATH=/usr/bin:/bin`, from `-c`
 // and from a script file), the sentence compared byte for byte (#6513).
 func TestARefusedStoreThroughPrintOrZparseoptsLeavesZeroFromACommandString(t *testing.T) {
+	t.Parallel()
 	const ro = "zsh:1: read-only variable: v\n"
 	for _, tc := range []struct {
 		src, want string
@@ -59,6 +60,7 @@ func TestARefusedStoreThroughPrintOrZparseoptsLeavesZeroFromACommandString(t *te
 // above: with `-K` and nothing matched there is no store, so a frozen name
 // says nothing and the script carries on, and an unfrozen name is filled.
 func TestAZparseoptsStoreNothingRefusesNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"typeset -r v=1; zparseopts -K -A v a; echo after $?", "after 0\n"},
 		{"typeset -r v=1; zparseopts -K -a v a; echo after $?", "after 0\n"},

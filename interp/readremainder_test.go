@@ -21,6 +21,7 @@ import (
 // Measured 2026-09-07 across dash, bash 5.3.15, bash as `sh`, bash 3.2.57,
 // ksh93u+ and zsh 5.9.2. Every row below is unanimous across the six.
 func TestTheLastNameOnAReadTakesTheRemainderOfTheLine(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the idiom, whole",
@@ -106,6 +107,7 @@ func TestTheLastNameOnAReadTakesTheRemainderOfTheLine(t *testing.T) {
 // about, and every one of them is written with `-r` or with no backslash in
 // it so that none of them reaches the axis.
 func TestAReadRemainderLosesOnlyItsClosingIFSWhitespace(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a closing separator run is not whitespace and stays",

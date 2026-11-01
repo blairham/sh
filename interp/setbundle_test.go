@@ -40,6 +40,7 @@ func setRun(t *testing.T, dir string, tweak func(*Semantics), src string) (strin
 // own: `set -euo pipefail` is the line at the top of a great many scripts, and
 // it was refused outright.
 func TestOAtTheEndOfABundle(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	// The named option takes effect. Without `-e` here: with it the script
 	// stops at the failing pipeline and never reaches the echo, which is
@@ -71,6 +72,7 @@ func TestOAtTheEndOfABundle(t *testing.T) {
 
 // A bundle ending in `o` with nothing after it has no name to read.
 func TestABundleEndingInOListsTheOptions(t *testing.T) {
+	t.Parallel()
 	// `set -eo` with nothing after it applies the letters and then lists —
 	// measured in bash, dash and zsh alike; the old refusal ("-o needs an
 	// option name") was ours alone.
@@ -87,6 +89,7 @@ func TestABundleEndingInOListsTheOptions(t *testing.T) {
 // name is read rather than after — otherwise `set -Zo pipefail` would set
 // pipefail on its way to complaining.
 func TestABadLetterInABundleIsRefusedFirst(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	// `set`'s own status, not the script's — the echo after it succeeds and
 	// would report 0 whatever `set` did.
@@ -103,6 +106,7 @@ func TestABadLetterInABundleIsRefusedFirst(t *testing.T) {
 // shells that have the option. An ordinary failing pipeline stops all of them,
 // so the axis is only about the failure the option adds.
 func TestErrexitAndAPipefailOnlyFailure(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, c := range []struct {
 		name    string

@@ -56,6 +56,7 @@ func offsetOf(t *testing.T, f *countingFile) int64 {
 // next reader of the descriptor sees: measured, `{ read -r l; cat; } < f`
 // hands `cat` the second line onward in every shell in the panel.
 func TestLineReadersReadAFileInBlocksAndPutBackTheRest(t *testing.T) {
+	t.Parallel()
 	var text strings.Builder
 	for i := range 10 {
 		text.WriteString("line ")
@@ -116,6 +117,7 @@ func TestLineReadersReadAFileInBlocksAndPutBackTheRest(t *testing.T) {
 // the callback two and four, on a file and on a pipe alike. Read ahead in a
 // block, that is only true if the block is put back before the callback runs.
 func TestAMapfileCallbackReadsFromWhereTheElementEnded(t *testing.T) {
+	t.Parallel()
 	f := lineFile(t, "one\ntwo\nthree\nfour\n")
 	out, _ := mapfileRun(t, `mapfile -t -c 1 -C 'read x; echo "cb=$x";:' arr; echo "${arr[*]}"`,
 		func(r *Runner) { r.Stdin = f })
@@ -127,6 +129,7 @@ func TestAMapfileCallbackReadsFromWhereTheElementEnded(t *testing.T) {
 // The control: a pipe cannot be put back, so a read from one still takes a
 // byte at a time and leaves the rest in the pipe for whoever reads next.
 func TestALineReaderLeavesTheRestOfAPipe(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`read -r a; echo "$a"`, `mapfile -n 1 arr; echo "${arr[0]}"`} {
 		t.Run(src, func(t *testing.T) {
 			pr, pw, err := os.Pipe()

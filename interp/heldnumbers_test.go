@@ -217,6 +217,7 @@ func TestARedirectionListsSubstitutionsAreMadeFirst(t *testing.T) {
 // ksh93u+ (#6503). `{v}` numbers are this shell's own table, so the rows are
 // exact numbers rather than positions in the kernel's free list.
 func TestTheLastPipelineElementHoldsANumber(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		own  OwnDescriptorNumbers
 		src  string
@@ -629,6 +630,7 @@ func TestACommandSubstitutionBodyHoldsANumber(t *testing.T) {
 // so every number here is one below zsh's. And `exec`'s list saves as any
 // list does, given back when it has applied, in both dialects that save.
 func TestAJoinHoldsNumbersWhileItsListApplies(t *testing.T) {
+	t.Parallel()
 	const (
 		stream = SavedStreamsAndPipeReadEndsTakeNumbers
 		each   = EachRedirectionSavesItsStreams

@@ -19,6 +19,7 @@ import (
 // body on the same line as its `f() {` is offset zero — and the number is
 // left out entirely there rather than written as a nought.
 func TestAMessageMayBeNamedForItsFunction(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 	}{
@@ -64,6 +65,7 @@ func TestAMessageMayBeNamedForItsFunction(t *testing.T) {
 // Every other dialect names the file and counts from the top of it, inside a
 // function as much as outside.
 func TestWithoutThatAnswerTheFileIsNamed(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"in a function", "f() {\n  true\n  nosuchcmd\n}\nf\n", "sh:3: "},
 		{"on one line", "f() { nosuchcmd; }\nf\n", "sh:1: "},

@@ -54,6 +54,7 @@ func slashDir(t *testing.T) string {
 // strings. A count is not evidence: three matches come back three matches
 // whether or not any of them kept its slash.
 func TestATrailingSlashStaysOnEveryMatch(t *testing.T) {
+	t.Parallel()
 	dir := slashDir(t)
 	for _, tc := range []struct{ name, src, want string }{
 		// The reproduction. Directories only, and each with its slash — the
@@ -102,6 +103,7 @@ func TestATrailingSlashStaysOnEveryMatch(t *testing.T) {
 // pattern's matches absolute and a relative one's relative, and those are two
 // different lines of code — so the slash has to be written back on both.
 func TestATrailingSlashOnAnAbsolutePatternToo(t *testing.T) {
+	t.Parallel()
 	dir := slashDir(t)
 	want := "[" + filepath.Join(dir, "cx") + "/]"
 	if got := runIn(t, dir, `printf "[%s]" `+dir+`/c*/`); got != want {
@@ -115,6 +117,7 @@ func TestATrailingSlashOnAnAbsolutePatternToo(t *testing.T) {
 // bash with the option and zsh without one both answer `cx/ cx/dx/` for
 // `cx/**/`, never `cx// cx/dx/`.
 func TestATrailingSlashSurvivesTheStarStarSelfDirectory(t *testing.T) {
+	t.Parallel()
 	dir := slashDir(t)
 	opt := withOption(StarStarCrossesDirectories, true,
 		withOption(StarStarAloneCrossesDirectories, true,
@@ -141,6 +144,7 @@ func TestATrailingSlashSurvivesTheStarStarSelfDirectory(t *testing.T) {
 // `zz*/` and not `zz*` — which is a thing the split could plausibly break and
 // nothing else here would notice.
 func TestATrailingSlashOnAMissThatIsAnError(t *testing.T) {
+	t.Parallel()
 	dir := slashDir(t)
 	out, _ := run(t, `printf "[%s]" zz*/`, func(r *Runner) {
 		r.Dir = dir
@@ -162,6 +166,7 @@ func TestATrailingSlashOnAMissThatIsAnError(t *testing.T) {
 // answer those three names bare, the list having taken the slash out of the
 // suffix — which is a live mutant and not a hypothetical.
 func TestATrailingSlashSurvivesAQualifierList(t *testing.T) {
+	t.Parallel()
 	dir := slashDir(t)
 	want := `[ax_dir/][cx/][sym/]`
 	if got, _ := runQualifiedWith(t, dir, `printf "[%s]" */(N)`, nil); got != want {

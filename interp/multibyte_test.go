@@ -30,6 +30,7 @@ func runLocale(t *testing.T, answer Answer, env []string, src string) (string, i
 // checked for the absence of a diagnostic would pass against the byte count
 // this exists to stop being the only answer.
 func TestALengthCountsWhatTheLocaleCallsACharacter(t *testing.T) {
+	t.Parallel()
 	const src = `s=héllo; t=日本語; printf "[%s][%s]" "${#s}" "${#t}"`
 	for _, tc := range []struct {
 		name string
@@ -59,6 +60,7 @@ func TestALengthCountsWhatTheLocaleCallsACharacter(t *testing.T) {
 // that makes the others count characters. Named as the axis and not as a
 // shell, which is what a test in this package may say.
 func TestAShellWithoutTheDecoderCountsBytesInEveryLocale(t *testing.T) {
+	t.Parallel()
 	const src = `s=héllo; printf "[%s]" "${#s}"`
 	for _, env := range [][]string{nil, {"LC_ALL=C"}, {"LC_ALL=C.UTF-8"}, {"LC_ALL=ja_JP.UTF-8"}} {
 		out, st := runLocale(t, No, env, src)
@@ -73,6 +75,7 @@ func TestAShellWithoutTheDecoderCountsBytesInEveryLocale(t *testing.T) {
 // skipped rather than being an answer of its own, which is the half a
 // precedence chain written as "the first name that is set" gets wrong.
 func TestTheLocaleVariablesAreConsultedInOrder(t *testing.T) {
+	t.Parallel()
 	const src = `s=héllo; printf "[%s]" "${#s}"`
 	for _, tc := range []struct {
 		name string
@@ -101,6 +104,7 @@ func TestTheLocaleVariablesAreConsultedInOrder(t *testing.T) {
 // the next command. Measured: `LC_ALL=C; s=héllo; echo ${#s}` gives 6 in every
 // panel member started under a UTF-8 locale.
 func TestTheLocaleIsReadFromTheShellsOwnVariables(t *testing.T) {
+	t.Parallel()
 	out, st := runLocale(t, Yes, []string{"LC_ALL=C.UTF-8"}, `s=héllo; LC_ALL=C; printf "[%s]" "${#s}"`)
 	if out != "[6]" || st != 0 {
 		t.Errorf("an assignment did not move it: got %q (status %d), want %q at 0", out, st, "[6]")
@@ -114,6 +118,7 @@ func TestTheLocaleIsReadFromTheShellsOwnVariables(t *testing.T) {
 // The codeset is compared without case and without the hyphen, and a
 // `@modifier` after it is not part of it.
 func TestTheCodesetIsSpelledSeveralWays(t *testing.T) {
+	t.Parallel()
 	const src = `s=héllo; printf "[%s]" "${#s}"`
 	for _, name := range []string{
 		"en_US.UTF-8", "en_US.utf8", "en_US.UTF8", "en_US.utf-8",
@@ -137,6 +142,7 @@ func TestTheCodesetIsSpelledSeveralWays(t *testing.T) {
 // ends: folding it into U+FFFD gives the right *length* with a value nothing
 // put there, and refusing it gives neither.
 func TestAnUndecodableByteIsOneCharacterOfItsOwn(t *testing.T) {
+	t.Parallel()
 	setVar := func(r *Runner) { r.SeedVars(map[string]string{"s": "a\x80b"}) }
 	withVar := func(t *testing.T, src string) (string, int) {
 		t.Helper()
@@ -177,6 +183,7 @@ func TestAnUndecodableByteIsOneCharacterOfItsOwn(t *testing.T) {
 // including from the end. An implementation that converted one end and not the
 // other would cut a character in half here rather than fail.
 func TestASubstringCountsTheSameUnitAsALength(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, utf8, single string
 	}{
@@ -203,6 +210,7 @@ func TestASubstringCountsTheSameUnitAsALength(t *testing.T) {
 // `${#a[@]}` is a count and not a length, so it is the same number in every
 // locale; `${#a[N]}` is the width of one element and moves with the codeset.
 func TestACountIsNotALength(t *testing.T) {
+	t.Parallel()
 	const src = `a=(héllo 日本語); printf "[%s][%s][%s]" "${#a[@]}" "${#a[0]}" "${#a[1]}"`
 	if out, st := runLocale(t, Yes, []string{"LC_ALL=C.UTF-8"}, src); out != "[2][5][3]" || st != 0 {
 		t.Errorf("in UTF-8: got %q (status %d), want %q at 0", out, st, "[2][5][3]")
@@ -217,6 +225,7 @@ func TestACountIsNotALength(t *testing.T) {
 // property that keeps `${#x}` working in the core, whose answer to nearly
 // every axis is "unanswered".
 func TestAnAsciiValueAsksNothing(t *testing.T) {
+	t.Parallel()
 	out, st := runLocale(t, Unspecified, []string{"LC_ALL=C.UTF-8"}, `x=abcd; printf "[%s][%s]" "${#x}" "${x:1:2}"`)
 	if out != "[4][bc]" || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, "[4][bc]")
@@ -239,6 +248,7 @@ func TestAnAsciiValueAsksNothing(t *testing.T) {
 // default. The two together are the axis: a value and a locale that make the
 // readings disagree is the only shape that needs a dialect.
 func TestANonAsciiValueInAUtf8LocaleNeedsAnAnswer(t *testing.T) {
+	t.Parallel()
 	out, st := runLocale(t, Unspecified, []string{"LC_ALL=C.UTF-8"}, `s=héllo; printf "[%s]" "${#s}"`)
 	if !strings.Contains(out, "a character being the locale's rather than a byte") {
 		t.Errorf("got %q, want the axis named", out)
@@ -257,6 +267,7 @@ func TestANonAsciiValueInAUtf8LocaleNeedsAnAnswer(t *testing.T) {
 // panel splits, both answers are plausible numbers, and neither shell reports
 // anything — Semantics.UnsetLocaleIsUnicodeAware (#2020).
 func TestAnUnsetLocaleCountsByTheAxis(t *testing.T) {
+	t.Parallel()
 	const src = `s=héllo; printf "[%s]" "${#s}"`
 	for _, tc := range []struct {
 		name   string
@@ -283,6 +294,7 @@ func TestAnUnsetLocaleCountsByTheAxis(t *testing.T) {
 // And it is refused by name where it decides, rather than answered by a
 // default, which is what makes it an axis rather than this package's opinion.
 func TestAnUnsetLocaleNeedsAnAnswer(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `s=héllo; printf "[%s]" "${#s}"`, func(r *Runner) {
 		sem := *r.Semantics
 		sem.MultibyteEncodingIsHonored = Yes
@@ -303,6 +315,7 @@ func TestAnUnsetLocaleNeedsAnAnswer(t *testing.T) {
 // one is. Both rows leave both axes unanswered on purpose, so a clean answer
 // is evidence that nothing was asked.
 func TestTheLocaleQuestionsAreAskedInOrder(t *testing.T) {
+	t.Parallel()
 	const src = `s=héllo; printf "[%s]" "${#s}"`
 	t.Run("a named single-byte locale asks neither", func(t *testing.T) {
 		out, st := run(t, src, func(r *Runner) {

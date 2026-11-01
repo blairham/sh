@@ -23,6 +23,7 @@ import (
 // with `[-1]` stuck on the end — never equal, so the hook list was rebuilt at
 // every prompt (#846).
 func TestASubscriptNeedsNoBraces(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an element", `a=(x y z); echo "[$a[1]]"`, "[x]\n"},
 		{"the last element", `a=(x y z); echo "[$a[-1]]"`, "[z]\n"},
@@ -50,6 +51,7 @@ func TestASubscriptNeedsNoBraces(t *testing.T) {
 // shell says anything, so a script testing `$#a` against zero tests the count
 // in this shell and the two characters `0a` in the others.
 func TestALengthNeedsNoBraces(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an array's count", `a=(x y z); echo "[$#a]"`, "[3]\n"},
 		{"an empty array", `a=(); echo "[$#a]"`, "[0]\n"},

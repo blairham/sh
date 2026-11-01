@@ -19,6 +19,7 @@ import (
 // This engine refused all of them and — worse — the refusal was **fatal**,
 // so a `local` of a frozen name at a prompt cost the session.
 func TestADeclarationShadowsAFrozenNameHere(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().DeclarationMayShadowAReadonly; got != interp.Yes {
 		t.Errorf("DeclarationMayShadowAReadonly = %v, want Yes", got)
 	}
@@ -49,6 +50,7 @@ echo after`)
 // And the outer name is frozen again when the function returns, which is
 // what a shadow that merely cleared the attribute would get wrong.
 func TestTheFrozenNameComesBackFrozenHere(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -r x=1
 f() { local x=2; }
 f

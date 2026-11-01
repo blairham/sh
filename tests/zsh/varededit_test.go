@@ -56,6 +56,7 @@ func varedEdit(
 // the row a guess gets wrong: `IFS=:` with `a=(one two)` draws `one:two` in
 // zsh, the same rule `$*` joins on.
 func TestVaredPutsTheValueInTheLine(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"a scalar", `v=hello; vared v`, "hello"},
 		{"an array, joined", `a=(one two); vared a`, "one two"},
@@ -76,6 +77,7 @@ func TestVaredPutsTheValueInTheLine(t *testing.T) {
 // And what is stored is decided by the kind that is already there, with the
 // `-a` and `-A` letters deciding only for a name that is not.
 func TestVaredStoresWhatWasAccepted(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, edited, accepted, probe, want string }{
 		{"a scalar", `v=hello`, "v", "helloXY", `print -r -- "[$v]"`, "[helloXY]"},
 		{
@@ -111,6 +113,7 @@ func TestVaredStoresWhatWasAccepted(t *testing.T) {
 // `-c` creates the name, and `-a` and `-A` say which kind — which is the whole
 // of what those two letters are for and why they are ignored without it.
 func TestVaredCreatesTheKindTheLettersName(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, accepted, want string }{
 		{"a scalar", `vared -c newv; print -r -- "[$newv]"`, "made", "[made]"},
 		{
@@ -136,6 +139,7 @@ func TestVaredCreatesTheKindTheLettersName(t *testing.T) {
 
 // The three letters that change the read rather than the value.
 func TestVaredSaysWhatTheReadIs(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src string
 		want      interp.LineEdit
@@ -171,6 +175,7 @@ func TestVaredSaysWhatTheReadIs(t *testing.T) {
 // would not tell an interrupt that failed one command from one that abandoned
 // the line.
 func TestVaredInterruptedAbandonsTheLine(t *testing.T) {
+	t.Parallel()
 	out, st, _ := varedEdit(t,
 		`v=hello; vared v; print after`, "", interp.LineEditInterrupted)
 	if st != 130 {
@@ -184,6 +189,7 @@ func TestVaredInterruptedAbandonsTheLine(t *testing.T) {
 // End of input is 1, leaves the variable alone, and does *not* abandon the
 // line — which is the difference from the interrupt above.
 func TestVaredEndedByEndOfInputLeavesTheValue(t *testing.T) {
+	t.Parallel()
 	out, st, _ := varedEdit(t,
 		`v=hello; vared -e v; print -r -- "st=$? [$v]"`, "", interp.LineEditEndOfInput)
 	if st != 0 {
@@ -222,6 +228,7 @@ func TestVaredRefusesTheLettersItCannotHonor(t *testing.T) {
 // And with no editor behind the terminal the sentence says which half is
 // missing, rather than claiming the terminal is unreachable.
 func TestVaredWithATerminalAndNoEditorSaysSo(t *testing.T) {
+	t.Parallel()
 	f := preset.Parse(t, `v=x; vared v`)
 	var buf strings.Builder
 	r := preset.Runner(dialecttest.Base{
@@ -241,6 +248,7 @@ func TestVaredWithATerminalAndNoEditorSaysSo(t *testing.T) {
 // 5.9.2 — `local l=x; vared l` leaves `${(t)l}` at `scalar-local`, and the
 // pattern substitution after it works on the string (#5966).
 func TestVaredKeepsTheKindItEdited(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, accepted, want string }{
 		{"a local scalar", `f() { local l=x; vared l; print -r -- "${(t)l} ${#l} ${#l//[^)]/}"; }; f`, "(1+", "scalar-local 3 0"},
 		{"a local with no value", `f() { local l; vared l; print -r -- "${(t)l} [$l]"; }; f`, "ab", "scalar-local [ab]"},
@@ -260,6 +268,7 @@ func TestVaredKeepsTheKindItEdited(t *testing.T) {
 // renders PS1 (#5965) — repl's TestAPromptValueInARequestIsRendered is the
 // half that draws it.
 func TestVaredAsksForItsPromptToBeExpanded(t *testing.T) {
+	t.Parallel()
 	_, _, asked := varedEdit(t, `v=x; vared -p '%1v> ' v`, "x", interp.LineEditAccepted)
 	if asked.Prompt != "%1v> " || !asked.ExpandPrompt {
 		t.Errorf("asked for %+v, want the prompt %q marked for expansion", asked, "%1v> ")

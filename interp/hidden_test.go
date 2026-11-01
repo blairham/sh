@@ -17,6 +17,7 @@ import (
 // with diagnostics. A score that compares only the status cannot see them.
 
 func TestRedirectionWithNoCommandStillOpensTheFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "b")
 	if _, st := run(t, `> `+path, nil); st != 0 {
@@ -36,6 +37,7 @@ func TestRedirectionWithNoCommandStillOpensTheFile(t *testing.T) {
 }
 
 func TestBraceExpansionIsADialectQuestion(t *testing.T) {
+	t.Parallel()
 	// The BraceExpansion axis: on one side the word expands, on the other it
 	// is a literal. Both answers are quiet, so both are asserted.
 	expands := permissive()
@@ -54,6 +56,7 @@ func TestBraceExpansionIsADialectQuestion(t *testing.T) {
 }
 
 func TestBracketCaretIsADialectQuestion(t *testing.T) {
+	t.Parallel()
 	// The BracketCaretNegates axis: `^` negates the class, or is an ordinary
 	// member — so `[^abc]` against `d` matches on one side and falls through
 	// on the other. Both answers are matches, on different inputs, with

@@ -19,6 +19,7 @@ import (
 // so this rides an axis rather than the letter — see
 // Semantics.ReadArrayTakesOneNameOnly.
 func TestReadArrayTakesOneNameOnly(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().ReadArrayTakesOneNameOnly; got != interp.Yes {
 		t.Errorf("ReadArrayTakesOneNameOnly = %v, want Yes", got)
 	}
@@ -50,6 +51,7 @@ print "C st=$? a3=(${(j:,:)a3})"`)
 // `REPLY` — which these two used to write instead — is left alone. A script
 // that seeded either one can tell, which is why both are seeded here.
 func TestReadKeysAndQueryFillTheArrayLettersName(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(
 		t,
 		t.TempDir(),
@@ -76,6 +78,7 @@ REPLY=S;             read -k2 -u0      <<<'xy'; print "5 st=$? REPLY=[$REPLY]"`,
 // `reply`, which is an array parameter before the read. So `-A` moves the name
 // these two letters fill and does not make the text a list.
 func TestReadKeysThroughTheArrayLetterStoresAScalar(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `ctrl=(xy); print "C t=${(t)ctrl} n=${#ctrl[@]}"
 a=(p q); read -k2 -u0 -A a <<<'xy'
 print "1 t=${(t)a} n=${#a[@]} join=[${(j:|:)a}]"

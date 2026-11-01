@@ -68,6 +68,7 @@ func bareCrossingKsh93(dir string) func(*Runner) {
 // spell the first one differently, so the separator is a property of neither
 // the directory nor the `**`.
 func TestZeroLevelStarStarIsNamedByWhatStandsAheadOfIt(t *testing.T) {
+	t.Parallel()
 	dir := starStarTree(t, []string{"cx/dx"}, []string{"ax", "cx/dx/ax"})
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -136,6 +137,7 @@ func TestZeroLevelStarStarIsNamedByWhatStandsAheadOfIt(t *testing.T) {
 // matches the middle component at two depths there is only one route to
 // anything and the assertion cannot fail.
 func TestPathnameExpansionKeepsEveryRouteToAName(t *testing.T) {
+	t.Parallel()
 	dir := starStarTree(t, []string{"cx/cx"}, []string{"ax", "cx/cx/ax"})
 	const want = `[cx][cx/cx][cx/cx][cx/cx/ax][cx/cx/ax]`
 	out, _ := run(t, `printf "[%s]" **/cx/**`, bareCrossing(dir))
@@ -154,6 +156,7 @@ func TestPathnameExpansionKeepsEveryRouteToAName(t *testing.T) {
 // against `cx/ cx/ cx/dx/ cx/dx/ cx/dx/` in zsh — one copy per way of
 // splitting the path between the two components.
 func TestRunOfStarStarIsOneComponentOnlyWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	dir := starStarTree(t, []string{"cx/dx"}, []string{"ax", "cx/dx/ax"})
 	for _, tc := range []struct {
 		name string
@@ -184,6 +187,7 @@ func TestRunOfStarStarIsOneComponentOnlyWhereTheDialectSaysSo(t *testing.T) {
 // the empty component a pattern ends with follows no further `**`, so it
 // still writes its own slash rather than disappearing into the run.
 func TestRunOfStarStarStopsAtTheNextComponent(t *testing.T) {
+	t.Parallel()
 	dir := starStarTree(t, []string{"cx/dx"}, []string{"ax", "cx/dx/ax"})
 	for _, tc := range []struct{ name, src, want string }{
 		{"a real component behind the run", `printf "[%s]" **/**/ax`, `[ax][cx/dx/ax]`},
@@ -217,6 +221,7 @@ func TestRunOfStarStarStopsAtTheNextComponent(t *testing.T) {
 // is `*/q/**` against `**/q/**`: both spell a literal `q`, both hold a
 // pattern ahead of it, and they differ.
 func TestZeroLevelStarStarIsNamedByWhatStandsAheadOfItInKsh93(t *testing.T) {
+	t.Parallel()
 	dir := starStarTree(t,
 		[]string{"p/q/w"},
 		[]string{"topf", "p/pf", "p/q/qf", "p/q/w/leaf"})

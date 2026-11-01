@@ -65,6 +65,7 @@ func withoutRedirectionComplaints(out string) string {
 // and still there when the function returns, and not the function's local.
 // See interp.Semantics.PrefixToALocalDeclarationIsALocal.
 func TestPosixBuiltinsKeepsAPrefixInFrontOfADeclaration(t *testing.T) {
+	t.Parallel()
 	for _, o := range posixDeclarationOptionStates {
 		for _, w := range posixDeclarationWords {
 			kept := o.on && w.special
@@ -101,6 +102,7 @@ func TestPosixBuiltinsKeepsAPrefixInFrontOfADeclaration(t *testing.T) {
 // the precommand words that end the script. Inside an `eval` in a subshell it
 // ends the subshell, which is what the second snippet reads.
 func TestPosixBuiltinsMakesARedirectionFailureOnADeclarationFatal(t *testing.T) {
+	t.Parallel()
 	for _, o := range posixDeclarationOptionStates {
 		for _, w := range posixDeclarationWords {
 			fatal := o.on && w.special

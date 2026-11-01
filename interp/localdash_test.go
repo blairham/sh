@@ -38,6 +38,7 @@ func savesOptions(yes Answer) func(*Runner) {
 }
 
 func TestLocalDashPutsTheOptionsBack(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 	}{
@@ -107,6 +108,7 @@ func TestLocalDashPutsTheOptionsBack(t *testing.T) {
 // declaration it was — nothing about this change may reach that shell, and
 // the options a body sets stay set.
 func TestWhereTheDashIsANameItStaysOne(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `f() { local -; set -u; }; f; echo "after=$-"`, savesOptions(No))
 	// What "a name" then means is the dialect's: the substrate's own answer
 	// is that it is not a valid one, and zsh — the shell this answer is for —
@@ -123,6 +125,7 @@ func TestWhereTheDashIsANameItStaysOne(t *testing.T) {
 // The axis is asked only where the operand was written: an ordinary `local`
 // runs under a Runner holding no answer at all.
 func TestAnOrdinaryLocalNeverAsks(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.LocalDashSavesTheShellOptions = Unspecified
 
@@ -150,6 +153,7 @@ func TestAnOrdinaryLocalNeverAsks(t *testing.T) {
 // reaches the row at all, because the shell that lists every parameter reads
 // `-` as a parameter name and never makes the save (#4048).
 func TestLocalDashListsAsOneOfTheCallsLocals(t *testing.T) {
+	t.Parallel()
 	listsLocals := func(r *Runner) {
 		sem := permissive()
 		sem.LocalDashSavesTheShellOptions = Yes

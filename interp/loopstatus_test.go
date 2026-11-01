@@ -11,6 +11,7 @@ import "testing"
 // case, and a shell that only reports the last command run passes every case
 // where something preceded the loop and failed.
 func TestALoopAnswersWithItsBody(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -49,6 +50,7 @@ func TestALoopAnswersWithItsBody(t *testing.T) {
 // The status a loop reports is the one an and-or chain judges, which is the
 // consequence that makes the difference visible without `$?`.
 func TestALoopSStatusIsWhatAChainJudges(t *testing.T) {
+	t.Parallel()
 	src := `i=0; while [ $i -lt 1 ]; do i=1; false; done && echo yes || echo no`
 	if out, _ := run(t, src, nil); out != "no\n" {
 		t.Errorf("%s: got %q, want %q", src, out, "no\n")
@@ -61,6 +63,7 @@ func TestALoopSStatusIsWhatAChainJudges(t *testing.T) {
 // something of its own to say, so the first iteration and the condition both
 // see what preceded the loop.
 func TestALoopDoesNotZeroTheStatusOnTheWayIn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the first iteration of a for sees what preceded the loop",

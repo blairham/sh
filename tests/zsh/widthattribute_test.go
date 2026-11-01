@@ -18,6 +18,7 @@ import (
 // with a scratch HOME, ZDOTDIR and HISTFILE, from a script file; the rule and
 // the wider measurement table are in interp/fieldwidth.go.
 func TestTheWidthAttributePresentsTheValue(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset -L 5 a=ab; print -r -- "[$a]"`, "[ab   ]\n"},
@@ -79,6 +80,7 @@ func TestTheWidthAttributePresentsTheValue(t *testing.T) {
 // answers the listing right and every later read wrong, once the name holds
 // something shorter than the value that taught it.
 func TestTheWidthIsLearnedAndListsItselfBack(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset -L f=xy; typeset -p f`, "typeset -L2 f=xy\n"},
@@ -117,6 +119,7 @@ func TestTheWidthIsLearnedAndListsItselfBack(t *testing.T) {
 // `typeset -i16r v=255` re-reads as the base `16r`, so the listing was not
 // the declaration it claimed to be. One rule serves both letters.
 func TestANumberedLetterEndsItsWordInTheListing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset -ri 16 v=255; typeset -p v`, "typeset -i16 -r v=255\n"},
@@ -148,6 +151,7 @@ func TestANumberedLetterEndsItsWordInTheListing(t *testing.T) {
 // the boundary. Measured 2026-09-12 on zsh 5.9.2 through `env`: `a=AB`,
 // `b=xy`, `c=7` — the case fold went and the two paddings did not.
 func TestAChildIsToldTheRawTextButTheFoldedCase(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	show := filepath.Join(dir, "show")
 	body := "#!/bin/sh\nprintf '%s\\n' \"[$a][$b][$c]\"\n"
@@ -179,6 +183,7 @@ show`
 // keeps it, which is what says this is about the re-creation and not about
 // arrays refusing the letter.
 func TestAnArrayLiteralDropsTheWidthAttribute(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset -L 5 s; s=(a bb); typeset -p s`, "typeset -a s=( a bb )\n"},
@@ -216,6 +221,7 @@ func TestAnArrayLiteralDropsTheWidthAttribute(t *testing.T) {
 // script file under `env -i PATH=/usr/bin:/bin`; `go version -m` says *not a
 // Go executable* for it and `github.com/blairham/sh/cmd/zsh` for ours.
 func TestTheZeroFillLetterCombinesWithTheLeftJustification(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().DeclareZeroFillLetter; got != interp.DeclareZeroFillLetterCombinesWithTheLeftJustification {
 		t.Errorf("DeclareZeroFillLetter = %v, want a combination with the left "+
 			"justification", got)
@@ -290,6 +296,7 @@ func TestTheZeroFillLetterCombinesWithTheLeftJustification(t *testing.T) {
 // winning, where ksh93 answers the pair with typeset's usage block and ends
 // the script. Measured 2026-09-18 (#2859).
 func TestAWidthLetterSharesWithTheIntegerLetter(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().WidthLettersExcludeTheIntegerLetter; got != interp.No {
 		t.Errorf("WidthLettersExcludeTheIntegerLetter = %v, want No", got)
 	}
@@ -322,6 +329,7 @@ func TestAWidthLetterSharesWithTheIntegerLetter(t *testing.T) {
 // discarded by a detached number. Varying only the letters, which is what the
 // suite above does, agrees under every reading.
 func TestTwoWidthLettersReallyReadLeaveNoWidth(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"L and R in separate words",
@@ -405,6 +413,7 @@ func TestTwoWidthLettersReallyReadLeaveNoWidth(t *testing.T) {
 // what say the answer is the order and not "a number already stored":
 // `-L4 -L0` really does fall back to the width the value teaches.
 func TestTheLastWidthNumberWritten(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().WidthNumberPrecedence; got != interp.WidthNumberLastWrittenWins {
 		t.Errorf("WidthNumberPrecedence = %v, want the last number written", got)
 	}
@@ -439,6 +448,7 @@ func TestTheLastWidthNumberWritten(t *testing.T) {
 // Measured 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0), `-f` from a
 // script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` (#4828).
 func TestAWidthLetterOnALaterDeclarationJoinsThePair(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{

@@ -60,6 +60,7 @@ func pipeRun(t *testing.T, src string) (errOut string, status int) {
 }
 
 func TestADefaultBrokenPipeEndsTheWriter(t *testing.T) {
+	t.Parallel()
 	errOut, _ := pipeRun(t, `echo hi; echo after >&2`)
 	if errOut != "" {
 		t.Errorf("stderr = %q, want nothing — the writer is dead and says so to no one", errOut)

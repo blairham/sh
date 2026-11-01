@@ -26,6 +26,7 @@ import (
 // answer would always be yes. A reading taken at the end would pass every row
 // below but the last two.
 func TestTheRunnerSaysWhetherExitRanOutsideAFile(t *testing.T) {
+	t.Parallel()
 	sourced := filepath.Join(t.TempDir(), "quits.sh")
 	if err := os.WriteFile(sourced, []byte("exit 3\n"), 0o600); err != nil {
 		t.Fatal(err)

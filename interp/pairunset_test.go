@@ -82,6 +82,7 @@ func TestUnsettingHalfAWordlessPairLeavesTheOtherHalf(t *testing.T) {
 // ask gets the first and last wrong; one that stopped after any `unset` gets
 // the middle two wrong.
 func TestAWordlessPairMirrorsOnlyIntoAHalfThatIsStillThere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"array gone, scalar written", `W=a:b; unset w; W=x:y; echo "+w=${+w} W=[$W]"`, "+w=0 W=[x:y]\n"},
 		{"array gone, array written", `W=a:b; unset w; w=(q r); echo "+w=${+w} W=[$W]"`, "+w=1 W=[q:r]\n"},
@@ -105,6 +106,7 @@ func TestAWordlessPairMirrorsOnlyIntoAHalfThatIsStillThere(t *testing.T) {
 // them apart was written wrong once and caught here: a mirror that asked only
 // "is the other half removed" left `${+s}` at 0 after `unset s; S=/y`.
 func TestUnsettingHalfATieStillRemovesBoth(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the scalar half", `S=a:b; unset S; echo "+S=${+S} +s=${+s}"`, "+S=0 +s=0\n"},
 		{"the array half", `S=a:b; unset s; echo "+S=${+S} +s=${+s}"`, "+S=0 +s=0\n"},

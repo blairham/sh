@@ -66,6 +66,7 @@ func prefixCostRun(t *testing.T, c prefixCost, src string) (stdout, stderr strin
 // that can tell "did not give the list up" from "gave it up": on separate
 // lines every reading reaches the line after.
 func TestWhatARefusedAssignmentPrefixCosts(t *testing.T) {
+	t.Parallel()
 	// The status a fatal refusal leaves is the dialect's for a fatal error
 	// and not this axis's — 1 in ksh93 and zsh, 2 in dash, and this preset's
 	// is the standard's.
@@ -196,6 +197,7 @@ func TestWhatARefusedAssignmentPrefixCosts(t *testing.T) {
 // would have earned: the lookup never happens, so a name nothing can run is
 // not "not found".
 func TestALostCommandReportsTheRefusalsStatus(t *testing.T) {
+	t.Parallel()
 	out, errs, st := prefixCostRun(t,
 		prefixCost{Yes, PrefixRefusalNeverFatal, Yes},
 		"readonly x=1\nx=2 nosuchcmd_zz; echo after")
@@ -212,6 +214,7 @@ func TestALostCommandReportsTheRefusalsStatus(t *testing.T) {
 // for it, so no value produces it; the state was ours in two dialects, which
 // is what the `;` cells of #1219 measured.
 func TestNoAnswerAbandonsTheListAlone(t *testing.T) {
+	t.Parallel()
 	for _, c := range []prefixCost{
 		{Yes, PrefixRefusalNeverFatal, No},
 		{Yes, PrefixRefusalNeverFatal, Yes},
@@ -230,6 +233,7 @@ func TestNoAnswerAbandonsTheListAlone(t *testing.T) {
 // frozen, which is what keeps them off the common path. With no answers at
 // all, an ordinary prefix still works.
 func TestAnUnfrozenPrefixAsksNoAxis(t *testing.T) {
+	t.Parallel()
 	none := prefixCost{Unspecified, PrefixRefusalFatalityUnspecified, Unspecified}
 	for _, src := range []string{
 		"y=2 /bin/echo RAN",
@@ -248,6 +252,7 @@ func TestAnUnfrozenPrefixAsksNoAxis(t *testing.T) {
 // And with a frozen name they are refused by name rather than guessed at:
 // four answers for the fatality, none of which contains another.
 func TestAnUnansweredPrefixRefusalIsRefused(t *testing.T) {
+	t.Parallel()
 	none := prefixCost{Unspecified, PrefixRefusalFatalityUnspecified, Unspecified}
 	out, errs, _ := prefixCostRun(t, none, "readonly x=1\nx=2 /bin/echo RAN; echo after")
 	if !strings.Contains(errs, "what a refused assignment prefix costs") ||

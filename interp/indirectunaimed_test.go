@@ -44,6 +44,7 @@ func runUnaimedIndirection(t *testing.T, abandons Answer, dg Diagnostics) func(s
 // It answered the empty string at status 0 — a silent empty that reads exactly
 // like a reference aimed at a name holding nothing. See #3490.
 func TestAnIndirectionOverAReferenceThatPointsNowhereIsRefused(t *testing.T) {
+	t.Parallel()
 	run := runUnaimedIndirection(t, Yes, Diagnostics{
 		IndirectionUnaimedReference: "%[1]s: invalid indirect expansion",
 	})
@@ -124,6 +125,7 @@ echo after`)
 // asks, and is not a second question here: one dialect gives up the rest of
 // the line and runs the next, the other ends the script.
 func TestWhatTheUnaimedIndirectionRefusalCostsTheScript(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{IndirectionUnaimedReference: "%[1]s: no reference name"}
 
 	out, st := runUnaimedIndirection(t, Yes, dg)(`typeset -n u

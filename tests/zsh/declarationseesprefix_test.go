@@ -19,6 +19,7 @@ import "testing"
 // prefix is in place, and an ordinary command's argument never sees it. See
 // interp/prefixoperandorder.go.
 func TestADeclarationsOperandSeesItsPrefix(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"typeset", `v=old; v=new typeset y=$v; echo "y=$y v=$v"`, "y=new v=old\n"},
 		{"export", `v=old; v=new export y=$v; echo "y=$y v=$v"`, "y=new v=old\n"},
@@ -70,6 +71,7 @@ func TestADeclarationsOperandSeesItsPrefix(t *testing.T) {
 // The command's trace line writes the operand as it expanded behind the
 // prefix. Measured the same day and the same way.
 func TestADeclarationsTracedOperandSeesItsPrefix(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"scalars",

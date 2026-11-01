@@ -17,6 +17,7 @@ import "testing"
 // `env -i` with a scratch `HOME`. Each row is a pair: a class reading and a
 // literal reading agree on half of all subjects.
 func TestARegexDigitEscapeIsTheLetter(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src    string
 		status int

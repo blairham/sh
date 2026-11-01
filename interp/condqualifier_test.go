@@ -63,6 +63,7 @@ func runCondition(t *testing.T, dir, src string) (string, int) {
 // interp/condqualifier.go for the whole table and for what it is load-bearing
 // for.
 func TestAConditionOperandEndingInAQualifierGroupIsMatched(t *testing.T) {
+	t.Parallel()
 	dir := conditionDir(t)
 	for _, tc := range []struct{ name, src, want string }{
 		// The pair that says the group is doing the work: the same word with
@@ -110,6 +111,7 @@ func TestAConditionOperandEndingInAQualifierGroupIsMatched(t *testing.T) {
 // else — which is what says the word really went to the filesystem rather
 // than being emptied by a rule of its own.
 func TestAConditionOperandThatMatchesNothingIsTheDialectsMiss(t *testing.T) {
+	t.Parallel()
 	dir := conditionDir(t)
 	out, st := runCondition(t, dir, `[[ -n zz(#q) ]] && printf yes || printf no`)
 	if st == 0 || !containsSub(out, "no matches found") {

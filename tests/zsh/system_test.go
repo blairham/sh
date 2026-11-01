@@ -74,6 +74,7 @@ func TestSysParamsReportsTheProcessThisShellIsIn(t *testing.T) {
 // matters in the wild and is asserted as a whole line below, because a
 // test on the value alone passes for a shell that ends the script.
 func TestProcSubstPidIsEmptyRatherThanZero(t *testing.T) {
+	t.Parallel()
 	got := sysParam(t, `print -r -- "[$sysparams[procsubstpid]]"`)
 	if want := "[]\n"; got != want {
 		t.Errorf("output = %q, want %q", got, want)
@@ -85,6 +86,7 @@ func TestProcSubstPidIsEmptyRatherThanZero(t *testing.T) {
 // replaces, the `print` never happened; against an answer of 0, the `kill`
 // branch is taken and it is the shell's own process group.
 func TestTheGuardInFrontOfTheKillSkipsAnEmptyProcSubstPid(t *testing.T) {
+	t.Parallel()
 	got := sysParam(t, `pid=$sysparams[procsubstpid]
 [[ -n $pid ]] && print -r -- "WOULD KILL -$pid"
 print -r -- "carried on"`)
@@ -98,6 +100,7 @@ print -r -- "carried on"`)
 // refusal this replaced, where the key was absent to every route but the
 // guard.
 func TestTheSetTestOnSysParamsIsAnswered(t *testing.T) {
+	t.Parallel()
 	got := sysParam(t, `print -r -- "${+sysparams[pid]}${+sysparams[procsubstpid]}`+
 		` [${sysparams[procsubstpid]-none}]"`)
 	if want := "11 []\n"; got != want {
@@ -114,6 +117,7 @@ func TestTheSetTestOnSysParamsIsAnswered(t *testing.T) {
 // platform-specific number would fail on the other one for the right reason
 // and be useless anyway.
 func TestErrnosIsIndexedByTheNumberTheSystemGives(t *testing.T) {
+	t.Parallel()
 	got := sysParam(t, `print -r -- "[$errnos[1]] [$errnos[2]] [$errnos[9]] [$errnos[13]]"`)
 	if want := "[EPERM] [ENOENT] [EBADF] [EACCES]\n"; got != want {
 		t.Errorf("output = %q, want %q", got, want)
@@ -126,6 +130,7 @@ func TestErrnosIsIndexedByTheNumberTheSystemGives(t *testing.T) {
 // — so it is called from arithmetic. Reading from the descriptor moves it,
 // which is the half that separates a real answer from a constant nought.
 func TestSystellIsTheDescriptorsPositionAndMovesWithIt(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bytes")
 	if err := os.WriteFile(path, []byte("abcd\nefgh\n"), 0o600); err != nil {
@@ -151,6 +156,7 @@ func TestSystellIsTheDescriptorsPositionAndMovesWithIt(t *testing.T) {
 // and not a complaint, measured. Every case with no position to report gives
 // the same -1 — a closed number, and a stream that has no position at all.
 func TestSystellReportsRatherThanRefuses(t *testing.T) {
+	t.Parallel()
 	got := sysParam(t, "v=$(( systell(99) ))\n"+`print -r -- "[$v]"`)
 	if want := "[-1]\n"; got != want {
 		t.Errorf("output = %q, want %q", got, want)
@@ -161,6 +167,7 @@ func TestSystellReportsRatherThanRefuses(t *testing.T) {
 // for the association and `typeset -ar errnos` for the array, measured — which
 // is what says one is a table of names and the other a list indexed by number.
 func TestBothSystemParametersAreReadonlyAndDifferInKind(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"a sysparams write", "sysparams[pid]=1", "zsh:1: read-only variable: sysparams\n"},
 		{"an errnos write", "errnos[1]=x", "zsh:1: read-only variable: errnos\n"},
@@ -189,6 +196,7 @@ func TestBothSystemParametersAreReadonlyAndDifferInKind(t *testing.T) {
 // exactly the accepting-and-inert failure this module has produced twice
 // (#1737, #1668), so the case calls it and reads what came back.
 func TestTheSystemModuleHasAllNineOfItsFeatures(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "zmodload zsh/system && zmodload -lF zsh/system\n")
 	want := "+b:syserror\n+b:sysopen\n+b:sysread\n+b:sysseek\n+b:syswrite\n" +
 		"+b:zsystem\n+f:systell\n+p:errnos\n+p:sysparams\n"
@@ -330,6 +338,7 @@ print -r -- $line`, zsh.Dialect())
 // docs/spec/semantics.md, *What a shell with no child subshells reports for
 // a pid* (#2125).
 func TestTheColonDefaultReachesTheCallersNumber(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			// The key is set, so `-` keeps the empty value.

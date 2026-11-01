@@ -53,6 +53,7 @@ func runZshOnPath(t *testing.T, dir, src string) (string, int) {
 // genuinely reaches the bare form, the reference answers **0**, exactly as the
 // empty brace body does. The rows below are those routes.
 func TestTheKeywordWithNothingToTakeRunsNothingHere(t *testing.T) {
+	t.Parallel()
 	if !zsh.Dialect().BareFunctionKeyword {
 		t.Fatal("BareFunctionKeyword is off, so the keyword needs a name here")
 	}
@@ -89,6 +90,7 @@ func TestTheKeywordWithNothingToTakeRunsNothingHere(t *testing.T) {
 // day: `echo hi | function > f` puts `hi` in the file, because the default
 // null command is `cat`.
 func TestARedirectionAfterTheBareKeywordIsTheNullCommand(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the file is written", `printf hi | function > f; printf "[%s]" "$(cat f)"`, "[hi]"},
@@ -116,6 +118,7 @@ func TestARedirectionAfterTheBareKeywordIsTheNullCommand(t *testing.T) {
 // form does not have — so all of these are refusals, exactly as they are in
 // the columns without the construct at all.
 func TestTheBareKeywordDoesNotReachTheseHere(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"function & printf a\n",
 		"function &\n",

@@ -44,6 +44,7 @@ func unsetAxisRun(t *testing.T, src string, skip, last Answer) (string, int) {
 // 0 under Yes and at 1 under No, with status 0 either way — so the row that
 // carries the axis is the one with no error in it at all.
 func TestUnsetSkipsTheSubscriptOfANameItHasNotGot(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src  string
 		yes, no    string
@@ -108,6 +109,7 @@ func TestUnsetSkipsTheSubscriptOfANameItHasNotGot(t *testing.T) {
 // name the shell has not got and an association's key all leave the status
 // where they found it, so an earlier failure still stands behind them.
 func TestUnsetStatusIsTheLastSubscripts(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, yes, no string }{
 		{
 			"a later element clears the failure",
@@ -181,6 +183,7 @@ func TestUnsetStatusIsTheLastSubscripts(t *testing.T) {
 // Measured on zsh 5.9.2 — `b=(x y z); unset "b[x+]" "nope[1]"` is 1, where
 // `unset "b[x+]" "b[1]"` is 0.
 func TestTheTwoUnsetAxesComposeAsTheyDoInZsh(t *testing.T) {
+	t.Parallel()
 	src := `b=(x y z); unset "b[x+]" "nope[1]"; printf "st=%d" "$?"`
 	out, _ := unsetAxisRun(t, src, Yes, Yes)
 	if got := strings.TrimSpace(out); !strings.Contains(got, "st=1") {

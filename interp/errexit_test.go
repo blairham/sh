@@ -16,6 +16,7 @@ import (
 // (#491): a file recording that a behavior has no axis, naming a shell to get
 // at it.
 func TestErrExit(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src  string
 		wantOut    string

@@ -20,6 +20,7 @@ import (
 // that ordered its matches by accident would agree with one of the two and
 // not with both.
 func TestSortsGlobMatchesNumerically(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		files []string
@@ -81,6 +82,7 @@ func TestSortsGlobMatchesNumerically(t *testing.T) {
 // answer differently under the two, so a reuse would have been a wrong answer
 // and not a tidy one. See globSortNumericLess beside numericSegmentOrder.
 func TestTheGlobNumericSwitchIsNotTheNumericSortKey(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, f := range []string{"f1", "f2", "f10"} {
 		if err := os.WriteFile(filepath.Join(dir, f), nil, 0o600); err != nil {
@@ -113,6 +115,7 @@ func TestTheGlobNumericSwitchIsNotTheNumericSortKey(t *testing.T) {
 // the last, which is what says the switch is on the comparator the walk uses
 // and not on a final pass.
 func TestSortsGlobMatchesNumericallyReachesEveryComponent(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, d := range []string{"d1", "d2", "d10"} {
 		if err := os.MkdirAll(filepath.Join(dir, d), 0o700); err != nil {

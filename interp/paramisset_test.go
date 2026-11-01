@@ -37,6 +37,7 @@ func isSetRunner(pos, spec bool) func(*interp.Runner) {
 // measured 2026-09-07 under `-c` — so they are asserted here, against the
 // flag, rather than three times over in the dialect packages.
 func TestAParameterIsSetTestAsksAboutTheParameter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a set name", `x=1; [[ -v x ]] && echo SET || echo UNSET`, "SET\n"},
 		{"set to empty is still set", `x=; [[ -v x ]] && echo SET || echo UNSET`, "SET\n"},
@@ -73,6 +74,7 @@ func TestAParameterIsSetTestAsksAboutTheParameter(t *testing.T) {
 // each having one of its own. Asserted as the pair, which is what a second
 // implementation would break.
 func TestTheTestBuiltinAndTheConditionAgreeAboutIsSet(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`x=1`, `x=`, `unset x`, `x=1; unset x`,
 	} {
@@ -99,6 +101,7 @@ func TestTheTestBuiltinAndTheConditionAgreeAboutIsSet(t *testing.T) {
 // alone leaves the long form's gate unasserted — measured by mutation, where
 // removing it changed no answer.
 func TestWithoutTheFlagTheTestBuiltinRefusesIsSetByName(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`x=1; [ -v x ] && echo SET || echo UNSET`,
 	} {
@@ -117,6 +120,7 @@ func TestWithoutTheFlagTheTestBuiltinRefusesIsSetByName(t *testing.T) {
 // one is read by the parser, which consults the operator table first. Both
 // have to know about `-v` or the two forms disagree in the same shell.
 func TestBothRoutesIntoTheTestBuiltinKnowIsSet(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`x=1; [ -v x ] && echo SET || echo UNSET`, "SET\n"},
 		{`x=1; [ -v x -a -n x ] && echo SET || echo UNSET`, "SET\n"},
@@ -134,6 +138,7 @@ func TestBothRoutesIntoTheTestBuiltinKnowIsSet(t *testing.T) {
 // is what keeps an element, a key and the base an index counts from out of
 // this file. The rows are the ones that would move if it did not.
 func TestAnIsSetTestReadsASubscriptTheSameWayAnExpansionDoes(t *testing.T) {
+	t.Parallel()
 	arrays := func(d *syntax.Dialect) {
 		isSetGrammar(d)
 		d.ArrayLiteral = true
@@ -159,6 +164,7 @@ func TestAnIsSetTestReadsASubscriptTheSameWayAnExpansionDoes(t *testing.T) {
 // operator declining to read a name of that kind, which is why the control
 // row asks the same question through `${name+s}` and gets the other answer.
 func TestWhichKindsOfNameAnIsSetTestReads(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		pos, spec bool

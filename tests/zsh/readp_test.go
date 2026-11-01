@@ -14,6 +14,7 @@ import (
 // builtin-naming location, status 1, and the variables left exactly as they
 // were — the read failed before reaching any input, so nothing is cleared.
 func TestReadCoprocessLetterHasNothingToRead(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `v=keep; printf 'x\n' | read -p v; echo "st=$? v=[$v]"`)
 	if !strings.Contains(out, "-p: no coprocess") {
 		t.Errorf("got %q, want zsh's own words for the missing coprocess", out)
@@ -27,6 +28,7 @@ func TestReadCoprocessLetterHasNothingToRead(t *testing.T) {
 // letter after it, and status 1 — the same number as any other option
 // complaint here. Measured 2026-09-04.
 func TestOptionArgumentExpectedIsZshsSentence(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `read -d </dev/null; echo "st=$?"`)
 	if !strings.Contains(out, "argument expected: -d") {
 		t.Errorf("got %q, want zsh's missing-argument sentence", out)

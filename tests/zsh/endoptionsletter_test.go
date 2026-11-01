@@ -30,6 +30,7 @@ import (
 // back to the shape six other columns have and nothing in driver would
 // notice: those tests set the field themselves (#3754).
 func TestTheEndOfOptionsLetterIsB(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().EndOfOptionsInvocationLetter; got != "b" {
 		t.Errorf("EndOfOptionsInvocationLetter = %q, want %q", got, "b")
 	}

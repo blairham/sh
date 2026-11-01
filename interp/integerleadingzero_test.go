@@ -32,6 +32,7 @@ func octalArithmetic(a Answer) func(*Semantics) {
 }
 
 func TestAnIntegerAssignmentsLeadingZeroIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -i d=010; echo "[$d]"`
 	for _, w := range []struct {
 		answer Answer
@@ -48,6 +49,7 @@ func TestAnIntegerAssignmentsLeadingZeroIsAnAxis(t *testing.T) {
 // point of the axis being asked here rather than inside it: one shell reads
 // the same four characters two ways.
 func TestTheLeadingZeroAxisLeavesArithmeticAlone(t *testing.T) {
+	t.Parallel()
 	for _, a := range []Answer{Yes, No} {
 		out, _, st := declRun(t, `echo "$((010))"`, octalArithmetic(a), Diagnostics{})
 		if out != "8\n" || st != 0 {
@@ -59,6 +61,7 @@ func TestTheLeadingZeroAxisLeavesArithmeticAlone(t *testing.T) {
 // Only a number and nothing else takes the decimal reading. Every row here is
 // a shape whose two readings agree, so it must answer the same under either.
 func TestOnlyAWholeZeroPaddedNumberTakesTheDecimalReading(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// Spaces around it mean the text is not a number, so the expression
 		// reader has it and the zero is octal again.
@@ -83,6 +86,7 @@ func TestOnlyAWholeZeroPaddedNumberTakesTheDecimalReading(t *testing.T) {
 // other once the reading is decimal — the row that says the two readings are
 // not the same code with a different base.
 func TestTheDecimalReadingTakesASignAndAnyDigit(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset -i c=-010; echo "[$c]"`, "[-10]\n"},
 		{`typeset -i p=+010; echo "[$p]"`, "[10]\n"},
@@ -106,6 +110,7 @@ func TestTheDecimalReadingTakesASignAndAnyDigit(t *testing.T) {
 // value an attribute re-reads, because they are one function — a second
 // evaluator beside it is what would drift.
 func TestTheLeadingZeroReadingReachesEveryIntegerValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset -i f; f=010; echo "[$f]"`, "[10]\n"},
 		{`e=010; typeset -i e; echo "[$e]"`, "[10]\n"},
@@ -127,6 +132,7 @@ func TestTheLeadingZeroReadingReachesEveryIntegerValue(t *testing.T) {
 // And where nothing made the zero octal there is nothing to choose between, so
 // the axis is never asked: an unanswered field is not a refusal here.
 func TestTheLeadingZeroAxisIsNotAskedWhereArithmeticIsDecimal(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -i d=010; echo "[$d]"`, func(s *Semantics) {
 		s.DeclareOptions = "aAgiprx"
 		s.ArithLeadingZeroIsOctal = No

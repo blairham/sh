@@ -28,6 +28,7 @@ import (
 // what every plugin manager does, so every diagnostic from anywhere inside a
 // plugin named the loader instead of the plugin's own file and line.
 func TestAFailureInAFileSourcedFromAFunctionNamesTheFile(t *testing.T) {
+	t.Parallel()
 	t.Run("the file the function sourced", func(t *testing.T) {
 		dir := sourceFixture(t, map[string]string{"inc.zsh": "nosuchcmd_zz\n"})
 		src := "f() {\n  . ./inc.zsh\n}\nf\nprint \"st=$?\"\n"
@@ -85,6 +86,7 @@ func TestAFailureInAFileSourcedFromAFunctionNamesTheFile(t *testing.T) {
 // sourced are 1 and 2, and the line after the `source` is the function's own
 // count again.
 func TestLinenoInAFileSourcedFromAFunctionCountsFromTheFile(t *testing.T) {
+	t.Parallel()
 	dir := sourceFixture(t, map[string]string{"lin.zsh": "echo a=$LINENO\necho b=$LINENO\n"})
 	src := "f() {\n  . ./lin.zsh\n  echo c=$LINENO\n}\nf\n"
 	out, _ := runZsh(t, dir, src)

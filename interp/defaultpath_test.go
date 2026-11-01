@@ -38,6 +38,7 @@ func decoyOnPath(t *testing.T, name, body string) (dir, exe string) {
 // — it is /bin/sh on a Mac and /usr/bin/sh on Ubuntu, and both are on the
 // default path.
 func TestCommandDashPSearchesTheDefaultPathAndNotTheCallers(t *testing.T) {
+	t.Parallel()
 	dir, decoy := decoyOnPath(t, "sh", "exit 7")
 	onDecoyPath := func(r *Runner) { r.Env = []string{"PATH=" + dir} }
 
@@ -77,6 +78,7 @@ func TestCommandDashPSearchesTheDefaultPathAndNotTheCallers(t *testing.T) {
 // twice, and a script that tested with `-pv` and ran with `-p` would be
 // testing the wrong path if they parted.
 func TestCommandDashPRunsWhatItReports(t *testing.T) {
+	t.Parallel()
 	empty := func(r *Runner) { r.Env = []string{"PATH="} }
 	if _, st := run(t, `command -p sh -c 'exit 3'`, empty); st != 3 {
 		t.Errorf("command -p sh -c 'exit 3' left %d, want 3", st)
@@ -93,6 +95,7 @@ func TestCommandDashPRunsWhatItReports(t *testing.T) {
 // assignment — measured across the panel, `command -p sh -c 'echo $PATH'`
 // prints what the script set.
 func TestCommandDashPLeavesTheEnvironmentAlone(t *testing.T) {
+	t.Parallel()
 	dir, _ := decoyOnPath(t, "unused", ":")
 	setup := func(r *Runner) { r.Env = []string{"PATH=" + dir} }
 	out, st := run(t, `command -p sh -c 'printf "%s" "$PATH"'`, setup)
@@ -105,6 +108,7 @@ func TestCommandDashPLeavesTheEnvironmentAlone(t *testing.T) {
 // to run. Measured: `command -p eval '…'` looks the inner command up on the
 // caller's PATH in every column of the panel.
 func TestCommandDashPDoesNotReachInsideTheBuiltinItRan(t *testing.T) {
+	t.Parallel()
 	dir, _ := decoyOnPath(t, "onlyhere_zz", "exit 0")
 	setup := func(r *Runner) { r.Env = []string{"PATH=" + dir} }
 	if _, st := run(t, `command -p eval 'onlyhere_zz'`, setup); st != 0 {
@@ -124,6 +128,7 @@ func TestCommandDashPDoesNotReachInsideTheBuiltinItRan(t *testing.T) {
 // program the script's own PATH cannot reach, which is bash's answer and is
 // Semantics.DefaultPathSearchIsRemembered.
 func TestADefaultPathSearchIsNotRemembered(t *testing.T) {
+	t.Parallel()
 	empty := func(r *Runner) {
 		r.Env = []string{"PATH="}
 		sem := *r.Semantics
@@ -147,6 +152,7 @@ func TestADefaultPathSearchIsNotRemembered(t *testing.T) {
 // whole of what the axis is — a table that answered the same either way would
 // be a field nothing reads.
 func TestADefaultPathSearchIsRememberedWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	setup := func(r *Runner) {
 		r.Env = []string{"PATH="}
 		sem := *r.Semantics

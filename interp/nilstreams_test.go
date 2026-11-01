@@ -64,6 +64,7 @@ func TestNilStreamsAreEmptyRatherThanTheProcess(t *testing.T) {
 // exactly as it does at the end of a file — and it is the answer that does not
 // depend on what the embedding program happened to have on its own descriptor.
 func TestAShellWithNoInputReadsEndOfInput(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r := newTestRunner(t, &interp.Runner{Stdout: &out, Stderr: &out})
 
@@ -82,6 +83,7 @@ func TestAShellWithNoInputReadsEndOfInput(t *testing.T) {
 // the wrong one — it would make every unwired embedder's script fail on its
 // first `echo`, which is a worse surprise than silence.
 func TestAShellWithNoOutputStillRuns(t *testing.T) {
+	t.Parallel()
 	r := newTestRunner(t, &interp.Runner{})
 	if status := runNilStreams(t, r, "echo one; echo two >&2; echo three\n"); status != 0 {
 		t.Errorf("status = %d, want writes to a nil stream to succeed quietly", status)
@@ -92,6 +94,7 @@ func TestAShellWithNoOutputStillRuns(t *testing.T) {
 // output goes to the same emptiness the shell's own does — nil reaches os/exec
 // as nil, which is /dev/null to a child.
 func TestAChildOfAShellWithNoStreamsStillRuns(t *testing.T) {
+	t.Parallel()
 	const path = "/bin/echo"
 	if _, err := os.Stat(path); err != nil {
 		t.Skipf("no %s on this machine", path)

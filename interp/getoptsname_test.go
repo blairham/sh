@@ -48,6 +48,7 @@ func getoptsNameRun(t *testing.T, tweak func(*Semantics), dg Diagnostics, src st
 // the wording, the status, the fatality and how far the set of names reaches
 // are the dialect's.
 func TestAGetoptsNameOperandThatIsNotANameIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, operand := range []string{"1bad", "a-b", "a b", "a.b", ""} {
 		src := `getopts x "` + operand + `" -x; echo "st=$?"`
 		out, _ := getoptsNameRun(t, nil, Diagnostics{}, src)
@@ -73,6 +74,7 @@ func TestAGetoptsNameOperandThatIsNotANameIsRefused(t *testing.T) {
 // probe that had been taken as settling it printed the status and never
 // printed OPTIND, so it could not have.
 func TestARefusedGetoptsNameStoresNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		scans Answer
@@ -103,6 +105,7 @@ func TestARefusedGetoptsNameStoresNothing(t *testing.T) {
 // Measured 2026-09-21, `getopts x 1bad foo` is `OPTIND=1` there while
 // `getopts x 1bad -x` is `OPTIND=2`.
 func TestARefusedGetoptsNameMovesNothingWithNoOptionToRead(t *testing.T) {
+	t.Parallel()
 	src := `getopts x "1bad" foo; echo "st=$? OPTIND=$OPTIND"`
 	out, _ := getoptsNameRun(t, func(s *Semantics) {
 		s.GetoptsRefusedNameStillScans = Yes
@@ -130,6 +133,7 @@ func TestARefusedGetoptsNameMovesNothingWithNoOptionToRead(t *testing.T) {
 // position rather than the brackets: a probe that asked only `o[0]` would have
 // read that column as a refusal.
 func TestWhetherAGetoptsOperandTakesASubscriptIsItsOwnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `getopts x 'o[1]' -x; echo "st=$? one=[${o[1]}]"`
 	out, _ := getoptsNameRun(t, func(s *Semantics) {
 		s.GetoptsOperandTakesASubscript = Yes
@@ -164,6 +168,7 @@ func TestWhetherAGetoptsOperandTakesASubscriptIsItsOwnAxis(t *testing.T) {
 // `printf -v`; the other six reach the line after it. Measured 2026-09-18 with
 // the probe above.
 func TestWhatARefusedGetoptsNameCostsTheScript(t *testing.T) {
+	t.Parallel()
 	const src = `getopts x "1bad" -x` + "\n" + `echo after`
 	out, _ := optRun(t, func(s *Semantics) {
 		s.BadNameToGetoptsFatal = No

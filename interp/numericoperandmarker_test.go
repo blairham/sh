@@ -18,6 +18,7 @@ import (
 // through each of them: a second reader beside the first is what drifts the
 // next time the marker is measured, and this defect is what one looked like.
 func TestADoubleDashEndsTheOptionsOfANumericOperand(t *testing.T) {
+	t.Parallel()
 	base := func(marker Answer) Semantics {
 		s := CoreSemantics()
 		s.NumericOperandDoubleDashEndsOptions = marker
@@ -115,6 +116,7 @@ func TestADoubleDashEndsTheOptionsOfANumericOperand(t *testing.T) {
 // output above cannot show: `exit -- 3` leaves 3 and not the 2 a refused
 // operand leaves.
 func TestAnExitStatusBehindTheMarkerIsTheShellsOwn(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	sem.NumericOperandDoubleDashEndsOptions = Yes
 	_, st := run(t, `echo A; exit -- 3`, func(r *Runner) { r.Semantics = &sem })

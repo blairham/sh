@@ -38,6 +38,7 @@ func localListingScope(a Answer) func(*Semantics) {
 // the sentence is the one a missing operand already gets with this builtin's
 // name in front of it.
 func TestLocalPrintNamesOnlyTheRunningCallsLocals(t *testing.T) {
+	t.Parallel()
 	const src = `g=global
 inner() { local -p g; echo "st=$?"; }
 outer() { local g=caller; inner; }
@@ -57,6 +58,7 @@ outer`
 // And the call's own local still lists, which is the control that keeps the
 // answer above from being "local -p writes nothing".
 func TestLocalPrintNamesTheRunningCallsOwnLocal(t *testing.T) {
+	t.Parallel()
 	const src = `g=global
 f() { local g=mine; local -p g; echo "st=$?"; }
 f`
@@ -70,6 +72,7 @@ f`
 // TestLocalPrintListsANameThisCallDidNotDeclare is the other answer: the word
 // narrows nothing, so the name is found wherever it lives and is written.
 func TestLocalPrintListsANameThisCallDidNotDeclare(t *testing.T) {
+	t.Parallel()
 	const src = `g=global
 inner() { local -p g; echo "st=$?"; }
 outer() { local g=caller; inner; }
@@ -85,6 +88,7 @@ outer`
 // same name is unmoved under either answer, which is what says the axis is
 // about which builtin asked rather than about the row.
 func TestTheDeclarationWordsListingIsNotNarrowed(t *testing.T) {
+	t.Parallel()
 	const src = `g=global
 inner() { typeset -p g; echo "st=$?"; }
 outer() { local g=caller; inner; }

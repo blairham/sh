@@ -10,6 +10,7 @@ import "testing"
 // 2026-10-05, from inside a `zle -C` widget; comptags.go has the table.
 
 func TestComptagsBeforeTheFirstStepAsksTheFirstSet(t *testing.T) {
+	t.Parallel()
 	requested := `local out= x; for x in a b c; do comptags -R $x; out+="$x=$? "; done`
 	for _, c := range []struct{ name, body, want string }{
 		{

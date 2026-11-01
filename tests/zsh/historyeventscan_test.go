@@ -37,6 +37,7 @@ import (
 // bash 5.3.20 in a script and ksh93u+ at a prompt answer the opposite of every
 // one, which is what makes each of them an axis rather than the engine's.
 func TestZshReadsAnEventNameItsOwnWay(t *testing.T) {
+	t.Parallel()
 	s := zsh.Semantics()
 	for _, c := range []struct {
 		name string
@@ -76,6 +77,7 @@ func TestZshReadsAnEventNameItsOwnWay(t *testing.T) {
 // Runner.HistoryChars passed every one of them. This row goes through the
 // runner, which is the only place the answer and the expander meet.
 func TestZshSubstitutionUnescapesTheReplacementTwice(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().HistorySubstitutionUnescapesTheReplacement; got != interp.Yes {
 		t.Errorf("HistorySubstitutionUnescapesTheReplacement is %v, want Yes", got)
 	}
@@ -108,6 +110,7 @@ func TestZshSubstitutionUnescapesTheReplacementTwice(t *testing.T) {
 // said nothing exercised the wiring, because the engine's own tests build
 // their histexpand.Chars by hand and never go through Runner.HistoryChars.
 func TestZshHeadAndTailTakeACount(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().HistoryHeadAndTailTakeACount; got != interp.Yes {
 		t.Errorf("HistoryHeadAndTailTakeACount is %v, want Yes", got)
 	}
@@ -164,6 +167,7 @@ func TestZshHeadAndTailTakeACount(t *testing.T) {
 // meet — and the resolver is the reason this row matters beyond the axis
 // read: a nil one makes `:P` the identity, which passes the suite chunk.
 func TestZshAbsolutePathModifier(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().HistoryAbsolutePathModifier; got != interp.Yes {
 		t.Errorf("HistoryAbsolutePathModifier is %v, want Yes", got)
 	}

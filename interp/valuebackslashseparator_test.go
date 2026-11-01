@@ -39,6 +39,7 @@ func backslashIFSRun(t *testing.T, src string, pattern ValueBackslashPolicy, joi
 // value's backslash is a different question from whether that backslash is a
 // field separator, and none of the three may move a row.
 func TestABackslashInIFSSeparates(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, setup, word, want string }{
 		// The row the issue was filed on: the backslash is plainly a
 		// character of the value — `printf '[%s]' "$v"` is `[b\c]` here and

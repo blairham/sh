@@ -78,6 +78,7 @@ func withFloatLetter(s *Semantics) {
 // both spellings — which is the whole of the bug: the detached `3` was read
 // as an operand and refused, and the attached `3` as an option letter.
 func TestAPrecisionIsAnArgumentAndNotAName(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"a precision as a word of its own", `typeset -F 3 v=3.14159; echo "[$v]"`, "[3.142]"},
 		{"the same precision attached to the letter", `typeset -F3 v=3.14159; echo "[$v]"`, "[3.142]"},
@@ -106,6 +107,7 @@ func TestAPrecisionIsAnArgumentAndNotAName(t *testing.T) {
 // never an argument and is a name again, which is what keeps `typeset -F abc
 // v=1` declaring two floats rather than refusing a precision it cannot read.
 func TestOnlyDigitsAreTheLettersArgument(t *testing.T) {
+	t.Parallel()
 	out, errs, st := floatRun(t, `typeset -F abc v=1; echo "[$v][$abc]"`,
 		withFloatLetter, Diagnostics{})
 	if st != 0 || errs != "" {
@@ -119,6 +121,7 @@ func TestOnlyDigitsAreTheLettersArgument(t *testing.T) {
 // One number and not a list: the letter is satisfied by the first, so the
 // second is an operand again and meets the name check like any other.
 func TestOneNumberSatisfiesTheLetter(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{BuiltinBadNameNumeric: map[string]string{"typeset": "not an identifier: %[2]s"}}
 	// Both spellings of the first number, because they satisfy the letter by
 	// different routes and only the detached one leaves anything waiting: a
@@ -144,6 +147,7 @@ func TestOneNumberSatisfiesTheLetter(t *testing.T) {
 // letter's output base has: every read sees these characters rather than a
 // value some later print formats.
 func TestAFloatNameStoresTheRenderedText(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"its length is of the digits written", `typeset -F 3 v=1.5; echo "${#v}"`, "5"},
 		{"a later assignment folds too", `typeset -F 3 v; v=7; echo "[$v]"`, "[7.000]"},
@@ -177,6 +181,7 @@ func TestAFloatNameStoresTheRenderedText(t *testing.T) {
 // the value alone cannot tell them apart, and a mutant that stopped taking
 // the integer letter off survived until this was here.
 func TestTheReplacedAttributeIsGoneAndNotOutvoted(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"the integer letter, taken off by the float one",
@@ -209,6 +214,7 @@ func TestTheReplacedAttributeIsGoneAndNotOutvoted(t *testing.T) {
 // The two attributes that say what a name's values *are* cannot both stand,
 // and the later declaration is the one that speaks.
 func TestTheFloatAndIntegerAttributesAreExclusive(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"float over integer", `typeset -i v=5; typeset -F 3 v; echo "[$v]"`, "[5.000]"},
 		{"integer over float", `typeset -F 3 v=1.5; typeset -i v; echo "[$v]"`, "[1]"},
@@ -250,6 +256,7 @@ func TestTheFloatAndIntegerAttributesAreExclusive(t *testing.T) {
 // ordinary options otherwise. Both halves, because a rule that only said the
 // letter ends its word would lose every `typeset -ir n` there is.
 func TestALetterEndsItsWordOnlyWhenItTakesANumber(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"the letter behind it is lost when a number follows",
@@ -291,6 +298,7 @@ func TestALetterEndsItsWordOnlyWhenItTakesANumber(t *testing.T) {
 // always did — a function listing — and the word after it is a name again.
 // The table is what decides, so a table with nothing in it changes nothing.
 func TestWithoutTheTableTheLetterIsAFunctionListing(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, "f() { echo hi; }\ntypeset -F",
 		withDeclareLetters("aAfFgiprx"), Diagnostics{})
 	if st != 0 || errs != "" {
@@ -318,6 +326,7 @@ func TestWithoutTheTableTheLetterIsAFunctionListing(t *testing.T) {
 // letter are the trap: deciding whether they are options looks like it needs
 // the answer, and the lookahead is what means it does not.
 func TestNoNumberAsksTheDialectNothing(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`typeset -i n=5`, `typeset -irx n=5`, `typeset -ix n=5`} {
 		t.Run(src, func(t *testing.T) {
 			_, errs, _ := floatRun(t, src, func(s *Semantics) {
@@ -346,6 +355,7 @@ func TestNoNumberAsksTheDialectNothing(t *testing.T) {
 // second operand (#5667). This test said the opposite until then, from a
 // reading that neither shell gives.
 func TestThePlusFormReadsItsNumber(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{BuiltinBadNameNumeric: map[string]string{"typeset": "not an identifier: %[2]s"}}
 	out, errs, st := floatRun(t, `typeset +F 3 v=1.5; echo "[$v]"`, withFloatLetter, dg)
 	if st != 0 || errs != "" || strings.TrimSuffix(out, "\n") != "[1.5]" {
@@ -370,6 +380,7 @@ func TestThePlusFormReadsItsNumber(t *testing.T) {
 // the attribute refuse this line — on different halves of it — and the shape
 // that matters is that neither reads the `4`.
 func TestAMalformedAttachedNumberDoesNotReachForTheNextWord(t *testing.T) {
+	t.Parallel()
 	out, errs, _ := floatRun(t, `typeset -F3g 4 v=1.5; echo "[$v]"`, withFloatLetter, Diagnostics{})
 	if errs == "" {
 		t.Errorf("stdout %q with nothing on stderr, want the malformed number refused", out)
@@ -382,6 +393,7 @@ func TestAMalformedAttachedNumberDoesNotReachForTheNextWord(t *testing.T) {
 // The attribute is a property of the name, so it must not outlive a subshell
 // and must not survive the name being unset.
 func TestTheFloatAttributeIsTheNames(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"a subshell's declaration does not escape it",

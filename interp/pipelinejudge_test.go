@@ -79,6 +79,7 @@ func TestAFunctionAsTheLastElementIsJudgedAtEachLevel(t *testing.T) {
 }
 
 func TestSetEStopsWhereTheElementIsJudged(t *testing.T) {
+	t.Parallel()
 	for _, j := range []LastElementJudging{
 		PipelineJudgedUnlessItsLastElementJudgedItself,
 		PipelineJudgedAsItsLastElement,

@@ -18,6 +18,7 @@ import (
 // below: `${#nope[@]}` is `nope[@]: parameter not set` and the shell stops,
 // `x=abc; ${#x[@]}` is `3`, and `a=(); ${#a[@]}` is `0` (#3125).
 func TestACountOfAWholeArrayRefusesANameHoldingNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"set -u\necho \"[${#nope[@]}]\"\necho after\n", "nope[@]: parameter not set"},
 		{"set -u\necho \"[${#nope[*]}]\"\necho after\n", "nope[*]: parameter not set"},

@@ -56,6 +56,7 @@ func ashLike() (Semantics, Diagnostics) {
 // script: the shape BusyBox ash writes, which no single pair of fields could
 // produce.
 func TestARefusedNameAndARefusedLetterAreTwoAnswers(t *testing.T) {
+	t.Parallel()
 	sem, dg := ashLike()
 	out, st := run(t, "set -o nosuchname\necho \"st=$?\"\nset -Z\necho after\n", func(r *Runner) {
 		r.Semantics, r.Diagnostics = &sem, &dg
@@ -72,6 +73,7 @@ func TestARefusedNameAndARefusedLetterAreTwoAnswers(t *testing.T) {
 // is asserted — the fields have to carry what they are told rather than one
 // shell's arrangement of them.
 func TestTheSplitIsNotOneShellsArrangement(t *testing.T) {
+	t.Parallel()
 	sem, dg := ashLike()
 	sem.BadSetOptionNameFatal, sem.BadSetOptionLetterFatal = Yes, No
 	dg.SetInvalidOptionNameStatus, dg.SetInvalidOptionLetterStatus = 2, 1
@@ -94,6 +96,7 @@ func TestTheSplitIsNotOneShellsArrangement(t *testing.T) {
 // disagreement is about a *refusal*, and there is no refusal here for either
 // axis to be about.
 func TestAGrantedSetOptionAsksNothing(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src string }{
 		{"a letter", `set -u; echo "ok=$?"`},
 		{"a letter turned back off", `set -u; set +u; echo "ok=$?"`},
@@ -140,6 +143,7 @@ func TestAGrantedSetOptionAsksNothing(t *testing.T) {
 // and an axis asked there would have made every column's refusal an
 // unanswered-axis complaint in the core.
 func TestARefusalWithNothingInFrontOfItAsksNothing(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src string }{
 		{"a letter on its own", "set -Z\n"},
 		{"the first letter of a bundle", "set -Ze\n"},
@@ -161,6 +165,7 @@ func TestARefusalWithNothingInFrontOfItAsksNothing(t *testing.T) {
 // which is the disagreement itself, and the mutation that kills a pass that
 // quietly picked a side.
 func TestARefusalBehindAnAppliedLetterAsksTheAxis(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	sem.BadSetOptionLetterFatal = No
 	sem.SetValidatesOptionLettersFirst = Unspecified
@@ -174,6 +179,7 @@ func TestARefusalBehindAnAppliedLetterAsksTheAxis(t *testing.T) {
 // holding: the letter in front of the bad one is applied in one and not in
 // the other, from the same two words.
 func TestTheValidatingPassAppliesNothing(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
 		answer Answer
@@ -199,6 +205,7 @@ func TestTheValidatingPassAppliesNothing(t *testing.T) {
 // the shell that has one refuses them at 1 and carries on where its own bad
 // letter is 2 and ends the script.
 func TestAWeldedLetterIsRefusedByTheApplyingPass(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
 		answer Answer
@@ -225,6 +232,7 @@ func TestAWeldedLetterIsRefusedByTheApplyingPass(t *testing.T) {
 }
 
 func TestEachRefusalReachesItsOwnAxis(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, why string }{
 		{"a letter", "set -Z\n", "a refused `set` option letter ending the script"},
 		{"a letter in a bundle", "set -xZ\n", "a refused `set` option letter ending the script"},
@@ -274,6 +282,7 @@ func TestEachRefusalReachesItsOwnAxis(t *testing.T) {
 // and then the letters of `zzznosuch`, so the option listing is written
 // before the `z` is refused.
 func TestTheAttachedFormIsALetterAndNotAName(t *testing.T) {
+	t.Parallel()
 	sem, dg := ashLike()
 	out, st := run(t, "set -ozzznosuch\necho after\n", func(r *Runner) {
 		r.Semantics, r.Diagnostics = &sem, &dg
@@ -305,6 +314,7 @@ func TestTheAttachedFormIsALetterAndNotAName(t *testing.T) {
 // alone as an operand, under `No` the next word is the name and the rest is
 // more letters.
 func TestTheWeldedFormAsksTheDialect(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
 		answer Answer
@@ -335,6 +345,7 @@ func TestTheWeldedFormAsksTheDialect(t *testing.T) {
 // that the wiring says which one it is rather than taking whichever field was
 // nearest.
 func TestSetArrayWithNoNameAsksTheLettersAxis(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	sem.SetArrayLetter = Yes
 	sem.SetArrayOptionsContinuePastTheName = No
@@ -362,6 +373,7 @@ func TestSetArrayWithNoNameAsksTheLettersAxis(t *testing.T) {
 // refuses it and answers the two alike, which is why the split has to be
 // driven by hand here.
 func TestADeniedMonitorAsksTheAxisForTheSpellingThatAsked(t *testing.T) {
+	t.Parallel()
 	setup := func(r *Runner) {
 		sem := CoreSemantics()
 		sem.MonitorNeedsATerminal = Yes

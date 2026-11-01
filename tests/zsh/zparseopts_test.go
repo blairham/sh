@@ -45,6 +45,7 @@ func runZparseoptsCases(t *testing.T, cases []zparseoptsCase) {
 // Where an option's argument goes, which is the whole of the spec grammar and
 // the thing a caller reads by index.
 func TestZparseoptsPutsAnArgumentWhereTheDescriptionSaysTo(t *testing.T) {
+	t.Parallel()
 	runZparseoptsCases(t, []zparseoptsCase{{
 		name:    "a-flag-is-one-element-and-the-word-stays",
 		snippet: `set -- -a foo; zparseopts a=x; echo "st=$? x=[${(j:|:)x}] argv=[${(j:|:)@}]"`,
@@ -88,6 +89,7 @@ func TestZparseoptsPutsAnArgumentWhereTheDescriptionSaysTo(t *testing.T) {
 // Which occurrence survives, and in what order — the part a per-array rule
 // would get wrong.
 func TestZparseoptsKeepsTheLastOccurrenceOfEachDescription(t *testing.T) {
+	t.Parallel()
 	runZparseoptsCases(t, []zparseoptsCase{{
 		name:    "without-plus-only-the-last",
 		snippet: `set -- -a v1 -a v2; zparseopts -D a:=x; echo "st=$? x=[${(j:|:)x}]"`,
@@ -115,6 +117,7 @@ func TestZparseoptsKeepsTheLastOccurrenceOfEachDescription(t *testing.T) {
 // Where parsing stops, which decides what a function passes on to something
 // else.
 func TestZparseoptsStopsWhereTheDescriptionsRunOut(t *testing.T) {
+	t.Parallel()
 	runZparseoptsCases(t, []zparseoptsCase{{
 		name:    "at-the-first-word-no-description-covers",
 		snippet: `set -- x -a y; zparseopts -D a=x; echo "st=$? x=[${(j:|:)x}] argv=[${(j:|:)@}]"`,
@@ -147,6 +150,7 @@ func TestZparseoptsStopsWhereTheDescriptionsRunOut(t *testing.T) {
 // `-F` is the validating form, and what it does *not* do is the point: an
 // unknown option is a refusal, and nothing is written or removed.
 func TestZparseoptsDashFRefusesAnUnknownOptionAndWritesNothing(t *testing.T) {
+	t.Parallel()
 	runZparseoptsCases(t, []zparseoptsCase{{
 		name:    "an-unknown-option-is-quietly-a-stop-without-dash-f",
 		snippet: `set -- -z r; zparseopts -D a=x; echo "st=$? x=[${(j:|:)x}] argv=[${(j:|:)@}]"`,
@@ -168,6 +172,7 @@ func TestZparseoptsDashFRefusesAnUnknownOptionAndWritesNothing(t *testing.T) {
 
 // How a description's name is spelled, and which one wins when two overlap.
 func TestZparseoptsMatchesTheLongestOrTheLastDescription(t *testing.T) {
+	t.Parallel()
 	runZparseoptsCases(t, []zparseoptsCase{{
 		name:    "one-dash-is-added-to-the-name-as-written",
 		snippet: `set -- --foo v r; zparseopts -D -- -foo:=x; echo "st=$? x=[${(j:|:)x}] argv=[${(j:|:)@}]"`,
@@ -209,6 +214,7 @@ func TestZparseoptsMatchesTheLongestOrTheLastDescription(t *testing.T) {
 
 // `-A` and `-K`: the association, and what survives a call.
 func TestZparseoptsWritesAnAssociationAndDashKKeepsWhatWasThere(t *testing.T) {
+	t.Parallel()
 	runZparseoptsCases(t, []zparseoptsCase{{
 		name:    "a-flag-is-a-key-with-an-empty-value",
 		snippet: `set -- -a; zparseopts -D -A o -- a; echo "st=$? [${(kv)o}]"`,
@@ -254,6 +260,7 @@ func TestZparseoptsWritesAnAssociationAndDashKKeepsWhatWasThere(t *testing.T) {
 // The refusals, whole lines with their locations — which is half of what each
 // one says.
 func TestZparseoptsRefusals(t *testing.T) {
+	t.Parallel()
 	runZparseoptsCases(t, []zparseoptsCase{{
 		name:    "nothing-to-parse-against",
 		snippet: `set -- -a; zparseopts -D 2>&1; echo "st=$?"`,
@@ -313,6 +320,7 @@ func TestZparseoptsRefusals(t *testing.T) {
 // answer `command not found` at 127, so there is nothing here for a dialect
 // axis to disagree about.
 func TestZparseoptsMapsOneDescriptionOntoAnother(t *testing.T) {
+	t.Parallel()
 	runZparseoptsCases(t, []zparseoptsCase{
 		{
 			name:    "the-equals-half-names-a-description-instead-of-an-array",
@@ -390,6 +398,7 @@ func TestZparseoptsMapsOneDescriptionOntoAnother(t *testing.T) {
 // A description aliased to itself, and a cycle, which are two different
 // answers rather than one.
 func TestZparseoptsRefusesACycleAndNotASelfMapping(t *testing.T) {
+	t.Parallel()
 	runZparseoptsCases(t, []zparseoptsCase{{
 		name:    "a-cycle-of-two-names-the-description-that-closes-it",
 		snippet: `set -- -a; zparseopts -M -a arr a=b b=a 2>&1; echo "st=$? arr=[${(j:|:)arr}]"`,
@@ -429,6 +438,7 @@ func TestZparseoptsRefusesACycleAndNotASelfMapping(t *testing.T) {
 // "only the last occurrence survives" puts it. Nothing to do with `-M` — it is
 // the rule `-M` generalizes, and it was wrong here until `-M` was built.
 func TestZparseoptsKeepsARepeatedOptionInItsFirstPlace(t *testing.T) {
+	t.Parallel()
 	runZparseoptsCases(t, []zparseoptsCase{{
 		name:    "the-slot-stays-put-and-the-argument-is-replaced",
 		snippet: `set -- -a v1 -c z -a v2; zparseopts -a arr a: c:; echo "st=$? arr=[${(j:|:)arr}]"`,
@@ -447,6 +457,7 @@ func TestZparseoptsKeepsARepeatedOptionInItsFirstPlace(t *testing.T) {
 // The default array is emptied whether or not a description names it, which is
 // the half of `-K` that is invisible until nothing matches.
 func TestZparseoptsEmptiesTheDefaultArrayNobodyNamed(t *testing.T) {
+	t.Parallel()
 	runZparseoptsCases(t, []zparseoptsCase{{
 		name:    "no-description-uses-it-and-it-is-emptied-anyway",
 		snippet: `arr=(old); zparseopts -a arr a=q; echo "st=$? arr=[${(j:|:)arr}]"`,
@@ -468,6 +479,7 @@ func TestZparseoptsEmptiesTheDefaultArrayNobodyNamed(t *testing.T) {
 // comment records — which is the one respect in which these wants are not real
 // zsh's transcript.
 func TestZparseoptsRefusesAnArrayNameWhereItWritesIt(t *testing.T) {
+	t.Parallel()
 	runZparseoptsCases(t, []zparseoptsCase{
 		{
 			name:    "a-missing-argument-is-refused-before-the-name-is",
@@ -529,6 +541,7 @@ func TestZparseoptsRefusesAnArrayNameWhereItWritesIt(t *testing.T) {
 // Every want here is real zsh's own, byte for byte, including the location
 // inside the function.
 func TestZparseoptsRefusesWithoutTouchingItsTarget(t *testing.T) {
+	t.Parallel()
 	runZparseoptsCases(t, []zparseoptsCase{
 		{
 			name:    "a-declared-array-is-still-an-empty-array",
@@ -569,6 +582,7 @@ func TestZparseoptsRefusesWithoutTouchingItsTarget(t *testing.T) {
 // so a registration that never happened would show up there — and `whence -w`
 // says the same thing one name at a time, `zregexparse` included.
 func TestZutilLoadsWithThreeOfItsFourBuiltins(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zutil 2>&1
 print -r -- "st=$?"
 whence -w zparseopts zformat zstyle zregexparse`)
@@ -595,6 +609,7 @@ whence -w zparseopts zformat zstyle zregexparse`)
 // second array *letter* rather than a second use of the same one would pass
 // the two refusals and fail these.
 func TestZparseoptsTakesEachArrayLetterOnce(t *testing.T) {
+	t.Parallel()
 	runZparseoptsCases(t, []zparseoptsCase{{
 		name:    "a-repeated-default-array-is-refused",
 		snippet: `set -- -x; zparseopts -a o -a p x; echo "st=$? o=${#o} p=${#p}"`,
@@ -634,6 +649,7 @@ func TestZparseoptsTakesEachArrayLetterOnce(t *testing.T) {
 // single letter is its own cluster and was already right, and a **long**
 // option is one name and is still named whole.
 func TestZparseoptsStrictNamesTheLetterAndNotTheWord(t *testing.T) {
+	t.Parallel()
 	runZparseoptsCases(t, []zparseoptsCase{{
 		name:    "the-first-letter-of-a-cluster",
 		snippet: `set -- -xy; zparseopts -F -a o a; echo "st=$?"`,

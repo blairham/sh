@@ -72,6 +72,7 @@ func lookRun(t *testing.T, dir, path, src string) (string, int) {
 // ask the runner. Before this, the assertion below failed and the one after it
 // passed for the wrong reason.
 func TestTheRunnersPathGovernsLookup(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "bin")
 	script(t, bin, "mycmd", "on-my-path", true)
@@ -86,6 +87,7 @@ func TestTheRunnersPathGovernsLookup(t *testing.T) {
 // worse half: a script that clears PATH to control what it can reach must not
 // still reach everything on the machine.
 func TestAnEmptyPathFindsNothing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "bin")
 	script(t, bin, "mycmd", "reached", true)
@@ -108,6 +110,7 @@ func TestAnEmptyPathFindsNothing(t *testing.T) {
 }
 
 func TestABuiltinIsNotLookedUpAtAll(t *testing.T) {
+	t.Parallel()
 	// The contrast that makes the previous test a finding rather than a
 	// broken shell.
 	out, st := lookRun(t, t.TempDir(), "", `echo builtin-ok`)
@@ -117,6 +120,7 @@ func TestABuiltinIsNotLookedUpAtAll(t *testing.T) {
 }
 
 func TestPathIsSearchedInOrder(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	a, b := filepath.Join(dir, "a"), filepath.Join(dir, "b")
 	script(t, a, "dup", "from-a", true)
@@ -136,6 +140,7 @@ func TestPathIsSearchedInOrder(t *testing.T) {
 // must not resolve a relative PATH entry against wherever the program happens
 // to have been started.
 func TestAnEmptyElementIsTheRunnersDirectory(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a")
 	script(t, a, "dup", "from-a", true)
@@ -148,6 +153,7 @@ func TestAnEmptyElementIsTheRunnersDirectory(t *testing.T) {
 }
 
 func TestARelativeElementResolvesAgainstTheRunnersDirectory(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	script(t, filepath.Join(dir, "sub"), "relcmd", "from-sub", true)
 
@@ -160,6 +166,7 @@ func TestARelativeElementResolvesAgainstTheRunnersDirectory(t *testing.T) {
 // TestANonExecutableDoesNotEndTheSearch is the rule an implementation that
 // stops at the first name match gets wrong.
 func TestANonExecutableDoesNotEndTheSearch(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	a, b := filepath.Join(dir, "a"), filepath.Join(dir, "b")
 	script(t, a, "dup", "from-a", false) // present, not executable
@@ -174,6 +181,7 @@ func TestANonExecutableDoesNotEndTheSearch(t *testing.T) {
 // TestADirectoryIsSkippedToo — a directory with the command's name is not the
 // command.
 func TestADirectoryIsSkippedToo(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	a, b := filepath.Join(dir, "a"), filepath.Join(dir, "b")
 	if err := os.MkdirAll(filepath.Join(a, "dup"), 0o755); err != nil {
@@ -191,6 +199,7 @@ func TestADirectoryIsSkippedToo(t *testing.T) {
 // "command not found" collapses: 127 for a name that resolved to nothing, 126
 // for a file that is there and will not start.
 func TestACommandWordSeparatesMissingFromUnrunnable(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "bin")
 	script(t, bin, "noexec", "never", false)
@@ -222,6 +231,7 @@ func TestACommandWordSeparatesMissingFromUnrunnable(t *testing.T) {
 // TestASlashBypassesPath — a name with a separator is a path, and PATH is not
 // consulted at all.
 func TestASlashBypassesPath(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	script(t, filepath.Join(dir, "sub"), "direct", "by-path", true)
 
@@ -240,6 +250,7 @@ func TestASlashBypassesPath(t *testing.T) {
 // PATH and died with Go's own "executable file not found in $PATH". Resolving
 // to an absolute path is what makes what lookPath returns actually runnable.
 func TestAFoundCommandIsRunnableByOsExec(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	script(t, dir, "viaempty", "ran-via-empty-element", true)
 
@@ -260,6 +271,7 @@ func TestAFoundCommandIsRunnableByOsExec(t *testing.T) {
 // see the other's — which is the same reason `cd` sets r.Dir instead of
 // calling os.Chdir.
 func TestTwoRunnersDoNotShareOnePath(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	one, two := filepath.Join(dir, "one"), filepath.Join(dir, "two")
 	script(t, one, "who", "runner-one", true)
@@ -290,6 +302,7 @@ func TestTwoRunnersDoNotShareOnePath(t *testing.T) {
 // PATH had, the panel splits: report the name as never found, or keep the
 // directory as the failed candidate — and among the keepers, which status.
 func TestADirectoryAsTheOnlyMatchIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		axis       Answer
@@ -337,6 +350,7 @@ func TestADirectoryAsTheOnlyMatchIsAnAxis(t *testing.T) {
 }
 
 func TestAnEmptyPathIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		axis  Answer

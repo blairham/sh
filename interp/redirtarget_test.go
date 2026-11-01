@@ -18,6 +18,7 @@ import (
 // afterwards, so a script got the unset name and then a complaint about a
 // file nobody wrote.
 func TestATargetThatCouldNotBeExpandedIsNotOpened(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a write", `set -u; cat /dev/null > "$NOPE_R"`},
 		{"a read", `set -u; cat < "$NOPE_R"`},
@@ -62,6 +63,7 @@ func TestATargetThatCouldNotBeExpandedIsNotOpened(t *testing.T) {
 // with the stream it was redirecting *away from*, so `cat < "$NOPE"` sat
 // reading the shell's own input.
 func TestATargetThatCouldNotBeExpandedLeavesTheStreamAlone(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `set -u; echo CAME-HERE > "$NOPE_R"`, nil)
 	if strings.Contains(out, "CAME-HERE") {
 		t.Errorf("out = %q, want the command never to have run", out)
@@ -72,6 +74,7 @@ func TestATargetThatCouldNotBeExpandedLeavesTheStreamAlone(t *testing.T) {
 // on a command the shell runs as a process of its own: Yes puts the write
 // back, No leaves it.
 func TestRedirectTargetExpandsInTheCommandsProcessConfinesTheWrite(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		answer Answer
 		want   string
@@ -95,6 +98,7 @@ func TestRedirectTargetExpandsInTheCommandsProcessConfinesTheWrite(t *testing.T)
 // that happened in the command's process takes the command with it, and one
 // that happened here takes the shell.
 func TestRedirectTargetExpandsInTheCommandsProcessDecidesWhatAFailureCosts(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		answer    Answer
 		wantAlive bool
@@ -118,6 +122,7 @@ func TestRedirectTargetExpandsInTheCommandsProcessDecidesWhatAFailureCosts(t *te
 // function or a group is run by this shell, so there is no other process for
 // the write to land in and the axis is not asked.
 func TestATargetForThisShellsOwnCommandKeepsItsWrite(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a builtin", "unset u\n: > \"${u:=made}\"\nprintf 'u=%s' \"${u-UNSET}\""},
 		{"a function", "f() { :; }\nunset u\nf > \"${u:=made}\"\nprintf 'u=%s' \"${u-UNSET}\""},
@@ -137,6 +142,7 @@ func TestATargetForThisShellsOwnCommandKeepsItsWrite(t *testing.T) {
 // TestAQuietTargetAsksNothing. A target that expands to a name is every other
 // redirection, and an unanswered dialect must still be able to open a file.
 func TestAQuietTargetAsksNothing(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.RedirectTargetExpandsInTheCommandsProcess = Unspecified
 	out, st := run(t, `v=f; echo hi > "$v"; cat f`, withSem(sem))
@@ -148,6 +154,7 @@ func TestAQuietTargetAsksNothing(t *testing.T) {
 // And one that writes refuses rather than guessing, which is what keeps the
 // core from having an opinion it never measured.
 func TestAnUnansweredTargetThatWritesIsRefused(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.RedirectTargetExpandsInTheCommandsProcess = Unspecified
 	out, st := run(t, "unset u\ncat /dev/null > \"${u:=made}\" && printf 'CAME-HERE'", withSem(sem))

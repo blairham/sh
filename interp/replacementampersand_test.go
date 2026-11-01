@@ -34,6 +34,7 @@ func readingTheAmpersand(r *Runner) {
 // (which is what the history modifier's `&` can only ever be), the whole
 // value, or the first character of the match.
 func TestTheReplacementAmpersandIsTheTextTheMatchTook(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a literal pattern",
@@ -106,6 +107,7 @@ func TestTheReplacementAmpersandIsTheTextTheMatchTook(t *testing.T) {
 // fix that read the operand's quoting off the `${ }` around it would make
 // every one of these a literal `&` and the test above would still pass.
 func TestAQuotedReplacementAmpersandIsAnOrdinaryCharacter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"double-quoted",
@@ -175,6 +177,7 @@ func TestAQuotedReplacementAmpersandIsAnOrdinaryCharacter(t *testing.T) {
 // rather than expanded cannot see the difference: ordinary quote removal has
 // already taken the backslash off by the time the replacement is read.
 func TestABackslashInAnExpandedReplacementEscapesOnlyItselfAndTheAmpersand(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"before an ampersand it leaves the ampersand",
@@ -223,6 +226,7 @@ func TestABackslashInAnExpandedReplacementEscapesOnlyItselfAndTheAmpersand(t *te
 // option is only an option if both of its states are measured: a fix that read
 // the ampersand unconditionally passes everything above.
 func TestWithoutTheOptionAReplacementAmpersandIsOrdinaryText(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"written down",
@@ -274,6 +278,7 @@ func TestWithoutTheOptionAReplacementAmpersandIsOrdinaryText(t *testing.T) {
 // The option moves while the shell runs, and what it switches is read at each
 // substitution rather than once.
 func TestTheReplacementAmpersandOptionIsReadAtEachSubstitution(t *testing.T) {
+	t.Parallel()
 	src := `v=abc; printf "[%s]" "${v/b/[&]}"`
 	on, _ := run(t, src, readingTheAmpersand)
 	off, _ := run(t, src, notReadingTheAmpersand)
@@ -301,6 +306,7 @@ func TestTheReplacementAmpersandOptionIsReadAtEachSubstitution(t *testing.T) {
 // again; this is the other half, and it is the half that would notice two
 // options sharing a bit.
 func TestEveryMatchOptionIsStoredSeparately(t *testing.T) {
+	t.Parallel()
 	all := []MatchOption{
 		UnmatchedPatternIsEmpty,
 		PatternsMatchHidden,

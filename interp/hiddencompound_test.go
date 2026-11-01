@@ -40,6 +40,7 @@ func hiddenCompoundRun(t *testing.T, src string) (string, string, int) {
 // status 0. The integer letter beside it is the control that was always
 // right, which is what says this is the compound letters and not the listing.
 func TestAHiddenNameKeepsTheCompoundAttribute(t *testing.T) {
+	t.Parallel()
 	out, errs, st := hiddenCompoundRun(t,
 		`f(){ local -a q; typeset -p q; echo "st=$?"; local -i n; typeset -p n; local -A m; typeset -p m; }; f`)
 	want := "declare -a q\nst=0\ndeclare -i n\ndeclare -A m\n"
@@ -51,6 +52,7 @@ func TestAHiddenNameKeepsTheCompoundAttribute(t *testing.T) {
 // And the name is still unset, which is the other half and the one a fix that
 // merely stopped hiding would break.
 func TestAHiddenTypedNameIsStillUnset(t *testing.T) {
+	t.Parallel()
 	out, errs, st := hiddenCompoundRun(t,
 		`f(){ local -a q; echo "[${q-UNSET}][${q+S}][${#q[@]}]"; }; f`)
 	if want := "[UNSET][][0]\n"; out != want || st != 0 || errs != "" {
@@ -62,6 +64,7 @@ func TestAHiddenTypedNameIsStillUnset(t *testing.T) {
 // control the whole shape rests on: the scope saved it, and keeping the
 // declaration's own empty table in the store must not disturb that.
 func TestTheCallersCompoundSurvivesAHiddenLocal(t *testing.T) {
+	t.Parallel()
 	out, errs, st := hiddenCompoundRun(t,
 		`arr=(a b c); f(){ local -a arr; echo "in=${#arr[@]}"; }; f; echo "out=${#arr[@]}"`)
 	if want := "in=0\nout=3\n"; out != want || st != 0 || errs != "" {
@@ -73,6 +76,7 @@ func TestTheCallersCompoundSurvivesAHiddenLocal(t *testing.T) {
 // store there, and the listing has nothing to find. The row that says the new
 // state belongs to the declaration rather than to every hidden name.
 func TestAnUnsetCompoundIsNotListed(t *testing.T) {
+	t.Parallel()
 	out, _, st := hiddenCompoundRun(t, `a=(x y); unset a; typeset -p a; echo "st=$?"`)
 	if want := "st=1\n"; out != want || st != 0 {
 		t.Errorf("got %q/%d, want %q", out, st, want)
@@ -82,6 +86,7 @@ func TestAnUnsetCompoundIsNotListed(t *testing.T) {
 // Assigning to the hidden name brings it back as the kind it was declared,
 // rather than as a scalar that happens to share the name.
 func TestAssigningToAHiddenTypedNameFillsTheDeclaredKind(t *testing.T) {
+	t.Parallel()
 	out, errs, st := hiddenCompoundRun(t, `f(){ local -a q; q=(x); typeset -p q; }; f`)
 	if want := `declare -a q=([0]="x")` + "\n"; out != want || st != 0 || errs != "" {
 		t.Errorf("got %q/%d stderr %q, want %q", out, st, errs, want)

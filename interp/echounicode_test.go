@@ -18,6 +18,7 @@ import (
 // replaced by U+FFFD, and the escape left standing are three different
 // strings that a Contains check on the letter would not tell apart.
 func TestEchoExpandsUnicodeEscapes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"four digits", `echo 'a\u0041Z'`, "aAZ\n"},
 		{"eight digits", `echo 'a\U00000041Z'`, "aAZ\n"},
@@ -50,6 +51,7 @@ func TestEchoExpandsUnicodeEscapes(t *testing.T) {
 // The same words with the axis answered No: the two characters stand, which is
 // what the four shells without the escape write.
 func TestEchoWithoutUnicodeEscapesLeavesThemAsWritten(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	sem.EchoInterpretsEscapes = Yes
 	sem.EchoExpandsUnicodeEscapes = No
@@ -69,6 +71,7 @@ func TestEchoWithoutUnicodeEscapesLeavesThemAsWritten(t *testing.T) {
 // under a naive encoder, so a test asserting only on `A` would pass for
 // an implementation that gets all four of these wrong.
 func TestEchoUnicodeEscapesUseTheWholeEncoding(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		want      []byte
@@ -98,6 +101,7 @@ func TestEchoUnicodeEscapesUseTheWholeEncoding(t *testing.T) {
 // EchoEmptyHexDigitRunIsNul is one question for `\x`, `\u` and `\U` together,
 // and it is asked only where such an escape actually runs out of digits.
 func TestAHexadecimalEscapeWithNoDigits(t *testing.T) {
+	t.Parallel()
 	const src = `echo -n 'a\xZ'; echo -n '|'; echo -n 'a\uZ'; echo -n '|'; echo -n 'a\U'`
 	for _, tc := range []struct {
 		name   string
@@ -126,6 +130,7 @@ func TestAHexadecimalEscapeWithNoDigits(t *testing.T) {
 // differ needs no answer to it — the same rule the hexadecimal and escape
 // letters follow.
 func TestTheEmptyRunAxisIsAskedOnlyWhereARunIsEmpty(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	sem.EchoInterpretsEscapes = Yes
 	sem.EchoExpandsHexEscapes = Yes

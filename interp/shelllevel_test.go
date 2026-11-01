@@ -36,6 +36,7 @@ func levelRunner(t *testing.T, policy ShellLevelPolicy, env []string, out *strin
 // unanimous across bash, bash 3.2, zsh, ksh93 and BusyBox ash: an absent, empty
 // or plainly non-numeric value starts the count at 1, and a number adds one.
 func TestHowAnInheritedShellLevelIsRead(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		inherited, want string
 	}{
@@ -76,6 +77,7 @@ func TestHowAnInheritedShellLevelIsRead(t *testing.T) {
 // should find a parameter invented for them — the same rule
 // Semantics.LoginStartupFiles states for the file a login shell reads.
 func TestAnUnansweredShellLevelInventsNothing(t *testing.T) {
+	t.Parallel()
 	for _, policy := range []ShellLevelPolicy{ShellLevelUnspecified, ShellLevelNotCounted} {
 		t.Run(policy.String(), func(t *testing.T) {
 			out := &strings.Builder{}
@@ -115,6 +117,7 @@ func TestTheShellLevelIsSettledOncePerSession(t *testing.T) {
 // A value the script wrote is the script's, and the environment does not
 // reach past it.
 func TestAnAssignedShellLevelIsNotOverwritten(t *testing.T) {
+	t.Parallel()
 	out := &strings.Builder{}
 	sem := PosixSemantics()
 	sem.ShellLevel = ShellLevelCounted
@@ -137,6 +140,7 @@ func TestAnAssignedShellLevelIsNotOverwritten(t *testing.T) {
 // 1000 and say nothing. The refusal names the level the shell *would* have
 // had, not the one it settles for.
 func TestTheCeilingRefusesADepthAndSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		inherited, capped, uncapped, warned string
 	}{
@@ -207,6 +211,7 @@ func handedLevel(t *testing.T, handed []string) (string, bool) {
 }
 
 func TestWhatAReplacedShellIsHandedForItsDepth(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name      string
 		policy    ShellLevelPolicy
@@ -251,6 +256,7 @@ func TestWhatAReplacedShellIsHandedForItsDepth(t *testing.T) {
 // way the second field is set: there is no count to take this shell out of,
 // and an entry a script made and exported is the script's.
 func TestAShellThatCountsNoDepthRewritesNothing(t *testing.T) {
+	t.Parallel()
 	for _, exec := range []ShellLevelExec{ShellLevelExecCounted, ShellLevelExecNotCounted} {
 		t.Run(exec.String(), func(t *testing.T) {
 			sem := PosixSemantics()
@@ -270,6 +276,7 @@ func TestAShellThatCountsNoDepthRewritesNothing(t *testing.T) {
 // would take the parent shell with it — so this is the guard that says the
 // rewrite is on the replacement road rather than on `exec`.
 func TestExecInASubshellHandsOverNoLoweredDepth(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	sem.ShellLevel, sem.ShellLevelExec = ShellLevelCounted, ShellLevelExecNotCounted
 	handed := replacedEnv(t, sem, []string{"SHLVL=5"}, `( exec /bin/echo x ); echo after`)

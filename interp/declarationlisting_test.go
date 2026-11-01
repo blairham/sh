@@ -33,6 +33,7 @@ func listingRun(t *testing.T, src string, a Answer) (string, string, int) {
 // holding an array, a name holding a scalar, and — the control — a name
 // holding nothing, which prints nothing under either answer.
 func TestAValuelessDeclarationListingIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `a=(x y); typeset a; s=str; typeset s; unset u; typeset u; echo done`
 	out, errs, st := listingRun(t, src, Yes)
 	if want := "a=( x y )\ns=str\ndone\n"; out != want || st != 0 || errs != "" {
@@ -47,6 +48,7 @@ func TestAValuelessDeclarationListingIsAnAxis(t *testing.T) {
 // The value is untouched either way, which is why nothing caught this: the
 // listing is the whole of what the declaration does here.
 func TestAValuelessDeclarationListingChangesNothing(t *testing.T) {
+	t.Parallel()
 	for _, a := range []Answer{Yes, No} {
 		out, _, st := listingRun(t, `s=str; typeset s >/dev/null; echo "[$s]"`, a)
 		if out != "[str]\n" || st != 0 {
@@ -59,6 +61,7 @@ func TestAValuelessDeclarationListingChangesNothing(t *testing.T) {
 // write, and each is a different reason: an attribute letter, the scope
 // letter, and a word whose own name is an attribute.
 func TestALetterSuppressesTheValuelessListing(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`n=5; typeset -i n`,
 		`s=str; typeset -g s`,
@@ -77,6 +80,7 @@ func TestALetterSuppressesTheValuelessListing(t *testing.T) {
 // from narrating every declaration in every function; a second declaration of
 // a name this scope has already made local does write it back.
 func TestOnlyANameAlreadyInTheCellIsListed(t *testing.T) {
+	t.Parallel()
 	out, errs, st := listingRun(t, `s=str; f(){ typeset s; }; f; echo after`, Yes)
 	if out != "after\n" || st != 0 || errs != "" {
 		t.Errorf("fresh: got %q/%d stderr %q, want silence", out, st, errs)
@@ -92,6 +96,7 @@ func TestOnlyANameAlreadyInTheCellIsListed(t *testing.T) {
 // after the builtin returns, so listing here would write the old value out in
 // front of a declaration that replaces it.
 func TestAnOperandAssignmentIsNotListed(t *testing.T) {
+	t.Parallel()
 	out, errs, st := listingRun(t, `b=(1 2); typeset b=(p q); printf '[%s]' "${b[@]}"; echo`, Yes)
 	if want := "[p][q]\n"; out != want || st != 0 || errs != "" {
 		t.Errorf("got %q/%d stderr %q, want %q", out, st, errs, want)
@@ -101,6 +106,7 @@ func TestAnOperandAssignmentIsNotListed(t *testing.T) {
 // And the refusal is real where nothing answered, which is what says the
 // silences above are decisions rather than a question nothing reaches.
 func TestTheValuelessListingAxisIsAsked(t *testing.T) {
+	t.Parallel()
 	out, errs, _ := declRun(t, `s=str; typeset s`, func(s *Semantics) {
 		s.DeclareOptions = "aAgiprx"
 		s.ValuelessDeclarationOfAHeldNameListsIt = Unspecified

@@ -11,6 +11,7 @@ import "testing"
 // twice (#5477). Measured 2026-10-02 on zsh 5.9.2
 // (`/opt/homebrew/bin/zsh -f`, `LC_ALL=C`).
 func TestAReversedSpanOverAStringKeepsWhatFollowsItsEnd(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`s=abcd; s[3,1]=XY; print -r -- $s`, "abXYbcd\n"},
 		{`s=abcd; s[4,2]=XY; print -r -- $s`, "abcXYcd\n"},

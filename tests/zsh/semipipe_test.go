@@ -22,6 +22,7 @@ import (
 // have neither.
 
 func TestSemiPipeKeepsTestingLaterPatterns(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The arm runs and the *later patterns keep being tested*, so the
 		// non-matching middle arm is skipped and the `*` is reached.
@@ -72,6 +73,7 @@ func TestSemiPipeKeepsTestingLaterPatterns(t *testing.T) {
 // not confined to the arm. And with a blank between them the bare `|` is
 // named again, so the two bytes have to touch, like `|&`.
 func TestTheOtherSpellingAndTheTokenAreNamedAsThisShellNamesThem(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the bash spelling stays refused",
@@ -109,6 +111,7 @@ func TestTheOtherSpellingAndTheTokenAreNamedAsThisShellNamesThem(t *testing.T) {
 // The flag itself, stated by name so a dialect rebuild that dropped it fails
 // here rather than only in the wild run.
 func TestCaseContinuePipeIsOn(t *testing.T) {
+	t.Parallel()
 	if !zsh.Dialect().CaseContinuePipe {
 		t.Error("zsh reads `;|` as the terminator that keeps testing later patterns")
 	}

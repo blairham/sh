@@ -22,6 +22,7 @@ import (
 // second check is there: DeepEqual cannot tell a node reached twice from two
 // copies of it, and a literal can only be the second.
 func TestPreludeTree(t *testing.T) {
+	t.Parallel()
 	want, err := syntax.Parse(zsh.Prelude(), zsh.Dialect())
 	if err != nil {
 		t.Fatal(err)

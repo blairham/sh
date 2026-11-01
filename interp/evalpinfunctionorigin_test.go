@@ -55,6 +55,7 @@ const pinnedEvalAtTheTop = "myfunc() {\n" +
 	"myfunc\n"
 
 func TestAPinnedLineIsNotMeasuredAgainstTheCalleesDefinitionLine(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, pinnedEvalAtTheTop, pinnedFunctionSetup)
 	if want := "pad\nF=5\nF=1"; strings.TrimSpace(out) != want {
 		t.Errorf("got %q, want %q — the pin, then the direct call's own offset", strings.TrimSpace(out), want)
@@ -80,6 +81,7 @@ const pinnedEvalInsideAFunction = "myfunc() {\n" +
 	"outer\n"
 
 func TestAPinnedLineKeepsTheOriginInForceWhereItWasTaken(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, pinnedEvalInsideAFunction, pinnedFunctionSetup)
 	if want := "pad\npad\nF=2"; strings.TrimSpace(out) != want {
 		t.Errorf("got %q, want %q — the pin counted from the frame that took it", strings.TrimSpace(out), want)
@@ -96,6 +98,7 @@ const pinnedEvalDiagnostic = "myfunc() {\n" +
 	`eval "myfunc"` + "\n"
 
 func TestAPinnedDiagnosticIsCountedFromTheSameOrigin(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, pinnedEvalDiagnostic, pinnedFunctionSetup)
 	if !strings.Contains(out, "myfunc:5:") {
 		t.Errorf("got %q, want the location `myfunc:5:`", out)
@@ -107,6 +110,7 @@ func TestAPinnedDiagnosticIsCountedFromTheSameOrigin(t *testing.T) {
 // numbers from its own line one, so the function called from it counts from
 // its own definition as it always did.
 func TestTheOriginRuleIsUnmovedWhereTheTextIsAPlaceOfItsOwn(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, pinnedEvalAtTheTop, func(r *Runner) {
 		pinnedFunctionSetup(r)
 		r.SetEvalTextHasALocationOfItsOwn(true)

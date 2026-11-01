@@ -39,6 +39,7 @@ import (
 // says is worse than an absent completion system, arrived at from the other
 // side.
 func TestTabKeepsCompletingWhenCompinitTakesTheWidget(t *testing.T) {
+	t.Parallel()
 	r := bindkeyRunner(t, "zle -C complete-word .complete-word _main_complete\n"+
 		"bindkey '^i' complete-word\n")
 	got, bound := zsh.KeyBindings(r, repl.KeymapMain)["\t"]
@@ -57,6 +58,7 @@ func TestTabKeepsCompletingWhenCompinitTakesTheWidget(t *testing.T) {
 // the widget is worth here is its completer, which is the one of `zle -C`'s
 // two claims this shell can keep.
 func TestACompletionWidgetIsAnsweredByItsCompleterNotItsFunction(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		src  string

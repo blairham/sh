@@ -23,6 +23,7 @@ import (
 // DeclareOptionsTakingANumber, which names `F` whoever is asking, so the letter
 // being accepted is the whole of what was needed.
 func TestLocalTakesTheFloatAttribute(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{`f(){ local -F x=1.5; print -r -- "[$x]"; }; f`, "[1.5000000000]\n"},

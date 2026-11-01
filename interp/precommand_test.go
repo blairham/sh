@@ -20,6 +20,7 @@ import (
 // not the roster. See tests/zsh/precommand_test.go for the measured words.
 
 func TestAnUnregisteredWordIsAnOrdinaryCommandName(t *testing.T) {
+	t.Parallel()
 	dir := fileDir(t, "a.txt")
 	inDir := func(r *Runner) { r.Dir = dir }
 	// No table: the word is a command name, and the words behind it were
@@ -37,6 +38,7 @@ func TestAnUnregisteredWordIsAnOrdinaryCommandName(t *testing.T) {
 }
 
 func TestASuppressingModifierIsTakenAwayAndStopsTheMatch(t *testing.T) {
+	t.Parallel()
 	dir := fileDir(t, "a.txt")
 	withTable := func(r *Runner) {
 		r.Dir = dir
@@ -86,6 +88,7 @@ func TestASuppressingModifierIsTakenAwayAndStopsTheMatch(t *testing.T) {
 // command's business, and a redirection target is expanded by another route
 // entirely.
 func TestASuppressedMatchIsTheWordsAndNotTheirInsides(t *testing.T) {
+	t.Parallel()
 	dir := fileDir(t, "a.txt")
 	withTable := func(r *Runner) {
 		r.Dir = dir
@@ -112,6 +115,7 @@ func TestASuppressedMatchIsTheWordsAndNotTheirInsides(t *testing.T) {
 // the pair is the assertion: the same runner, with and without the modifier,
 // has to reach the same variable.
 func TestAModifierDoesNotMoveTheCommandOutOfThisShell(t *testing.T) {
+	t.Parallel()
 	withTable := func(r *Runner) {
 		r.SetPrecommand("nomatch", PrecommandNoGlob)
 		s := *r.Semantics

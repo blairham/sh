@@ -46,6 +46,7 @@ func condRefusal(t *testing.T, src string, d Diagnostics) string {
 // one derived from the three-word row alone would name the middle word at four
 // and be wrong the other way.
 func TestAConditionThatWillNotReadNamesOneOfItsWords(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"two words name the first, prefixed", `[[ p q ]]`, "parse error: condition expected: p"},
 		{"three name the middle, plainly", `[[ p q r ]]`, "condition expected: q"},
@@ -91,6 +92,7 @@ func TestAConditionThatWillNotReadNamesOneOfItsWords(t *testing.T) {
 // And the dialects without the sentences name the token, exactly as they did:
 // an empty ConditionExpected is what says a column has no such wording.
 func TestAConditionRefusalWithoutTheSentencesNamesTheToken(t *testing.T) {
+	t.Parallel()
 	d := Diagnostics{SyntaxUnexpected: "near `%[1]s'", SyntaxUnexpectedWord: "near `%[1]s'"}
 	for _, tc := range []struct{ src, want string }{
 		{`[[ p q ]]`, "near `q'"},
@@ -107,6 +109,7 @@ func TestAConditionRefusalWithoutTheSentencesNamesTheToken(t *testing.T) {
 // condition and does so when the condition **runs** — `[[ -zz x ]]` prints the
 // line before it first — which is neither of the two sentences here.
 func TestANamedConditionWordIsNotThisRefusal(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`[[ p -zz q ]]`, "near `-zz'"},
 		{`[[ -zz x ]]`, "near `x'"},
@@ -121,6 +124,7 @@ func TestANamedConditionWordIsNotThisRefusal(t *testing.T) {
 // A dialect with one sentence for both states it once: an empty prefixed
 // wording falls back to the plain one rather than to nothing.
 func TestOneConditionSentenceServesBoth(t *testing.T) {
+	t.Parallel()
 	d := condDiags()
 	d.ConditionExpectedPrefixed = ""
 	if got, want := condRefusal(t, `[[ p q ]]`, d), "condition expected: p"; got != want {
@@ -135,6 +139,7 @@ func TestOneConditionSentenceServesBoth(t *testing.T) {
 // and the contrast row is three words whose middle one is no operator, which
 // is still the group sentence (measured 2026-10-04).
 func TestACompleteConditionStoppedOnAnOperatorNamesTheToken(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`[[ p -eq q ; ]]`, "near `;'"},
 		{`[[ p == q & ]]`, "near `&'"},

@@ -20,6 +20,7 @@ import (
 // neither but answers 2. Three different shapes over one failure, which is why
 // this is Diagnostics data and not a branch.
 func TestAScriptOperandThatWillNotOpen(t *testing.T) {
+	t.Parallel()
 	d := zsh.Diagnostics()
 	for _, tc := range []struct {
 		name string

@@ -35,6 +35,7 @@ func runNamerefOff(t *testing.T, src string) (string, int) {
 // line" rather than as a declaration of its own, so the reference stood and
 // every later read still went through it.
 func TestTheReferenceLetterUnderAPlusTakesTheReferenceAway(t *testing.T) {
+	t.Parallel()
 	// The value is the target's *name* and not what the target holds, which
 	// is the row that says the reference was not followed on the way out.
 	out, st := runNamerefOff(t, `v=bar; typeset -n foo=v
@@ -75,6 +76,7 @@ typeset -p g`)
 // reference carries rather than the one its target carries — the same half
 // `unset -n` asks, and the opposite of what a write through a reference asks.
 func TestAFrozenReferenceRefusesTheLetterUnderAPlus(t *testing.T) {
+	t.Parallel()
 	out, _ := runNamerefOff(t, `w=2; typeset -rn k=w
 typeset +n k; echo "st=$?"
 typeset -p k

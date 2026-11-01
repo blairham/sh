@@ -72,6 +72,7 @@ func oneLine(t *testing.T, got, want string) {
 // A function the prelude defined reaches the location prefix through the seam,
 // and the sentence it hands over is the only part it writes.
 func TestAPreludeFunctionsOwnDiagnosticIsLocated(t *testing.T) {
+	t.Parallel()
 	const prelude = "stack() {\n\tdiagnose \"nothing to pop\"\n\treturn 1\n}\n"
 	got := preludeRun(t, t.TempDir(), prelude, "true\nstack\n",
 		Diagnostics{Location: LocationLineWord})
@@ -82,6 +83,7 @@ func TestAPreludeFunctionsOwnDiagnosticIsLocated(t *testing.T) {
 // prelude line renders the other way with nothing in the prelude to say so.
 // That is the point of the seam: the dialect answers, the shell text does not.
 func TestTheSeamRendersUnderEitherLocationStyle(t *testing.T) {
+	t.Parallel()
 	const prelude = "stack() {\n\tdiagnose \"nothing to pop\"\n\treturn 1\n}\n"
 	got := preludeRun(t, t.TempDir(), prelude, "true\nstack\n",
 		Diagnostics{Location: LocationTightLine, NamesBuiltinInLocation: true})
@@ -91,6 +93,7 @@ func TestTheSeamRendersUnderEitherLocationStyle(t *testing.T) {
 // A builtin the function called is renamed and relocated: the script asked for
 // `stack`, so `stack` is what refused, at the line the script wrote.
 func TestABuiltinInsideAPreludeFunctionSpeaksAsTheFunction(t *testing.T) {
+	t.Parallel()
 	const prelude = "stack() {\n\tcd /no/such/dir-xyz\n}\n"
 	got := preludeRun(t, t.TempDir(), prelude, "true\ntrue\nstack\n",
 		Diagnostics{Location: LocationLineWord, CdCannotChange: "cd: %[1]s: %[2]s"})
@@ -104,6 +107,7 @@ func TestABuiltinInsideAPreludeFunctionSpeaksAsTheFunction(t *testing.T) {
 // prelude function does not take it over, which is what keeps an internal
 // split invisible.
 func TestTheOutermostPreludeFunctionOwnsTheName(t *testing.T) {
+	t.Parallel()
 	const prelude = "helper() {\n\tdiagnose \"out of range\"\n}\nstack() {\n\thelper\n}\n"
 	got := preludeRun(t, t.TempDir(), prelude, "stack\n",
 		Diagnostics{Location: LocationLineWord})
@@ -117,6 +121,7 @@ func TestTheOutermostPreludeFunctionOwnsTheName(t *testing.T) {
 // function is and the builtin behind it names itself. Without this the rule
 // would be "any function", which is a different and wrong one.
 func TestAScriptsFunctionIsNotTheShellSpeaking(t *testing.T) {
+	t.Parallel()
 	got := preludeRun(t, t.TempDir(), "", "stack() {\n\tcd /no/such/dir-xyz\n}\nstack\n",
 		Diagnostics{Location: LocationLineWord, CdCannotChange: "cd: %[1]s: %[2]s"})
 	oneLine(t, got, "testsh: line 2: cd: /no/such/dir-xyz: No such file or directory")
@@ -125,6 +130,7 @@ func TestAScriptsFunctionIsNotTheShellSpeaking(t *testing.T) {
 // And redefining one takes the voice away with the name, because what is
 // remembered is the declaration rather than the name.
 func TestRedefiningAPreludeFunctionTakesTheVoiceAway(t *testing.T) {
+	t.Parallel()
 	const prelude = "stack() {\n\tdiagnose \"nothing to pop\"\n}\n"
 	got := preludeRun(t, t.TempDir(), prelude, "stack() {\n\tcd /no/such/dir-xyz\n}\nstack\n",
 		Diagnostics{Location: LocationLineWord, CdCannotChange: "cd: %[1]s: %[2]s"})
@@ -137,6 +143,7 @@ func TestRedefiningAPreludeFunctionTakesTheVoiceAway(t *testing.T) {
 // The seam is the prelude's and not the language's: a script running the word
 // finds no such command, so a dialect gains no builtin by having a prelude.
 func TestTheSeamIsNotACommandAScriptCanRun(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{Location: LocationLineWord}
 	got := preludeRun(t, t.TempDir(), "stack() { :; }\n", "diagnose oops\n", dg)
 	if !strings.Contains(got, "diagnose") || !strings.Contains(got, "not found") {
@@ -154,6 +161,7 @@ func TestTheSeamIsNotACommandAScriptCanRun(t *testing.T) {
 // because a seam that printed a bare `name: ` for this would be a diagnostic
 // nobody wrote.
 func TestTheSeamWithNothingToSayIsSilent(t *testing.T) {
+	t.Parallel()
 	const prelude = "stack() {\n\tdiagnose\n\tdiagnose two words\n}\n"
 	got := preludeRun(t, t.TempDir(), prelude, "stack\n",
 		Diagnostics{Location: LocationLineWord})
@@ -166,6 +174,7 @@ func TestTheSeamWithNothingToSayIsSilent(t *testing.T) {
 // it here: a prelude function is a builtin speaking, so the composition is the
 // one BuiltinLocation already describes rather than a fourth case.
 func TestTheShellSpeakingIsLocatedTheWayABuiltinIs(t *testing.T) {
+	t.Parallel()
 	const prelude = "stack() {\n\tdiagnose \"nothing to pop\"\n}\n"
 	dg := Diagnostics{Location: LocationLineWord, BuiltinLocation: LocationBracketLine}
 	got := preludeRun(t, t.TempDir(), prelude, "true\nstack\n", dg)
@@ -184,6 +193,7 @@ func TestTheShellSpeakingIsLocatedTheWayABuiltinIs(t *testing.T) {
 // location would depend on which command the prelude reached for, which is the
 // implementation detail this seam exists to hide.
 func TestTheShellSpeakingIsABuiltinWhateverRaisedTheMessage(t *testing.T) {
+	t.Parallel()
 	const prelude = "stack() {\n\tnosuchcmd-xyz\n}\n"
 	dg := Diagnostics{Location: LocationLineWord, BuiltinLocation: LocationBracketLine}
 	got := preludeRun(t, t.TempDir(), prelude, "stack\n", dg)
@@ -196,6 +206,7 @@ func TestTheShellSpeakingIsABuiltinWhateverRaisedTheMessage(t *testing.T) {
 // instead when the shell is speaking, because to the script there is no
 // function there to name.
 func TestTheShellSpeakingIsNeverLocatedAsAFunction(t *testing.T) {
+	t.Parallel()
 	const prelude = "stack() {\n\tdiagnose \"nothing to pop\"\n}\n"
 	got := preludeRun(t, t.TempDir(), prelude, "true\nstack\n", Diagnostics{
 		Location: LocationTightLine, LocationNamesTheFunction: true,

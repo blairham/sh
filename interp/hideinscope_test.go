@@ -45,6 +45,7 @@ func withHidingAndTies(s *Semantics) {
 // like the special one, so the array half keeps what the caller put there,
 // and the caller's scalar comes back untouched on return.
 func TestTheHideLetterDetachesALocalFromItsTie(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunTied(t, `S=one:two
 f() { local -h S=zzz; echo "in=[$S][${s[@]}]"; }
 f
@@ -61,6 +62,7 @@ echo "after=[$S][${s[@]}]"`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s
 // array with it. A `-h` that parsed and did nothing passes the first test by
 // answering this one's output.
 func TestALocalWithoutTheHideLetterKeepsItsTie(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunTied(t, `S=one:two
 f() { local S=zzz; echo "in=[$S][${s[@]}]"; }
 f`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
@@ -75,6 +77,7 @@ f`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 // its own inherits whatever the name it shadows was given, however far away
 // that was written.
 func TestTheHideAttributeIsInheritedByALaterLocal(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunTied(t, `S=one:two
 typeset -h S
 f() { local S=zzz; echo "in=[${s[@]}]"; }
@@ -91,6 +94,7 @@ f`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 // have left out. This is the row that fails if `+h` is a no-op: the script is
 // the one above with three characters added, and the answer is the other one.
 func TestThePlusHideLetterTakesTheInheritedAttributeOff(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunTied(t, `S=one:two
 typeset -h S
 f() { local +h S=zzz; echo "in=[${s[@]}]"; }
@@ -107,6 +111,7 @@ f`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 // being the special one — so a declaration at the top level changes no answer
 // until a function shadows the name.
 func TestTheHideAttributeDetachesNothingWithoutALocal(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunTied(t, `typeset -h S
 S=one:two
 echo "top=[${s[@]}]"`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
@@ -123,6 +128,7 @@ echo "top=[${s[@]}]"`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 // and is still detached from that tie inside a local — only the plus form
 // puts it back.
 func TestUnsetDoesNotTakeTheHideAttributeOff(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunTied(t, `typeset -h S
 unset S
 S=one:two
@@ -141,6 +147,7 @@ g`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 // An attribute a call added goes away with the call, the way a freeze does:
 // the caller's name is the special one again the moment the function returns.
 func TestTheHideAttributeAddedByACallGoesAwayWithIt(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunTied(t, `f() { local -h S=zzz; }
 f
 S=three:four
@@ -156,6 +163,7 @@ echo "after=[${s[@]}]"`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 // the other direction of the same save. A restore that only put back a `true`
 // would pass the test above and fail this one.
 func TestTheHideAttributeRemovedByACallComesBack(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunTied(t, `typeset -h S
 f() { local +h S=zzz; }
 f
@@ -173,6 +181,7 @@ g`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 // the other two-sign letters here keep — in the dialect where the last sign
 // wins at all; see Semantics.ALetterUnderBothSignsComesOff.
 func TestTheLastHideLetterWrittenDecides(t *testing.T) {
+	t.Parallel()
 	lastSignWins := func(s *Semantics) {
 		withHidingAndTies(s)
 		s.ALetterUnderBothSignsComesOff = No
@@ -194,6 +203,7 @@ g`, lastSignWins, Diagnostics{}, [2]string{"S", "s"}, [2]string{"T", "t"})
 // signs: the plus form is what a real script writes and it must not be the
 // one spelling that slips past a dialect which has not been given the letter.
 func TestTheHideLetterIsTheDialectsToGive(t *testing.T) {
+	t.Parallel()
 	for _, sign := range []string{"-", "+"} {
 		_, errs, st := declRun(t, "typeset "+sign+"h v=1", nil,
 			Diagnostics{UnimplementedOptionLetters: map[string]string{"typeset": "h"}})
@@ -245,6 +255,7 @@ func producedAndHidden(name, value string, hide, frozen bool) func(*Runner) {
 // ordinary parameter, so it holds what the declaration wrote and the name is
 // the shell's own again on return.
 func TestAHiddenShadowOfAProducedNameIsAnOrdinaryParameter(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunWith(t, `f() { local P=5; echo "in=[$P]"; }
 f
 echo "after=[$P]"`, withHidingInScope, Diagnostics{}, nil, producedAndHidden("P", "produced", true, false))
@@ -260,6 +271,7 @@ echo "after=[$P]"`, withHidingInScope, Diagnostics{}, nil, producedAndHidden("P"
 // ordinary": the same producer without it is read straight through the
 // shadow, and the value the declaration wrote is never seen.
 func TestAShadowOfAProducedNameWithoutTheAttributeIsTheProducedView(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunWith(t, `f() { local P=5; echo "in=[$P]"; }
 f`, withHidingInScope, Diagnostics{}, nil, producedAndHidden("P", "produced", false, false))
 	want := "in=[produced]\n"
@@ -273,6 +285,7 @@ f`, withHidingInScope, Diagnostics{}, nil, producedAndHidden("P", "produced", fa
 // says a valueless declaration is, and not the produced value — which is the
 // row a fix aimed at the *assignment* would fail.
 func TestAValuelessHiddenShadowOfAProducedNameIsEmpty(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunWith(t, `f() { local P; echo "in=[$P]"; }
 f`, withHidingInScope, Diagnostics{}, nil, producedAndHidden("P", "produced", true, false))
 	want := "in=[]\n"
@@ -285,6 +298,7 @@ f`, withHidingInScope, Diagnostics{}, nil, producedAndHidden("P", "produced", tr
 // The letter written on the declaration reaches a producer the same way the
 // registration does, for a name that carries nothing of its own.
 func TestTheHideLetterOnADeclarationDetachesAProducer(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunWith(t, `f() { local -h P=5; echo "in=[$P]"; }
 f
 echo "after=[$P]"`, withHidingInScope, Diagnostics{}, nil, producedAndHidden("P", "produced", false, false))
@@ -300,6 +314,7 @@ echo "after=[$P]"`, withHidingInScope, Diagnostics{}, nil, producedAndHidden("P"
 // thing asking for the second view — and a `+h` that merely parsed would
 // leave the local holding the 5 it wrote.
 func TestThePlusHideLetterPutsTheProducerBack(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunWith(t, `f() { local +h P=5; echo "in=[$P]"; }
 f`, withHidingInScope, Diagnostics{}, nil, producedAndHidden("P", "produced", true, false))
 	want := "in=[produced]\n"
@@ -313,6 +328,7 @@ f`, withHidingInScope, Diagnostics{}, nil, producedAndHidden("P", "produced", tr
 // same control the tie half has: a name carrying it at the top level is
 // still produced there.
 func TestTheHideAttributeSuspendsNoProducerWithoutALocal(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunWith(t, `echo "top=[$P]"`, withHidingInScope, Diagnostics{}, nil,
 		producedAndHidden("P", "produced", true, false))
 	want := "top=[produced]\n"
@@ -327,6 +343,7 @@ func TestTheHideAttributeSuspendsNoProducerWithoutALocal(t *testing.T) {
 // second half the declaration is accepted and then discarded, and the local
 // reads the produced value at status 0.
 func TestAHiddenShadowOfAFrozenProducerHoldsWhatItWasGiven(t *testing.T) {
+	t.Parallel()
 	frozen := func(s *Semantics) {
 		withHidingInScope(s)
 		s.DeclarationMayShadowAReadonly = Yes
@@ -345,6 +362,7 @@ echo "after=[$P]"`, frozen, Diagnostics{}, nil, producedAndHidden("P", "produced
 // the producer is out of the tables for as long as the shadow stands rather
 // than for the one expansion the declaration is on.
 func TestANestedCallInsideAHiddenShadowSeesTheOrdinaryParameter(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunWith(t, `g() { echo "g=[$P]"; }
 f() { local P=5; g; }
 f

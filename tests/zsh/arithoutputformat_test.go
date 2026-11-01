@@ -21,6 +21,7 @@ import (
 // refusal rather than a wrong number, so the expression produced nothing at
 // all (#2095).
 func TestTheArithmeticOutputBase(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a base writes its mark", `echo $(( [#16] 255 ))`, "16#FF\n"},
 		{"two hashes drop the mark", `echo $(( [##16] 255 ))`, "FF\n"},
@@ -51,6 +52,7 @@ func TestTheArithmeticOutputBase(t *testing.T) {
 // construct and is measured with it: a bare `_` is decimal in threes, a number
 // after it is the group size, and `_0` turns grouping off again.
 func TestTheArithmeticOutputGrouping(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"decimal in threes", `echo $(( [#_] 1234567 ))`, "1_234_567\n"},
 		{"a group size", `echo $(( [#_5] 1234567 ))`, "12_34567\n"},
@@ -76,6 +78,7 @@ func TestTheArithmeticOutputGrouping(t *testing.T) {
 // textually last one decides. Each row is a reading that a prefix operator
 // over the expression beside it would get wrong.
 func TestTheArithmeticOutputBaseIsLexical(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"in the middle of an expression", `echo $(( 255 + [#16] 1 ))`, "16#100\n"},
 		{"after a value", `echo $(( 2[#8] ))`, "8#2\n"},
@@ -100,6 +103,7 @@ func TestTheArithmeticOutputBaseIsLexical(t *testing.T) {
 // evaluation that carried it. The second half is what a leaked format would
 // fail: the next expansion is plain decimal again.
 func TestTheArithmeticOutputBaseChangesNoValueAndDoesNotLeak(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `echo $(( [#16] 255 )) $(( 255 )) $(( 16#FF ))`)
 	if out != "16#FF 255 255\n" || st != 0 {
 		t.Errorf("gave %q at %d, want %q at 0", out, st, "16#FF 255 255\n")
@@ -111,6 +115,7 @@ func TestTheArithmeticOutputBaseChangesNoValueAndDoesNotLeak(t *testing.T) {
 // same assignment is not formatted, which is what tells the value apart from
 // every other text the write touches.
 func TestTheArithmeticOutputBaseReachesTheValueAndNotTheKey(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a scalar", `x=5; (( x = [#16] 255 )); typeset -p x`, "typeset x='16#FF'\n"},
 		{"read back", `x=5; (( x = [#16] 255 )); echo $(( x ))`, "255\n"},
@@ -132,6 +137,7 @@ func TestTheArithmeticOutputBaseReachesTheValueAndNotTheKey(t *testing.T) {
 // does not write a literal — where the same characters arriving as the text of
 // an ordinary assignment do teach one.
 func TestTheArithmeticOutputBaseTeachesAnIntegerNameNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an arithmetic assignment teaches nothing", `typeset -i i; (( i = [#16] 255 )); typeset -p i; echo $i`, "typeset -i i=255\n255\n"},
 		{"an ordinary assignment still does", `typeset -i i; i=$(( [#16] 255 )); typeset -p i`, "typeset -i16 i=255\n"},
@@ -151,6 +157,7 @@ func TestTheArithmeticOutputBaseTeachesAnIntegerNameNothing(t *testing.T) {
 // range, a bracketed group that is not a specifier at all, and one holding
 // nothing but digits — the last two being one character apart.
 func TestTheArithmeticOutputBaseRefusals(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		status          int
@@ -183,6 +190,7 @@ func TestTheArithmeticOutputBaseRefusals(t *testing.T) {
 // which is what keeps a branch nobody takes quiet — measured, the same script
 // reaches the echo after it.
 func TestAnUnreadableOutputFormatIsARunTimeFailure(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `false && echo $(( [#37] 1 )); echo reached`)
 	if out != "reached\n" || st != 0 {
 		t.Errorf("gave %q at %d, want %q at 0", out, st, "reached\n")
@@ -192,6 +200,7 @@ func TestAnUnreadableOutputFormatIsARunTimeFailure(t *testing.T) {
 // A subscript is untouched: its bracket touches the name in front of it and is
 // read by the name, where a specifier stands where a token begins.
 func TestASubscriptIsNotAnOutputFormat(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `a=(1 2 3); echo $(( a[#8] )) $(( a[2] ))`)
 	if out != "0 2\n" || st != 0 {
 		t.Errorf("gave %q at %d, want %q at 0", out, st, "0 2\n")

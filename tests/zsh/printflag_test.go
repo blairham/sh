@@ -13,6 +13,7 @@ import (
 // Every want below is zsh 5.9.2's own answer, measured 2026-09-07 with
 // `a=(x y)`.
 func TestThePrintFlagReadsThisDialectsEscapes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a newline", `a=(x y); printf "[%s]" "${(pj:\n:)a}"`, "[x\ny]"},
 		{"a tab", `a=(x y); printf "[%s]" "${(pj:\t:)a}"`, "[x\ty]"},
@@ -56,6 +57,7 @@ func TestThePrintFlagReadsThisDialectsEscapes(t *testing.T) {
 // difference is a parameter, so this is the row that would fail if the
 // parameter were wired the wrong way round.
 func TestPrintStillTruncatesAtTheCEscape(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `print -- "A\cB"; print -- END`)
 	// `\c` drops the rest of *that* command's output, its trailing newline
 	// included, and the next command still runs — so `AEND` on one line is
@@ -67,6 +69,7 @@ func TestPrintStillTruncatesAtTheCEscape(t *testing.T) {
 
 // The real lines that need the flag, from the plugin manager that reported it.
 func TestThePrintFlagIsThisDialects(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			// `+zi-prehelp-usage-message` line 28: a separator built out of
@@ -117,6 +120,7 @@ func TestThePrintFlagIsThisDialects(t *testing.T) {
 // Written here rather than in interp because the escapes are this dialect's
 // measurement and a runner nobody handed them refuses the `p` by name.
 func TestThePaddingPairReadsItsFillWithPrintEscapes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a fill read with escapes",

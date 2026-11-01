@@ -11,6 +11,7 @@ import (
 // the two are separate settings: `-l` moves the separator, `-N` moves both and
 // `-n` clears the terminator. Measured 2026-09-05, zsh 5.9.2.
 func TestPrintSeparatorAndTerminator(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`print hello world`, "hello world\n"},
 		{`print -n abc`, "abc"},
@@ -39,6 +40,7 @@ func TestPrintSeparatorAndTerminator(t *testing.T) {
 // bare octal escape needs no leading zero, `\M-` and `\C-` are escapes here,
 // and one nobody knows loses its backslash instead of keeping it.
 func TestPrintEscapes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`print 'a\tb'`, "a\tb\n"},
 		{`print -r 'a\tb'`, "a\\tb\n"},
@@ -80,6 +82,7 @@ func TestPrintEscapes(t *testing.T) {
 // still read as this shell's letters, while every later word is read as
 // echo's — only `e` and `n` are options there, and `--` is an operand.
 func TestPrintCapitalRSwitchesTheOptionParser(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`print -Rl a b`, "a\nb\n"},
 		{`print -R -l c d`, "-l c d\n"},
@@ -102,6 +105,7 @@ func TestPrintCapitalRSwitchesTheOptionParser(t *testing.T) {
 // rather than its later-wins opposite: `print -O -o` still sorts backwards.
 // The order is byte order, which is what the oracle's LC_ALL=C measures.
 func TestPrintSortsAndFilters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`print -o B a C`, "B C a\n"},
 		{`print -O B a C`, "a C B\n"},
@@ -124,6 +128,7 @@ func TestPrintSortsAndFilters(t *testing.T) {
 // `-s`, `-S` and `-z` aim at a history and a line editor a non-interactive
 // shell has not got: the operands are consumed and nothing is written.
 func TestPrintHistoryAndEditorLettersWriteNowhere(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`print -s a b`, `print -S ab`, `print -S`, `print -z c`} {
 		out, st := runZsh(t, t.TempDir(), src)
 		if st != 0 || out != "" {
@@ -136,6 +141,7 @@ func TestPrintHistoryAndEditorLettersWriteNowhere(t *testing.T) {
 // and the line between its own name and the message, and a usage complaint is
 // 1 with no usage line after it — where ksh93 prints one and exits 2.
 func TestPrintRefusals(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, want string
 		status    int
@@ -195,6 +201,7 @@ func TestPrintRefusals(t *testing.T) {
 // The option's argument may be attached to the letter or be the next word, and
 // `--` and a lone `-` both end the options.
 func TestPrintDescriptorFormatAndEnders(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st, errs := runZshSplit(t, dir, `print -u2 to-err; print -nu2 more; print -u 2 again`)
 	if st != 0 || out != "" || errs != "to-err\nmoreagain\n" {
@@ -227,6 +234,7 @@ func TestPrintDescriptorFormatAndEnders(t *testing.T) {
 // and the second is a character no listing spells with a backslash. This used
 // to join the operands as they were written (#4104).
 func TestPrintHistoryExpandsItsOperands(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"an escape that ends the text takes the operand after it",

@@ -13,6 +13,7 @@ import "testing"
 // from a script file under `env -i PATH=/usr/bin:/bin`), output compared byte
 // for byte (#6469).
 func TestAGlobalUntieRemovesThePartnerBeneathALocal(t *testing.T) {
+	t.Parallel()
 	const tie = "typeset -T FOO=a:b foo; "
 	const show = `print -r -- "[${(t)foo}] [${(t)FOO}]"`
 	for _, tc := range []struct{ name, src, want string }{
@@ -47,6 +48,7 @@ func TestAGlobalUntieRemovesThePartnerBeneathALocal(t *testing.T) {
 //
 // Measured as above (#6470).
 func TestALocalTieOverAnOuterTieIsAFreshPair(t *testing.T) {
+	t.Parallel()
 	const tie = "typeset -T FOO=a:b foo; "
 	const after = `; print -r -- "[$FOO] [${(t)FOO}] [${(t)foo}]"; foo=(z w); print -r -- $FOO`
 	const back = "[a:b] [scalar-tied] [array-tied]\nz:w\n"

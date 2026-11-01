@@ -12,6 +12,7 @@ import (
 // output, which is how `exec` sees it: `exec >a >b; exec /bin/echo hi` was
 // replaced with standard output closed, because the hold hid the marker.
 func TestAMultiTargetStreamIsSeenThroughAHold(t *testing.T) {
+	t.Parallel()
 	multi := multiTarget{Writer: io.Discard}
 	if !isMultiTarget(&heldOutput{to: multi, out: multi}) {
 		t.Error("a held multi-target stream read as one descriptor")

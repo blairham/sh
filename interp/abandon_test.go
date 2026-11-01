@@ -80,6 +80,7 @@ func TestARefusedAssignmentGivesUpWhatEnclosesIt(t *testing.T) {
 // TestTheLineIsTheBoundary is the measurement that says it is the line and
 // not the statement: the same two commands on separate lines both run.
 func TestTheLineIsTheBoundary(t *testing.T) {
+	t.Parallel()
 	out, _, _ := abandonRun(t, "readonly r=1\nr=2\necho one")
 	if !strings.Contains(out, "one") {
 		t.Errorf("output = %q, want the next line to run", out)
@@ -89,6 +90,7 @@ func TestTheLineIsTheBoundary(t *testing.T) {
 // TestGivingUpIsNotExiting, which is the whole reason for a third control
 // value: the script keeps going and its status is the next command's.
 func TestGivingUpIsNotExiting(t *testing.T) {
+	t.Parallel()
 	out, _, st := abandonRun(t, "readonly r=1\nr=2; echo one\necho two\ntrue")
 	if !strings.Contains(out, "two") || st != 0 {
 		t.Errorf("output %q status %d, want the shell still running", out, st)
@@ -104,6 +106,7 @@ func TestGivingUpIsNotExiting(t *testing.T) {
 // readonly refusal unwinds": the three declaration spellings report and run
 // the next command on the same line.
 func TestADeclarationGivesUpNothing(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"readonly r=1\nexport r=2; echo one\necho two",
 		"readonly r=1\nreadonly r=2; echo one\necho two",

@@ -21,6 +21,7 @@ import (
 // one that is right all exit 0 and differ only in what they produce — and
 // `[a][b][c]` says which of the three ran where `n=3` does not.
 func TestTheShellSplitFlagSplitsAValueLikeACommandLine(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"blanks separate", `v="a b  c"; printf "[%s]" ${(Z+n+)v}; echo`, "[a][b][c]\n"},
 		{"quotes are kept in the word", `v="a 'b c' d"; printf "[%s]" ${(Z+n+)v}; echo`, "[a]['b c'][d]\n"},
@@ -105,6 +106,7 @@ func TestTheShellSplitFlagSplitsAValueLikeACommandLine(t *testing.T) {
 // a scanner that split on blanks answers `[a]['b][c']` where both spellings
 // of this flag answer `[a]['b c']`.
 func TestTheArgumentlessShellSplitFlagIsTheSameSplit(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"blanks separate", `v="a b  c"; printf "[%s]" ${(z)v}; echo`, "[a][b][c]\n"},
 		{"quotes are kept in the word", `v="a 'b c' d"; printf "[%s]" ${(z)v}; echo`, "[a]['b c'][d]\n"},
@@ -165,6 +167,7 @@ func TestTheArgumentlessShellSplitFlagIsTheSameSplit(t *testing.T) {
 // would answer them differently, and the one that broke would be whichever
 // order the tests happened not to cover.
 func TestTheArgumentlessShellSplitFlagBesideTheFieldsFlag(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"quoted, split first", `v="a b"; set -- "${(z@)v}"; printf "n=%d" $#; printf "[%s]" "$@"; echo`, "n=2[a][b]\n"},
 		{"quoted, fields first", `v="a b"; set -- "${(@z)v}"; printf "n=%d" $#; printf "[%s]" "$@"; echo`, "n=2[a][b]\n"},
@@ -197,6 +200,7 @@ func TestTheArgumentlessShellSplitFlagBesideTheFieldsFlag(t *testing.T) {
 // last `Z` argument alone answered `[a][#][h][b]` for `${(Z+C+Z+n+)v}`, the
 // dropped comment lost, at status 0.
 func TestTheTwoShellSplitSpellingsAccumulateTheirOptionLetters(t *testing.T) {
+	t.Parallel()
 	const v = "v=$'a # h\nb'; "
 	for _, tc := range []struct{ name, src, want string }{
 		{"two arguments union", `printf "[%s]" ${(Z+C+Z+n+)v}; echo`, "[a][b]\n"},
@@ -225,6 +229,7 @@ func TestTheTwoShellSplitSpellingsAccumulateTheirOptionLetters(t *testing.T) {
 // of the pair is that they are different complaints and a reader has to be
 // able to tell which one they got.
 func TestTheShellSplitFlagRefusesAnUnknownOptionLetter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"an unknown letter", `v=x; printf "[%s]" ${(Z:q:)v}`,
@@ -275,6 +280,7 @@ func TestTheShellSplitFlagRefusesAnUnknownOptionLetter(t *testing.T) {
 // assignment and `then` to be a keyword — which is why this one drives the
 // parser (#1514). Measured on zsh 5.9.2.
 func TestTheShellSplitFlagAsksTheParserWhereAnArgumentMayStand(t *testing.T) {
+	t.Parallel()
 	grammar := func(d *syntax.Dialect) {
 		selectingWithFlags(d)
 		d.GlobQualifiers = true

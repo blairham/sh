@@ -54,6 +54,7 @@ func printfSem() Semantics {
 // details: whether the escape is there at all, how wide the digit run is, and
 // what an empty run means.
 func TestPrintfHexEscapeIsFourReadings(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		policy PrintfHexEscapePolicy
@@ -93,6 +94,7 @@ func TestPrintfHexEscapeIsFourReadings(t *testing.T) {
 // The reading that leaves `\x` standing says so on standard error, and still
 // reports success — a warning rather than a failure.
 func TestPrintfHexEscapeWithNoDigitsWarnsWithoutFailing(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfHexEscape = PrintfHexEscapeByte
 	diag := Diagnostics{PrintfMissingHexDigit: "printf: no hex digit"}
@@ -110,6 +112,7 @@ func TestPrintfHexEscapeWithNoDigitsWarnsWithoutFailing(t *testing.T) {
 // Diagnostics.PrintfMissingHexDigit already means "the substrate's own".
 // See Semantics.PrintfReportsAMissingHexDigit (#3239).
 func TestPrintfMissingHexDigit(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		says Answer
@@ -137,6 +140,7 @@ func TestPrintfMissingHexDigit(t *testing.T) {
 
 // The axis is asked only where a `\x` is actually in the format.
 func TestPrintfHexEscapeIsAskedOnlyWhenOneIsThere(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfHexEscape = PrintfHexEscapeUnspecified
 
@@ -155,6 +159,7 @@ func TestPrintfHexEscapeIsAskedOnlyWhenOneIsThere(t *testing.T) {
 // axis is never put to a format. ksh93 is what makes the distinction real —
 // it reads `\x41` in a format and writes the four characters in a `%b`.
 func TestPrintfHexEscapeIsAskedPerSite(t *testing.T) {
+	t.Parallel()
 	t.Run("a %b argument does not ask the format's axis", func(t *testing.T) {
 		sem := printfSem()
 		sem.PrintfHexEscape = PrintfHexEscapeUnspecified
@@ -206,6 +211,7 @@ func TestPrintfHexEscapeIsAskedPerSite(t *testing.T) {
 // run is and split on what an *empty* run means, where one of the three ends
 // the pass rather than substituting or leaving the text.
 func TestPrintfUnicodeEscapeIsFourReadings(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		policy PrintfUnicodeEscapePolicy
@@ -243,6 +249,7 @@ func TestPrintfUnicodeEscapeIsFourReadings(t *testing.T) {
 // Written with two operands on purpose. One operand cannot tell the two apart,
 // which is the whole reason printfPassEnd has three values.
 func TestPrintfUnicodeTruncationEndsThePassAndNotTheBuiltin(t *testing.T) {
+	t.Parallel()
 	t.Run("the loop over the operands goes on", func(t *testing.T) {
 		sem := printfSem()
 		sem.PrintfUnicodeEscape = PrintfUnicodeEscapeCodePointOrTruncate
@@ -273,6 +280,7 @@ func TestPrintfUnicodeTruncationEndsThePassAndNotTheBuiltin(t *testing.T) {
 // still reports success. The letter is a verb, so one wording covers both
 // spellings rather than the two drifting apart.
 func TestPrintfUnicodeEscapeWithNoDigitsWarnsWithoutFailing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the short spelling", `printf 'a\uZ'`, "sh: printf: no digit for \\u\na\\uZ"},
 		{"the long one", `printf 'a\UZ'`, "sh: printf: no digit for \\U\na\\UZ"},
@@ -294,6 +302,7 @@ func TestPrintfUnicodeEscapeWithNoDigitsWarnsWithoutFailing(t *testing.T) {
 
 // The axis is asked only where a `\u` or a `\U` is actually there.
 func TestPrintfUnicodeEscapeIsAskedOnlyWhenOneIsThere(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfUnicodeEscape = PrintfUnicodeEscapeUnspecified
 
@@ -311,6 +320,7 @@ func TestPrintfUnicodeEscapeIsAskedOnlyWhenOneIsThere(t *testing.T) {
 // makes the distinction real: it reads `\u0041` in a format and writes the ten
 // characters as they stand in a `%b`.
 func TestPrintfUnicodeEscapeIsAskedPerSite(t *testing.T) {
+	t.Parallel()
 	t.Run("a %b argument does not ask the format's axis", func(t *testing.T) {
 		sem := printfSem()
 		sem.PrintfUnicodeEscape = PrintfUnicodeEscapeUnspecified
@@ -377,6 +387,7 @@ func TestPrintfUnicodeEscapeIsAskedPerSite(t *testing.T) {
 // question: every value here is above ASCII, so what a locale with no room
 // for one does is the other axis's and is asserted in localeescape_test.go.
 func TestPrintfUnicodeEscapeEncodesWhatUnicodeLaterRefused(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfUnicodeEscape = PrintfUnicodeEscapeCodePoint
 	for _, tc := range []struct{ name, src, want string }{
@@ -403,6 +414,7 @@ func TestPrintfUnicodeEscapeEncodesWhatUnicodeLaterRefused(t *testing.T) {
 // The word already held the byte — `%s` and a variable both carried it
 // through untouched — so this was never about how a word is read.
 func TestPrintfWritesBytesAndNotEncodedRunes(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfHexEscape = PrintfHexEscapeByte
 	for _, tc := range []struct{ name, src, want string }{
@@ -434,6 +446,7 @@ func TestPrintfWritesBytesAndNotEncodedRunes(t *testing.T) {
 // dropped the whole field rather than the precision would pass every
 // precision row here and quietly stop padding.
 func TestPrintfCharacterIgnoresItsPrecision(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfCharPrecisionRepeats = No
 	for _, tc := range []struct{ name, src, want string }{
@@ -461,6 +474,7 @@ func TestPrintfCharacterIgnoresItsPrecision(t *testing.T) {
 // the width like the single character is. Zero and one are one character
 // under both readings, so they must not raise the axis at all.
 func TestPrintfCharacterPrecisionCanRepeat(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfCharPrecisionRepeats = Yes
 	for _, tc := range []struct{ name, src, want string }{
@@ -498,6 +512,7 @@ func TestPrintfCharacterPrecisionCanRepeat(t *testing.T) {
 // field out in zsh, which only a precision can show: an omitted precision is
 // the conversion's default, a zero one writes no digits for a zero value.
 func TestPrintfStarWithoutOperandCanLeaveTheFieldOut(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src          string
 		absent, zero string
@@ -533,6 +548,7 @@ func TestPrintfStarWithoutOperandCanLeaveTheFieldOut(t *testing.T) {
 // The C length modifiers are a set with three answers, and every one of them
 // reads the letters and throws them away.
 func TestPrintfLengthModifiersAreThreeSets(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		set  PrintfLengthModifierSet
@@ -566,6 +582,7 @@ func TestPrintfLengthModifiersAreThreeSets(t *testing.T) {
 // The axis is asked only where a letter one of the answers would take is
 // actually in the format, so the strict core runs `%d` and refuses `%ld`.
 func TestPrintfLengthModifiersAreAskedOnlyWhenOneIsThere(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfLengthModifiers = PrintfLengthModifiersUnspecified
 
@@ -584,6 +601,7 @@ func TestPrintfLengthModifiersAreAskedOnlyWhenOneIsThere(t *testing.T) {
 // one spelled with an empty name. One verb: the whole directive, since there
 // is no conversion character in it to name.
 func TestPrintfMissingVerbNamesTheWholeDirective(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, wording, src, want string }{
 		{"nothing after the percent", "printf: %[1]s: no", `printf "a%"`, "sh: printf: %: no\na"},
 		{"nothing after a width", "printf: %[1]s: no", `printf "a%5"`, "sh: printf: %5: no\na"},
@@ -610,6 +628,7 @@ func TestPrintfMissingVerbNamesTheWholeDirective(t *testing.T) {
 // The two complaints are separate: a conversion nobody has still gets the
 // bad-conversion wording, and a format that ran out never does.
 func TestPrintfMissingVerbIsNotTheBadVerbComplaint(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	diag := Diagnostics{
 		PrintfBadVerb:           "printf: bad %[2]s",
@@ -633,6 +652,7 @@ func TestPrintfMissingVerbIsNotTheBadVerbComplaint(t *testing.T) {
 // conversion becomes a single literal percent, prefix and all, and the
 // command succeeds.
 func TestPrintfUnfinishedConversionCanBeALiteralPercent(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfLengthModifiers = PrintfLengthModifiersC99
 	sem.PrintfUnfinishedConversionIsAPercent = Yes
@@ -658,6 +678,7 @@ func TestPrintfUnfinishedConversionCanBeALiteralPercent(t *testing.T) {
 // unfinished conversion outright and the pass is over before any operand is
 // looked at.
 func TestPrintfUnfinishedConversionStillTakesItsStarOperands(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfLengthModifiers = PrintfLengthModifiersC99
 	sem.PrintfUnfinishedConversionIsAPercent = Yes
@@ -686,6 +707,7 @@ func TestPrintfUnfinishedConversionStillTakesItsStarOperands(t *testing.T) {
 
 // The axis is asked only where a format actually ends inside a conversion.
 func TestPrintfUnfinishedConversionIsAskedOnlyWhenOneIsThere(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfUnfinishedConversionIsAPercent = Unspecified
 
@@ -707,6 +729,7 @@ func TestPrintfUnfinishedConversionIsAskedOnlyWhenOneIsThere(t *testing.T) {
 // makes the two visible: the character is not the directive once the
 // directive can hold more than a verb.
 func TestPrintfBadVerbNamesTheConversionOrTheDirective(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, wording, src, want string }{
 		{"the character alone", "printf: %[1]s: no", `printf "%v]xY" 1`, "sh: printf: v: no\n"},
 		{"the whole directive", "printf: %[2]s: no", `printf "%v]xY" 1`, "sh: printf: %v: no\n"},
@@ -741,6 +764,7 @@ func TestPrintfBadVerbNamesTheConversionOrTheDirective(t *testing.T) {
 // bash 3.2 alone writes nothing, which is the age of one binary rather than a
 // language the dialects have to carry (#2647).
 func TestPrintfCWithNothingToWriteIsANul(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an empty operand", `printf "[%c]" ''`, "[\x00]"},
 		{"no operand at all", `printf "[%c]"`, "[\x00]"},
@@ -761,6 +785,7 @@ func TestPrintfCWithNothingToWriteIsANul(t *testing.T) {
 // The parts every shell in the panel agrees on, which is most of printf and
 // worth pinning as the thing a dialect does not get to change.
 func TestPrintfTheUnanimousParts(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the format is reused", `printf "[%s]" a b c`, "[a][b][c]"},
 		{"a missing argument is empty", `printf "[%s][%s]" a`, "[a][]"},
@@ -786,6 +811,7 @@ func TestPrintfTheUnanimousParts(t *testing.T) {
 // `\c` is three things, and the middle one is why it is a policy: a control
 // character *looks* like truncation until the bytes are read.
 func TestPrintfBackslashCIsThreeThings(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		policy PrintfBackslashCPolicy
@@ -811,6 +837,7 @@ func TestPrintfBackslashCIsThreeThings(t *testing.T) {
 // and toggling bit 6 agree over `@` through `_` — so every case here is
 // outside that span or is an argument that has to be decoded first.
 func TestPrintfBackslashCControlIsTheQuotedFormsRule(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a digit is not a letter", `printf 'a\c1Z'`, "aqZ"},
 		{"a symbol above the letters", `printf 'a\c~Z'`, "a>Z"},
@@ -838,6 +865,7 @@ func TestPrintfBackslashCControlIsTheQuotedFormsRule(t *testing.T) {
 // argument above the ASCII range leaves it above it, and what comes out has to
 // be that one byte rather than the two its encoding would take.
 func TestPrintfBackslashCControlWritesOneByte(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfBackslashC = PrintfBackslashCControl
 	// The argument is written as an octal escape rather than as the byte
@@ -850,6 +878,7 @@ func TestPrintfBackslashCControlWritesOneByte(t *testing.T) {
 }
 
 func TestPrintfQuoteIsThreeAnswersAndAnAbsence(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		style PrintfQuoteStyle
@@ -884,6 +913,7 @@ func TestPrintfQuoteIsThreeAnswersAndAnAbsence(t *testing.T) {
 // is *missing* is an error in only one of those two. The pair is easy to
 // conflate and the corpus has a case for each.
 func TestPrintfEmptyOperandIsNotAMissingOne(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfReportsBadNumber = Yes
 	sem.PrintfEmptyIsNotANumber = Yes
@@ -903,6 +933,7 @@ func TestPrintfEmptyOperandIsNotAMissingOne(t *testing.T) {
 // is present and empty and not about one that is absent; ash complains about
 // both; the other three complain about neither (#2648).
 func TestPrintfAbsentNumberIsAnEmptyOneIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -932,6 +963,7 @@ func TestPrintfAbsentNumberIsAnEmptyOneIsAnAxis(t *testing.T) {
 // reading that stopped at the first would have been indistinguishable on
 // `printf '[%d]'` and wrong on the line that found it.
 func TestPrintfAbsentNumberComplainsOncePerConversion(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfReportsBadNumber = Yes
 	sem.PrintfEmptyIsNotANumber = Yes
@@ -949,6 +981,7 @@ func TestPrintfAbsentNumberComplainsOncePerConversion(t *testing.T) {
 // second. Without the guard, a core with neither axis answered would refuse
 // `printf '%d'` — which no shell in the panel does.
 func TestPrintfAbsentNumberIsNotAskedWhereEmptyIsAllowed(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfEmptyIsNotANumber = No
 	sem.PrintfAbsentNumberIsAnEmptyOne = Unspecified
@@ -962,6 +995,7 @@ func TestPrintfAbsentNumberIsNotAskedWhereEmptyIsAllowed(t *testing.T) {
 // The complaint arrives before the output or after it, which is only visible
 // where both streams reach one place — as they do here.
 func TestPrintfOutputPrecedesComplaintIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -989,6 +1023,7 @@ func TestPrintfOutputPrecedesComplaintIsAnAxis(t *testing.T) {
 // reader made `\0101` a backspace and a `1` where all six shells write an
 // `A`, and made `\c` three different things where all six stop.
 func TestPrintfBEscapeTableIsNotTheFormats(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -1019,6 +1054,7 @@ func TestPrintfBEscapeTableIsNotTheFormats(t *testing.T) {
 // it asks nothing, where the same two characters in a *format* are literal in
 // bash and dash, control-X in ksh93 and a full stop in zsh.
 func TestPrintfBackslashCInABArgumentAlwaysStops(t *testing.T) {
+	t.Parallel()
 	for _, policy := range []PrintfBackslashCPolicy{
 		PrintfBackslashCUnspecified,
 		PrintfBackslashCLiteral,
@@ -1039,6 +1075,7 @@ func TestPrintfBackslashCInABArgumentAlwaysStops(t *testing.T) {
 // The four axes a `%b` argument does ask, each asked only where its escape is
 // there and each refused by name when no dialect has answered it.
 func TestPrintfBEscapeAxes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		answer  func(*Semantics)
@@ -1115,6 +1152,7 @@ func TestPrintfBEscapeAxes(t *testing.T) {
 // zsh answer them in opposite directions: one answer for both letters is
 // wrong for half the panel.
 func TestPrintfBEscAndCapitalEscAreTwoQuestions(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		esc, capes Answer
@@ -1140,6 +1178,7 @@ func TestPrintfBEscAndCapitalEscAreTwoQuestions(t *testing.T) {
 // An axis is asked only where its escape is actually in the argument, so a
 // `%b` that carries none of them needs no dialect at all.
 func TestPrintfBEscapeAxesAreAskedOnlyWhenTheEscapeIsThere(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	out, st := run(t, `printf '%b' 'a\t\0101\cZ'`, func(r *Runner) { r.Semantics = &sem })
 	if out != "a\tA" || st != 0 {
@@ -1152,6 +1191,7 @@ func TestPrintfBEscapeAxesAreAskedOnlyWhenTheEscapeIsThere(t *testing.T) {
 // after it go unused, and the format does not run again. Unanimous, and
 // invisible to a case that reads one conversion.
 func TestPrintfBackslashCInABArgumentEndsTheWholePrintf(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the rest of the format", `printf '[%b][%s]' 'a\cb' x`, "[a"},
@@ -1179,6 +1219,7 @@ func TestPrintfBackslashCInABArgumentEndsTheWholePrintf(t *testing.T) {
 // and truncates, which the last two rows pin so the axis cannot be read as
 // "this shell has no field for `%b`".
 func TestPrintfBStopIsPaddedOrNot(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		padded Answer
@@ -1214,6 +1255,7 @@ func TestPrintfBStopIsPaddedOrNot(t *testing.T) {
 // The axis is asked only where a `\c` stopped a `%b` *and* the field would
 // change the text, so an ordinary stop with no field needs no dialect.
 func TestPrintfBStopPaddingIsAskedOnlyWhenItMatters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a bare %b that stops", `printf '[%b]' 'a\cb'`, "[a"},
 		{"a width the text already fills", `printf '[%1b]' 'a\cb'`, "[a"},
@@ -1233,6 +1275,7 @@ func TestPrintfBStopPaddingIsAskedOnlyWhenItMatters(t *testing.T) {
 
 // And it is refused by name where it does matter and no dialect answered.
 func TestPrintfBStopPaddingUnansweredIsRefused(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfBStopIsPadded = Unspecified
 	out, st := run(t, `printf '[%5b]' 'a\cb'`, func(r *Runner) { r.Semantics = &sem })
@@ -1248,6 +1291,7 @@ func TestPrintfBStopPaddingUnansweredIsRefused(t *testing.T) {
 // whole panel — bash 5.3, bash as sh, bash 3.2, zsh, ksh93, dash and BusyBox
 // ash — and so a correction rather than an axis (#2646).
 func TestPrintfStarTakesTheWidthFromTheOperands(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -1336,6 +1380,7 @@ func TestPrintfStarIsCountedByTheReuseLoop(t *testing.T) {
 // operand is, so the complaint and the axis that governs it are the same
 // ones — except for the status, which ash alone withholds.
 func TestPrintfStarOperandIsReadAsANumber(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		costs  Answer
@@ -1365,6 +1410,7 @@ func TestPrintfStarOperandIsReadAsANumber(t *testing.T) {
 // reads a missing `%d` operand as an empty string reads a missing width as a
 // silent zero. `printf 'a%*db'` writes one complaint there and not two.
 func TestPrintfStarWithNoOperandIsNotTheAbsentNumberCase(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfReportsBadNumber = Yes
 	sem.PrintfEmptyIsNotANumber = Yes
@@ -1391,6 +1437,7 @@ func TestPrintfStarWithNoOperandIsNotTheAbsentNumberCase(t *testing.T) {
 // completed, which is why `%s[%*d]` with `x` keeps none of `x[` — the `%s`
 // completed, so the mark is where it began.
 func TestPrintfStarWithoutOperandIsRefusedIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		refused Answer
@@ -1442,6 +1489,7 @@ func TestPrintfStarWithoutOperandIsRefusedIsAnAxis(t *testing.T) {
 // TestPrintfDropsTheGroupingFlagOnlyBecauseTheSeparatorIsEmpty below. See
 // Semantics.PrintfGroupingFlag and #2675.
 func TestPrintfGroupingFlagIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		flag   Answer
@@ -1498,6 +1546,7 @@ func TestPrintfGroupingFlagIsAnAxis(t *testing.T) {
 // the same under all of them — which is the third row, and the reason the
 // separator and not the locale is the thing pinned.
 func TestPrintfDropsTheGroupingFlagOnlyBecauseTheSeparatorIsEmpty(t *testing.T) {
+	t.Parallel()
 	numeric, ok := LocaleNumericFor("C")
 	if !ok {
 		t.Fatal("LocaleNumericFor has no data for the C locale, which is the one locale it is for")
@@ -1533,6 +1582,7 @@ func TestPrintfDropsTheGroupingFlagOnlyBecauseTheSeparatorIsEmpty(t *testing.T) 
 // row would pass for an implementation that had simply stopped accepting the
 // flag at all.
 func TestPrintfGroupingFlagAfterTheWidthIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		after  Answer
@@ -1577,6 +1627,7 @@ func TestPrintfGroupingFlagAfterTheWidthIsAnAxis(t *testing.T) {
 // from — an implementation that dropped the losing star would take 4 for the
 // width and then hand 6 to the conversion.
 func TestPrintfStarBesideTheFieldDigitsIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		beside Answer
@@ -1610,6 +1661,7 @@ func TestPrintfStarBesideTheFieldDigitsIsAnAxis(t *testing.T) {
 // a conversion that consults it refuses the command and names it, where one
 // that does not runs as it always did.
 func TestPrintfStarBesideTheDigitsIsAskedOnlyAtItsOwnDisagreement(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		src     string
@@ -1649,6 +1701,7 @@ func TestPrintfStarBesideTheDigitsIsAskedOnlyAtItsOwnDisagreement(t *testing.T) 
 // it is the difference between asking at the disagreement and asking at the
 // feature.
 func TestPrintfGroupingPositionIsAskedOnlyAtItsOwnDisagreement(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		flag    Answer
@@ -1688,6 +1741,7 @@ func TestPrintfGroupingPositionIsAskedOnlyAtItsOwnDisagreement(t *testing.T) {
 // them, and a star that is given its operands is ordinary: the panel is
 // unanimous about it, which is what made #2646 a correction.
 func TestPrintfDoesNotConsultTheStarAxesOnThePlainPath(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -1730,6 +1784,7 @@ func TestPrintfDoesNotConsultTheStarAxesOnThePlainPath(t *testing.T) {
 // zsh, dash and BusyBox ash all answer the same thing, so this is the core's
 // and no axis may be consulted to reach it (#2687).
 func TestPrintfGDefaultsToSixSignificantDigits(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -1807,6 +1862,7 @@ func TestPrintfGDefaultsToSixSignificantDigits(t *testing.T) {
 // rows here are the ones where the two readings of
 // PrintfNonFiniteIsConverted agree, which is what makes them the core's.
 func TestPrintfWritesAnInfinityAndANotANumberCsWay(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -1868,6 +1924,7 @@ func TestPrintfWritesAnInfinityAndANotANumberCsWay(t *testing.T) {
 // consequences are tested together because they are one rule: an upper-case
 // conversion capitalizes it, and a width pads it.
 func TestPrintfNonFiniteAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name      string
 		src       string
@@ -1913,6 +1970,7 @@ func TestPrintfNonFiniteAxis(t *testing.T) {
 // rows the two readings agree on must reach an unanswered core, and the rows
 // they differ on must refuse it and say so.
 func TestPrintfAsksTheNonFiniteAxisOnlyWhereTheReadingsDiffer(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		src   string
@@ -1966,6 +2024,7 @@ func TestPrintfAsksTheNonFiniteAxisOnlyWhereTheReadingsDiffer(t *testing.T) {
 // million: the shape is the same and the test writes ten megabytes instead of
 // a hundred.
 func TestAFieldWiderThanFmtRendersIsLaidOutHere(t *testing.T) {
+	t.Parallel()
 	// One past the ceiling the in-package TestAZeroInTheWidthIsNotTheZeroFlag
 	// names; spelled out here because this file is the external test package.
 	const over = 10000010
@@ -2019,6 +2078,7 @@ func TestAFieldWiderThanFmtRendersIsLaidOutHere(t *testing.T) {
 // One past the ceiling rather than the issue's two billion: the shape is the
 // same and the test writes ten megabytes instead of two gigabytes.
 func TestAPrecisionWiderThanFmtRendersIsHonoredHere(t *testing.T) {
+	t.Parallel()
 	const over = 10000010
 	for _, tc := range []struct {
 		name        string
@@ -2095,6 +2155,7 @@ func TestAPrecisionWiderThanFmtRendersIsHonoredHere(t *testing.T) {
 // any unknown one is — which is the shape #2646 had, where the diagnostics
 // looked right and the answer was wrong.
 func TestPrintfC99FloatConversionsAreAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"%F is %f in capitals", `printf '[%F]' 1.5`, "[1.500000]"},
 		{"and capitalizes an infinity", `printf '[%F]' inf`, "[INF]"},
@@ -2137,6 +2198,7 @@ func TestPrintfC99FloatConversionsAreAnAxis(t *testing.T) {
 // everywhere else — strconv rounds a tie away from zero and renormalizes when
 // the rounding carries, and these two references do neither.
 func TestPrintfHexFloatIsLaidOutCsWay(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the exponent is the shortest run of digits", `printf '[%a]' 1.5`, "[0x1.8p+0]"},
 		{"a large exponent keeps all of them", `printf '[%a]' 1e300`, "[0x1.7e43c8800759cp+996]"},
@@ -2184,6 +2246,7 @@ func TestPrintfHexFloatIsLaidOutCsWay(t *testing.T) {
 // rather than a minimum width: the thirteenth digit of `0.1` is rounded away
 // under the twelve-digit answer, and `255` is padded out to twelve.
 func TestPrintfHexFloatDefaultPrecisionIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		twelve Answer
@@ -2217,6 +2280,7 @@ func TestPrintfHexFloatDefaultPrecisionIsAnAxis(t *testing.T) {
 //
 // Measured against ksh93u+ under `LC_ALL=C`; every row here is one it wrote.
 func TestPrintfGroupingFlagEndsTheFieldRunItIsIn(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfGroupingFlagAfterTheWidth = Yes
 	for _, tc := range []struct{ src, want string }{
@@ -2262,6 +2326,7 @@ func TestPrintfGroupingFlagEndsTheFieldRunItIsIn(t *testing.T) {
 // does — and the precision is the rule that disagrees with the width's
 // (#2910).
 func TestPrintfFlagAfterTheFieldIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		flag   Answer
@@ -2305,6 +2370,7 @@ func TestPrintfFlagAfterTheFieldIsAnAxis(t *testing.T) {
 
 // And it is asked where a flag actually stands past a field and nowhere else.
 func TestPrintfFlagAfterTheFieldIsAskedOnlyAtItsOwnDisagreement(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		src     string
@@ -2334,6 +2400,7 @@ func TestPrintfFlagAfterTheFieldIsAskedOnlyAtItsOwnDisagreement(t *testing.T) {
 // between it and the digits, at the same total width. Both are measured; see
 // Semantics.PrintfHexFloatZeroFillPrecedesThePrefix.
 func TestPrintfHexFloatFillMayPrecedeThePrefix(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the fill goes in front", `printf '[%014a]' 1.5`, "[0000000x1.8p+0]"},
 		{"and behind the sign, which is still counted", `printf '[%014a]' -1.5`, "[-000000x1.8p+0]"},
@@ -2359,6 +2426,7 @@ func TestPrintfHexFloatFillMayPrecedeThePrefix(t *testing.T) {
 // is asked only where there is a fill to place: a width the rendered field
 // already fills leaves the two readings identical, and neither is consulted.
 func TestPrintfZeroFlagAgainstAPrecision(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		survives  Answer
@@ -2392,6 +2460,7 @@ func TestPrintfZeroFlagAgainstAPrecision(t *testing.T) {
 // ksh93's output base: the field after a second `.` in an integer
 // conversion. Every row is a measurement of ksh93u+ 2012-08-01, 2026-10-03.
 func TestPrintfOutputBase(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfOutputBase = Yes
 	sem.PrintfZeroFlagSurvivesAPrecision = Yes

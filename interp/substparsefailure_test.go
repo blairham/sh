@@ -23,6 +23,7 @@ func substFailureSem(a Answer) Semantics {
 // empty string and carries the statement and the script on, and the rest
 // abandon the input (#2703).
 func TestWhereASubstitutionBodysRefusalStopsFollowsTheAxis(t *testing.T) {
+	t.Parallel()
 	// The nesting written wrong: the escaped backquote opens an inner body
 	// nothing closes, so the text the outer substitution hands on runs out
 	// mid-substitution.
@@ -47,6 +48,7 @@ func TestWhereASubstitutionBodysRefusalStopsFollowsTheAxis(t *testing.T) {
 // being dropped, which is what a reused conversion can see: a field that is
 // gone prints no `[]` at all.
 func TestAWordWhoseSubstitutionWasRefusedIsEmptyAndNotGone(t *testing.T) {
+	t.Parallel()
 	const src = "printf '[%s]' a \"`echo \\`echo n`\" b; echo"
 	out, st := run(t, src, withSem(substFailureSem(No)))
 	if st != 0 {
@@ -60,6 +62,7 @@ func TestAWordWhoseSubstitutionWasRefusedIsEmptyAndNotGone(t *testing.T) {
 // And the status is the command's own rather than the failure's: nothing here
 // sets a syntax status behind the statement that goes on to run.
 func TestAScopedSubstitutionFailureLeavesTheStatusToTheCommand(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, "false; echo \"`echo \\`echo n`\" >/dev/null; echo \"st=$?\"",
 		withSem(substFailureSem(No)))
 	if st != 0 {
@@ -75,6 +78,7 @@ func TestAScopedSubstitutionFailureLeavesTheStatusToTheCommand(t *testing.T) {
 // refusal is the line's there and is fatal — asking this axis for both would
 // take one row and lose the other.
 func TestTheNewerSpellingsRefusalIsFatalUnderEitherAnswer(t *testing.T) {
+	t.Parallel()
 	const src = "echo one; echo $(if; then :; fi); echo two"
 	for _, a := range []Answer{Yes, No} {
 		out, st := run(t, src, withSem(substFailureSem(a)))

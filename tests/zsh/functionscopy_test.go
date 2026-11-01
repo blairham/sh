@@ -14,6 +14,7 @@ import (
 // TestFunctionsCCopiesAFunction pins `functions -c`. Measured 2026-10-02 on
 // zsh 5.9.2 under `-f` (#5148). See functionsCopying.
 func TestFunctionsCCopiesAFunction(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "auto"), []byte("\nprint -P \"%N:%i %1x:%I\"\n"), 0o644); err != nil {
 		t.Fatal(err)

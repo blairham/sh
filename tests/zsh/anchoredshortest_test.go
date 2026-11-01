@@ -10,6 +10,7 @@ import "testing"
 // it can have (#5151, a chunk of D04parameter.ztst). Measured 2026-10-03 on
 // zsh 5.9.2 under `-f`.
 func TestAFullyAnchoredShortestMatchIsTheWholeValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`v=abc; print ${(S)v/#%*/X} ${(S)v//#%(*)/X} ${(SU)v/#%*/x}`, "X X X\n"},
 		{`setopt extendedglob; v=abc; print ${(S)v//#%((#b)(*))/X} $match[1]`, "X abc\n"},

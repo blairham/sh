@@ -74,6 +74,7 @@ func aliasRun(t *testing.T, tweak func(*Semantics), dg Diagnostics, src string) 
 
 // The table holds what was put in it, and listing gives it back.
 func TestAliasKeepsWhatItWasGiven(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`alias a='echo x'; alias a`, "a='echo x'"},
 		{`alias a=1 b=2; alias b`, "b='2'"},
@@ -91,6 +92,7 @@ func TestAliasKeepsWhatItWasGiven(t *testing.T) {
 // One dialect writes `alias ` in front of every line so the listing reads back
 // as commands, and the other three write only the assignment.
 func TestTheListingPrefixIsTheDialects(t *testing.T) {
+	t.Parallel()
 	prefixed := Diagnostics{AliasListPrefix: "alias "}
 	for _, src := range []string{`alias a=1; alias a`, `alias a=1; alias`} {
 		out, _ := aliasRun(t, nil, prefixed, src)
@@ -110,6 +112,7 @@ func TestTheListingPrefixIsTheDialects(t *testing.T) {
 // Listing with no operand gives every entry, in name order rather than in the
 // order they were defined — which is the only order a map can promise.
 func TestListingIsSortedAndComplete(t *testing.T) {
+	t.Parallel()
 	out, _ := aliasRun(t, nil, Diagnostics{}, `alias c=3 a=1 b=2; alias`)
 	want := "a='1'\nb='2'\nc='3'\n"
 	if out != want {
@@ -123,6 +126,7 @@ func TestListingIsSortedAndComplete(t *testing.T) {
 
 // unalias removes one, and -a removes the lot.
 func TestUnaliasRemoves(t *testing.T) {
+	t.Parallel()
 	out, _ := aliasRun(t, nil, Diagnostics{}, `alias a=1 b=2; unalias a; alias`)
 	if strings.Contains(out, "a=") || !strings.Contains(out, "b='2'") {
 		t.Errorf("said %q, want a gone and b kept", out)
@@ -139,6 +143,7 @@ func TestUnaliasRemoves(t *testing.T) {
 // A name the table does not hold is two questions — whether to speak, and in
 // which words — and the panel does not pair the two builtins.
 func TestANameTheTableDoesNotHold(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		AliasNotFound:   "%[1]s: %[2]s: not found",
 		UnaliasNotFound: "%[1]s: %[2]s: gone",
@@ -176,6 +181,7 @@ func TestANameTheTableDoesNotHold(t *testing.T) {
 // same text whether or not something precedes it, which is how a mutant that
 // ignored the flag entirely survived.
 func TestTheNotFoundLineMayCarryNoPrefix(t *testing.T) {
+	t.Parallel()
 	prefixed := Diagnostics{
 		AliasNotFound:   "alias: %[2]s: not found",
 		UnaliasNotFound: "unalias: %[2]s: not found",
@@ -209,6 +215,7 @@ func TestTheNotFoundLineMayCarryNoPrefix(t *testing.T) {
 
 // One dialect answers with how many it could not find.
 func TestTheStatusMayCountTheMissingNames(t *testing.T) {
+	t.Parallel()
 	counts := func(s *Semantics) { s.AliasNotFoundStatusCounts = Yes }
 	for _, c := range []struct {
 		src  string
@@ -235,6 +242,7 @@ func TestTheStatusMayCountTheMissingNames(t *testing.T) {
 // `unalias -a` with a name beside it: one dialect calls that too many
 // arguments and clears nothing.
 func TestUnaliasAllMayRefuseOperands(t *testing.T) {
+	t.Parallel()
 	refuse := func(s *Semantics) { s.UnaliasAllRefusesOperands = Yes }
 	out, _ := aliasRun(t, refuse, Diagnostics{UnaliasAllWithOperands: "too many arguments"},
 		`alias a=1; unalias -a a; echo "st=$?"; alias`)
@@ -263,6 +271,7 @@ func TestUnaliasAllMayRefuseOperands(t *testing.T) {
 // Reading options at all is a separate question from having `-p`: one dialect
 // reads none, so `-p` is a name it looks up and fails to find.
 func TestReadingOptionsIsNotTheSameAsHavingOne(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		AliasNotFound:    "%[1]s: %[2]s: not found",
 		BuiltinBadOption: "%[1]s: bad option: %[2]s",
@@ -296,6 +305,7 @@ func TestReadingOptionsIsNotTheSameAsHavingOne(t *testing.T) {
 // `unalias` with no name and no -a: a usage line in two, silence in one, and
 // a shortage of arguments in the fourth.
 func TestUnaliasWithNothingToRemove(t *testing.T) {
+	t.Parallel()
 	out, _ := aliasRun(t, nil, Diagnostics{
 		UnaliasUsage: "unalias: usage: unalias [-a] name [name ...]",
 	}, `unalias; echo "st=$?"`)
@@ -351,6 +361,7 @@ func aliasNameSem(set string) func(*Semantics) {
 }
 
 func TestAnAliasNameIsCheckedAgainstTheDialectsSet(t *testing.T) {
+	t.Parallel()
 	// Not checked at all: an empty set takes every name, and the alias is
 	// then there to be listed back.
 	out, st := aliasRun(t, aliasNameSem(""), Diagnostics{}, `alias 'a$b'=echo; alias`)
@@ -378,6 +389,7 @@ func TestAnAliasNameIsCheckedAgainstTheDialectsSet(t *testing.T) {
 // A refusal costs the operand and not the ones beside it, and the status is 1
 // however many of each there were.
 func TestARefusedAliasNameLeavesTheOtherOperandsAlone(t *testing.T) {
+	t.Parallel()
 	out, _ := aliasRun(t, aliasNameSem("$ "), Diagnostics{},
 		`alias 'a$b'=echo x=1 'a b'=echo; echo "st=$?"; alias`)
 	want := "testsh: alias: a$b: invalid alias name\n" +
@@ -392,6 +404,7 @@ func TestARefusedAliasNameLeavesTheOtherOperandsAlone(t *testing.T) {
 // goes on to be looked up and reported the way any absent name is; under Yes
 // the lookup never happens.
 func TestWhetherTheAliasNameCheckReachesALookupIsAnAxis(t *testing.T) {
+	t.Parallel()
 	out, _ := aliasRun(t, aliasNameSem("$"), Diagnostics{}, `alias 'a$b'; echo "st=$?"`)
 	if out != "testsh: alias: a$b: not found\nst=1\n" {
 		t.Errorf("lookup unchecked: got %q, want the not-found answer", out)
@@ -409,6 +422,7 @@ func TestWhetherTheAliasNameCheckReachesALookupIsAnAxis(t *testing.T) {
 // refusal runs, which is the half a status cannot show: the builtin answers 1
 // either way.
 func TestWhetherARefusedAliasNameEndsTheScriptIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `echo one; alias 'a$b'=echo; echo two`
 	out, _ := aliasRun(t, aliasNameSem("$"), Diagnostics{}, src)
 	if out != "one\ntestsh: alias: a$b: invalid alias name\ntwo\n" {
@@ -427,6 +441,7 @@ func TestWhetherARefusedAliasNameEndsTheScriptIsAnAxis(t *testing.T) {
 // operand — because the two shells that check name different ones: one quotes
 // the name and the other prints the operand it was handed, value and all.
 func TestTheInvalidAliasNameWordingCanNameTheWholeOperand(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		AliasInvalidName:           "%[1]s: %[3]s: invalid alias name",
 		AliasInvalidNameUnprefixed: true,

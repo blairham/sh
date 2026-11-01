@@ -10,6 +10,7 @@ import "testing"
 // what follows as a single `q` would. Every row measured on zsh 5.9.2
 // (/opt/homebrew/bin/zsh, -f), 2026-10-05, with the same `HOME` and table.
 func TestTheDirectoryFlag(t *testing.T) {
+	t.Parallel()
 	const pre = `HOME=/Users/x; hash -d proj=/opt/p; hash -d pp=/opt/p/src
 a=/Users/x/doc; v='/Users/x/a b'; arr=(/Users/x /opt/p/src/q /Users/xy)
 `
@@ -48,6 +49,7 @@ a=/Users/x/doc; v='/Users/x/a b'; arr=(/Users/x /opt/p/src/q /Users/xy)
 // `${(VQ)t}` as `a\tb`. A `V` ahead of the `Q` hands it a backslash to take,
 // and gives `atb`.
 func TestVisibleRunsAfterTheUnquoting(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `t=$'a\tb'; print -r -- ${(VQ)t} ${(QV)t}`)
 	if want := `a\tb a\tb` + "\n"; out != want {
 		t.Errorf("got %q, want %q", out, want)

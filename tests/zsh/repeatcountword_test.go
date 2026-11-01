@@ -10,6 +10,7 @@ import "testing"
 // brace-expanded, and its text reaches the arithmetic as written. Measured
 // 2026-10-02 on zsh 5.9.2 under `-f` (#5382).
 func TestARepeatCountIsAnArgumentWord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"repeat {1,2} print y", "zsh:1: bad math expression: illegal character: {\n"},
 		// And a count that fails ends the script, as a failed expansion does.
@@ -35,6 +36,7 @@ func TestARepeatCountIsAnArgumentWord(t *testing.T) {
 // the shell with: 1, as a failed expansion in the count leaves. Measured
 // 2026-10-02 on zsh 5.9.2 under `-f` (#5382).
 func TestAFailedRepeatCountLeavesItsStatus(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src    string
 		status int

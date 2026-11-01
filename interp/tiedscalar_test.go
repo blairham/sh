@@ -33,6 +33,7 @@ func withTies(s *Semantics) {
 // scalar, the array, an append and one element. A one-directional mirror
 // passes the first line and fails the second.
 func TestATiedScalarAndArrayMirrorEachOther(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -T S s
 S=a:b:c
 echo "1 n=${#s[@]} [${s[@]}]"
@@ -54,6 +55,7 @@ echo "5 [${s[@]}]"`, withTies, Diagnostics{})
 // shape can fail catastrophically rather than wrongly. A write through each
 // half, and then a read of both, is what says the guard let go again.
 func TestTheMirrorsDoNotChaseEachOther(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -T S s
 S=a:b
 s=(c d)
@@ -69,6 +71,7 @@ echo "S=[$S] s=[${s[@]}]"`, withTies, Diagnostics{})
 // The separator, used in both directions, and it is the third operand rather
 // than a flag.
 func TestATieSplitsAndJoinsOnItsSeparator(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -T S s '#'
 S=a#b#c
 echo "split=[${s[@]}]"
@@ -83,6 +86,7 @@ echo "join=[$S]"`, withTies, Diagnostics{})
 // `unset` of either half unsets both, and forgets the tie: a later
 // assignment is a plain scalar again.
 func TestUnsettingHalfATieUnsetsAllOfIt(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -T S s
 S=a:b
 unset S
@@ -112,6 +116,7 @@ echo "3 untied n=${#u[@]} U=[$U]"`, withTies, Diagnostics{})
 // Runner.Tie rather than the letter, because the seam is what makes a tie
 // the shell's own: the letter can only make the script's kind.
 func TestUnsettingHalfAShellsOwnTieKeepsThePairing(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunTied(t, `S=a:b
 unset S
 echo "1 gone n=${#s[@]} S=[${S-UNSET}]"
@@ -133,6 +138,7 @@ echo "4 rejoined T=[$T]"`, withTies, Diagnostics{}, [2]string{"S", "s"}, [2]stri
 // purpose, because that splits into one field. The mirror is held off at the
 // declaration for exactly that reason.
 func TestAValuelessTieLeavesTheArrayWithNoElements(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -T S s
 echo "1 S=[${S-UNSET}] n=${#s[@]}"
 S=a
@@ -150,6 +156,7 @@ echo "3 n=${#s[@]}"`, withTies, Diagnostics{})
 // follow. Emptying it instead is the failure this guards: it is what a tie
 // made over `PATH` would do to `PATH`.
 func TestATieReadsBackWhatTheScalarAlreadyHeld(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `V=one:two:three
 typeset -T V v
 echo "n=${#v[@]} [${v[@]}] V=[$V]"`, withTies, Diagnostics{})
@@ -161,6 +168,7 @@ echo "n=${#v[@]} [${v[@]}] V=[$V]"`, withTies, Diagnostics{})
 
 // The refusals that are reported and run on, each naming what it refused.
 func TestTheReportedTieRefusals(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -T X
 echo "1 st=$?"
 typeset -T S s
@@ -184,6 +192,7 @@ echo "4 st=$?"`, withTies, Diagnostics{})
 // answer about a refused declaration operand rather than this letter's own —
 // which is what keeps one rule instead of two.
 func TestASelfTieTakesTheDialectsAnswerAboutFatality(t *testing.T) {
+	t.Parallel()
 	fatal := func(s *Semantics) { withTies(s); s.BadNameToDeclarationFatal = Yes }
 	out, errs, st := declRun(t, `typeset -T A A
 echo "reached"`, fatal, Diagnostics{})
@@ -204,6 +213,7 @@ echo "reached"`, notFatal, Diagnostics{})
 // wrote: a parser that lifts an array literal out of the arguments and
 // appends its bare name turns `typeset -T R r=(a b) ':'` into `R`, `:`, `r`.
 func TestATieHalfMustBeAName(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{BuiltinBadName: map[string]string{"typeset": "not valid in this context: %[2]s"}}
 	_, errs, st := declRun(t, `typeset -T A :`, withTies, dg)
 	want := "testsh: not valid in this context: :\n"
@@ -216,6 +226,7 @@ func TestATieHalfMustBeAName(t *testing.T) {
 // because the scalar is what a child can be told, and the rest to both. The
 // listing is where that shows, and `T` is written last of all the letters.
 func TestATieListsBackWithTheLettersItsHalvesHave(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -TUx A a
 a=(p q p)
 typeset -p A a
@@ -238,6 +249,7 @@ typeset -p C c`, withTies, Diagnostics{})
 // separator meaning the default, and that it confers no export attribute on
 // the scalar it ties.
 func TestTheTieSeamSeedsDefaultsAndConfersNoExport(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.DeclareOptions = "aAgHilpruUTx"
 	sem.DeclareTypeLetter = DeclareTypeLetterTiesAScalarAndAnArray
@@ -276,6 +288,7 @@ typeset -p STANDING`, syntax.Core())
 // A letter outside the dialect's set is still refused by name, which is what
 // keeps the tie a dialect's to have rather than the substrate's to assume.
 func TestTheTieLetterIsTheDialectsToGive(t *testing.T) {
+	t.Parallel()
 	_, errs, st := declRun(t, `typeset -T S s`, nil,
 		Diagnostics{UnimplementedOptionLetters: map[string]string{"typeset": "T"}})
 	want := "testsh: typeset: -T is not implemented yet\n"
@@ -294,6 +307,7 @@ func TestTheTieLetterIsTheDialectsToGive(t *testing.T) {
 // one state a tie does not have. Measured against the shell with the letter:
 // the array half holds what it held before the command.
 func TestAPrefixOnATiedNameIsTakenBackFromBothHalves(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -T S s
 S=a:b
 S=x:y true
@@ -308,6 +322,7 @@ echo "S=[$S] s=[${s[@]}]"`, withTies, Diagnostics{})
 // direction that says the take-back follows the tie rather than replaying the
 // scalar the prefix happened to name.
 func TestAPrefixOverATieGivesBackWhatTheArrayHalfLeft(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -T S s
 S=a:b
 s=(c d)
@@ -327,6 +342,7 @@ echo "S=[$S] s=[${s[@]}]"`, withTies, Diagnostics{})
 // through because the name was never frozen at all would pass every row, and
 // that is a fix indistinguishable from a broken `readonly`.
 func TestATiesMirrorWritesThroughAFreeze(t *testing.T) {
+	t.Parallel()
 	t.Run("the array half is frozen", func(t *testing.T) {
 		out, errs, st := declRun(t, `typeset -ar arr=(1 2)
 typeset -T SS arr

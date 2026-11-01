@@ -21,6 +21,7 @@ import (
 // Both operand shapes, because they reach the question through one call and a
 // dialect must not come to answer them differently.
 func TestWhetherAnExportThroughASubscriptedOperandRecordsTheLetter(t *testing.T) {
+	t.Parallel()
 	// The valueless shape reaches the letter through
 	// ValuelessSubscriptedOperandWritesTheElement, which is where the operand
 	// is finished and the caller records the attribute; the other two
@@ -53,6 +54,7 @@ func TestWhetherAnExportThroughASubscriptedOperandRecordsTheLetter(t *testing.T)
 // The element really is written under both answers, which is what keeps the
 // row above about the attribute rather than about the store.
 func TestAnExportThroughASubscriptedOperandStillWritesTheElement(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Yes, No} {
 		out, _ := exportLetterRun(t, answer,
 			"a=(1 2 3)\nexport 'a[1]'=v\n"+`echo "[${a[*]}]"`)
@@ -66,6 +68,7 @@ func TestAnExportThroughASubscriptedOperandStillWritesTheElement(t *testing.T) {
 // column's child carries the value and the other's does not, so neither
 // answer stands in for the other.
 func TestAnExportThroughASubscriptedOperandRefusesAnUnspecifiedAxis(t *testing.T) {
+	t.Parallel()
 	out, _ := exportLetterRun(t, Unspecified, "a=(1 2 3)\nexport 'a[1]'=v")
 	if !strings.Contains(out, "no dialect was chosen") {
 		t.Errorf("out %q is not a refusal naming the axis", out)

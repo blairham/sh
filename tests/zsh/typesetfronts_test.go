@@ -9,6 +9,7 @@ import "testing"
 // (#5142). Every row measured 2026-10-02 on zsh 5.9.2
 // (`/opt/homebrew/bin/zsh -f`).
 func TestTypesetFrontsOfB02(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		// The width words, after `local` and ahead of the case.
 		{`typeset -L10 x=a; typeset +m x`, "left justified 10 x\n"},

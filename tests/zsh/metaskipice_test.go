@@ -36,6 +36,7 @@ import "testing"
 // hid this: `${(@s: :)v}` on a scalar is right in both readings, and only a
 // split standing on another split's result tells them apart.
 func TestTheSkipIceIsReadThroughStackedSplits(t *testing.T) {
+	t.Parallel()
 	const src = `
 handler() {
   local -a plugin_array on_demand_cand on_demand_skip keep not_existing

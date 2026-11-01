@@ -53,6 +53,7 @@ func runFlagRange(t *testing.T, src string) (string, int) {
 //
 // Every row is a measurement on zsh 5.9.2, 2026-09-08.
 func TestAFlagGroupOverARangeSeesTheElements(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the join separator goes between the elements",
@@ -109,6 +110,7 @@ func TestAFlagGroupOverARangeSeesTheElements(t *testing.T) {
 // a subscript naming one element is a scalar, and a range over a scalar is a
 // substring — one value however many characters it holds.
 func TestAFlagGroupOverWhatIsNotAListStaysAScalar(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a single index is one value",
@@ -159,6 +161,7 @@ func TestAFlagGroupOverWhatIsNotAListStaysAScalar(t *testing.T) {
 // and the fields flag keeps no field at all where the quoted spelling still
 // keeps one because that is what quoting guarantees.
 func TestAFlagGroupOverARangeThatNamesNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			// `0:` is the assertion. The `[]` after it is the helper's own
@@ -214,6 +217,7 @@ func TestAFlagGroupOverARangeThatNamesNothing(t *testing.T) {
 // can say — which is why the two ranges below differ from the range after an
 // index.
 func TestAFlagGroupOverAChainedRange(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a range over a range is elements",
@@ -256,6 +260,7 @@ func TestAFlagGroupOverAChainedRange(t *testing.T) {
 // elements were written in — and only the spellings that skip that join show
 // the sort happening at all.
 func TestTheOrderingFlagsOverARangeRunAfterTheJoin(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"quoted, the sort has one word to sort",
@@ -291,6 +296,7 @@ func TestTheOrderingFlagsOverARangeRunAfterTheJoin(t *testing.T) {
 // identical drift had left a second copy: an operator over a range joins in
 // quotes — the reading `[*]` takes — and distributes outside them.
 func TestAnOperatorOverARangeJoinsInQuotesAndDistributesOutside(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"quoted, the trim runs once on the joined string",
@@ -348,6 +354,7 @@ func TestAnOperatorOverARangeJoinsInQuotesAndDistributesOutside(t *testing.T) {
 // Every row is a measurement on zsh 5.9.2, 2026-09-12, over `a=(1 2 3 4 5)`
 // unless it says otherwise.
 func TestARangeStartingOutsideTheArrayNamesOneEmptyElement(t *testing.T) {
+	t.Parallel()
 	const a = `a=(1 2 3 4 5); `
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -448,6 +455,7 @@ func runFlagRangeGroups(t *testing.T, src string) (string, int) {
 //
 // Every row is a measurement on zsh 5.9.2, 2026-09-12.
 func TestAFlagGroupInEachEndOfARange(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"both ends search a string",
@@ -530,6 +538,7 @@ func TestAFlagGroupInEachEndOfARange(t *testing.T) {
 // that selects nothing at the front leaves the pair alone, and only the last
 // selecting letter written counts.
 func TestAnIndexFlagInTheFirstEndOfARangeIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"i at the front", `a=(p q r); f "${a[(i)q,2]}"`},
 		{"I at the front", `a=(p q r); f "${a[(I)q,3]}"`},
@@ -550,6 +559,7 @@ func TestAnIndexFlagInTheFirstEndOfARangeIsRefused(t *testing.T) {
 
 // The other side of that line, so a fix that refused too much fails here.
 func TestAnIndexFlagInTheSecondEndOfARangeIsRead(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"i names where it matched first", `a=(p q r); f "${a[1,(i)r]}"`, `1:[p q r]`},
 		{"I names where it matched last", `a=(p q r); f "${a[1,(I)q]}"`, `1:[p q]`},
@@ -571,6 +581,7 @@ func TestAnIndexFlagInTheSecondEndOfARangeIsRead(t *testing.T) {
 // back empty at status 0 where the shell writes a diagnostic and ends the
 // line. The end that failed is what the complaint names, not the pair.
 func TestARangeEndThatWillNotEvaluateIsReported(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, token string }{
 		{"the first end", `a=(p q r); f "${a[b c,2]}"`, "c"},
 		{"the second end", `a=(p q r); f "${a[1,b c]}"`, "c"},

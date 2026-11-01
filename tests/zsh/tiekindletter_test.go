@@ -15,6 +15,7 @@ import "testing"
 // from a script file under `env -i PATH=/usr/bin:/bin`), output compared byte
 // for byte (#6387).
 func TestAKindLetterUntiesAScriptTie(t *testing.T) {
+	t.Parallel()
 	const show = `; print -r -- "[${(t)foo}] [${(t)FOO}]"`
 	for _, tc := range []struct{ name, src, want string }{
 		{"array letter on the scalar half", "typeset -T FOO foo; typeset -a FOO" + show + "; typeset -p FOO", "[] [array]\ntypeset -a FOO=(  )\n"},
@@ -55,6 +56,7 @@ func TestAKindLetterUntiesAScriptTie(t *testing.T) {
 // arithmetic, so the sentence names `foo` rather than the math, and the
 // script ends there. Measured as above.
 func TestAReadonlyPartnerRefusesTheUntie(t *testing.T) {
+	t.Parallel()
 	got, _ := runZshOnPath(t, t.TempDir(), "typeset -T FOO=a:b foo; typeset -r foo; typeset -i FOO; echo after")
 	if want := "zsh:1: read-only variable: foo\n"; got != want {
 		t.Errorf("got %q, want %q", got, want)

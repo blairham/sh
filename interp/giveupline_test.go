@@ -63,6 +63,7 @@ func giveUpProgram(inside string) string {
 // The row the issue is about: the give-up is inside a function body and the
 // line that is given up is the one the **call** was written on.
 func TestAGiveUpInsideAFunctionGivesUpTheCallersLine(t *testing.T) {
+	t.Parallel()
 	for _, route := range giveUpRoutes {
 		t.Run(route.name, func(t *testing.T) {
 			src := giveUpProgram("f() { " + route.stmt + `; echo inside; }` + "\n" + `f; echo "same=$?"`)
@@ -88,6 +89,7 @@ func TestAGiveUpInsideAFunctionGivesUpTheCallersLine(t *testing.T) {
 // reported the *callee's* line here would leave the caller's line running,
 // and a construct that swallowed the give-up would run `inside` as well.
 func TestAGiveUpReachesTheInputLineThroughEveryEnclosingShape(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{
 			"a function called from an if",
@@ -133,6 +135,7 @@ func TestAGiveUpReachesTheInputLineThroughEveryEnclosingShape(t *testing.T) {
 // the statement that failed: the parentheses run in a copy of the runner, so
 // the give-up ends the copy and the line the call was on carries on.
 func TestAGiveUpInsideASubshellEndsTheSubshellAndNothingElse(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a give-up written in the parentheses", `( unset "a[1+]"; echo insub ); echo "same=$?"`},
 		{
@@ -160,6 +163,7 @@ func TestAGiveUpInsideASubshellEndsTheSubshellAndNothingElse(t *testing.T) {
 // command's `;` is on a line after its words end. Both of them are still one
 // input line, so the `echo` behind the `;` goes with the give-up.
 func TestAGiveUpTakesTheRestOfTheInputLineAndNotOfTheFirstLine(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{
 			"a compound whose last line carries the next command",
@@ -187,6 +191,7 @@ func TestAGiveUpTakesTheRestOfTheInputLineAndNotOfTheFirstLine(t *testing.T) {
 // line back when it is done, or a give-up in the function that called the
 // `eval` would give up a line of text that has stopped running.
 func TestBorrowedTextGivesUpItsOwnLineAndRestoresTheCallers(t *testing.T) {
+	t.Parallel()
 	// Inside the text: the first of its two lines is given up and the second
 	// runs, so the `eval` itself succeeds and the caller's line carries on.
 	src := giveUpProgram("f() { eval 'r=2\necho ineval'; echo inf; }\n" + `f; echo "same=$?"`)
@@ -220,6 +225,7 @@ func TestBorrowedTextGivesUpItsOwnLineAndRestoresTheCallers(t *testing.T) {
 // body is still reported against its own line while the caller's line is what
 // stops running.
 func TestAGiveUpReportsTheFailingLineAndGivesUpTheInputLine(t *testing.T) {
+	t.Parallel()
 	src := giveUpProgram("f() {\n  echo before\n  unset \"a[1+]\"\n}\n" + `f; echo "same=$?"`)
 	out, _ := runGrammar(t, src, nil, func(r *Runner) {
 		giveUpLineSemantics(r)
@@ -240,6 +246,7 @@ func TestAGiveUpReportsTheFailingLineAndGivesUpTheInputLine(t *testing.T) {
 // `unset 'a[1+]'` and `a[1+]=v` — the same expression, one builtin apart —
 // disagreed here and agree in the panel (#3502).
 func TestABadSubscriptGivesACommandStringUpWholeAndABareExpressionDoesNot(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, stmt string
 		wholeText  bool

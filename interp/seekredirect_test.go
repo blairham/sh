@@ -22,6 +22,7 @@ func runSeek(t *testing.T, src string) (string, int) {
 
 // The read side, the write side, and an expression that reads a parameter.
 func TestSeekRedirectMovesTheDescriptor(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"back to the start and on again",
@@ -88,6 +89,7 @@ read -n2 v <&3; printf 'read=%s [%s]\n' "$?" "$v"`,
 // expression: a parameter of those names keeps its value, and an assignment
 // the expression makes still reaches the shell.
 func TestSeekRedirectBindsCurAndEof(t *testing.T) {
+	t.Parallel()
 	const src = `printf abcdefghij > f
 exec 3< f
 read -n4 v <&3
@@ -110,6 +112,7 @@ read -n2 v <&3; printf '[%s:%s]\n' "$v" "$zz"`
 // number nothing is open at, a stream with no position, and an offset before
 // the start.
 func TestSeekRedirectRefusals(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a descriptor nothing is open at", `exec 6<#((0))`, "6: Bad file descriptor"},
 		{"a stream with no position", `printf x | { exec 0<#((0)); }`, "0: not seekable"},
@@ -131,6 +134,7 @@ func TestSeekRedirectRefusals(t *testing.T) {
 // The three refusals are three sentences and not one, which a dialect can
 // word separately. Read through the vector rather than through any preset.
 func TestSeekRefusalsAreSeparateWordings(t *testing.T) {
+	t.Parallel()
 	setup := func(r *Runner) {
 		d := Diagnostics{
 			SeekDescriptorNotOpen:   "NOTOPEN %[1]s %[2]s",

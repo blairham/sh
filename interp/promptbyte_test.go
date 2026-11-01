@@ -19,6 +19,7 @@ import (
 // space followed by the character `0` there and a NUL here. See [PromptOctal]
 // for the nine probes both were measured over.
 func TestAPromptsNumericEscapes(t *testing.T) {
+	t.Parallel()
 	exact := PromptStyle{Escape: '\\', Octal: OctalExactlyThree}
 	upTo := PromptStyle{
 		Escape: '\\', Octal: OctalUpToThree,
@@ -69,6 +70,7 @@ func TestAPromptsNumericEscapes(t *testing.T) {
 // nothing at all in the other — the difference between "the last component"
 // and "the text after the last slash".
 func TestTheLastComponentOfTheRootMayBeEmpty(t *testing.T) {
+	t.Parallel()
 	base := PromptStyle{Escape: '\\', Codes: map[rune]PromptField{'W': FieldCwdBase}}
 	empty := base
 	empty.CwdBaseAtRootIsEmpty = true
@@ -127,6 +129,7 @@ func drawPromptIn(t *testing.T, st PromptStyle, dir, text string) string {
 // `\$` becomes a literal dollar before anything can ask who is typing, which
 // is a shell whose own default prompt draws the wrong character for root.
 func TestTheExpansionMaySkipThePromptsEscapes(t *testing.T) {
+	t.Parallel()
 	skips := PromptStyle{
 		Expand: PromptExpandsAlways, ExpandBeforeEscapes: true,
 		ExpansionSkipsTheEscapes: true,
@@ -185,6 +188,7 @@ func renderWithVars(t *testing.T, st PromptStyle, text string) string {
 //
 // Every row is BusyBox ash 1.37.0 in the digest-pinned image.
 func TestSkippingTheEscapesLeavesTheSubstitutionsWhole(t *testing.T) {
+	t.Parallel()
 	st := PromptStyle{
 		Expand: PromptExpandsAlways, ExpandBeforeEscapes: true,
 		ExpansionSkipsTheEscapes: true,

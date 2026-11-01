@@ -21,6 +21,7 @@ import "testing"
 const fields = `f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; `
 
 func TestATrailingSeparatorDelimitsInThisDialect(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		// Reachable three ways, and the option is the first: this shell does

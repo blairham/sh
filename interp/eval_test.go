@@ -11,6 +11,7 @@ import (
 )
 
 func TestArithmetic(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ name, src, want string }{
 		{"precedence follows C", `echo $((1+2*3))`, "7\n"},
 		{"grouping", `echo $(((1+2)*3))`, "9\n"},
@@ -34,6 +35,7 @@ func TestArithmetic(t *testing.T) {
 }
 
 func TestArithmeticBasesAreDecidedAtEvaluation(t *testing.T) {
+	t.Parallel()
 	// The parser kept literals as written precisely so this could decide.
 	// Whether a leading zero means octal is a dialect question.
 	if got, _ := run(t, `echo $((0x10)) $((010)) $((0100)) $((2#101))`, nil); got != "16 8 64 5\n" {
@@ -42,6 +44,7 @@ func TestArithmeticBasesAreDecidedAtEvaluation(t *testing.T) {
 }
 
 func TestArithmeticAssignmentOutlivesTheExpression(t *testing.T) {
+	t.Parallel()
 	if got, _ := run(t, `echo $((x=7)); echo $x`, nil); got != "7\n7\n" {
 		t.Errorf("got %q", got)
 	}
@@ -58,6 +61,7 @@ func TestArithmeticAssignmentOutlivesTheExpression(t *testing.T) {
 }
 
 func TestArithmeticShortCircuitIsObservable(t *testing.T) {
+	t.Parallel()
 	// Assignment is an operator whose effect outlives the expression, so
 	// evaluation order is part of the specification rather than a detail.
 	if got, _ := run(t, `x=0; echo $((0 && (x=9))) $x`, nil); got != "0 0\n" {
@@ -69,6 +73,7 @@ func TestArithmeticShortCircuitIsObservable(t *testing.T) {
 }
 
 func TestArithmeticErrors(t *testing.T) {
+	t.Parallel()
 	// Division by zero is a runtime error; the expression parsed.
 	out, _ := run(t, `echo $((1/0))`, nil)
 	if out == "" || out == "\n" {
@@ -86,6 +91,7 @@ func TestArithmeticErrors(t *testing.T) {
 }
 
 func TestArithmeticCommandInvertsTheConvention(t *testing.T) {
+	t.Parallel()
 	// `(( expr ))` exits 0 when the expression is non-zero.
 	if _, st := run(t, `(( 1+1 ))`, nil); st != 0 {
 		t.Errorf("status %d, want 0 for a non-zero expression", st)
@@ -96,6 +102,7 @@ func TestArithmeticCommandInvertsTheConvention(t *testing.T) {
 }
 
 func TestConditions(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ name, src, want string }{
 		{"unquoted right side is a pattern", `[[ abc == a* ]] && echo m`, "m\n"},
 		{"quoted right side is a literal", `[[ abc == "a*" ]] && echo m || echo no`, "no\n"},
@@ -121,6 +128,7 @@ func TestConditions(t *testing.T) {
 }
 
 func TestConditionsDoNotSplitOrGlob(t *testing.T) {
+	t.Parallel()
 	// Every case where the `[` builtin needs its argument quoted and this
 	// does not, because the words never become arguments.
 	if got, _ := run(t, `x="a b"; [[ $x == "a b" ]] && echo m`, nil); got != "m\n" {
@@ -132,6 +140,7 @@ func TestConditionsDoNotSplitOrGlob(t *testing.T) {
 }
 
 func TestCommandSubstitution(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ name, src, want string }{
 		{"basic", `echo "[$(echo sub)]"`, "[sub]\n"},
 		{"trailing newlines are stripped", "echo \"[$(printf 'a\\n\\n')]\"", "[a]\n"},
@@ -158,6 +167,7 @@ func TestCommandSubstitution(t *testing.T) {
 func withSem(s Semantics) func(*Runner) { return func(r *Runner) { r.Semantics = &s } }
 
 func TestSemanticsAxesHaveTwoSides(t *testing.T) {
+	t.Parallel()
 	// Each row is an axis, run with its field answered both ways on the same
 	// base. Asserting only one side asserts a default rather than a behavior.
 	tests := []struct {
@@ -226,6 +236,7 @@ func TestSemanticsAxesHaveTwoSides(t *testing.T) {
 }
 
 func TestHeredocBodies(t *testing.T) {
+	t.Parallel()
 	// The delimiter's quoting decides whether the body is expanded, which is
 	// a property of how it was *written* — the reason the lexer recorded it
 	// rather than resolving it.
@@ -244,6 +255,7 @@ func TestHeredocBodies(t *testing.T) {
 }
 
 func TestCoreRefusesWhatTheShellsDisagreeAbout(t *testing.T) {
+	t.Parallel()
 	// The counterpart of syntax.Core(), built the same way: that refuses
 	// constructs not every shell has, this refuses behaviors not every shell
 	// shares. A script that runs under it depends on nothing contested.
@@ -270,6 +282,7 @@ func TestCoreRefusesWhatTheShellsDisagreeAbout(t *testing.T) {
 }
 
 func TestCoreOnlyRefusesWhenTheInputDependsOnAnAxis(t *testing.T) {
+	t.Parallel()
 	// What keeps the core usable rather than refusing everything: an axis is
 	// consulted only when the answer could change the result.
 	core := CoreSemantics()
@@ -287,6 +300,7 @@ func TestCoreOnlyRefusesWhenTheInputDependsOnAnAxis(t *testing.T) {
 }
 
 func TestCoreAgreesWithTheShellsWhereTheyAgree(t *testing.T) {
+	t.Parallel()
 	// Only two axes survive into the core, and that is not a defect of the
 	// panel: the axes exist because they diverge, so everything the shells
 	// agree about never became one.
@@ -300,6 +314,7 @@ func TestCoreAgreesWithTheShellsWhereTheyAgree(t *testing.T) {
 }
 
 func TestArithmeticErrorsFailTheCommand(t *testing.T) {
+	t.Parallel()
 	// `echo $((1/0))` fails rather than echoing an empty string. Reporting
 	// the error and then running the command was the silent wrong answer —
 	// the diagnostic went to stderr and the exit status said everything had

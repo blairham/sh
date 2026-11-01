@@ -56,6 +56,7 @@ func joinRun(t *testing.T, src string, join Answer) (string, int) {
 // The field count is asserted with the fields because `[x][y]` and `[x][][y]`
 // are the same characters once the boundaries are gone.
 func TestAnEmptyElementSurvivesOnlyWhereTheListIsJoined(t *testing.T) {
+	t.Parallel()
 	const src = `IFS=:; set -- x "" y; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"`
 
 	if out, st := joinRun(t, src, Yes); out != "3[x][][y]" || st != 0 {
@@ -70,6 +71,7 @@ func TestAnEmptyElementSurvivesOnlyWhereTheListIsJoined(t *testing.T) {
 // two must not part company: `$@` and `${a[@]}` are the same fields for the
 // same elements in every shell measured.
 func TestTheArraySpellingJoinsWithTheParameters(t *testing.T) {
+	t.Parallel()
 	const src = `IFS=:; a=(x "" y); set -- ${a[@]}; printf "%d" "$#"; printf "[%s]" "$@"`
 
 	if out, st := joinRun(t, src, Yes); out != "3[x][][y]" || st != 0 {
@@ -89,6 +91,7 @@ func TestTheArraySpellingJoinsWithTheParameters(t *testing.T) {
 // `x:y:` splits into. zsh under `setopt shwordsplit`, which does not join,
 // keeps three.
 func TestTheJoinLosesATrailingEmptyElement(t *testing.T) {
+	t.Parallel()
 	const src = `IFS=:; set -- x y ""; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"`
 
 	if out, st := joinRun(t, src, Yes); out != "2[x][y]" || st != 0 {
@@ -109,6 +112,7 @@ func TestTheJoinLosesATrailingEmptyElement(t *testing.T) {
 // `IFS=:; set -- "x:" y` is `x::y` joined — three fields — and `[x]` then
 // `[y]` taken one at a time.
 func TestAnElementEndingInASeparatorMeetsTheJoins(t *testing.T) {
+	t.Parallel()
 	const src = `IFS=:; set -- "x:" y; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"`
 
 	if out, st := joinRun(t, src, Yes); out != "3[x][][y]" || st != 0 {
@@ -125,6 +129,7 @@ func TestAnElementEndingInASeparatorMeetsTheJoins(t *testing.T) {
 // Left unanswered on purpose: an unanswered axis that is asked says so and
 // refuses, so the fields coming back at status 0 are the whole assertion.
 func TestAWhitespaceSeparatorNeverAsksTheJoin(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`set -- x "" y; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"`,
 		`a=("" x); set -- ${a[@]}; printf "%d" "$#"; printf "[%s]" "$@"`,
@@ -153,6 +158,7 @@ func TestAWhitespaceSeparatorNeverAsksTheJoin(t *testing.T) {
 // none depending on the splitting answer, which is the older question and not
 // this one.
 func TestNothingToJoinWithNeverAsksTheJoin(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`IFS=""; set -- x ""; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"`,
 		`IFS=:; set -- ""; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"`,
@@ -185,6 +191,7 @@ func TestNothingToJoinWithNeverAsksTheJoin(t *testing.T) {
 // Asserted with the join answered *yes*, which is the combination that would
 // go wrong: a shell that joined without splitting would print one field here.
 func TestSplittingStandsInFrontOfTheJoin(t *testing.T) {
+	t.Parallel()
 	const src = `IFS=:; set -- x "" y; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"`
 
 	out, st := axisRun(t, src, func(s *Semantics) {
@@ -201,6 +208,7 @@ func TestSplittingStandsInFrontOfTheJoin(t *testing.T) {
 // one field per parameter and `"$*"` is one field holding the join, in every
 // shell measured — both core, and neither moves with the axis.
 func TestTheQuotedSpellingsDoNotAskTheJoin(t *testing.T) {
+	t.Parallel()
 	const at = `IFS=:; set -- x "" y; set -- "$@"; printf "%d" "$#"; printf "[%s]" "$@"`
 	const star = `IFS=:; set -- x "" y; set -- "$*"; printf "%d" "$#"; printf "[%s]" "$@"`
 
@@ -222,6 +230,7 @@ func TestTheQuotedSpellingsDoNotAskTheJoin(t *testing.T) {
 // characters would put `:,` between each pair, and each of those is a
 // delimiter of its own, so five fields would come out.
 func TestTheJoinUsesTheFirstCharacterOfIFS(t *testing.T) {
+	t.Parallel()
 	const src = `IFS=":,"; set -- x "" y; set -- $@; printf "%d" "$#"; printf "[%s]" "$@"`
 
 	if out, st := joinRun(t, src, Yes); out != "3[x][][y]" || st != 0 {
@@ -238,6 +247,7 @@ func TestTheJoinUsesTheFirstCharacterOfIFS(t *testing.T) {
 // without this row the specification's answer is whatever the last edit left
 // behind.
 func TestTheSpecificationsAnswerIsTheUnjoinedReading(t *testing.T) {
+	t.Parallel()
 	if got := PosixSemantics().UnquotedListJoinsOnIFS; got != No {
 		t.Errorf("PosixSemantics().UnquotedListJoinsOnIFS = %v, want %v", got, No)
 	}

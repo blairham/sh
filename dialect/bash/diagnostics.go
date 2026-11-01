@@ -203,10 +203,12 @@ func Diagnostics() interp.Diagnostics {
 		KilledCommandNotice: "%5[1]d %-27[2]s%[3]s",
 		// SIGTERM alone, and 5.3 alone: no location and no process id.
 		KilledCommandNoticeBareForTerminate: "%-27[1]s%[2]s",
-		JobRunning:                          "Running",
-		JobStopped:                          "Stopped",
-		JobDone:                             "Done",
-		JobExited:                           "Exit %[1]d",
+		// And for any signal the shell traps, the same two verbs.
+		KilledCommandNoticeForATrappedSignal: "%-27[1]s%[2]s",
+		JobRunning:                           "Running",
+		JobStopped:                           "Stopped",
+		JobDone:                              "Done",
+		JobExited:                            "Exit %[1]d",
 		// A job a signal ended is named by the signal, the host's words
 		// and its number: `Terminated: 15`. Measured 2026-10-02 on bash
 		// 5.3.20 (#5389).

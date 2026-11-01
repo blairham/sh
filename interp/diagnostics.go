@@ -4777,6 +4777,20 @@ type Diagnostics struct {
 	// every other dialect wants.
 	KilledCommandNoticeBareForTerminate string
 
+	// KilledCommandNoticeForATrappedSignal replaces the notice for a command
+	// killed by a signal the shell itself has a trap for — a handler or an
+	// ignore — and is written with no location and no process id. Two verbs:
+	// the words, the command.
+	//
+	// bash 5.3 alone. Measured 2026-11-01, `trap 'echo T' USR1; /bin/sh -c
+	// 'kill -USR1 $$'` writes `User defined signal 1: 30  /bin/sh -c …`, bare,
+	// where the same line with USR2 trapped instead writes the located notice
+	// with the process id; an ignored USR1, over a child that resets the
+	// signal and dies of it, is bare too. bash 3.2 writes the words alone
+	// there, and the other columns write what they always write. Empty leaves
+	// the ordinary notice standing.
+	KilledCommandNoticeForATrappedSignal string
+
 	// KilledCommandNoticeUnprefixed writes that notice with no location in
 	// front of it. dash alone, and unlike every other message it prints:
 	// this one carries neither the shell's name nor the line.

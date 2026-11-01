@@ -84,7 +84,33 @@ func (r *Runner) reportKilled(sig syscall.Signal, pid int) {
 		r.status, r.unspecified = status, false
 		return
 	}
+	if dg := r.diag(); dg.KilledCommandNoticeForATrappedSignal != "" && r.trapsTheSignal(sig) {
+		// A signal this shell has a trap for, which one dialect reports with
+		// neither the location nor the process id. Only on this route: a
+		// `wait` that reaps a job killed by it is a question of its own.
+		r.noticef("%s\n", Wording(dg.KilledCommandNoticeForATrappedSignal, "%-27[1]s%[2]s",
+			r.signalDescription(sig), r.killedCommandText()))
+		return
+	}
 	r.killedNotice(sig, pid, r.killedCommandText())
+}
+
+// trapsTheSignal reports whether the trap table this runner answers for has
+// an entry for sig, a handler or an ignore.
+func (r *Runner) trapsTheSignal(sig syscall.Signal) bool {
+	key, ok := signalName(sig)
+	if !ok {
+		return false
+	}
+	if r.traps != nil {
+		_, ok = r.traps[key]
+		return ok
+	}
+	s := r.sigs()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok = s.traps[key]
+	return ok
 }
 
 // killedNotice is the sentence itself, once, for both routes that write it.

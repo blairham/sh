@@ -201,15 +201,41 @@ func tailOfList(list []*syntax.Stmt, into map[*syntax.SimpleCmd]bool) {
 // An EXIT trap counts, and it is the one the copy of the traps does not hold,
 // so the caller says: `{ trap 'print X' EXIT; sleep } &` killed with TERM
 // leaves the `sleep` running and prints no X.
-func (b *bodyInbox) reachedATail(c *syntax.SimpleCmd, exitTrap bool) {
+//
+// **An ignore the body was handed does not count.** The program a fork execs
+// inherits an ignored disposition and needs nobody to answer it, so the job
+// is that program exactly as it is with no trap at all. Measured 2026-11-01,
+// each shell in a process group of its own — bash 5.3.20, bash 3.2.57,
+// ksh93u+, dash and zsh 5.9.2 all agree:
+//
+//	trap '' USR1; perl -e '$SIG{USR1}="DEFAULT"; sleep 1' &
+//	sleep 0.3; kill -USR1 $!; wait $!         158, and ksh93's 286
+//	…TERM in place of USR1                    143, and ksh93's 271
+//	trap '' USR1; perl -e 'sleep 1' &
+//	sleep 0.3; kill -TERM $!; wait $!         143, and nothing left running
+//
+// where this shell kept the body standing because its table was not empty:
+// the first two rows found the ignore in it and sent nothing, so `kill`
+// returned 0 and the program ran on, and the third ended the body and
+// orphaned the program (#7248). The program still keeps the ignore — `perl
+// -e 'sleep 1'` sent USR1 sleeps through it in every column but zsh's.
+//
+// One the body sets itself still counts. Whether such a fork execs its last
+// command is a split — bash keeps the fork, ksh93, dash and zsh exec — and
+// that is a question of its own. inherited is the runner's own record of
+// which entries crossed the boundary; see Runner.inheritedIgnored.
+func (b *bodyInbox) reachedATail(c *syntax.SimpleCmd, exitTrap bool, inherited map[string]bool) {
 	if c == nil || !b.tails[c] || exitTrap {
 		return
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if len(b.traps) == 0 {
-		b.execd = true
+	for name, action := range b.traps {
+		if action != "" || !inherited[name] {
+			return
+		}
 	}
+	b.execd = true
 }
 
 // isTheProgram reports whether the job has become the program it exec'd.

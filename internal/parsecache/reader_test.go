@@ -22,6 +22,7 @@ import (
 	"github.com/blairham/sh/dialect/zsh"
 	"github.com/blairham/sh/internal/oracle"
 	"github.com/blairham/sh/internal/parsecache"
+	"github.com/blairham/sh/internal/testenv"
 	"github.com/blairham/sh/internal/treecodec"
 	"github.com/blairham/sh/syntax"
 )
@@ -276,11 +277,28 @@ func carried(src string, o outcome) bool {
 // TestACachedReadIsTheParse is the cache's claim over everything the
 // repository holds, in every grammar, read a line at a time and whole, with
 // aliases and without: a read the cache serves is the read a parser makes.
+//
+// Under the race detector a grammar reads every raceStride-th text rather than
+// all of them. The sweep runs in one goroutine, so the detector has nothing to
+// compare and can find nothing in it, and it cost ten times the work: 427s of
+// this package's time on CI's Linux leg against 39s for the same package on the
+// uninstrumented macOS leg (#7290). That leg, `make test`, and any `go test`
+// without -race still read every text in every grammar, so the claim is proved
+// whole on every pull request; the instrumented run keeps a sample, offset per
+// grammar, so the code under the detector is still the code the claim is about.
 func TestACachedReadIsTheParse(t *testing.T) {
 	texts := corpus(t)
-	clean, failing := 0, 0
-	for name, d := range dialects() {
+	ds := dialects()
+	clean, failing, want := 0, 0, 50000
+	if testenv.RaceDetector {
+		want /= raceStride
+	}
+	for k, name := range slices.Sorted(maps.Keys(ds)) {
+		d := ds[name]
 		for i, src := range texts {
+			if testenv.RaceDetector && i%raceStride != k {
+				continue
+			}
 			for _, aliases := range []bool{false, true} {
 				for _, whole := range []bool{false, true} {
 					label := fmt.Sprintf("%s/%d/%v/%v", name, i, aliases, whole)
@@ -295,10 +313,16 @@ func TestACachedReadIsTheParse(t *testing.T) {
 	}
 	// Both kinds have to be there: a corpus that never failed to parse would
 	// never have checked that a failure is not kept.
-	if clean < 50000 || failing == 0 {
+	if clean < want || failing == 0 {
 		t.Fatalf("%d clean readings and %d that failed", clean, failing)
 	}
+	t.Logf("%d clean readings and %d that failed", clean, failing)
 }
+
+// raceStride is how far apart the texts are that a grammar reads under the
+// race detector — see TestACachedReadIsTheParse. Wider than the number of
+// grammars, so that each reads texts none of the others does.
+const raceStride = 40
 
 // TestARealPluginTree is the same claim over a tree of real plugins, which is
 // what the cache is for. The tree is named by SH_TEST_PLUGIN_TREE, since it

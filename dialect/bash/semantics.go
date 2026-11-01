@@ -1166,6 +1166,11 @@ func Semantics() interp.Semantics {
 	// ReadCountAtTheEndSticksTheDescriptor (#7179).
 	s.ReadCountOfAPipeExecOpenedFindsItsEnd = interp.No
 	s.ReadCountAtTheEndSticksTheDescriptor = interp.No
+	// A `read -N` reads on through a trapped signal here, as every read does
+	// (ReadIsAbandonedByATrappedSignal is no), so nothing it took is ever
+	// left over for a later read to find. See
+	// interp.Semantics.ReadExactCountGivenUpKeepsWhatItTook (#7177).
+	s.ReadExactCountGivenUpKeepsWhatItTook = interp.No
 	s.ReadTimeoutKeepsWhatArrived = interp.Yes
 	s.ReadTimeoutBoundsReadability = interp.No
 	// A trapped signal that lands while a `read` waits for input stops it to

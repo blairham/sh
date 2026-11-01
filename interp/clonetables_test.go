@@ -5,7 +5,6 @@ package interp
 
 import (
 	"context"
-	"io"
 	"os"
 	"reflect"
 	"slices"
@@ -549,7 +548,7 @@ func seedTables(r *Runner) {
 	r.execFds = map[int]bool{7: true}
 	r.cloexecFds = map[int]bool{8: true}
 	r.dupFds = map[int]bool{9: true}
-	r.stuckReads = map[int]io.Reader{10: os.Stdin}
+	r.readMarks = map[int]readMark{10: {stream: os.Stdin, stuck: true}}
 	r.exportedFuncs = map[string]bool{"seed": true}
 	r.withdrawnFuncs = map[string]withdrawnFunction{"seed": {}}
 	r.readonlyFuncs = map[string]bool{"seed": true}

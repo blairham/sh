@@ -2110,6 +2110,8 @@ func Semantics() interp.Semantics {
 	// unanswered ReadCountOfAPipeExecOpenedFindsItsEnd: the same
 	// reason, and there is no `-u` either.
 	// unanswered ReadCountAtTheEndSticksTheDescriptor: the same reason.
+	// unanswered ReadExactCountGivenUpKeepsWhatItTook: the same reason — it
+	// is asked only of a `-N` read.
 	// unanswered ExportThroughASubscriptedOperandRecordsTheLetter: no
 	// arrays and no subscripted operand, so nothing reaches it.
 	s.DeclarationTakesASubscript = interp.No

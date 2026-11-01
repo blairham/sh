@@ -58,11 +58,15 @@ const (
 	// signal that arrives during it: `-u3` after `exec 3<fifo` or with 3
 	// inherited, `-p`, and a `read` of standard input that its own
 	// redirection opened — `read l <fifo`, or a builtin's, `eval 'read l'
-	// <fifo`. A duplicate is read the way standard input is, `exec 4<&3` and
-	// `exec 3<&3` alike, and a move keeps what its source was; `-u0` is
-	// standard input. Neither kind is given up by a signal already waiting
-	// when it began: the read goes on. A read from a descriptor open for
-	// writing as well — `exec 3<>fifo` — is given up as
+	// <fifo`. Except a `-N` read: of standard input no signal gives one up —
+	// it reads its count whatever arrives, from a stream it was handed, one
+	// its own redirection opened, or `-u0` — and of any other number only a
+	// signal that arrives once it has taken a byte does (#7177). A duplicate
+	// is read the way standard input is, `exec 4<&3` and `exec 3<&3` alike,
+	// and a move keeps what its source was; `-u0` is standard input.
+	// Neither kind is given up by a signal already waiting when it began:
+	// the read goes on. A read from a descriptor open for writing as well —
+	// `exec 3<>fifo` — is given up as
 	// ReadAbandonedAtTheNextByte gives one up, a signal already waiting
 	// included; the standard input the shell was started with, and every
 	// copy of it, counts as open for reading alone whatever its open mode.
@@ -94,17 +98,23 @@ type readWatch struct {
 	r  *Runner
 	in io.Reader
 	// fd is the descriptor the read names — its `-u` number, the
-	// coprocess's for `-p`, and 0 for standard input — and counted is a
-	// read that reads to a count rather than to a delimiter. Only
-	// ReadAbandonedOnlyAtTheStartOfALine looks at either.
+	// coprocess's for `-p`, and 0 for standard input — counted is a read
+	// that reads to a count rather than to a delimiter, and exact one whose
+	// count is `-N`'s. Only ReadAbandonedOnlyAtTheStartOfALine looks at
+	// them.
 	fd      int
 	counted bool
+	exact   bool
 	// reading is the dialect's answer, and asked says it has been asked.
 	reading ReadAbandonmentReading
 	asked   bool
 	// inLine is true once a byte of the current line has been read, and
 	// false again after a newline.
 	inLine bool
+	// firstByte is arrivalMark as the read took its first byte: the
+	// arrivals before it do not give a `-N` read up, in the reading that
+	// tells them apart.
+	firstByte int
 	// began is arrivalMark as the read began: the arrivals before it are not
 	// the read's, in the readings that tell the two apart.
 	began int
@@ -163,8 +173,8 @@ const (
 // that read: no signal is trapped, and no fatal signal from outside could be
 // handed over either — or the stream is a regular file, whose reads do not
 // wait for anybody.
-func (r *Runner) readWatchFor(ctx context.Context, in io.Reader, fd int, counted bool) (*readWatch, bool) {
-	if w, ok := r.trapWatchFor(ctx, in, fd, counted); ok {
+func (r *Runner) readWatchFor(ctx context.Context, in io.Reader, fd int, counted, exact bool) (*readWatch, bool) {
+	if w, ok := r.trapWatchFor(ctx, in, fd, counted, exact); ok {
 		return w, true
 	}
 	if w, ok := r.goesOnWatchFor(ctx, in); ok {
@@ -175,11 +185,11 @@ func (r *Runner) readWatchFor(ctx context.Context, in io.Reader, fd int, counted
 
 // trapWatchFor is readWatchFor for the trapped signals, in the dialect whose
 // reads they give up.
-func (r *Runner) trapWatchFor(ctx context.Context, in io.Reader, fd int, counted bool) (*readWatch, bool) {
+func (r *Runner) trapWatchFor(ctx context.Context, in io.Reader, fd int, counted, exact bool) (*readWatch, bool) {
 	if r.sem().ReadIsAbandonedByATrappedSignal != Yes || !r.anySignalTrapped() || neverWaits(in) {
 		return nil, false
 	}
-	return &readWatch{r: r, in: in, fd: fd, counted: counted, began: r.arrivalMark(), ctx: ctx}, true
+	return &readWatch{r: r, in: in, fd: fd, counted: counted, exact: exact, began: r.arrivalMark(), ctx: ctx}, true
 }
 
 // goesOnWatchFor is readWatchFor for the trapped signals, in the dialect whose
@@ -223,8 +233,8 @@ func neverWaits(in io.Reader) bool {
 // stop that read early: readWatchFor's, with the wait for the first byte of a
 // read that goes on also one a trapped signal may end. See
 // Semantics.ReadTimeoutWaitEndedByATrappedSignal.
-func (r *Runner) timedReadWatchFor(ctx context.Context, in io.Reader, fd int, counted bool) *readWatch {
-	w, ok := r.readWatchFor(ctx, in, fd, counted)
+func (r *Runner) timedReadWatchFor(ctx context.Context, in io.Reader, fd int, counted, exact bool) *readWatch {
+	w, ok := r.readWatchFor(ctx, in, fd, counted, exact)
 	if !ok {
 		return nil
 	}
@@ -291,9 +301,28 @@ func (w *readWatch) atTheNextByte() bool {
 // that has arrived, mark being where the arrivals that count start: the
 // current wait's for a line read, and nil where no byte is being waited for.
 // handled is false where the reading falls back to the next byte.
+//
+// A `-N` read of standard input is never given up, and one of any other
+// number only by a signal that arrives once it has taken a byte. Measured
+// 2026-10-31 on ksh93u+, `ab` waiting, INT 0.3 s into the read and `cd` and
+// `end` half a second after, ten runs a row: `read -r -N 4 l` is `T, st=0
+// l=[abcd]` on an inherited pipe or fifo, with `-u0`, after `exec 0<fifo`,
+// from `<&3` and from its own `<fifo`, and with nothing waiting it reads on
+// to `cd` and a newline. `-n 4` on each of those is given up, `st=0 l=[ab]`.
+// `read -r -N 4 -u3 l` — 3 opened, a copy, or `exec 3<&0` on the same pipe —
+// is given up at 258 with `ab` in, and reads on to `cd` and a newline with
+// nothing; `exec 3<>fifo` and `exec 0<>fifo` are open both ways, given up at
+// 258 either way (#7177).
 func (w *readWatch) startOfALine(mark *int) (sig syscall.Signal, gives, handled bool) {
 	if w.openBothWays() {
 		return 0, false, false
+	}
+	if w.exact {
+		if w.fd == 0 || !w.started {
+			return 0, false, true
+		}
+		sig, gives = w.r.pendingTrapFrom(w.firstByte)
+		return sig, gives, true
 	}
 	if w.counted || w.atTheNextByte() {
 		sig, gives = w.r.pendingTrapFrom(w.began)
@@ -483,7 +512,7 @@ func (w *readWatch) runHandlers() bool {
 	r.statusBefore = r.status
 	r.runPendingTraps(w.ctx)
 	r.statusBefore = before
-	w.began = 0
+	w.began, w.firstByte = 0, 0
 	return r.ctl != controlNone || r.unspecified
 }
 
@@ -543,6 +572,9 @@ func (w *readWatch) track(read func() (byte, int)) func() (byte, int) {
 		if ev != evByte {
 			ended, last = true, ev
 			return b, ev
+		}
+		if !w.started && w.exact {
+			w.firstByte = w.r.arrivalMark()
 		}
 		w.inLine = b != '\n'
 		w.started = true

@@ -6809,7 +6809,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// up (#7027), and in the others may still end its wait for the first
 		// byte as the deadline would (#7032), or stop it to run its handler
 		// (#7031).
-		watch := r.timedReadWatchFor(ctx, in, readsFrom, count >= 0)
+		watch := r.timedReadWatchFor(ctx, in, readsFrom, count >= 0, exact)
 		if polled, can := polledTimedSource(ctx, in, timeout, whole, watch); can {
 			next = polled
 			break
@@ -6824,10 +6824,20 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// stops to run its handler in the middle of, in the dialect that
 		// does that. See Semantics.ReadIsAbandonedByATrappedSignal and
 		// Semantics.ReadHandlersRun.
-		if watch, ok := r.readWatchFor(ctx, in, readsFrom, count >= 0); ok && !buffered {
+		if watch, ok := r.readWatchFor(ctx, in, readsFrom, count >= 0, exact); ok && !buffered {
 			src, stop := r.trapInterruptibleByteSource(in, watch)
 			next = src
 			defer stop()
+		}
+	}
+	// What a `-N` read a trapped signal gave up had taken from this number,
+	// in the dialect that keeps it, is read ahead of the stream (#7177). See
+	// Runner.keptRead.
+	var kept *keptFirst
+	if coprocSource < 0 && !readsKeys && !buffered && !stuck {
+		if held := r.keptRead(readFd, stream); held != "" {
+			kept = &keptFirst{kept: held, next: next}
+			next = kept.read
 		}
 	}
 	if query {
@@ -6848,6 +6858,12 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			r.countsTheLocalesCharacters, r.readCharacterWidth)
 	}
 	giveBack()
+	// What this read did not take of the kept bytes is still the number's.
+	left := ""
+	if kept != nil {
+		left = kept.rest()
+		r.keepRead(readFd, stream, left)
+	}
 	if r.unspecified {
 		return 2
 	}
@@ -6921,7 +6937,9 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		}
 	case endEOF:
 		status = 1
+		givenUp := false
 		if sig := r.readAbandonedBy; sig != 0 {
+			givenUp = true
 			// Given up for a trapped signal rather than at the end of the
 			// input, which one dialect reports as the signal: 256 plus its
 			// number. See Semantics.ReadAbandonedReportsTheSignal.
@@ -6953,6 +6971,21 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		}
 		switch {
 		case exact:
+			// Given up for a trapped signal, what it took may be the next
+			// read's, in the dialect that keeps it: `read -r -N 4 -u3 l`
+			// over `ab` with INT is 258 there, l empty, and the next `read
+			// -u3` has `abcd` (#7177). Asked only where a signal gave a `-N`
+			// read up having taken something.
+			if givenUp && text != "" && coprocSource < 0 && !readsKeys && !buffered &&
+				r.sem().ReadIsAbandonedByATrappedSignal == Yes {
+				if r.ask(r.sem().ReadExactCountGivenUpKeepsWhatItTook,
+					"a `read -N` a trapped signal gave up keeping what it took for the next read") {
+					r.keepRead(readFd, stream, text+left)
+				}
+				if r.unspecified {
+					return 2
+				}
+			}
 			// Both shells with the letter report the short read; whether
 			// the partial text survives into the variable splits them.
 			if text != "" && !r.ask(r.sem().ReadExactCountKeepsPartial,

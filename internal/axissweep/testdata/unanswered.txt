@@ -259,6 +259,7 @@ ash   ProducedIntegerReadsInItsBase
 ash   ReadArrayDefault
 ash   ReadArrayTakesOneNameOnly
 ash   ReadEchoLettersWriteTheValues
+ash   ReadExactCountGivenUpKeepsWhatItTook
 ash   ReadExactCountKeepsPartial
 ash   ReadTypedValueFailureIsAnAssignmentFailure
 ash   RefusedPlacementKeepsWhatTheLiteralPlaced
@@ -681,6 +682,7 @@ dash  ReadCountOfAPipeExecOpenedFindsItsEnd
 dash  ReadCountOfZeroIsNoCount
 dash  ReadDelimiterIsTheLocalesCharacter
 dash  ReadEchoLettersWriteTheValues
+dash  ReadExactCountGivenUpKeepsWhatItTook
 dash  ReadExactCountKeepsPartial
 dash  ReadPartialCountSucceeds
 dash  ReadTimeoutBoundsReadability
@@ -899,6 +901,7 @@ zsh   ReadCountFillsTheFirstNameWhole
 zsh   ReadCountJudgesTheNamesAfterTheFirst
 zsh   ReadCountOfAPipeExecOpenedFindsItsEnd
 zsh   ReadCountOfZeroIsNoCount
+zsh   ReadExactCountGivenUpKeepsWhatItTook
 zsh   ReadExactCountKeepsPartial
 zsh   ReadPartialCountSucceeds
 zsh   ReadonlyReferenceLetter

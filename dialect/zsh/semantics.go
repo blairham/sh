@@ -3523,6 +3523,8 @@ func Semantics() interp.Semantics {
 	// 2026-10-31 on zsh 5.9 — and never reaches the question.
 	// unanswered ReadCountAtTheEndSticksTheDescriptor: the same reason; a
 	// `-k 4 -u 3` at the end is 1 and the read after it 1 again.
+	// unanswered ReadExactCountGivenUpKeepsWhatItTook: `read -N` is a bad
+	// option here, and a read goes on through a trapped signal besides.
 	// This shell's `-n` is a flag rather than a count and its `-k` reads
 	// from the terminal — `printf 'XYZW\n' | zsh -c 'read -k 3 a'` answers
 	// `not interactive and can't open terminal` — so no count ever reaches

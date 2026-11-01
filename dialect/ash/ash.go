@@ -2336,6 +2336,9 @@ func Semantics() interp.Semantics {
 	s.ErrExitEntersACommandSubstitution = interp.No
 	s.ChildInterruptEndsTheScript = interp.No
 	s.SubshellRunsOnAfterSignalingTheShell = interp.Yes
+	// Not measured with the signal trapped (#7168), and the fork above is
+	// the reason the subshell would run on.
+	s.SubshellEndsWhenItSendsTheShellATrappedSignal = interp.No
 	// Only numbers and the `%%`, `%+`, `%-` forms resolve; `%name` is a job
 	// that is not there, and `wait`, `jobs`, `fg` and `bg` each say so.
 	s.JobSpecsByName = interp.No

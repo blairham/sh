@@ -1255,6 +1255,9 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 		// and Semantics.SelfAimedChildSignalRunsTheTrap (#4756).
 		if r.selfAimedSignalIsTheCondition(key) {
 			r.selfSignaled(key)
+			// And the subshell it came from ends, in the dialect that runs
+			// it in the shell's own process. See subshelltrappedsignal.go.
+			r.endsTheSubshellOnATrappedSignal(sig)
 		}
 	case trapped:
 		// An ignore: `trap '' NAME` leaves an entry with an empty body, and

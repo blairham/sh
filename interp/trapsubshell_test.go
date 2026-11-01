@@ -31,6 +31,7 @@ func trapSem() Semantics {
 	s.KeptTrapListingIncludesExit = Yes
 	s.SubshellHidesInheritedIgnoredTraps = No
 	s.SubshellRunsOnAfterSignalingTheShell = Yes
+	s.SubshellEndsWhenItSendsTheShellATrappedSignal = No
 	return s
 }
 

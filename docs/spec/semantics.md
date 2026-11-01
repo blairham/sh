@@ -3601,6 +3601,69 @@ reached while the script is running, and only by a `kill` at the shell's
 own pid from inside a subshell, so an unanswered preset refuses there and
 nowhere else.
 
+### And a signal the shell has trapped
+
+    trap 'echo T' USR1; (kill -USR1 $$; echo in); echo "after $?"
+
+    ksh93  → T, after 286          bash 5.3, zsh 5.9, dash → in, T, after 0
+
+`Semantics.SubshellEndsWhenItSendsTheShellATrappedSignal` — ksh93 yes ·
+bash no · zsh no · dash no; ash no, unmeasured (there is no BusyBox here).
+Measured 2026-11-01 under `-c`, five runs of each row, identical every time
+(#7168).
+
+The same reason as above: in ksh93 the signal lands on the subshell. It ends
+there as a command killed by the signal (256 + N), and the handler runs in the
+shell once it is over. Each row has `trap 'echo T' USR1` in front of it:
+
+    row                                              ksh93            here, before      here, after
+    (kill -USR1 $$; echo in)                         T, after 286     in, T, after 0    as ksh93
+    x=$(kill -USR1 $$; echo in)                      T, 286, x empty  T, 0, x=in        as ksh93
+    { kill -USR1 $$; echo in; }                      T, in, after 0   as ksh93          as ksh93
+    : | (kill -USR1 $$; echo in)                     T, after 286     in, T, after 0    as ksh93
+    ( (kill -USR1 $$; echo in1); echo in2 )          T, after 286     in1, in2, T, 0    as ksh93
+    ( x=$(kill -USR1 $$; echo in); echo in2 )        T, after 286     in2, T, after 0   as ksh93
+    f() { kill -USR1 $$; echo inf; }; (f; echo in)   T, after 286     inf, in, T, 0     as ksh93
+    trap 'x=1' USR1, then the subshell               x=1 afterwards   x=1               as ksh93
+    (y=in; kill …), handler `echo T $y`              T, y empty       in, T, y empty    as ksh93
+    TERM trapped, (kill $$; echo in)                 T, after 271     in, T, after 0    as ksh93
+
+The issue's row, `HUP`, `USR1` and `USR2` all trapped and `(kill -USR2 $$;
+echo in1; kill -HUP $$; echo in2; kill -USR1 $$; echo in3)`, is `USR2` and
+`after 287` in ksh93 and now here: only the first signal counts, because
+nothing after it in the subshell runs.
+
+**Keyed on the subshell being in the shell's own process, and on the pid
+being `$$`.** The group row holds the pid fixed and drops the subshell, and
+nothing splits. `(kill -USR1 $$; echo in) | cat` holds both fixed and makes
+the subshell a pipeline element ksh93 forks: it runs on there (`T`, `in`,
+`after 0`). And ksh93u+ has no `${.sh.pid}` (a usage error there and here), so
+the other half of the pair — a subshell aiming at a number of its own — cannot
+be written in it; in bash and zsh that route is #7233's.
+
+**Recorded, not modeled.** Our answers are pinned, `trap 'echo T' USR1` in
+front of each row but the second:
+
+    row                                              ksh93                       here
+    (exit 5); (kill …), handler `echo T $?`          T 5, after 286              T 286, after 286
+    trap '' USR1; (kill -USR1 $$; echo in)           Trace/BPT trap, after 261   in, after 0
+    (trap 'echo S' USR1; kill -USR1 $$; echo in)     Trace/BPT trap, after 261   T, after 286
+    (kill -USR1 $$ $$; echo in)                      T, after 286                T, T, after 286
+    (kill -USR1 $$; echo in) | cat                   T, in, after 0              in, T, after 0
+
+The handler reads the status from before the `kill` in ksh93 (`(false; kill
+…)` shows `T 1`); here it runs at the shell's next command and reads the
+subshell's. The two `Trace/BPT trap` rows are ksh93 ending the parentheses at
+the number of SIGTRAP, with a notice naming it, whenever the shell ignores
+the signal or the subshell has set a trap of its own for it — nothing this
+shell can model as a rule about the signal that was sent. `$$ $$` queues two
+arrivals here at the top level too, which is #7166's question. The pipeline
+row is the shell running its handler while it waits for the element, which
+is the forked route and not this one.
+
+The untrapped, fatal half of the in-process route — which EXIT trap runs as
+the shell dies — is #7153.
+
 
 ## What a shell with no child subshells reports for a pid
 

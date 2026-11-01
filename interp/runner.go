@@ -2243,6 +2243,10 @@ type Runner struct {
 	// heldInterruptDeath says this runner died of an interrupt held inside
 	// parentheses, which its parent dies of too.
 	heldInterruptDeath bool
+	// endedByATrappedSignal says this runner is a subshell a trapped signal
+	// it sent the shell ended, which the unforked subshell around it ends
+	// over too. See subshelltrappedsignal.go.
+	endedByATrappedSignal bool
 	// locatesFunctions is whether a names-only function listing says where
 	// each function was defined — see Runner.LocatesFunctions.
 	locatesFunctions bool
@@ -6254,7 +6258,7 @@ func (r *Runner) clone() *Runner {
 	// put its nil back over the front end's the next time it starts a job.
 	// See jobEndedHook.
 	c.jobEndedHook = nil
-	c.inParensBody, c.heldInterruptDeath = false, false
+	c.inParensBody, c.heldInterruptDeath, c.endedByATrappedSignal = false, false, false
 	// And one boundary further from the shell that was started. The flag
 	// above cannot answer this: it is already true in a subshell of a
 	// subshell, and a dialect that names the count needs to tell those two

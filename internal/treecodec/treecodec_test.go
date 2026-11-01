@@ -9,6 +9,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -23,6 +24,7 @@ import (
 	"github.com/blairham/sh/dialect/ksh"
 	"github.com/blairham/sh/dialect/zsh"
 	"github.com/blairham/sh/internal/oracle"
+	"github.com/blairham/sh/internal/testenv"
 	"github.com/blairham/sh/internal/treecodec"
 	"github.com/blairham/sh/syntax"
 )
@@ -65,14 +67,52 @@ func texts(t *testing.T) []string {
 	return out
 }
 
+// dialectNames are the dialects' names in a fixed order, so that each is given
+// the same share of the texts on every run — see textsFor.
+func dialectNames() []string {
+	return slices.Sorted(maps.Keys(dialects()))
+}
+
+// textsFor is the texts the k-th grammar reads: all of them, except under the
+// race detector, where it is every raceStride()-th text starting at k.
+//
+// TestATreeComesBackAsTheParserMadeIt reads the texts this way. It runs in one
+// goroutine, so the detector has nothing to compare in it and can find
+// nothing, and it cost 49s of this package's 69s on a hosted ubuntu runner
+// (#7290). Every run without -race — CI's macOS leg, `make test` — still reads
+// every text in every grammar, so the codec's claim is proved whole on every
+// pull request. TestOnlyTheListedFieldsShare does not: the sharing its control
+// needs is in a handful of texts, and a sample misses them.
+func textsFor(all []string, k int) []string {
+	if !testenv.RaceDetector {
+		return all
+	}
+	var out []string
+	for i := k; i < len(all); i += raceStride() {
+		out = append(out, all[i])
+	}
+	return out
+}
+
+// raceStride is how far apart the texts are that a grammar reads under the
+// race detector, and 1 without it. Wider than the number of grammars, so that
+// each reads texts none of the others does.
+func raceStride() int {
+	if testenv.RaceDetector {
+		return 30
+	}
+	return 1
+}
+
 // TestATreeComesBackAsTheParserMadeIt is the codec's whole claim: every tree
 // the parser makes of every text in the repository, in every grammar, read
 // back equal to itself — and sharing what it shared.
 func TestATreeComesBackAsTheParserMadeIt(t *testing.T) {
 	all := texts(t)
 	trees, refused, deferred := 0, 0, 0
-	for name, d := range dialects() {
-		for _, src := range all {
+	for k, name := range dialectNames() {
+		d := dialects()[name]
+		for _, src := range textsFor(all, k) {
 			p := syntax.NewParser(src, d)
 			for {
 				f, ok := p.NextLine()
@@ -106,12 +146,12 @@ func TestATreeComesBackAsTheParserMadeIt(t *testing.T) {
 	// The refusals are the trees holding a deferred refusal, which a cache
 	// does not keep. They are few; if they were most, the cache would be
 	// keeping nothing and this test would be passing on nothing.
-	if trees < 50000 || refused > trees/20 {
+	if trees < 50000/raceStride() || refused > trees/20 {
 		t.Fatalf("%d trees carried and %d refused", trees, refused)
 	}
 	// And bodies came back deferred, so the comparison above covered the
 	// read that happens when a function is first called (#6483).
-	if deferred < 1000 {
+	if deferred < 1000/raceStride() {
 		t.Fatalf("only %d bodies came back deferred", deferred)
 	}
 }

@@ -44,18 +44,19 @@ func freshProgramCache(t *testing.T) {
 }
 
 // factOutcomes runs every substitution and longest trim the corpus has under
-// o, with the written-arm reading taken, and returns everything each one
-// handed back.
+// o, the k-th reading, with the written-arm reading taken, and returns
+// everything each one handed back. Under the race detector that is the
+// reading's share of the corpus — see casesForReading.
 //
 // The cases run side by side (see eachInParallel), each one's subjects in
 // order, and the answers come back in the order the corpus lists them.
-func factOutcomes(o patternOpts) []string {
+func factOutcomes(o patternOpts, k int) []string {
 	arm := armOrder{answer: Yes, ask: func() bool { return true }}
 	with := func(m matchReport, text string) string {
 		return fmt.Sprintf("<%s|%v|%v>", text, m.groups, m.whole)
 	}
 	declined := func() EmptyMatchDeclinedPolicy { return EmptyMatchDeclinedAtTheEnd }
-	cases := allProgramCases()
+	cases := casesForReading(allProgramCases(), k)
 	cases = append(cases, armFactCases...)
 	each := make([][]string, len(cases))
 	eachInParallel(len(cases), func(n int) {
@@ -92,12 +93,12 @@ func factOutcomes(o patternOpts) []string {
 func TestTheKeptFactsAnswerWhatAFreshReadingAnswers(t *testing.T) {
 	defer func(c bool) { patternFactsCached = c }(patternFactsCached)
 	freshProgramCache(t)
-	for _, rd := range programReadings() {
+	for k, rd := range programReadings() {
 		patternFactsCached = false
-		want := factOutcomes(rd.o)
+		want := factOutcomes(rd.o, k)
 		patternFactsCached = true
-		cold := factOutcomes(rd.o)
-		warm := factOutcomes(rd.o)
+		cold := factOutcomes(rd.o, k)
+		warm := factOutcomes(rd.o, k)
 		for i := range want {
 			if cold[i] != want[i] || warm[i] != want[i] {
 				t.Errorf("%s: outcome %d is %q kept cold and %q kept warm, %q read afresh",
@@ -113,11 +114,11 @@ func TestTheKeptFactsAnswerWhatAFreshReadingAnswers(t *testing.T) {
 func TestTheArmShortcutAnswersWhatTheSearchAnswers(t *testing.T) {
 	freshProgramCache(t)
 	defer func(d bool) { armShortcutDisabled = d }(armShortcutDisabled)
-	for _, rd := range programReadings() {
+	for k, rd := range programReadings() {
 		armShortcutDisabled = true
-		want := factOutcomes(rd.o)
+		want := factOutcomes(rd.o, k)
 		armShortcutDisabled = false
-		got := factOutcomes(rd.o)
+		got := factOutcomes(rd.o, k)
 		for i := range want {
 			if got[i] != want[i] {
 				t.Errorf("%s: outcome %d is %q with the shortcut, %q without", rd.name, i, got[i], want[i])

@@ -22077,9 +22077,16 @@ In ksh93:
 
 Not modeled: ksh93 also catches a signal it has ever had a trap of its own
 for — `trap 'echo t' TERM` at the top, or set and taken away — and ends a
-`function` call on it with the caller's handler unrun; and an ignored
-signal stays ignored inside the call, where this shell's `function` call
-takes the ignore away with the rest of the trap table (#7156, #7157).
+`function` call on it with the caller's handler unrun (#7156).
+
+An ignored signal stays ignored inside the call. That is not this axis but
+the call's trap table, which is empty of the caller's handlers and keeps
+its ignores: `trap '' TERM; function f { kill -TERM $$; echo inf; }; f;
+echo "after $?"` writes `inf` and `after 0` in ksh93, with TERM from
+another process during a `sleep` in the body as well, and `trap` inside the
+call lists `trap -- '' TERM`. A body that sets a handler for the signal or
+resets it has the ignore back after the return. Measured 2026-11-01, each
+shell in a session of its own (#7157).
 
 **`SignalDeathWaitsForAnUnforkedSubshell`** — bash no · dash no · ksh93
 yes · zsh no · ash no

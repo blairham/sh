@@ -39230,6 +39230,11 @@ const (
 	//     `function g { trap 'echo I' USR1; }; g; kill -USR1 $$` kills the
 	//     shell, so the return clears what the body raised as well as
 	//     putting back what it displaced.
+	//
+	// The table is empty of the caller's *handlers*: an ignore stays in it.
+	// `trap '' TERM; function f { kill -TERM $$; echo inf; }; f` writes
+	// `inf` and lists `trap -- '' TERM` inside the call, measured 2026-11-01
+	// (#7157). See localtraps.go.
 	TrapsGoBackAtTheReturnOfAKeywordFunction
 )
 

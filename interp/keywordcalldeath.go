@@ -58,8 +58,9 @@ import "syscall"
 // is not the one that ends.
 //
 // Not modeled: ksh93 also catches a signal it has ever had a trap of its own
-// for, and ends a call on it with the caller's handler unrun (#7156); and an
-// ignored signal stays ignored inside the call (#7157).
+// for, and ends a call on it with the caller's handler unrun (#7156). An
+// ignored signal stays ignored inside the call, which is the call's trap table
+// keeping the caller's ignore: see localtraps.go (#7157).
 
 // takenDeath is where the death the shell is unwinding for was taken — the
 // depth of the calls standing — and the status the shell held there.

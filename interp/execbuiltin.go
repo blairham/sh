@@ -200,6 +200,11 @@ func (r *Runner) replaceSelfWith(ctx context.Context, argv []string, flags execF
 		// under an open descriptor is the ordinary case here, not a race.
 		// Where the replacement starts, read while the shell still holds its
 		// directory: cleanUpAtEnd lets go of that hold.
+		// The pipeline elements this shell left running are goroutines and
+		// would go with the process, where ksh93's are processes that outlive
+		// it, so they finish first — as they did when a pipeline waited for
+		// them. See strayelements.go.
+		r.strays.join()
 		dir, releaseDir := r.dirForReplacement()
 		defer releaseDir()
 		r.cleanUpAtEnd()

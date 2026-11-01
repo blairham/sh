@@ -179,9 +179,9 @@ func (r *Runner) timeClause(ctx context.Context, tc *syntax.TimeClause) error {
 	}
 	start := time.Now()
 	if tc.Pipeline != nil {
-		r.timedPipeline = timing
+		r.timedPipeline, r.timedClause = timing, true
 		err := r.expr(ctx, tc.Pipeline)
-		r.timedPipeline = nil
+		r.timedPipeline, r.timedClause = nil, false
 		if err != nil {
 			return err
 		}

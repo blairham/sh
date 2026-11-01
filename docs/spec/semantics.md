@@ -57,6 +57,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | `echo` expands backslashes | **yes** | no | no | **yes** |
 | glob with no match | passes pattern | passes pattern | passes pattern | **error** |
 | last pipeline element runs in | subshell | subshell *(current shell under `shopt -s lastpipe`, monitor off)* | **current shell** | **current shell** |
+| a pipeline waits for | every element | every element | **its last element** *(every element under `set -m`, `set -o pipefail` or `time`)* | every element |
 | `$0` inside a function | shell name | shell name | shell name | **function name** |
 | `local` builtin | yes | yes | **absent** | yes |
 | `unset` of a name a *calling* function made local | unset until that call returns | **the binding goes, and the next scope out shows through** *(unset until that call returns, under `shopt -s localvar_unset`)* | *static scope* | unset until that call returns |
@@ -4997,6 +4998,80 @@ reports it as a command that was not found. A dialect says so through the
 extension seam — `dialect/ksh` calls `Unregister("local")` — which is the
 same mechanism anything built on the substrate would use, the difference
 being that this one takes something away.
+
+## A pipeline that ends with its last element
+
+POSIX has the shell wait for a pipeline's last command, and says it "may
+also wait for all commands to complete". Five of the six columns wait for
+all of them. ksh93 waits for the last one only: an earlier element that is
+still running goes on running while the shell runs the next command (#7169).
+
+Measured 2026-11-01, `-c` and a script file alike, both streams on one pipe:
+
+    { /bin/sleep 0.3; echo first >&2; } | LAST; echo after
+
+| `LAST` | ksh93u+ 2012-08-01 | bash 5.3.20 · bash 3.2.57 · zsh 5.9.2 · dash · BusyBox ash 1.37.0 |
+| --- | --- | --- |
+| `:`, `true`, `/usr/bin/true`, `echo x >/dev/null`, `( :; )` | `after`, `first` | `first`, `after` |
+| `/bin/cat` | `first`, `after` | `first`, `after` |
+
+The last element being a builtin, or running in the shell, does not decide
+it. A last element that reads the pipe to its end cannot end first, so there
+is nothing to tell apart. The same rows hold inside a function, a `( … )`, a
+command substitution and under `!`.
+
+ksh93 waits for every element with `set -o pipefail`, since the status needs
+them all (`first`, `after 3` with the first element ending at 3); with the
+monitor on, from `-c` as at a prompt; and under `time`. An interactive shell
+started with `-i` waits, and the same shell after `set +m` does not, so it is
+the monitor and not interactivity.
+
+What comes after it:
+
+- `$?` is the last element's status.
+- A bare `wait` waits for the elements still running, and returns 0.
+- ksh93 lists each of them as a job, `[1] + Running <command unknown>`, still
+  `Running` after they have ended, and numbers a later `&` job after them;
+  `wait %1` returns 0 at once. Not modeled: this shell lists none of them
+  (#7235).
+- A backgrounded pipeline, `… | : & wait`, does not wait for the earlier
+  element in ksh93 either. Not modeled: here the job waits for every
+  element (#7235).
+- ksh93 exits without waiting, and the element, being a process, writes
+  after the shell has gone.
+
+That last row is where an element being a goroutine here shows. A `&` job
+whose remaining work is the shell's own is lost when the process ends, and
+that was decided rather than fixed (#519; see "A background job and the end
+of the shell"). A pipeline had no such loss before this, because it waited,
+so the shell at the top waits for the elements it left running once its EXIT
+trap has run, and so do `exec` and a command string's last program before
+they replace the process. The output is
+ksh93's, in ksh93's order; the process exits when it did before. An element
+left running stops touching the shell's own state from the moment the
+pipeline ends: an element that ends in time is noticed as any element is,
+and one that ends later is not, and the two are decided under one lock.
+
+An element is left running only where everything it inherits is a
+descriptor it can hold a copy of, as ksh93's process holds its own: its
+input, its error stream and the rest of the table. Then what it writes late
+still reaches a file a redirection around the pipeline has closed since, and
+a reader waiting for the stream to end waits for it — `{ { sleep 0.3; echo
+first >&2; } | :; } 2>f` leaves `first` in `f`, and `{ { sleep 0.3; echo
+first >&2; } | :; echo after; } 2>&1 | cat; echo end` is `after`, `first`,
+`end`, as in ksh93. Where the error stream is not a descriptor — the value a
+`$( … )` is collecting, or an embedder's io.Writer — there is nothing to
+copy, and the pipeline waits for every element. ksh93 is seen to wait there
+too: `x=$( { { sleep 0.3; echo first >&2; } | :; echo after; } 2>&1 )` holds
+`first` and then `after`, where the same pipeline writing to the terminal
+from inside `$( … )` does not hold up the substitution.
+
+The axis, `PipelineEndsWithItsLastElement`, is read and not asked. The two
+answers differ only where an earlier element outlives the last one, and in an
+ordinary pipeline that is a matter of timing — in `yes | head -1`, `yes` goes
+on running after `head` has gone, until its next write fails — so a strict
+core asking there would refuse such pipelines or not depending on the
+scheduler. With no answer the shell waits for every element.
 
 ## A row in this table is not an implementation
 

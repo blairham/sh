@@ -777,6 +777,12 @@ type Runner struct {
 	bodies      *pendingBodies
 	ownsBodies  bool
 	procSubHome *procSubDirs
+	// strays holds the earlier elements of each pipeline that ended with its
+	// last element and left them running, in the dialect that does. Shared
+	// with every clone, like bodies, and joined by the runner that owns it
+	// when it ends. See strayelements.go.
+	strays     *strayElements
+	ownsStrays bool
 	// pipeEnd is set on the runner that is a process substitution's *body*,
 	// and is the end of that substitution's pipe the shell holds. It is
 	// there so a job the body backgrounds can keep the pipe open past the
@@ -2105,6 +2111,10 @@ type Runner struct {
 	// pipeline element, and consumed by the next pipeline dispatched — the
 	// clause's own body and nothing nested inside it.
 	timedPipeline *pipelineTiming
+	// timedClause is set by every `time` clause, whatever its layout, and
+	// consumed the same way: a timed pipeline waits for all its elements.
+	// See Semantics.PipelineEndsWithItsLastElement.
+	timedClause bool
 	// elemCPU is where this runner's external commands add the CPU their
 	// processes used, while a per-element `time` report is collecting. Nil
 	// almost always; a clone inherits it, so a subshell inside a timed
@@ -6336,6 +6346,14 @@ func (r *Runner) clone() *Runner {
 	// list of its own — see Runner.collectBodies, which is the one caller
 	// that asks for one.
 	c.ownsBodies = false
+	// The same for a pipeline's earlier elements left running, in the
+	// dialect that leaves them: made on the parent so that a subshell's
+	// elements are joined where the shell at the top ends. Only there, so
+	// the other dialects carry a nil. See strayelements.go.
+	if r.strays == nil && r.sem().PipelineEndsWithItsLastElement == Yes {
+		r.strays, r.ownsStrays = &strayElements{}, true
+	}
+	c.strays, c.ownsStrays = r.strays, false
 	// Every table the clone must own rather than share. One list, in one
 	// place, with a test that fails when a new one is added — see
 	// clonetables.go for why that is a check rather than a convention.
@@ -7752,6 +7770,10 @@ func (r *Runner) Finish(ctx context.Context) int {
 	// is what shipped: CleanUp existed, was tested, and was called by nothing
 	// outside interp's own suite, so every invocation of every dialect binary
 	// that used `<(…)` left its directory in /tmp. See #1284.
+	// The pipeline elements this shell left running, after the EXIT trap as
+	// ksh93 writes them and before anything below takes the streams away.
+	// See strayelements.go.
+	r.joinStrayElements()
 	// Before the directory goes, and after the EXIT trap has had its say —
 	// the trap writes to the shell's standard output, which for the shape
 	// this is about *is* the pipe a body is reading. See endHeldProcSubs.
@@ -8644,6 +8666,8 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 	if timing != nil {
 		timing.grow(p.Cmds)
 	}
+	timed := r.timedClause
+	r.timedClause = false
 	if p.Negated {
 		// A negated pipeline is a status being *tested*, so `set -e` is
 		// suspended for the whole of it — and the suspension is inherited,
@@ -8706,7 +8730,7 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 		r.recordSingleStatus(p)
 	} else {
 		before := r.line
-		if err := r.runPipeline(ctx, p, timing, quiet); err != nil {
+		if err := r.runPipeline(ctx, p, timing, timed, quiet); err != nil {
 			return err
 		}
 		// A pipeline is not a command, so nothing dispatched it and nothing

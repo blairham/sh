@@ -1718,6 +1718,12 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 		// than leaving it alone — measured, and the same rule the narrowed
 		// form follows when it finds nothing to wait for.
 		r.storeWaitedPID(opts, nil)
+		// And the elements this shell's pipelines left running, in the
+		// dialect that leaves them: they are children of this shell and of
+		// no job. See strayelements.go.
+		if sig, hit := r.waitForStrayElements(); hit {
+			return r.interruptedWaitStatus(sig, false)
+		}
 		if r.jobsInherited {
 			// And it does not wait for them either, which is the half a
 			// refusal would not have shown: measured, `( wait )` in that

@@ -87,7 +87,8 @@ func (r *Runner) reportKilled(sig syscall.Signal, pid int) {
 	if dg := r.diag(); dg.KilledCommandNoticeForATrappedSignal != "" && r.trapsTheSignal(sig) {
 		// A signal this shell has a trap for, which one dialect reports with
 		// neither the location nor the process id. Only on this route: a
-		// `wait` that reaps a job killed by it is a question of its own.
+		// `wait` that reaps a job killed by it is a question of its own,
+		// Diagnostics.WaitIsQuietForATrappedSignal.
 		r.noticef("%s\n", Wording(dg.KilledCommandNoticeForATrappedSignal, "%-27[1]s%[2]s",
 			r.signalDescription(sig), r.killedCommandText()))
 		return

@@ -51,3 +51,42 @@ func TestAJobASignalEndedIsNamedBySignal(t *testing.T) {
 		}
 	}
 }
+
+// A `wait` over a job killed by a signal the shell traps writes nothing, on
+// every route into it, where the same job killed by a signal the shell does
+// not trap is the located notice. Measured 2026-11-01 on bash 5.3.20, each
+// shell in a process group of its own (#7164). The pair holds the job fixed
+// and moves only whether the shell traps the signal it died of; the last two
+// rows move the trap across the job's death, and it is the table at the
+// `wait` that decides.
+func TestAWaitOverAJobKilledByATrappedSignalSaysNothing(t *testing.T) {
+	t.Parallel()
+	usr1 := "User defined signal 1: 30"
+	if runtime.GOOS != "darwin" {
+		usr1 = "User defined signal 1"
+	}
+	const job = `/bin/sh -c 'kill -USR1 $$' &`
+	notice := "bash: line 1: PID " + fmt.Sprintf("%-26s", usr1) + " /bin/sh -c 'kill -USR1 $$'\n"
+	died := "st=" + strconv.Itoa(128+int(syscall.SIGUSR1)) + "\n"
+	for _, tc := range []struct{ name, src, want string }{
+		{"wait $!", "trap 'echo T' USR1; " + job + " wait $!; echo st=$?", died},
+		{"another signal trapped", "trap 'echo T' USR2; " + job + " wait $!; echo st=$?", notice + died},
+		{"wait %1", "trap 'echo T' USR1; " + job + " wait %1; echo st=$?", died},
+		{"bare wait", "trap 'echo T' USR1; " + job + " wait; echo st=$?", "st=0\n"},
+		{
+			"trapped after it died",
+			job + " /bin/sleep 0.3; trap 'echo T' USR1; wait $!; echo st=$?", died,
+		},
+		{
+			"untrapped after it died",
+			"trap 'echo T' USR1; " + job + " /bin/sleep 0.3; trap - USR1; wait $!; echo st=$?", notice + died,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := runBash(t, t.TempDir(), tc.src)
+			if got := pidRun.ReplaceAllString(out, " PID "); got != tc.want {
+				t.Errorf("%s\n got %q\nwant %q", tc.src, got, tc.want)
+			}
+		})
+	}
+}

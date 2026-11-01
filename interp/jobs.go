@@ -1621,10 +1621,13 @@ func (r *Runner) noticeWaitedSignalIn(j *Job, status int, notice string) {
 		return
 	}
 	if quietSignal(syscall.Signal(sig)) ||
-		(syscall.Signal(sig) == syscall.SIGTERM && r.diag().WaitIsQuietForTerminate) {
-		// The deaths no column remarks on, and the one a dialect's `wait`
-		// keeps quiet where its foreground route speaks. See
-		// Diagnostics.WaitIsQuietForTerminate.
+		(syscall.Signal(sig) == syscall.SIGTERM && r.diag().WaitIsQuietForTerminate) ||
+		(r.diag().WaitIsQuietForATrappedSignal && r.trapsTheSignal(syscall.Signal(sig))) {
+		// The deaths no column remarks on, and the ones a dialect's `wait`
+		// keeps quiet where its foreground route speaks: a TERM, and a
+		// signal the shell traps as it waits. See
+		// Diagnostics.WaitIsQuietForTerminate and
+		// Diagnostics.WaitIsQuietForATrappedSignal.
 		return
 	}
 	said := r.status

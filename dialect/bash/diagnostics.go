@@ -212,9 +212,13 @@ func Diagnostics() interp.Diagnostics {
 		// A job a signal ended is named by the signal, the host's words
 		// and its number: `Terminated: 15`. Measured 2026-10-02 on bash
 		// 5.3.20 (#5389).
-		JobSignaled:              "%[1]s",
-		WaitIsQuietForTerminate:  true,
-		JobRunningShowsAmpersand: true,
+		JobSignaled:             "%[1]s",
+		WaitIsQuietForTerminate: true,
+		// And a `wait` over a job killed by a signal the shell traps writes
+		// nothing at all, where the foreground route writes the bare notice
+		// above (#7164).
+		WaitIsQuietForATrappedSignal: true,
+		JobRunningShowsAmpersand:     true,
 		// ^Z prints the listing's own row — JobStoppedNotice is left empty
 		// for that — under a newline of its own, because the terminal has
 		// just echoed `^Z` where the cursor was.

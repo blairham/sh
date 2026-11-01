@@ -6012,7 +6012,19 @@ func (r *Runner) declareEmpty(name string, fresh, keepsTheEnvironmentEntry, name
 		// plain scalar store here would ask scalarOverCompound whether to
 		// replace the compound the same declaration had brought into being,
 		// and in the dialect that replaces, `local -a opts` left a string.
-		r.setVarAs(name, "", assignedAsTheCompoundView)
+		//
+		// Where every question that road asks answers "nothing to do", the
+		// store is all it does, and that is most valueless declarations: the
+		// road was about a seventh of what each name in `local a b c d e`
+		// cost in zsh, the dialect that stores here (#6373). See
+		// Runner.storesPlainly for the questions and why this form's road
+		// answers them as an assignment's does.
+		if r.storesPlainly(name) {
+			r.releaseEnvCopy(name)
+			r.varsPut(name, "")
+		} else {
+			r.setVarAs(name, "", assignedAsTheCompoundView)
+		}
 		if owned {
 			// Cleared above, and this is the branch that would put it
 			// straight back.

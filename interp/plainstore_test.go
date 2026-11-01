@@ -92,6 +92,62 @@ func TestAPlainScalarStoreAnswersAsTheFullRoadDoes(t *testing.T) {
 	}
 }
 
+// plainDeclarationScript declares names with no value over the states a
+// valueless declaration's store must answer exactly as the full road does or
+// leave to it, in a vector where such a declaration sets the name to the empty
+// string: an unset name, a set one, an exported one, the integer and case
+// attributes, an array, a produced parameter, allexport, a redeclaration, the
+// names the store treats specially, and a reference standing anywhere, which
+// comes last because it turns the shortcut off for everything after it.
+const plainDeclarationScript = `p() { printf '[%s]' "$@"; echo; }
+dv=outer; de=exp; export de; typeset -i di=3; typeset -u du=abc; command eval 'da=(1 2)'
+f() { local dn dv de di du da; p "<${dn-unset}>" "<$dv>" "<$de>" "<$di>" "<$du>" "<$da>"
+  local dv; p "<$dv>"; di=2+3; du=xyz; p "$di" "$du"; set -a; local dx; set +a
+  case "$(export -p)" in *dx=*) echo dx-exported;; *de=*) echo de-exported;; *) echo none-exported;; esac
+  local COUNT OPTIND PATH IFS; p "<$COUNT>" "<$OPTIND>" "<${PATH-unset}>" "<${IFS-unset}>"; }
+f; p "$dv" "$de" "$di" "$du" "<${dn-unset}>" "${da[1]}"
+g() { local q; q=in; p "$q"; local q; p "<$q>"; }; g; p "<${q-unset}>"
+command eval 'typeset -n ref=dv'; h() { local dv; p "<$dv>" "<$ref>"; }; h; p "$dv"
+`
+
+// TestAPlainDeclarationStoreAnswersAsTheFullRoadDoes runs
+// plainDeclarationScript with the plain store on and off, and requires the
+// same output and status (#6373).
+func TestAPlainDeclarationStoreAnswersAsTheFullRoadDoes(t *testing.T) {
+	f, err := syntax.Parse(plainDeclarationScript, syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sem := plainParamVectors()["first element"]
+	sem.DeclaredNameWithoutValueIsEmpty = Yes
+	run := func(on bool) (string, int) {
+		was := SetPlainScalarStoreShortcutForTest(on)
+		defer SetPlainScalarStoreShortcutForTest(was)
+		var out strings.Builder
+		r := plainParamRunner(t, sem, &out)
+		st, err := r.Run(context.Background(), f)
+		if err != nil {
+			t.Fatalf("shortcut %v: %v", on, err)
+		}
+		return out.String(), st
+	}
+	full, fullStatus := run(false)
+	short, shortStatus := run(true)
+	if short != full || shortStatus != fullStatus {
+		t.Errorf("with the shortcut:\n%s(status %d)\nwithout it:\n%s(status %d)", short, shortStatus, full, fullStatus)
+	}
+	// The rows the comparison leans on: a valueless local holding the empty
+	// string rather than nothing, which is the branch the store is on, and
+	// the outer values back after the return.
+	for _, row := range []string{
+		"[<>][<>][<>][<>][<>]", "[<>]\n", "[outer][exp][3][ABC][<unset>]", "[in]\n[<in>]\n[<unset>]\n",
+	} {
+		if !strings.Contains(full, row) {
+			t.Errorf("the script did not reach %q:\n%s", row, full)
+		}
+	}
+}
+
 // TestThePlainScalarStoreIsReached says the comparison above compares
 // something: a bare assignment of a plain value to an ordinary name is
 // answered by the shortcut, and the states it must leave to the full road are

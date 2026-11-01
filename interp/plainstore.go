@@ -44,11 +44,31 @@ var plainScalarStoreShortcut = true
 // storesAPlainScalar reports whether the assignment is a plain store that
 // storePlainScalar may make in the full road's place.
 func (r *Runner) storesAPlainScalar(a *syntax.Assign) bool {
-	if !plainScalarStoreShortcut || a.Index != nil || a.IsArray || a.Members != nil || len(a.Leading) > 0 ||
+	if a.Index != nil || a.IsArray || a.Members != nil || len(a.Leading) > 0 ||
 		a.Member != "" || a.Append || a.EmptySubscript || a.Operand || a.IndexFlags != nil {
 		return false
 	}
-	name := a.Name
+	// A valueless declaration's store is the other caller of storesPlainly,
+	// and it is the one place this is set — see Runner.declareEmpty.
+	return !r.declaringWithoutAValue && r.storesPlainly(a.Name) && r.valueOnlyReads(a.Value)
+}
+
+// storesPlainly reports whether every question the full road asks of a store
+// into name answers "nothing to do", whatever the value: the questions about
+// the name and about what the runner is in the middle of, without the
+// assignment's own shape or its value.
+//
+// Its other caller is a valueless declaration in a dialect where one sets the
+// name to the empty string (Runner.declareEmpty). The full road there is
+// setVarAs with assignedAsTheCompoundView, which differs from a bare
+// assignment's in three places and none of them is a question this answers:
+// it skips the scope lint and allexport, which belong to an assignment, and
+// it skips the guard registered for the name, which a name accepted here does
+// not have (#6373).
+func (r *Runner) storesPlainly(name string) bool {
+	if !plainScalarStoreShortcut {
+		return false
+	}
 	// An identifier, so not a positional parameter and not a compound
 	// member; and none of the names the store itself treats specially.
 	if !identifierName(name) || name == "OPTIND" || name == "PATH" || name == r.sem().IgnoredNamesVariable {
@@ -57,7 +77,7 @@ func (r *Runner) storesAPlainScalar(a *syntax.Assign) bool {
 	// What the runner is in the middle of: a traced assignment's value is
 	// expanded by the caller, and each of the rest is a road of its own.
 	if r.expanded != nil || r.unspecified || r.namespace != "" || r.frameSelected ||
-		r.storingSelfNameref != "" || r.retypingFrozen != "" || r.declaringWithoutAValue ||
+		r.storingSelfNameref != "" || r.retypingFrozen != "" ||
 		r.viewIsAlreadyFolded || r.mirroring || r.caseFoldHeld != "" || r.privateDeclared ||
 		len(r.privateShield) > 0 || len(r.nameref) > 0 || r.scalarAssignmentGlobs() {
 		return false
@@ -112,7 +132,7 @@ func (r *Runner) storesAPlainScalar(a *syntax.Assign) bool {
 	if _, ok := r.fieldWidth[name]; ok {
 		return false
 	}
-	return r.valueOnlyReads(a.Value)
+	return true
 }
 
 // valueOnlyReads reports whether expanding w can do nothing but read: no

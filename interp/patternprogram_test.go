@@ -15,6 +15,7 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/blairham/sh/internal/testenv"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -372,6 +373,45 @@ func eachInParallel(n int, f func(i int)) {
 	wg.Wait()
 }
 
+// casesForReading is the part of the corpus the k-th reading sweeps: all of it,
+// except under the race detector, where each case is swept under one reading
+// rather than all 23 — the readings take turns, so between them they still
+// reach every case.
+//
+// The sweeps that read the corpus this way were 221s of this package's 508s on
+// a hosted ubuntu runner under -race, and they already run their cases side by
+// side on every core, so that was far more of the runner's CPU than its share
+// (#7290). What the detector adds to them is whether cases running at once
+// share state they must not — the program cache, the kept facts — and every
+// reading still runs its cases side by side, so it is still asked that. Whether
+// the program and the walk agree is the other question, and nothing about it is
+// sampled: every run without -race — CI's macOS leg, `make test` — sweeps every
+// case under every reading.
+//
+// Turns rather than a fraction of each reading's cases, because one case is
+// most of the cost: `(a|aa|aaa)##[a-z]` was 950ms of reading 0's 1.03s under
+// the detector, and a sample that kept it in several readings kept the cost.
+func casesForReading[T any](cases []T, k int) []T {
+	if !testenv.RaceDetector {
+		return cases
+	}
+	turns := raceTurns()
+	var out []T
+	for i := k % turns; i < len(cases); i += turns {
+		out = append(out, cases[i])
+	}
+	return out
+}
+
+// raceTurns is how many readings share the corpus out under the race detector
+// — see casesForReading — and it is 1 without it.
+func raceTurns() int {
+	if !testenv.RaceDetector {
+		return 1
+	}
+	return len(programReadings())
+}
+
 // programPair is one reading, pattern and subject of the equivalence corpus.
 type programPair struct {
 	reading          string
@@ -384,8 +424,8 @@ type programPair struct {
 func programPairs() []programPair {
 	var out []programPair
 	cases := allProgramCases()
-	for _, rd := range programReadings() {
-		for _, c := range cases {
+	for k, rd := range programReadings() {
+		for _, c := range casesForReading(cases, k) {
 			for _, subject := range c.subjects {
 				out = append(out, programPair{rd.name, rd.o, c.pattern, subject})
 			}
@@ -439,7 +479,7 @@ func TestTheProgramAnswersWhatTheWalkAnswers(t *testing.T) {
 					}
 				}
 			}
-			if compiledPairs < 50000 {
+			if floor := 50000 / raceTurns(); compiledPairs < floor {
 				t.Errorf(
 					"a program ran for only %d spans, so the comparison above was mostly the walk against itself",
 					compiledPairs,

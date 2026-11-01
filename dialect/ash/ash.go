@@ -2401,6 +2401,8 @@ func Semantics() interp.Semantics {
 	// once the read is over. Measured 2026-10-31 on BusyBox 1.37.0 in the
 	// pinned image; see interp.ReadHandlerMoment (#7031).
 	s.ReadHandlersRun = interp.ReadHandlersRunAfterTheRead
+	// unanswered ReadLeftByAHandlersReturnAssignsWhatArrived: a handler never
+	// runs in the middle of a read here, so none can return out of one.
 
 	// ---- control flow and redirection ----
 

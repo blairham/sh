@@ -6867,13 +6867,16 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	if r.unspecified {
 		return 2
 	}
-	if r.ctl != controlNone {
+	if r.ctl != controlNone && !r.readLeftByAReturnEndsAsAtTheEnd() {
 		// A handler run in the middle of the read left the shell or the
 		// function the read is in, and the read ended there with no name
 		// touched: measured 2026-10-31, an EXIT trap after `exit 3` in one
 		// reads the name as it was in bash, zsh and ksh93, and a `return 5`
 		// returns 5 in bash 5.3 and ksh93. The status is the handler's. See
 		// Semantics.ReadHandlersRun.
+		if r.unspecified {
+			return 2
+		}
 		return r.status
 	}
 	// A `-n` read that found the end before its first character, which one

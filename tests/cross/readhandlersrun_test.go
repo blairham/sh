@@ -71,3 +71,46 @@ func TestAHandlerRunsDuringAReadWhereTheShellsRunIt(t *testing.T) {
 		})
 	}
 }
+
+// What a `read` does when a handler run in the middle of it returns from the
+// function the read is in — interp.Semantics.ReadLeftByAHandlersReturnAssignsWhatArrived
+// (#7176). Every row is the script run from -c on 2026-10-31, three runs a row
+// with one answer, and the wanted output is what the real shell printed: zsh
+// 5.9.2, bash 5.3.20 and ksh93u+ 2012-08-01. The read is the one
+// signalLandsInTheWait makes, inside f; the handler returns 5.
+const (
+	aReturnLandsInTheWait = `mkfifo p q; exec 4<>p 3<p; l=old; trap 'echo T; return 5' INT; ` +
+		`f() { read -r l <&3; echo in; }; ` +
+		`(read y <q; sleep 1; kill -INT $$; sleep 1; echo W; echo cd >p) & ` +
+		`printf ab >p; echo >q; f; echo "out st=$? l=[$l]"; read -r m <&3; echo "m=[$m]"; wait`
+	// aReturnWithNothingIn is the same with nothing written before the signal.
+	aReturnWithNothingIn = `mkfifo p q; exec 4<>p 3<p; l=old; trap 'echo T; return 5' INT; ` +
+		`f() { read -r l <&3; echo in; }; ` +
+		`(read y <q; sleep 1; kill -INT $$; sleep 1; echo W; echo cd >p) & ` +
+		`echo >q; f; echo "out st=$? l=[$l]"; read -r m <&3; echo "m=[$m]"; wait`
+)
+
+func TestAHandlersReturnInTheMiddleOfAReadWhereTheShellsDo(t *testing.T) {
+	t.Parallel()
+	for _, r := range []struct{ name, dialect, src, want string }{
+		// zsh ends the read as at the end of its input — `ab` assigned, the
+		// read's 1 the function's status — and bash and ksh93 with no name
+		// touched and the handler's 5. Either way `cd` is the next reader's.
+		{"ab in", "zsh", aReturnLandsInTheWait, "T\nout st=1 l=[ab]\nW\nm=[cd]\n"},
+		{"ab in", "bash", aReturnLandsInTheWait, "T\nout st=5 l=[old]\nW\nm=[cd]\n"},
+		{"ab in", "ksh", aReturnLandsInTheWait, "T\nout st=5 l=[old]\nW\nm=[cd]\n"},
+		// With nothing in, zsh's end of input clears the name. ksh93 gives
+		// this read up for the signal (ReadAbandonedWhen) and runs the
+		// handler after it, so its row asks nothing of the axis.
+		{"nothing in", "zsh", aReturnWithNothingIn, "T\nout st=1 l=[]\nW\nm=[cd]\n"},
+		{"nothing in", "bash", aReturnWithNothingIn, "T\nout st=5 l=[old]\nW\nm=[cd]\n"},
+		{"nothing in", "ksh", aReturnWithNothingIn, "T\nout st=5 l=[]\nW\nm=[cd]\n"},
+	} {
+		t.Run(r.dialect+"/"+r.name, func(t *testing.T) {
+			t.Parallel()
+			if got := runReleasingFifos(t, presets[r.dialect], r.src); got != r.want {
+				t.Errorf("got %q, want %q", got, r.want)
+			}
+		})
+	}
+}

@@ -19825,6 +19825,54 @@ type Semantics struct {
 	// unpinned ash: the same reach. Pinned by
 	// TestAHandlerRunsDuringAReadWhereTheShellsRunIt.
 	ReadHandlersRun ReadHandlerMoment
+	// ReadLeftByAHandlersReturnAssignsWhatArrived decides what a `read` does
+	// when a handler run in the middle of it (ReadHandlersRun) returns from
+	// the function the read is in. Yes ends the read as at the end of its
+	// input before the function returns: what arrived is assigned, the names
+	// cleared where nothing had, and the read's own status — the end of
+	// input's 1 — is the one the function returns with, whatever the
+	// `return` said. No ends the read there with no name touched, and the
+	// function returns the handler's status. Either way the rest of the line
+	// is the next reader's.
+	//
+	// zsh 5.9.2 answers yes; bash 5.3.20 and ksh93u+ 2012-08-01 no. Measured
+	// 2026-10-31 from -c: the read is the shell's standard input, a pipe,
+	// with `ab` in before it starts; INT comes from another process 0.3 s
+	// in, `W` is written to the terminal at 0.6 s and `cd` follows at 0.9 s.
+	// `trap 'echo T; return 5' INT; f() { read -r l; echo in; }; l=old; f;
+	// echo "out st=$? l=[$l]"; read -r m`:
+	//
+	//	zsh               T, out st=1 l=[ab], W, m=[cd]
+	//	bash 5.3, ksh93   T, out st=5 l=[old], W, m=[cd]
+	//
+	// zsh's 1 is the read's and not the `return`'s: `return`, `return 0` and
+	// `false; return` give it too. It held with the read in a group and in a
+	// loop inside the function, for `-d x`, `-t 5`, `-A` and two names, and
+	// with nothing in before the signal, where the name is cleared (`out
+	// st=1 l=[]`) as at an end of input with nothing before it. bash 3.2.57
+	// answers no, and returns 0 (#7222).
+	//
+	// Not modeled: zsh ends a read the same way for a handler's `break` and
+	// `continue`, after which bash and ksh93 read on to the end of the line
+	// and then leave, and for an `exit` inside a function, where bash and
+	// ksh93 assign nothing; at the top level zsh's `exit` assigns nothing
+	// either. See docs/spec/semantics.md, "When a handler runs during a read
+	// that goes on".
+	//
+	// Asked only where a handler run in the middle of a read returned from
+	// the function the read is in, which is the one place the answers part.
+	// A read nothing interrupts, a handler that does not leave, and one that
+	// leaves the shell ask nothing.
+	//
+	// unpinned zsh: no corpus row times a signal against a read. Pinned by
+	// TestAHandlersReturnInTheMiddleOfAReadWhereTheShellsDo.
+	//
+	// unpinned bash: the same reach. Pinned by
+	// TestAHandlersReturnInTheMiddleOfAReadWhereTheShellsDo.
+	//
+	// unpinned ksh: the same reach. Pinned by
+	// TestAHandlersReturnInTheMiddleOfAReadWhereTheShellsDo.
+	ReadLeftByAHandlersReturnAssignsWhatArrived Answer
 	// DisownRemovesTheJob makes `disown` take the job out of the table, so
 	// a later `jobs` no longer lists it: bash and zsh. ksh93's disown only
 	// shields the job from the HUP an exiting shell would send, and its
@@ -39087,17 +39135,22 @@ func (o WaitingHandlerOrder) String() string {
 //     only meet at the start of the read.
 //
 // A handler that leaves the shell — `exit 3` — ends the read with no name
-// touched: an EXIT trap reads `l=[old]` and 3 in bash, zsh and ksh93. One
-// that returns from the function the read is in returns with no name touched
-// in bash 5.3 and ksh93, with the handler's status; the rest of the line is
-// the next reader's.
+// touched: an EXIT trap reads `l=[old]` and 3 in bash, zsh and ksh93, for a
+// read at the top level. One that returns from the function the read is in
+// returns with no name touched in bash 5.3 and ksh93, with the handler's
+// status, and in zsh ends the read as at the end of its input first
+// (Semantics.ReadLeftByAHandlersReturnAssignsWhatArrived); either way the
+// rest of the line is the next reader's.
 //
-// Not modeled: zsh's handler that returns from the function assigns what
-// arrived and returns 1; ksh93's read reports 258 to a handler for a signal
-// its own command substitution sent; zsh runs a handler for a signal that
-// lands during any command substitution at the end of that substitution
-// rather than at the next command; and a file read in this shell, which is
-// never watched because it never waits, runs zsh's handlers after it.
+// Not modeled: zsh's `exit` in a handler, with the read inside a function,
+// assigns what arrived before the shell exits (`l=[ab]`, still 3); zsh's
+// `break` and `continue` there end the read as its `return` does, where bash
+// and ksh93 read on to the end of the line first; ksh93's read reports 258 to
+// a handler for a signal its own command substitution sent; zsh runs a
+// handler for a signal that lands during any command substitution at the end
+// of that substitution rather than at the next command; and a file read in
+// this shell, which is never watched because it never waits, runs zsh's
+// handlers after it.
 type ReadHandlerMoment uint8
 
 const (

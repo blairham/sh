@@ -4175,6 +4175,11 @@ func Semantics() interp.Semantics {
 	// during it, then goes on; one already waiting as it begins runs then.
 	// Measured 2026-10-31 on ksh93u+; see interp.ReadHandlerMoment (#7031).
 	s.ReadHandlersRun = interp.ReadHandlersRunAsSoonAsTheyArrive
+	// A handler's `return` there ends the read with no name touched, and the
+	// function returns the handler's status: `return 5` mid-read is `out st=5
+	// l=[old]`. Measured 2026-10-31 on ksh93u+; see
+	// interp.Semantics.ReadLeftByAHandlersReturnAssignsWhatArrived (#7176).
+	s.ReadLeftByAHandlersReturnAssignsWhatArrived = interp.No
 	// And this is the column where the monitor is *not* enough: `set -m` is
 	// granted in a script with no terminal, and `fg` still answers 1 without
 	// a word — on a pseudo-terminal too, which is what says the missing

@@ -261,6 +261,7 @@ ash   ReadArrayTakesOneNameOnly
 ash   ReadEchoLettersWriteTheValues
 ash   ReadExactCountGivenUpKeepsWhatItTook
 ash   ReadExactCountKeepsPartial
+ash   ReadLeftByAHandlersReturnAssignsWhatArrived
 ash   ReadTypedValueFailureIsAnAssignmentFailure
 ash   RefusedPlacementKeepsWhatTheLiteralPlaced
 ash   TypedValueFailureGivesUpTheLine
@@ -684,6 +685,7 @@ dash  ReadDelimiterIsTheLocalesCharacter
 dash  ReadEchoLettersWriteTheValues
 dash  ReadExactCountGivenUpKeepsWhatItTook
 dash  ReadExactCountKeepsPartial
+dash  ReadLeftByAHandlersReturnAssignsWhatArrived
 dash  ReadPartialCountSucceeds
 dash  ReadTimeoutBoundsReadability
 dash  ReadTimeoutKeepsWhatArrived

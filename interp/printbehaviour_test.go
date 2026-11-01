@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/internal/oracle"
+	"github.com/blairham/sh/internal/testenv"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -30,8 +31,11 @@ import (
 // Under a wider grammar than the core, because the core refuses whatever the
 // shells disagree about and most of the corpus is about exactly that — the
 // question here is the printer, not the semantics.
+//
+// Under the race detector every case is still parsed and printed, and only
+// every printedRunStride-th one is run both ways — see printedRunStride.
 func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
-	unread := 0
+	unread, eligible, ran := 0, 0, 0
 	for _, c := range oracle.Corpus {
 		if c.SyntaxError {
 			continue
@@ -50,6 +54,8 @@ func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
 			// the wrong promise.
 			continue
 		}
+		run := eligible%printedRunStride() == 0
+		eligible++
 		t.Run(c.ID, func(t *testing.T) {
 			// Before the parse, so a case that changed the process is named
 			// here rather than felt by whatever ran next. See processState.
@@ -60,6 +66,10 @@ func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
 				t.Skipf("the grammar here does not read it: %v", err)
 			}
 			printed := syntax.Print(f)
+			if !run {
+				return
+			}
+			ran++
 
 			// A directory each, because a case that creates a file would
 			// find it already there on the second run — and the name taken
@@ -80,6 +90,31 @@ func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
 	if unread != 0 {
 		t.Errorf("%d corpus cases did not parse; corpusGrammar no longer reads the corpus", unread)
 	}
+	// The same for the sample: a stride that outgrew the corpus, or a filter
+	// that left nothing to run, would pass having run nothing.
+	if ran == 0 {
+		t.Errorf("none of the %d corpus cases was run both ways", eligible)
+	}
+}
+
+// printedRunStride says which of the round trip's cases are run both ways:
+// every one without the race detector, every eighth under it.
+//
+// The round trip runs each case twice in one goroutine at a time, so what the
+// detector adds is the goroutines a single Runner starts for itself — a
+// pipeline's elements, a background job, a process substitution — and those
+// are the same few shapes over and over across four thousand cases. It cost
+// 49s of interp's run on a hosted ubuntu runner under -race, all of it serial,
+// because the process-state check after each case cannot share the process
+// with other tests (#7290). Every case is still parsed and printed under the
+// detector, so the unread count stays whole, and every run without -race — CI's
+// macOS leg, `make test` — runs every case both ways, so the printer's claim is
+// still proved whole on every pull request.
+func printedRunStride() int {
+	if testenv.RaceDetector {
+		return 8
+	}
+	return 1
 }
 
 // corpusGrammar is the grammar the round-trip reads the corpus with: the core,

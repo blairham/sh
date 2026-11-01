@@ -244,3 +244,116 @@ func TestAFatalSignalFromOutsideEndsAKeywordCall(t *testing.T) {
 		})
 	}
 }
+
+// A trap on the signal itself, set at any point, has the shell catching it
+// too, and a `function name { … }` call ends on it with the caller's handler
+// unrun: the trap table inside the call is the call's own (#7156).
+//
+// Measured 2026-11-01 on ksh93u+, each shell in a session of its own, with no
+// EXIT trap anywhere: the first column, exit 0. Killed by TERM for the
+// POSIX-form rows without a handler standing, for a reset with nothing set
+// before it and for a trap on another signal. This shell died of TERM from
+// inside the call in every keyword-form row.
+func TestASignalTheShellEverTrappedEndsAKeywordCall(t *testing.T) {
+	const body = `function f { kill -TERM $$; echo inf; }; f; echo "after $?"`
+	ended := leaving{out: "after 271\n"}
+	for _, tc := range []struct {
+		name, src string
+		yes, no   leaving
+	}{
+		{
+			name: "a handler standing",
+			src: `trap 'echo O' TERM; function q { echo mark1; kill -TERM $$; echo mark2; }; ` +
+				`q; echo "mark3 $?"; kill -TERM $$; echo end`,
+			yes: leaving{out: "mark1\nmark3 271\nO\nend\n"}, no: killedByTERM("mark1\n"),
+		},
+		{
+			name: "HUP", src: `trap 'echo O' HUP; function f { kill -HUP $$; echo inf; }; f; echo "after $?"`,
+			yes: leaving{out: "after 257\n"}, no: leaving{out: "", status: 129, died: syscall.SIGHUP},
+		},
+		{name: "a trap taken away", src: `trap 'echo t' TERM; trap - TERM; ` + body, yes: ended, no: killedByTERM("")},
+		{name: "an ignore taken away", src: `trap '' TERM; trap - TERM; ` + body, yes: ended, no: killedByTERM("")},
+		{
+			name: "a trap an earlier call set", src: `function g { trap 'echo g' TERM; }; g; ` + body,
+			yes: ended, no: killedByTERM(""),
+		},
+		{
+			name: "an ignore taken away in the call",
+			src:  `trap '' TERM; function f { trap - TERM; kill -TERM $$; echo inf; }; f; echo "after $?"`,
+			yes:  ended, no: killedByTERM(""),
+		},
+		{
+			name: "a POSIX-form call inside it",
+			src:  `trap 't' TERM; g() { kill -TERM $$; echo ing; }; function f { g; echo inf; }; f; echo "after $?"`,
+			yes:  ended, no: killedByTERM(""),
+		},
+		// The POSIX form is no boundary in either, and its caller's handler
+		// is the one that runs while it stands.
+		{
+			name: "the POSIX form",
+			src:  `trap 'echo O' TERM; q() { kill -TERM $$; echo mark2; }; q; echo "mark3 $?"`,
+			yes:  leaving{out: "O\nmark2\nmark3 0\n"}, no: leaving{out: "O\nmark2\nmark3 0\n"},
+		},
+		{
+			name: "the POSIX form, a trap taken away",
+			src:  `trap 'echo t' TERM; trap - TERM; f() { kill -TERM $$; echo inf; }; f; echo "after $?"`,
+			yes:  killedByTERM(""), no: killedByTERM(""),
+		},
+		{name: "a reset alone", src: `trap - TERM; ` + body, yes: killedByTERM(""), no: killedByTERM("")},
+		{
+			name: "a trap on another signal", src: `trap 'echo u' USR1; ` + body,
+			yes: killedByTERM(""), no: killedByTERM(""),
+		},
+	} {
+		for _, answer := range []Answer{Yes, No} {
+			t.Run(tc.name+"/"+answer.String(), func(t *testing.T) {
+				want := tc.no
+				if answer == Yes {
+					want = tc.yes
+				}
+				// A handler reads `kill`'s own status, as in all but one.
+				sem := keywordDeathSem(answer)
+				sem.SignalHandlerSeesEarlierStatus = No
+				got, _ := leavingBy(t, tc.src, sem, 0, false)
+				if got != want {
+					t.Errorf("ended %+v, want %+v", got, want)
+				}
+			})
+		}
+	}
+}
+
+// From another process the same: the front end is told which signals a call
+// would end on, and hands those over and no others (#7156).
+//
+// Measured 2026-11-01 on ksh93u+ with `/bin/kill -TERM` from another process
+// while the call waits on `/bin/sleep 3`: `after 271`, exit 0, with a handler
+// for TERM standing or one taken away before the call; killed by TERM with a
+// handler for USR1 alone. `offer` is a builtin and leaves 0.
+func TestASignalFromOutsideTheShellEverTrappedEndsAKeywordCall(t *testing.T) {
+	const call = `function f { :; offer; echo inf; }; f; echo "after $?"`
+	for _, tc := range []struct {
+		name, src string
+		taken     bool
+		want      leaving
+	}{
+		{"a handler standing", `trap 'echo term' TERM; ` + call, true, leaving{out: "after 271\n"}},
+		{"a trap taken away", `trap 'echo t' TERM; trap - TERM; ` + call, true, leaving{out: "after 271\n"}},
+		{"a trap on another signal", `trap 'echo u' USR1; ` + call, false, leaving{out: "inf\nafter 0\n"}},
+		{
+			"the POSIX form", `trap 'echo t' TERM; trap - TERM; f() { :; offer; echo inf; }; f; echo "after $?"`,
+			false,
+			leaving{out: "inf\nafter 0\n"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, taken := leavingBy(t, tc.src, keywordDeathSem(Yes), syscall.SIGTERM, true)
+			if taken != tc.taken {
+				t.Errorf("taken %v, want %v", taken, tc.taken)
+			}
+			if got != tc.want {
+				t.Errorf("ended %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}

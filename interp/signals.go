@@ -544,6 +544,11 @@ func trapConditionSignal(name string) syscall.Signal {
 // signal — which are different things: an ignored signal does not kill the
 // shell and does not run anything.
 func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
+	if body != nil {
+		// Caught from here on, whatever happens to the trap. See
+		// keywordcalldeath.go.
+		r.caughtSignals = r.caughtSignals.with(sig)
+	}
 	if r.traps != nil {
 		// A subshell is a pretend process: its trap table is its own, and
 		// the real handlers stay the top-level shell's. Nothing here may

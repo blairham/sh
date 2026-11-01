@@ -35,6 +35,29 @@ import "syscall"
 //     set inside an earlier `function` call and fired at its return, the call
 //     still ends: the shell went on catching. A trap on some other signal
 //     does not do it.
+//   - **Or a trap on the signal itself, ever.** Then the call ends on that
+//     signal, and the caller's handler does not run: inside the call the
+//     trap table is the call's own. The rows below, with the same `after
+//     271` for a trap set and taken away again before the call — `trap
+//     'echo t' TERM; trap - TERM` — or set to `''` and taken away, or set
+//     inside an earlier `function` call; for an ignore the call itself takes
+//     away; and for `kill -TERM $$` in place of the `sleep`. A `trap - TERM`
+//     with nothing set before it leaves the shell dying of TERM, and so does
+//     each of these with the POSIX-form call, where the caller's handler
+//     runs if it still stands (#7156).
+//
+// Those rows, measured 2026-11-01 with no EXIT trap anywhere, the second
+// with TERM from another process half a second in:
+//
+//	trap 'echo O' USR1; function q { echo mark1; kill -USR1 $$; echo mark2; }
+//	q; echo "mark3 $?"; kill -USR1 $$; echo end
+//	        mark1, mark3 286, O, end, exit 0
+//	trap 'echo term' TERM; function f { /bin/sleep 3; echo inf; }
+//	f; echo "after $?"
+//	        after 271, exit 0
+//
+// And the rest of the rule:
+//
 //   - **The innermost `function` call is the one that ends.** A POSIX-form
 //     call inside it is not a boundary — `g() { /bin/sleep 3; }; function f {
 //     g; echo inf; }` ends at `f` with `inf` unwritten — and a keyword call
@@ -57,10 +80,13 @@ import "syscall"
 // and its parent takes the death (see outsidedeath.go), so a call in the copy
 // is not the one that ends.
 //
-// Not modeled: ksh93 also catches a signal it has ever had a trap of its own
-// for, and ends a call on it with the caller's handler unrun (#7156). An
-// ignored signal stays ignored inside the call, which is the call's trap table
-// keeping the caller's ignore: see localtraps.go (#7157).
+// An ignored signal stays ignored inside the call, which is the call's trap
+// table keeping the caller's ignore: see localtraps.go (#7157).
+//
+// Not modeled: in ksh93 a trap set inside a `( … )` has the shell catching
+// the signal too, since the parentheses run in the shell's own process; and
+// INT, with a trap for it set before the call, runs the caller's handler and
+// then ends the call at 258.
 
 // takenDeath is where the death the shell is unwinding for was taken — the
 // depth of the calls standing — and the status the shell held there.
@@ -76,20 +102,56 @@ func signalEndsAKeywordCall(name string, sig syscall.Signal) bool {
 	return name != "" && name != "INT" && catchableSignal(sig)
 }
 
-// aKeywordCallEndsOnADeath reports whether a `function name { … }` call is
-// standing that a caught fatal signal would end rather than the shell. Read
-// and not asked, as the front end's watch reads it: an unanswered axis is no,
-// which leaves the signal to end the shell.
-func (r *Runner) aKeywordCallEndsOnADeath() bool {
-	return r.keywordCalls > 0 && !r.inSubshell && r.caughtByAnExitTrap &&
-		r.sem().ExitTrapRunsOnSignalDeath == Yes &&
-		r.sem().SignalDeathEndsAtAKeywordFunctionCall == Yes
+// signalSet is a set of signals by number, a bit each. A signal past the
+// last bit is never in a set built by adding to one, and is in everySignal.
+type signalSet uint64
+
+// everySignal is the set that holds them all, which is what an EXIT trap ever
+// set has the shell catching.
+const everySignal = ^signalSet(0)
+
+// with is the set with sig added.
+func (ss signalSet) with(sig syscall.Signal) signalSet {
+	if sig <= 0 || sig >= 64 {
+		return ss
+	}
+	return ss | 1<<uint(sig)
 }
 
-// aDeathWouldEndAKeywordCall is aKeywordCallEndsOnADeath for one signal.
+// has reports whether sig is in the set.
+func (ss signalSet) has(sig syscall.Signal) bool {
+	if ss == everySignal {
+		return true
+	}
+	return sig > 0 && sig < 64 && ss&(1<<uint(sig)) != 0
+}
+
+// caughtSignalSet is the signals the shell has caught: every one where an
+// EXIT trap has been set, in the dialect that catches them to run it on a
+// death, and otherwise each one it has ever had a trap for.
+func (r *Runner) caughtSignalSet() signalSet {
+	if r.caughtByAnExitTrap && r.sem().ExitTrapRunsOnSignalDeath == Yes {
+		return everySignal
+	}
+	return r.caughtSignals
+}
+
+// signalsAKeywordCallEndsOn is the signals whose death would end a standing
+// `function name { … }` call rather than the shell: the caught ones, where
+// such a call is standing in the shell at the top and the dialect puts a
+// boundary there. Read and not asked, as the front end's watch reads it: an
+// unanswered axis is no, which leaves the signal to end the shell.
+func (r *Runner) signalsAKeywordCallEndsOn() signalSet {
+	if r.keywordCalls == 0 || r.inSubshell || r.sem().SignalDeathEndsAtAKeywordFunctionCall != Yes {
+		return 0
+	}
+	return r.caughtSignalSet()
+}
+
+// aDeathWouldEndAKeywordCall is signalsAKeywordCallEndsOn for one signal.
 func (r *Runner) aDeathWouldEndAKeywordCall(name string, sig syscall.Signal) bool {
 	return signalEndsAKeywordCall(name, sig) && !r.segvEndsTheShellWhereItLands(name) &&
-		r.aKeywordCallEndsOnADeath()
+		r.signalsAKeywordCallEndsOn().has(sig)
 }
 
 // endTheCallOnADeath is the boundary, at the return of a `function name { … }`
@@ -102,8 +164,7 @@ func (r *Runner) aDeathWouldEndAKeywordCall(name string, sig syscall.Signal) boo
 // the ordinary way asks nothing.
 func (r *Runner) endTheCallOnADeath(depth int) syscall.Signal {
 	sig := r.killedBySig
-	if sig == 0 || r.ctl != controlExit || r.inSubshell || !r.caughtByAnExitTrap ||
-		r.sem().ExitTrapRunsOnSignalDeath != Yes ||
+	if sig == 0 || r.ctl != controlExit || r.inSubshell || !r.caughtSignalSet().has(sig) ||
 		!signalEndsAKeywordCall(r.killedBy, sig) || r.segvEndsTheShellWhereItLands(r.killedBy) ||
 		!r.ask(r.sem().SignalDeathEndsAtAKeywordFunctionCall,
 			"a fatal signal ending at the call of a `function` body") {

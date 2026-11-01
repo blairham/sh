@@ -251,7 +251,9 @@ func sortedTrapNames(m map[string]savedTrapState) []string {
 // function q { echo mark1; kill -USR1 $$; echo mark2; }; q; echo mark3`
 // writes `mark1` and `mark3` in four runs out of four — the signal found no
 // handler, the rest of the body did not run, and the caller's handler was not
-// reached either.
+// reached either. That the call ends there and the shell does not is the
+// shell catching a signal it has ever had a trap for: see keywordcalldeath.go
+// (#7156).
 //
 // That model explains every row the per-modification save explains and two it
 // does not, which is why this is where the shell's answer lives.

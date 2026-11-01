@@ -6784,11 +6784,17 @@ type Semantics struct {
 	// #7145).
 	//
 	// Caught means an EXIT trap has been set in the shell at some point,
-	// wherever it was set and whether or not it still stands. See
-	// keywordcalldeath.go for the rows. Reached only where
-	// ExitTrapRunsOnSignalDeath says yes, because a shell that runs no EXIT
-	// trap on a death has caught nothing: zsh, dash and BusyBox ash never
-	// ask.
+	// wherever it was set and whether or not it still stands, where
+	// ExitTrapRunsOnSignalDeath says yes; or a trap on the signal itself,
+	// an ignore included, set at some point in the same way. The caller's
+	// handler does not run for the second: `trap 'echo O' USR1; function q {
+	// kill -USR1 $$; echo in; }; q; echo "after $?"` writes `after 286` in
+	// ksh93, and `O`, `in` and `after 0` in bash 5.3, which is the call's
+	// trap table and not this axis. And `trap 't' TERM; trap - TERM` before
+	// the call is `after 271` in ksh93 and a death of TERM in bash 5.3 and
+	// zsh 5.9.2, for `kill -TERM $$` in the body and for TERM from another
+	// process alike. Measured 2026-11-01 (#7156). See keywordcalldeath.go
+	// for the rows.
 	SignalDeathEndsAtAKeywordFunctionCall Answer
 
 	// SignalDeathWaitsForAnUnforkedSubshell holds a fatal signal the shell

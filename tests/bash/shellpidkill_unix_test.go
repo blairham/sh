@@ -87,6 +87,47 @@ echo not-reached`)
 	}
 }
 
+// A copy of the subshell that kills the subshell's `$BASHPID` reaches the
+// subshell, and its next external command still starts (#7233).
+//
+// The copy has a group of its own, so the number was once somebody else's
+// process to it and went to kill(2) — at the subshell's placeholder, which
+// died of it. No handler ran, and the pipeline's `/bin/cat`, put into the
+// placeholder's group as it started, failed with `fork/exec /bin/cat:
+// operation not permitted`. Measured 2026-11-01 under `-c` against bash
+// 5.3.20 and zsh 5.9.2, which agree on every row: the handler runs once the
+// copy is done, before the next command.
+func TestACopyThatKillsTheSubshellsBashPidRunsTheSubshellsTrap(t *testing.T) {
+	for _, tc := range []struct{ name, copy string }{
+		{"pipeline element", `{ kill -USR1 $p; echo l; } | /bin/cat`},
+		{"nested subshell", `(kill -USR1 $p; echo l)`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := runBashAnchored(t, `( trap 'echo U' USR1; p=$BASHPID; `+tc.copy+`; echo after )
+echo "outer $?"`)
+			if want := "l\nU\nafter\nouter 0\n"; got != want {
+				t.Errorf("output = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// The rest of the body's own `kill $BASHPID`, sent from the copy: an ignored
+// signal does nothing, and an untrapped fatal one ends the subshell — not the
+// copy, which has finished its line by then — at 128+N. Measured as above.
+func TestACopyThatKillsTheSubshellsBashPidIsAnsweredByTheSubshell(t *testing.T) {
+	got := runBashAnchored(t, `( trap '' USR1; p=$BASHPID; { kill -USR1 $p; } | /bin/cat; echo after )
+echo "outer $?"`)
+	if want := "after\nouter 0\n"; got != want {
+		t.Errorf("ignored: output = %q, want %q", got, want)
+	}
+	got = runBashAnchored(t, `( p=$BASHPID; (kill $p; echo inner); echo after )
+echo "outer $?"`)
+	if want := "inner\nouter 143\n"; !strings.HasPrefix(got, want) {
+		t.Errorf("untrapped: output = %q, want it to start %q", got, want)
+	}
+}
+
 // runBashAnchored runs a script with a placeholder program supplied, which is
 // what a shell binary does for itself — see driver/procanchor.go. Without one
 // `$BASHPID` in a forked body is empty and none of the cases above has a

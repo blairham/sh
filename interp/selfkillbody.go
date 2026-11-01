@@ -64,17 +64,22 @@ import "syscall"
 // here to compare against would fork a process for every `kill` in every
 // subshell in order to learn that the answer is no.
 func (r *Runner) aimedAtThisBody(pid int) bool {
-	a := r.bodyAnchor
+	// This body's own and never the one around it. `existing` walks outward
+	// so that a command a body starts joins the group it is contained in;
+	// identity does not walk, because a real shell forked again for the inner
+	// body and the inner body is not the outer one. A body around this one
+	// is answered too, but by that body and not here: see bodyAroundNamed.
+	return r.bodyAnchor.leads(pid)
+}
+
+// leads reports that pid is the group this anchor already leads.
+func (a *procAnchor) leads(pid int) bool {
 	if a == nil || pid <= 0 {
 		return false
 	}
 	a.mu.Lock()
 	pgid := a.pgid
 	a.mu.Unlock()
-	// This body's own and never the one around it. `existing` walks outward
-	// so that a command a body starts joins the group it is contained in;
-	// identity does not walk, because a real shell forked again for the inner
-	// body and the inner body is not the outer one.
 	return pgid > 0 && pgid == pid
 }
 
@@ -171,4 +176,107 @@ func (r *Runner) selfSignaledBody(key string) {
 	// A `wait` blocked elsewhere re-reads what is pending when it is poked,
 	// and the poke is cheap enough not to be worth deciding about.
 	s.poke()
+}
+
+// A copy of the body — a pipeline element, a nested `( … )`, anything a real
+// shell would have forked again from it — that aims a signal at the body's
+// number is aiming at **the body**, and it is the body that answers.
+//
+// The copy has an anchor of its own, so aimedAtThisBody says no to it, and
+// until #7233 the number then went to kill(2) as somebody else's process. It
+// is not: it is the body's placeholder, which has no traps and dies of USR1
+// or TERM. Nothing ran the body's handler, and the group the body's commands
+// join went with the placeholder — a pipeline's next element, checked into
+// that group a moment before the kill and started a moment after, failed with
+// `fork/exec /bin/cat: operation not permitted`.
+//
+// Measured 2026-11-01 under `-c` against bash 5.3.20 (`$BASHPID`) and zsh
+// 5.9.2 (`$sysparams[pid]` after `zmodload zsh/system`), which agree in every
+// row; ksh93u+ 2012 has no such parameter and cannot reach the shape:
+//
+//	( trap 'echo U' USR1; p=<pid>; { kill -USR1 $p; } | /bin/cat; echo after )
+//	        U after          here, before: cat not permitted, after
+//	( trap 'echo U' USR1; p=<pid>; { kill -USR1 $p; echo l; } | /bin/cat; echo after )
+//	        l U after        the handler runs once the copy is done
+//	( trap 'echo T' TERM; p=<pid>; (kill $p; echo inner); echo after )
+//	        inner T after    here, before: inner after
+//	( trap 'echo U' USR1; p=<pid>; (kill -USR1 $p) )
+//	        U                the body's end is a moment between commands too
+//	( p=<pid>; { kill -USR1 $p; } | /bin/cat; echo after )
+//	        128+N, no after  the body dies of it; here, before: after, 0
+//	( p=<pid>; (kill -USR1 $p; echo inner); echo after )
+//	        inner, 128+N     the copy runs on; here, before: inner after, 0
+//	( trap '' USR1; p=<pid>; { kill -USR1 $p; } | /bin/cat; echo after )
+//	        after            here, before: cat not permitted, after
+//
+// So every row is the body's own `kill $BASHPID`, answered once the copy has
+// finished: the copy posts the signal on the body's anchor, and the body
+// settles it through signalThisBody at its next moment between commands —
+// the same switch, on the goroutine that owns the table it reads. Not a
+// dialect split, so nothing asks a Semantics axis.
+//
+// Only while the body is running. Once its process has ended the number names
+// nothing a copy can reach, and the send is what it always was.
+
+// bodyArrival is one signal a copy of a body aimed at it.
+type bodyArrival struct {
+	name string
+	sig  syscall.Signal
+}
+
+// bodyAroundNamed is the running body around this runner whose group pid is,
+// if there is one: the body this one was copied from, or one further out.
+func (r *Runner) bodyAroundNamed(pid int) *procAnchor {
+	if r.bodyAnchor == nil {
+		return nil
+	}
+	for a := r.bodyAnchor.outer; a != nil; a = a.outer {
+		if a.leads(pid) && !a.body.ended() {
+			return a
+		}
+	}
+	return nil
+}
+
+// signalTheBodyAround leaves a signal for the body around this runner that
+// it names. Locked, because the copy and the body are different goroutines,
+// and a job the body backgrounded runs beside it rather than before it.
+func (r *Runner) signalTheBodyAround(a *procAnchor, name string, sig syscall.Signal) {
+	a.mu.Lock()
+	a.arrivals = append(a.arrivals, bodyArrival{name: name, sig: sig})
+	a.posted.Store(true)
+	a.mu.Unlock()
+	s := r.sigs()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.poke()
+}
+
+// copiesSignaled reports that a copy of this body has left it something.
+func (r *Runner) copiesSignaled() bool {
+	return r.bodyAnchor != nil && r.bodyAnchor.posted.Load()
+}
+
+// settleCopiesSignals answers what copies of this body aimed at it, as its
+// own `kill` would have been answered, and reports whether one ended it.
+func (r *Runner) settleCopiesSignals() bool {
+	if !r.copiesSignaled() {
+		return false
+	}
+	a := r.bodyAnchor
+	a.mu.Lock()
+	got := a.arrivals
+	a.arrivals = nil
+	a.posted.Store(false)
+	a.mu.Unlock()
+	for _, s := range got {
+		was := r.ctl
+		_ = r.signalThisBody(s.name, s.sig)
+		if r.ctl != was {
+			// It died of one, and a process killed by a signal runs
+			// nothing more: not the next handler, and not this one's.
+			return true
+		}
+	}
+	return false
 }

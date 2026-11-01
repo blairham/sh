@@ -69,6 +69,16 @@ func (p *Process) exit() {
 	}
 }
 
+// ended reports that the process has ended. The shell's own, nil, has not.
+func (p *Process) ended() bool {
+	if p == nil {
+		return false
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.done
+}
+
 // forkProcess gives a cloned runner a process of its own and answers with
 // what ends it. Called beside the anchor at each of the five places a real
 // shell forks; see Runner.anchorForkedBody.

@@ -52,6 +52,18 @@ print -r -- "sub=$?"`)
 	}
 }
 
+// And a pipeline element of the body aiming at the body's number reaches the
+// body too, and the element beside it still starts. Measured 2026-11-01 in
+// zsh 5.9.2: `U`, `after`. Here it was `fork/exec /bin/cat: operation not
+// permitted` and no `U`, because the signal went to the placeholder (#7233).
+func TestAPipelineElementThatKillsTheBodysPidRunsTheBodysTrap(t *testing.T) {
+	got := runZshAnchored(t, `( trap 'print -r -- U' USR1; p=$sysparams[pid]
+  { kill -USR1 $p } | /bin/cat; print -r -- after )`)
+	if want := "U\nafter\n"; got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
 // **The pid is the noun, and this is the pair that holds it fixed.**
 //
 // Same construct, same context, same signal and the same trap; only the number

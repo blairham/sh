@@ -138,6 +138,11 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	// backgrounds is a process of its own, given one where it is started, so
 	// this one ends with the body's run. See Process.
 	exitBody := sub.forkProcess()
+	if keep.anchor != nil {
+		// And it is that process a copy of the body reaches through the
+		// group id, not the group's lifetime. See selfkillbody.go.
+		keep.anchor.body = sub.process
+	}
 
 	// And where its *output* goes, for the dialect that does not wait for the
 	// body: held rather than written straight through, unless the body holds

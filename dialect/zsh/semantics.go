@@ -580,7 +580,18 @@ func Semantics() interp.Semantics {
 	// command's own closed stream. What zsh prints when the stream was
 	// closed by `exec >&-` instead — a `write error` with the status still 0
 	// — is measured in docs/spec/semantics.md and not reproduced.
+	//
+	// EBADF is the odd errno here and not EFBIG: a write past `ulimit -f`
+	// with XFSZ ignored or handled, or onto a full disk, fails `echo`,
+	// `print` and `printf` at 1 and says `zsh:printf:1: write error: file
+	// too large`, as the rest of the panel does. The axis is asked for EBADF
+	// alone; see it (#7172).
 	s.BuiltinWriteErrorFailsTheCommand = interp.No
+	// And whichever errno fails the command, only the three builtins whose
+	// output is the point of running them fail: `set`, `typeset -p`, `alias`
+	// and `export` past `ulimit -f` leave 0 and say nothing. Measured
+	// 2026-11-01, zsh 5.9.2; see Semantics.BuiltinWriteErrorFailsOnlyThese.
+	s.BuiltinWriteErrorFailsOnlyThese = "echo print printf"
 	// `set -a` marks an array or a table as surely as a scalar, whoever
 	// stored it: `set -a; A=(1); typeset -p A` is `typeset -ax A=( 1 )`.
 	// Measured 2026-10-03; see the axis.

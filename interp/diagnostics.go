@@ -10075,11 +10075,41 @@ type Diagnostics struct {
 	//
 	// dash opens with the name twice and fixes the reason as "I/O error"
 	// whatever the errno was, so its format uses %[1]s in both places and
-	// never mentions %[2]s. Empty means nothing is said, which is the other
-	// two and the substrate's own: ksh93 fails silently, and zsh does not
-	// fail at all — the status is the semantics axis's answer either way,
-	// so silence here is a wording rather than a behavior.
+	// never mentions %[2]s. Empty means nothing is said, which is the
+	// substrate's own answer. zsh fails nothing on a closed descriptor and
+	// so never reaches this there; it does reach it for a broken pipe and
+	// for every other errno, which is where its `write error: …` is said.
+	//
+	// ksh93's is `write to 1 failed [File too large]` behind the builtin's
+	// name, and it is said for every errno it fails on but EBADF — see
+	// BuiltinWriteErrorSilentForABadDescriptor. The number is 1 in every row
+	// measured, because `echo`, `print` and `printf` write to their standard
+	// output however it was aimed: `printf … >&4` is `write to 1 failed`
+	// too. The same sentence with no builtin in front of it — `ksh: write to
+	// 1 failed [File too large]` — is what ksh93 says for `set > f` and for
+	// a subshell's write with an EXIT trap set (#7173); it is this format
+	// with the leading `%[1]s: ` cut, as diagLineNamed already cuts a
+	// builtin's name for other reasons. Measured 2026-11-01, ksh93u+ (#7172).
 	BuiltinWriteError string
+
+	// BuiltinWriteErrorSilentForABadDescriptor keeps BuiltinWriteError unsaid
+	// for a write that failed with EBADF — a descriptor closed with `>&-`,
+	// or one open only for reading — while the command still fails as the
+	// semantics axis says.
+	//
+	// ksh93 alone, and the errno is the key. Measured 2026-11-01, ksh93u+,
+	// `trap '' XFSZ` where a signal could arrive:
+	//
+	//	echo hi >&-                        silent, 1
+	//	exec 3</etc/hosts; echo hi >&3     silent, 1
+	//	printf '%4000s' x > f past -f 1    ksh: printf: write to 1 failed [File too large], 1
+	//	the same printf onto a full disk   ksh: printf: write to 1 failed [No space left on device], 1
+	//
+	// The second row is the one that says EBADF rather than "closed": the
+	// descriptor is open, and the write is refused all the same, in silence.
+	// A broken pipe is silent in ksh93 too, but there the command does not
+	// fail, so no wording is reached (BrokenPipeWriteErrorFailsTheCommand).
+	BuiltinWriteErrorSilentForABadDescriptor bool
 
 	// BuiltinWriteErrorFrom narrows BuiltinWriteError to the builtins named,
 	// space-separated; the others fail in silence. Empty means every builtin.
@@ -10138,8 +10168,9 @@ type Diagnostics struct {
 	// redirected for itself and present on every row it inherited. What the
 	// errno moves is the *first* sentence and the status — zsh names the
 	// builtin and leaves 1 for ENOSPC and EPIPE and neither for EBADF, which
-	// is BuiltinWriteErrorFailsTheCommand's business and is still answered No
-	// here.
+	// is BuiltinWriteErrorFailsTheCommand's business: that axis is keyed on
+	// EBADF and answered No here, and ENOSPC fails the command without
+	// asking it (#7172).
 	//
 	// Emitted before BuiltinWriteErrorFailsTheCommand is asked, which is the
 	// whole reason it is a second field. zsh answers that axis No and returns

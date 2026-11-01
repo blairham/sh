@@ -19,6 +19,13 @@
 // chore for when the interpreter's shape has moved, not a step of every
 // change.
 //
+// It moves faster than that sentence suggests. The compiler matches a hot
+// call by its line offset within the function, so edits detach it. Two weeks
+// after it was made, the 2026-10-16 profile was worth 1–2% on the gate loop
+// over no profile at all. A fresh one was worth 6–7%. Measured on the x86
+// runner, profiles trained on x86 and on arm64 were equal: the architecture
+// that trains the profile does not matter, and its age does (#6496).
+//
 // The programs are chosen to look like what the shell spends its life doing,
 // rather than any one benchmark, so that the compiler is not taught to win one
 // row at the cost of the rest (#6496):

@@ -268,12 +268,24 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// and is reported as one, when the shell next reports its jobs — not
 		// a sentence the parentheses write the moment they die. See
 		// bodyinbox.go.
-		if sub.diedOfItsOwnSignal() && !sub.diedAsAJob {
+		//
+		// Nor one the shell is dying of as well. A signal the body sent the
+		// group it shares with the shell killed both at once, and a shell
+		// that is dead says nothing about its child. See
+		// signalTheGroupFromASubshell.
+		if sub.diedOfItsOwnSignal() && !sub.diedAsAJob && !r.dyingOfASubshellsSignal() {
 			// The group the body leads is its process id as far as anything
 			// that asked is concerned, and asking is how the script got the
 			// number it signaled — so it is already started and this starts
 			// nothing. See Runner.anchoredGroup.
-			pid, _ := sub.anchoredGroup()
+			pid, asked := sub.anchoredGroup()
+			if !asked {
+				// Except a body that signaled the group it shares with the
+				// shell, which reaches it without its number. The number the
+				// notice carries is its own all the same, so it is started
+				// now, once, for the one sentence that prints it.
+				pid, _ = sub.SubshellProcessGroup()
+			}
 			r.reportKilled(sub.diedOfSig, pid)
 		}
 		// A fork this shell just waited for, which is where a coprocess that

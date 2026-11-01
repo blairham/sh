@@ -3,7 +3,10 @@
 
 package interp
 
-import "syscall"
+import (
+	"os"
+	"syscall"
+)
 
 // A `kill` aimed at **the shell's own process group** — `kill -USR1 0`, `kill
 // -USR1 -$$` where the shell leads its group — reaches the shell as well as
@@ -36,16 +39,13 @@ import "syscall"
 // does), and a `WINCH` waits for input where the dialect's does (zsh writes no
 // `W` for `kill -WINCH 0` under `-c`, and everybody else writes it first).
 //
-// Only a trapped signal with a handler, and only at the top level. An ignored
-// signal is ignored on arrival and a fatal or stopping one acts on the whole
-// group, the shell included, as the kernel delivers it — which is what every
-// reference does, and agreed already. A subshell is a pretend child that
-// shares the process, so its copy is the top-level shell's to have and is left
-// to arrive as it always did.
+// Only a trapped signal with a handler, at the top level. An ignored signal is
+// ignored on arrival and a fatal or stopping one acts on the whole group, the
+// shell included, as the kernel delivers it — which is what every reference
+// does, and agreed already. A subshell sending it is the other half of the
+// rule, and has two copies to answer rather than one: see
+// signalTheGroupFromASubshell.
 func (r *Runner) signalTheShellsOwnGroup(pid int, name string, sig syscall.Signal) error {
-	if r.inSubshell {
-		return r.killProcess(pid, sig)
-	}
 	key := trapKey(name, sig)
 	// The name the runtime's copy will be read back under, which is the one
 	// signalState.forwarded computes — a nameless number's decimal included.
@@ -65,22 +65,90 @@ func (r *Runner) signalTheShellsOwnGroup(pid int, name string, sig syscall.Signa
 		s.groupCopies[copyName]++
 	}
 	s.mu.Unlock()
-	err := r.killProcess(pid, sig)
-	if !answered {
+	if err := r.killProcess(pid, sig); err != nil {
+		if answered {
+			// Nothing was sent — the gate refused it, or the kernel did — so
+			// no copy is coming for the credit to cover.
+			s.mu.Lock()
+			s.groupCopies[copyName]--
+			s.mu.Unlock()
+		}
 		return err
 	}
-	if err != nil {
-		// Nothing was sent — the gate refused it, or the kernel did — so no
-		// copy is coming for the credit to cover.
-		s.mu.Lock()
-		s.groupCopies[copyName]--
-		s.mu.Unlock()
-		return err
+	if r.inSubshell {
+		r.signalTheGroupFromASubshell(name, sig, trapped)
+		return nil
 	}
-	if r.selfAimedSignalIsTheCondition(key) {
+	if answered && r.selfAimedSignalIsTheCondition(key) {
 		r.selfSignaled(key)
 	}
 	return nil
+}
+
+// A subshell that signals **the process group it shares with the shell** —
+// `( kill -USR1 0 )`, or `-$$` where the shell leads its group — is a member
+// of that group itself, so the signal reaches the subshell as well as the
+// shell above it. Each answers its own copy from its own table: the subshell
+// has the shell's handled signals back at their defaults, so it dies of one
+// the shell traps, and the shell runs its handler once the subshell is over.
+// Measured 2026-11-01, each shell in a process group of its own, against bash
+// 5.3.20, bash 3.2.57, ksh93u+ 2012-08-01, zsh 5.9.2 and dash:
+//
+//	trap 'echo T' USR1; (kill -USR1 0; echo in); echo out=$?
+//	        T, out=158 in all five (ksh93 out=286); bash and dash write the
+//	        death notice first; here, before: in, then T and out=0 in
+//	        either order
+//	…the same with `kill -USR1 -$$`                     the same
+//	(kill -USR1 0; echo in); echo out=$?                nothing, and 158:
+//	        the whole group dies; here, before: in, and a race
+//	trap 'echo T' USR1; (trap 'echo S' USR1; kill -USR1 0; echo in)
+//	        S, in, T, out=0 — the subshell's own handler, and it runs on
+//	        (ksh93 crashes); here, before: in, out=0, and T or not
+//	trap 'echo T' USR1; { kill -USR1 0; echo in; }      T, in: a group is
+//	        the shell itself, and was already right
+//
+// So the shell's copy is answered as `kill -SIG $$` from the subshell is
+// answered — a handler queued for the shell, a death recorded for it — and the
+// runtime's copy is dropped by the credit taken above, so the handler runs
+// once and before the next command rather than whenever os/signal is
+// scheduled. The subshell's copy is answered as `kill -SIG $BASHPID` is, by
+// signalThisBody against the subshell's own table. Not a dialect split: the
+// one column whose answer differs is ksh93, whose `( … )` runs in the shell's
+// own process, so the two copies are one and the axes that already say so —
+// Semantics.SubshellEndsWhenItSendsTheShellATrappedSignal and
+// SubshellRunsOnAfterSignalingTheShell — end the subshell at the shell's
+// answer, and there is no second copy left to settle.
+//
+// An untrapped stop is the shell's copy left to the kernel, as at the top
+// level: it stops the process, which is every member here, and a second stop
+// raised beside it would stop the shell again once something had continued it.
+
+// signalTheGroupFromASubshell answers the shell's copy and the subshell's own
+// copy of a signal the subshell has just sent the group they share. trapped
+// is whether the shell has an entry for it.
+func (r *Runner) signalTheGroupFromASubshell(name string, sig syscall.Signal, trapped bool) {
+	was := r.ctl
+	if trapped || !signalStops(sig) {
+		_ = r.sendSignal(os.Getpid(), name, sig)
+	}
+	if r.ctl != was {
+		// The shell's copy was this subshell's own, in the dialect that runs
+		// it in the shell's process, and it has ended it.
+		return
+	}
+	_ = r.signalThisBody(name, sig)
+}
+
+// dyingOfASubshellsSignal reports that a subshell has sent the shell a fatal
+// signal it has still to die of.
+func (r *Runner) dyingOfASubshellsSignal() bool {
+	s := r.signals
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.diedSig != 0
 }
 
 // aimedAtTheShellsOwnGroup reports whether a `kill` operand names the process

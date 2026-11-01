@@ -2885,6 +2885,12 @@ func Semantics() interp.Semantics {
 	// order they came in. Measured 2026-10-31 on 5.3.20 and 3.2.57, and on
 	// 5.3 under the name `sh`; see interp.WaitingHandlerOrder (#7039).
 	s.WaitingHandlersRun = interp.WaitingHandlersRunUpTheSignalNumbers
+	// And one of them that lost its trap to an earlier one before its turn
+	// is warned about at its turn, and sent again where the trap went back
+	// to the default: `trap - USR2` in HUP's handler dies of USR2 after the
+	// two warnings. Measured 2026-11-01 on 5.3.20, 3.2.57 and 5.3 under the
+	// name `sh`; see interp/waitingtrapgone.go (#7170).
+	s.WaitingSignalWithoutItsTrapIsResent = interp.Yes
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
 	// `read -d £` stops at the first byte of the `£`, under a UTF-8 locale
 	// too, and the second begins the next record. Measured 2026-10-02 on

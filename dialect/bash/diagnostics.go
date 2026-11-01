@@ -857,6 +857,12 @@ func Diagnostics() interp.Diagnostics {
 		// that named a job speaks from inside its own wait (#2227).
 		WaitJobStopped:    "wait: warning: job %[1]d[%[2]d] stopped",
 		WaitForJobStopped: "warning: wait_for_job: job %[1]d is stopped",
+		// And what a waiting signal that lost its trap to an earlier handler
+		// says at its turn, and, where the trap went back to the default, as
+		// it is sent again. Measured 2026-11-01 on 5.3.20; see
+		// interp.Diagnostics.WaitingSignalLostItsTrap (#7170).
+		WaitingSignalLostItsTrap: "warning: run_pending_traps: bad value in trap_list[%[1]d]: 0x%[2]x",
+		WaitingSignalResent:      "warning: run_pending_traps: signal handler is SIG_DFL, resending %[1]d (SIG%[2]s) to myself",
 		// The kinds of variable a function cannot be. See
 		// interp.Diagnostics.VariableOnlyLettersOnAFunctionLine.
 		UnsetFunctionAndVariable: "unset: cannot simultaneously unset a function and a variable",

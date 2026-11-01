@@ -3638,6 +3638,11 @@ func Semantics() interp.Semantics {
 	// whatever order they came in. Measured 2026-10-31 on ksh93u+; see
 	// interp.WaitingHandlerOrder (#7039).
 	s.WaitingHandlersRun = interp.WaitingHandlersRunDownTheSignalNumbers
+	// And one of them that lost its trap to an earlier one before its turn
+	// runs nothing: `trap - HUP` in USR2's handler, with both waiting, goes
+	// on with no HUP. Measured 2026-11-01 on ksh93u+; see
+	// interp/waitingtrapgone.go (#7170).
+	s.WaitingSignalWithoutItsTrapIsResent = interp.No
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
 	// `printf '[%q]'` with no operand is `[]`, measured 2026-10-02 on 93u+
 	// 2012-08-01 (#5153).

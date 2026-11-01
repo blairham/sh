@@ -3361,6 +3361,11 @@ func Semantics() interp.Semantics {
 	// in. Measured 2026-10-31 on 5.9.2; see interp.WaitingHandlerOrder
 	// (#7039).
 	s.WaitingHandlersRun = interp.WaitingHandlersRunAsTheyArrived
+	// And one of them that lost its trap to an earlier one before its turn
+	// runs nothing: `trap - USR2` in the handler of a HUP that came first
+	// goes on with no USR2. Measured 2026-11-01 on 5.9.2; see
+	// interp/waitingtrapgone.go (#7170).
+	s.WaitingSignalWithoutItsTrapIsResent = interp.No
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.Yes
 	// A pipeline whose last element ran here is judged once, by its status,
 	// unless that element is a compound whose body judged itself: `true | {

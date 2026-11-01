@@ -19665,10 +19665,13 @@ type Semantics struct {
 	// standard input does, and one of a number opened, handed over or moved
 	// there is given up; `-u0` is standard input, given up at the next byte
 	// only where a running builtin's own redirection opened it (`read l
-	// <fifo`, `eval 'read l' <fifo`). Not modeled: what a given-up `read -N`
-	// keeps for the next read (#7177). See docs/spec/semantics.md, "Where the
-	// stream came from". When the handler of a read that goes on runs is
-	// ReadHandlersRun.
+	// <fifo`, `eval 'read l' <fifo`). A `-N` read from a descriptor open for
+	// reading alone is not given up at all on standard input, and elsewhere
+	// only by a signal that arrives once it has taken a byte; one given up
+	// keeps what it took for the next read —
+	// ReadExactCountGivenUpKeepsWhatItTook (#7177). See
+	// docs/spec/semantics.md, "Where the stream came from" and "A `-N` read".
+	// When the handler of a read that goes on runs is ReadHandlersRun.
 	//
 	// unexhibited ReadAbandonedAtTheNextByte: no column answers it whole. It is
 	// the reading this shell had for all three, and ksh93's for the reads its
@@ -19691,6 +19694,48 @@ type Semantics struct {
 	//
 	// unpinned zsh: never asked, for the same reason.
 	ReadAbandonedWhen ReadAbandonmentReading
+	// ReadExactCountGivenUpKeepsWhatItTook decides what becomes of the bytes
+	// a `read -N` had taken when a trapped signal gives it up. Yes keeps
+	// them for the next `read` of the same number, which takes them before
+	// anything in the stream; no drops them. Either way the read reports the
+	// signal and assigns nothing (ReadExactCountKeepsPartial).
+	//
+	// ksh93u+ 2012-08-01 answers yes. Measured 2026-10-31 from -c, an INT
+	// trap `echo T`, `ab` waiting, INT 0.3 s into the read and `cd` and
+	// `end` half a second after it, ten runs a row with one answer:
+	//
+	//	script                                           ksh93                    this shell before
+	//	exec 4<>p 3<p; read -r -N 4 -u3 l; read -r -u3 m T, st=258 l=[], m=abcd   m=cd
+	//	exec 3<p; exec 4<&3; read -r -N 4 -u4 l; -u4 m   T, st=258 l=[], m=abcd   m=cd
+	//	exec 3<&0 on a pipe; -N 4 -u3 l; -u3 m           T, st=258 l=[], m=abcd   m=cd
+	//	exec 0<>p; read -r -N 4 l; read -r m             T, st=258 l=[], m=abcd   m=cd
+	//	exec 3<>p; read -r -N 4 -u3 l; read -r -u3 m     T, st=258 l=[], m=abcd   m=cd
+	//	exec 3<>p; read -r -N 4 l <&3; read -r m <&3     T, st=258 l=[], m=cd     the same
+	//
+	// They are not in the stream: `dd bs=1 count=2 <&3` after the give-up
+	// prints `cd`, and the `read -u3` after it has `ab`. They are the
+	// number's: after `exec 5<&3` and a give-up on 5, `read -u3` has `cd`,
+	// and after a give-up on 3 so does `read <&3`; a `-N 3 -u3` after a
+	// give-up on 3 has `abc`. A read's own redirection keeps them on the
+	// standard input it made, which goes with it — the last row. bash 5.3
+	// reads on through a trapped signal and never gives a `-N` read up for
+	// one.
+	//
+	// Not modeled: a short `-N` at the end keeps what it took the same way —
+	// `printf ab | ksh -c 'read -N 4 l; read m'` is st=1 l empty, then m=ab
+	// — where this shell drops it (#7220). And what opening the number again
+	// does to the kept bytes was not measured; this shell drops them there,
+	// as it drops the mark ReadCountAtTheEndSticksTheDescriptor leaves.
+	//
+	// Asked only where a trapped signal gave up a `-N` read that had taken
+	// something, in a dialect whose reads a trapped signal gives up.
+	//
+	// unpinned ksh: no corpus row can time a signal against a stream. Pinned
+	// by TestAGivenUpExactCountKeepsWhatItTookWhereTheShellsDo.
+	//
+	// unpinned bash: never asked. bash reads on through a trapped signal
+	// (ReadIsAbandonedByATrappedSignal is no).
+	ReadExactCountGivenUpKeepsWhatItTook Answer
 	// ReadTimeoutWaitEndedByATrappedSignal ends a `read -t` that is still
 	// waiting for its first byte when a trapped signal lands, as its deadline
 	// would have: the status is the timeout's and no name is touched. Nothing

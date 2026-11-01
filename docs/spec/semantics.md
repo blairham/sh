@@ -35511,9 +35511,11 @@ So the readings, each one a constant of `ReadAbandonmentReading`:
   deadline still bounding it, and no signal gives it up. A `-n` or `-N` read,
   and a read of a stream the shell opened at the number the read names, are
   given up at the next byte by a signal that arrives during them; neither kind
-  by one already waiting as it began. A read from a descriptor open both ways
-  is given up at the next byte by any signal waiting. Which streams fall where
-  is the next subsection.
+  by one already waiting as it began. Except `-N`, from a descriptor open for
+  reading alone: of standard input no signal gives it up, and of any other
+  number only one that arrives once it has taken a byte (*A `-N` read*, below).
+  A read from a descriptor open both ways is given up at the next byte by any
+  signal waiting. Which streams fall where is the next subsection.
 - `ReadAbandonedAtTheNextByte` is that last reading alone, and the one this
   shell had for all three columns before #7027. No column holds it whole.
 
@@ -35582,13 +35584,68 @@ The table holds a mark beside each copied entry, kept with the table the way
 the table when a command's redirections end, copied into a subshell — and
 `simpleCommand` hands a builtin the standard input its own redirection opened.
 
-**Not modeled**, all ksh93's, measured the same day (#7177): `read -N 4` given
-up keeps what it took for the next `read` of the stream — not in the stream:
-an external `head -c 2` after it reads `cd` — and answers 1 on a pipe, 258 by
-`-u`, and reads on from a fifo handed over as standard input; and after `read
--n 4` on a pipe with nothing in is given up at 258, every later read of that
-pipe answers 0 with an empty line, where here the next read has the line
-written after.
+**A `-N` read** (#7177). Measured 2026-10-31 against ksh93u+ 2012-08-01 from
+`-c`, with the *part of a line* shape — `first` waiting, INT 0.3 s into the
+read, `cd` and `end` half a second after — and the next read a plain `read -r
+m` of the same number unless it says otherwise. Ten runs a row, one answer
+each. "Reading alone" is `exec 4<>p 3<p`, `\n` is a newline, and "this shell"
+is before the change:
+
+| read | stream | `first` | ksh93 | this shell |
+| --- | --- | --- | --- | --- |
+| `read -r -N 4 l` | an inherited pipe or fifo, `-u0` too | `ab` | `T`, `st=0 l=[abcd]` | `T`, `st=258 l=[]`, next `cd` |
+| `read -r -N 4 l` | `exec 0<p`; `<&3`; its own `<p` | `ab` | `T`, `st=0 l=[abcd]` | the same |
+| `read -r -N 4 l <&3` | reading alone | nothing | `T`, `st=0 l=[cd\ne]`, next `nd` | `T`, `st=258 l=[]`, next `cd` |
+| `read -r -n 4 l` | an inherited pipe; `<&3`; its own `<p` | `ab` | `T`, `st=0 l=[ab]`, next `cd` | the same |
+| `read -r -N 4 -u3 l` | 3 opened; `exec 5<&3` and `-u5`; `exec 3<&0` on a pipe | `ab` | `T`, `st=258 l=[]`, next `abcd` | `T`, `st=258 l=[]`, next `cd` |
+| `read -r -N 4 -u3 l` | 3 opened, or a copy | nothing | `T`, `st=0 l=[cd\ne]`, next `nd` | `T`, `st=258 l=[]`, next `cd` |
+| `read -r -N 4 -u3 l` | `exec 3<>p` | `ab` | `T`, `st=258 l=[]`, next `abcd` | `T`, `st=258 l=[]`, next `cd` |
+| `read -r -N 4 l` | `exec 0<>p` | `ab` | `T`, `st=258 l=[]`, next `abcd` | `T`, `st=258 l=[]`, next `cd` |
+| `read -r -N 4 l <&3` | `exec 3<>p` | `ab` | `T`, `st=258 l=[]`, next `cd` | the same |
+| `-u3` or `0<>p` | open both ways | nothing | `T`, `st=258 l=[]`, next `cd` | the same |
+
+So two things, each keyed by a pair that holds the rest fixed:
+
+- **When it is given up.** From a descriptor open for reading alone, a `-N`
+  read of standard input is never given up — the first row against the
+  fourth, `-N` against `-n` on one stream, and `read -r -N 4 -u0 l` against
+  `exec 3<&0; read -r -N 4 -u3 l` on one pipe, 0 against another number. Of
+  any other number it is given up by a signal that arrives once it has taken a
+  byte, and reads on through one that lands while it waits for its first —
+  `ab` against nothing on one `-u3`. Open both ways it is given up at the next
+  byte as every read there is. This refines `ReadAbandonedOnlyAtTheStartOfALine`
+  for `-N`; no other column has the letter and a trapped signal that gives
+  reads up.
+- **What it keeps — `ReadExactCountGivenUpKeepsWhatItTook`.** Given up having
+  taken `ab`, it answers 258 with the name empty, and the next `read` of the
+  same number has `ab` first: `abcd`, or `abc` under `-N 3`. The bytes are the
+  shell's, not the stream's: `dd bs=1 count=2 <&3` after the give-up prints
+  `cd`, and the `read -u3` after that has `ab`. They are the number's: after
+  `exec 5<&3` and a give-up on 5, `read -u3` has `cd`, and after a give-up on
+  3 so does `read m <&3`. A read's own redirection keeps them on the standard
+  input it made, which goes with it — `read -r -N 4 l <&3` with 3 open both
+  ways leaves `cd` for the next `read m <&3`.
+
+This shell keeps them as a mark on the number, the one
+`ReadCountAtTheEndSticksTheDescriptor` leaves (#7179): made by one read, heeded
+by the next read of that number while it holds the same stream, taken off when
+the number is opened again, and dropped with a command's own redirection of
+standard input when that ends. That last is measured for the stuck mark too:
+`: >f; exec 3<f; read -n 4 l <&3; echo abc >>f; read m <&3` reads `abc` at 0
+in ksh93, where this shell had kept 0 stuck because `<&3` is the same stream
+both times.
+
+The issue was filed with a pipe answering `T`, `st=1 l=[]`, next `abcd`, against
+the fifo's `st=0`. Measured again with INT sent to ksh alone, the pipe is the
+fifo's answer in ten runs of ten. An INT sent to the writer's process group as
+well ends the pipe instead, and that is `T`, `st=1 l=[]`, next `ab` in five runs
+of five — which is the other half of what `-N` keeps:
+
+**Not modeled.** A short `-N` at the end keeps what it took the same way:
+`printf ab | ksh -c 'read -r -N 4 l; read -r m'` is `st=1 l=[]` and then
+`m=ab`, where this shell drops it (`ReadExactCountKeepsPartial` models only the
+empty name; #7220). And what opening the number again does to kept bytes was not
+measured; this shell drops them there.
 
 #### What a read that ends short keeps
 

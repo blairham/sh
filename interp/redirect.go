@@ -179,6 +179,7 @@ func (r *Runner) applyRedirList(
 	savedOut, savedIn, savedErr := r.Stdout, r.Stdin, r.Stderr
 	closers = append(closers, closerFunc(func() error {
 		r.Stdout, r.Stdin, r.Stderr = savedOut, savedIn, savedErr
+		r.forgetReadMarkOfAnotherStdin(savedIn)
 		return nil
 	}))
 	// The descriptor table is restored the same way the streams are, and by
@@ -192,7 +193,7 @@ func (r *Runner) applyRedirList(
 	// not have it either. See closeMovedSource.
 	var savedFds map[int]any
 	var savedExecFds, savedDupFds map[int]bool
-	var savedStuckReads map[int]io.Reader
+	var savedReadMarks map[int]readMark
 	saveFds := func() {
 		if fdsTouched {
 			return
@@ -204,14 +205,14 @@ func (r *Runner) applyRedirList(
 		// number for itself, and when the command ends the number goes back
 		// to being `exec`'s. Likewise a copy a command made over a number
 		// is that command's, and the number is what it was again after.
-		savedExecFds, savedDupFds, savedStuckReads = r.execFds, r.dupFds, r.stuckReads
+		savedExecFds, savedDupFds, savedReadMarks = r.execFds, r.dupFds, r.readMarks
 		r.fds = maps.Clone(r.fds)
 		r.execFds = maps.Clone(r.execFds)
 		r.dupFds = maps.Clone(r.dupFds)
-		r.stuckReads = maps.Clone(r.stuckReads)
+		r.readMarks = maps.Clone(r.readMarks)
 		closers = append(closers, closerFunc(func() error {
 			r.fds, r.execFds, r.dupFds = savedFds, savedExecFds, savedDupFds
-			r.stuckReads = savedStuckReads
+			r.readMarks = savedReadMarks
 			return nil
 		}))
 	}
@@ -2713,8 +2714,9 @@ func (r *Runner) setFd(fd int, v any) {
 	// the mark of a copy, which dupFd puts on after this.
 	delete(r.cloexecFds, fd)
 	delete(r.dupFds, fd)
-	// So is a `read -n` that stuck at the number: see Runner.readIsStuck.
-	delete(r.stuckReads, fd)
+	// So is a `read -n` that stuck at the number, and what a given-up
+	// `read -N` kept there: see readMark.
+	delete(r.readMarks, fd)
 }
 
 // builtinWriteStatus folds a failed output write into a builtin's status.

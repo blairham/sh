@@ -2357,6 +2357,12 @@ func Semantics() interp.Semantics {
 	// ReadCountAtTheEndSticksTheDescriptor (#7179).
 	s.ReadCountOfAPipeExecOpenedFindsItsEnd = interp.Yes
 	s.ReadCountAtTheEndSticksTheDescriptor = interp.Yes
+	// A `read -N 4 -u3` a trapped signal gives up with `ab` taken answers 258
+	// with the name empty, and the next `read -u3` has `abcd`: the shell kept
+	// the two bytes, and `dd bs=1 count=2 <&3` after the give-up has what
+	// came after them. Measured 2026-10-31 on ksh93u+ 2012-08-01, ten runs a
+	// row. See interp.Semantics.ReadExactCountGivenUpKeepsWhatItTook (#7177).
+	s.ReadExactCountGivenUpKeepsWhatItTook = interp.Yes
 	s.ReadTimeoutKeepsWhatArrived = interp.No
 	s.ReadTimeoutBoundsReadability = interp.No
 	// The escape is a byte's here, not a character's: `read` without -r takes

@@ -30,6 +30,16 @@ import (
 //
 // The first is what makes the second reachable on a pipe that still has a
 // line in it, which is the shape the issue was found in.
+//
+// And one thing it does with a `-N` read (#7177):
+//
+//   - Semantics.ReadExactCountGivenUpKeepsWhatItTook: a `-N` read a trapped
+//     signal gives up keeps the bytes it took, and the next `read` of the
+//     same number takes them first.
+//
+// The stuck number and the kept bytes are both a mark on the number, made by
+// one read and heeded by the next while the number holds the same stream;
+// readMark is that mark.
 
 // countedReadFindsItsEnd reports whether in is a stream the first of those
 // takes for at its end: a descriptor that is neither a regular file nor a
@@ -75,17 +85,34 @@ func (s streamAtItsEnd) Read([]byte) (int, error) {
 // Fd is the stream's own number, for the waits that poll it.
 func (s streamAtItsEnd) Fd() uintptr { return s.f.Fd() }
 
-// stickRead records that descriptor fd, which is stream, has had a `-n` read
-// find its end, in the dialect that keeps that. A stream that cannot be
-// compared is not recorded, and reads on.
-func (r *Runner) stickRead(fd int, stream io.Reader) {
+// readMark is what one number's stream carries from one `read` to the next,
+// in the dialect that carries anything: that a `-n` read found it at its end,
+// or the bytes a `-N` read a trapped signal gave up had taken. stream is the
+// stream the number held when the mark was made, and a read of the number
+// heeds the mark only while it still holds that stream.
+type readMark struct {
+	stream io.Reader
+	stuck  bool
+	kept   string
+}
+
+// markRead puts m on descriptor fd, which is stream. A stream that cannot be
+// compared is not marked, and reads on as though nothing had happened.
+func (r *Runner) markRead(fd int, stream io.Reader, m readMark) {
 	if stream == nil || !reflect.TypeOf(stream).Comparable() {
 		return
 	}
-	if r.stuckReads == nil {
-		r.stuckReads = map[int]io.Reader{}
+	if r.readMarks == nil {
+		r.readMarks = map[int]readMark{}
 	}
-	r.stuckReads[fd] = stream
+	m.stream = stream
+	r.readMarks[fd] = m
+}
+
+// stickRead records that descriptor fd, which is stream, has had a `-n` read
+// find its end, in the dialect that keeps that.
+func (r *Runner) stickRead(fd int, stream io.Reader) {
+	r.markRead(fd, stream, readMark{stuck: true})
 }
 
 // readIsStuck reports whether a read of descriptor fd, which is stream, is one
@@ -98,6 +125,69 @@ func (r *Runner) stickRead(fd int, stream io.Reader) {
 // own `read -n 4 l <empty` sticks the file it opened and not the standard
 // input that comes back after it.
 func (r *Runner) readIsStuck(fd int, stream io.Reader) bool {
-	held, ok := r.stuckReads[fd]
-	return ok && held == stream
+	m, ok := r.readMarks[fd]
+	return ok && m.stuck && m.stream == stream
 }
+
+// forgetReadMarkOfAnotherStdin takes the mark off standard input once a
+// command's redirections are undone and stdin, what it was before them, is
+// standard input again, where the mark was left on a stream other than that
+// one: the command's own, which goes with the command. Its number is 0 either
+// way, and a copy — `read l <&3` — is the same stream as the number it copies,
+// so neither the number nor the stream tells the two apart afterwards.
+//
+// Measured 2026-10-31 on ksh93u+: `exec 3<>fifo; read -r -N 4 l <&3` given
+// up by INT with `ab` taken leaves the next `read -r m <&3` reading `cd`, and
+// `: >f; exec 3<f; read -n 4 l <&3; echo abc >>f; read m <&3` reads `abc` at
+// 0 (#7177).
+func (r *Runner) forgetReadMarkOfAnotherStdin(stdin io.Reader) {
+	if m, ok := r.readMarks[0]; ok && m.stream != stdin {
+		delete(r.readMarks, 0)
+	}
+}
+
+// keepRead holds text, what a `-N` read a trapped signal gave up had taken,
+// for the next `read` of descriptor fd while it holds stream, in the dialect
+// that keeps it (#7177). Nothing outside the shell sees it: the bytes are off
+// the stream already, so a command run after the read reads what came after
+// them. See Semantics.ReadExactCountGivenUpKeepsWhatItTook.
+func (r *Runner) keepRead(fd int, stream io.Reader, text string) {
+	if text != "" {
+		r.markRead(fd, stream, readMark{kept: text})
+	}
+}
+
+// keptRead is what keepRead holds for a read of descriptor fd, which is
+// stream: on the terms readIsStuck keeps, the number and then the stream, so
+// a copy of the number, the source it was copied from and the number opened
+// again read the stream itself. The caller hands back what it did not use.
+func (r *Runner) keptRead(fd int, stream io.Reader) string {
+	m, ok := r.readMarks[fd]
+	if !ok || m.kept == "" || m.stream != stream {
+		return ""
+	}
+	delete(r.readMarks, fd)
+	return m.kept
+}
+
+// keptFirst is a byte source that hands out kept before it asks next, the
+// source of a `read` whose number holds what a given-up `-N` read took. The
+// kept bytes are there to be read and are handed out without a wait, the way
+// a byte already in the stream would be.
+type keptFirst struct {
+	kept string
+	at   int
+	next func() (byte, int)
+}
+
+func (k *keptFirst) read() (byte, int) {
+	if k.at < len(k.kept) {
+		c := k.kept[k.at]
+		k.at++
+		return c, evByte
+	}
+	return k.next()
+}
+
+// rest is what the read did not take of kept, still the number's.
+func (k *keptFirst) rest() string { return k.kept[k.at:] }

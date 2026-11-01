@@ -3354,11 +3354,13 @@ type Runner struct {
 	// a second name for a stream another number already held. See
 	// Runner.duplicated, which says who reads it.
 	dupFds map[int]bool
-	// stuckReads are the numbers a `read -n` found at its end, in the
-	// dialect where that sticks, each with the stream it found there. See
-	// Runner.readIsStuck, which says who reads it, and
-	// Semantics.ReadCountAtTheEndSticksTheDescriptor.
-	stuckReads map[int]io.Reader
+	// readMarks are the numbers a `read` left a mark on for the next one,
+	// each with the stream it read there: a `-n` read that found its end, in
+	// the dialect where that sticks, and what a `-N` read a trapped signal
+	// gave up had taken, in the dialect that keeps it. See readMark, and
+	// Semantics.ReadCountAtTheEndSticksTheDescriptor and
+	// ReadExactCountGivenUpKeepsWhatItTook.
+	readMarks map[int]readMark
 	// cloexecFds are the numbers in that table a builtin has marked as not
 	// reaching what this shell runs — `sysopen -o cloexec` and nothing else
 	// so far. See Runner.KeepDescriptorFromChildren, which is the only

@@ -2731,6 +2731,9 @@ func Semantics() interp.Semantics {
 	// pinned image, BusyBox v1.37.0 (#7179).
 	s.ReadCountOfAPipeExecOpenedFindsItsEnd = interp.No
 	s.ReadCountAtTheEndSticksTheDescriptor = interp.No
+	// unanswered ReadExactCountGivenUpKeepsWhatItTook: `read` has `-n` and no
+	// `-N` here (ReadOptions), and the axis is asked only of a `-N` read a
+	// trapped signal gave up.
 
 	// `set -e` stops for a failure only pipefail saw: `set -eo pipefail;
 	// false | true; echo reached` reaches nothing and the shell ends at 1,

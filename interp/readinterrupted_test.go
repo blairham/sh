@@ -62,7 +62,7 @@ func TestASignalLandingBetweenTheTwoQuestionsAtAByteStillGivesTheReadUp(t *testi
 			sem.ReadHandlersRun = ReadHandlersRunAsSoonAsTheyArrive
 			r := newTestRunner(t, &Runner{Semantics: &sem})
 			r.sigs().traps["INT"] = "echo T"
-			w, ok := r.trapWatchFor(context.Background(), tc.in, tc.fd, false)
+			w, ok := r.trapWatchFor(context.Background(), tc.in, tc.fd, false, false)
 			if !ok {
 				t.Fatal("no watch for a read with INT trapped")
 			}

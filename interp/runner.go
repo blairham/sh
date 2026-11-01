@@ -5822,9 +5822,9 @@ type Runner struct {
 	// value. Written at setup and never again, so a subshell shares it. See
 	// MarkLocalKeepsTheOuterValue.
 	localKeepsOuter map[string]bool
-	// emptyShadows counts the `local` operands declared over a name with
-	// nothing to shadow, so a test can show the route is reached. See
-	// emptyshadow.go.
+	// emptyShadows counts the declaration operands that made a local over a
+	// name with nothing to shadow, so a test can show the route is reached.
+	// See emptyshadow.go.
 	emptyShadows int
 	// heldSubscriptFailure, where it is set, receives the sentence about a
 	// subscript that would not evaluate in place of the shell writing it, for

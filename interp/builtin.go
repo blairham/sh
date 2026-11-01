@@ -8457,7 +8457,7 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 		// See declareNames: this line's numeric letter evaluates the value.
 		r.declarationEvaluatesItsValue = hasValue && (f.integer || f.float)
 		if plainScope != nil && !appends && r.shadowsNothing(plainScope, name) {
-			r.declareOverNothing(plainScope, name, value, hasValue, f, asked)
+			r.declareOverNothing(plainScope, name, value, hasValue, f, asked, assignedAnyhow)
 			if hasValue && r.ctl == controlExit {
 				return r.status
 			}

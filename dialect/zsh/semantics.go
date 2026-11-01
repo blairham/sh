@@ -167,6 +167,10 @@ func Semantics() interp.Semantics {
 	// The same, and zsh is worth stating rather than assuming: it forks for
 	// a `( )` that has a command after it, which is where this was measured.
 	s.SubshellRunsOnAfterSignalingTheShell = interp.Yes
+	// And with the signal trapped: `trap 'echo T' USR1; (kill -USR1 $$; echo
+	// in); echo "after $?"` writes `in`, `T` and `after 0`. Measured
+	// 2026-11-01 on zsh 5.9.2 (#7168).
+	s.SubshellEndsWhenItSendsTheShellATrappedSignal = interp.No
 	// And it announces both ends of a job on that route: measured on
 	// `-i script.sh` through a pseudo-terminal, `[1] <pid>` as the job
 	// starts and `[1]  + done       sleep 0.3` as it ends.

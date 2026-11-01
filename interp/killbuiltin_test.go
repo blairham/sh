@@ -49,6 +49,9 @@ func killSem() Semantics {
 	// finishes its body and the parent stops afterwards. The other answer
 	// has cases of its own.
 	s.SubshellRunsOnAfterSignalingTheShell = Yes
+	// And the same with the signal trapped: the subshell finishes and the
+	// parent runs the handler afterwards.
+	s.SubshellEndsWhenItSendsTheShellATrappedSignal = No
 	// A number written after `-s` is the number, which is four of the five
 	// columns and the core's own reading. The one that holds `-s` to a name
 	// is pinned in dialect/zsh; answering it here keeps a case about some

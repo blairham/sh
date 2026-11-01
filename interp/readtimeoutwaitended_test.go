@@ -57,13 +57,15 @@ func signalLandsInTheFirstWait(first string) string {
 func TestAnOrdinaryTimedReadAsksNothingAboutASignalEndingItsWait(t *testing.T) {
 	// The core answers none of what the scripts pass on the way to the read
 	// either — whether the descriptors `exec` parks reach `mkfifo`, the jobs a
-	// command substitution sees, the status and parse of a trap body — so
-	// those are POSIX's, which are not the question, and the jobs are kept.
+	// command substitution sees, the status and parse of a trap body, whether
+	// a substitution's trapped `kill $$` ends it — so those are POSIX's, which
+	// are not the question, and the jobs are kept.
 	core, posix := CoreSemantics(), PosixSemantics()
 	core.ExecOpenedFdReachesACommand = posix.ExecOpenedFdReachesACommand
 	core.SubshellJobTable = SubshellJobsKept
 	core.SignalHandlerSeesEarlierStatus = posix.SignalHandlerSeesEarlierStatus
 	core.TrapBodyRunsWhatParsed = posix.TrapBodyRunsWhatParsed
+	core.SubshellEndsWhenItSendsTheShellATrappedSignal = posix.SubshellEndsWhenItSendsTheShellATrappedSignal
 	for _, bounded := range []Answer{Yes, No} {
 		sem := timedReadOn(core, bounded)
 		for _, tc := range []struct{ name, src, want string }{

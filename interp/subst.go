@@ -309,6 +309,11 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 		// finished. See unforkeddeath.go.
 		return ""
 	}
+	if r.takeOverATrappedSignalEnd(sub) {
+		// And so does a trapped signal the body sent the shell. See
+		// subshelltrappedsignal.go.
+		return ""
+	}
 	v := r.substitutedValue(out.String())
 	// A trapped signal another process sent while the body ran is handled
 	// here in the dialects that handle it before the rest of the command's

@@ -517,6 +517,10 @@ func Semantics() interp.Semantics {
 	// The same, and measured the same way: dash forks for `( )`, so the
 	// subshell outlives the signal its `kill` sent the shell.
 	s.SubshellRunsOnAfterSignalingTheShell = interp.Yes
+	// And with the signal trapped: `trap 'echo T' USR1; (kill -USR1 $$; echo
+	// in); echo "after $?"` writes `in`, `T` and `after 0`. Measured
+	// 2026-11-01 (#7168).
+	s.SubshellEndsWhenItSendsTheShellATrappedSignal = interp.No
 	// dash has somebody to tell on this route, and tells them exactly one
 	// thing: measured on `-i script.sh` through a pseudo-terminal it writes
 	// `[1] + Done sleep 0.3` and never the line that starts the job. The

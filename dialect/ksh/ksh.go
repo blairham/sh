@@ -4331,6 +4331,11 @@ func Semantics() interp.Semantics {
 	// the next command. Measured: `(kill -TERM $$; echo inner)` prints
 	// nothing at all, where the five that fork print `inner` and then die.
 	s.SubshellRunsOnAfterSignalingTheShell = interp.No
+	// And a trapped one ends it the same way, the handler running in the
+	// shell once it is over: `trap 'echo T' USR1; (kill -USR1 $$; echo in);
+	// echo "after $?"` writes `T` and `after 286`. Measured 2026-11-01 on
+	// ksh93u+ 2012-08-01, alone in the panel (#7168).
+	s.SubshellEndsWhenItSendsTheShellATrappedSignal = interp.Yes
 	// And it announces both ends of a job on that route: measured on
 	// `-i script.sh` through a pseudo-terminal, `[1]\t<pid>` as the job
 	// starts and `[1] +  Done  sleep 0.3 &` as it ends.

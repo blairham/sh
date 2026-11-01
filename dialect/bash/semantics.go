@@ -3625,6 +3625,10 @@ func Semantics() interp.Semantics {
 	// inside one reports the subshell rather than the shell as its parent —
 	// so a signal aimed at `$$` never reaches it and it finishes its body.
 	s.SubshellRunsOnAfterSignalingTheShell = interp.Yes
+	// And with the signal trapped: `trap 'echo T' USR1; (kill -USR1 $$; echo
+	// in); echo "after $?"` writes `in`, `T` and `after 0`. Measured
+	// 2026-11-01 on bash 5.3.20 (#7168).
+	s.SubshellEndsWhenItSendsTheShellATrappedSignal = interp.No
 	// And bash is the one member of the panel that announces nothing on
 	// this route. Measured on `-i script.sh` through a pseudo-terminal:
 	// 5.3.15, 3.2.57 and 3.2 run as `sh` all print neither the start nor

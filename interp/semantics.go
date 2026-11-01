@@ -7143,6 +7143,42 @@ type Semantics struct {
 	// forking reading, and it is five of the six.
 	SubshellRunsOnAfterSignalingTheShell Answer
 
+	// SubshellEndsWhenItSendsTheShellATrappedSignal ends a `( … )` or
+	// `$( … )` the shell runs in its own process when something inside it
+	// sends the shell a signal the shell has trapped: the subshell stops as
+	// a command killed by the signal, every unforked subshell around it with
+	// it, and the handler runs in the shell once they are over.
+	//
+	//	trap 'echo T' USR1; (kill -USR1 $$; echo in); echo "after $?"
+	//
+	// writes `T` and `after 286` in ksh93, and `in`, `T` and `after 0` in
+	// bash, zsh and dash, which run the parentheses in a child the signal
+	// never reaches. Measured 2026-11-01 under `-c`, five runs each: ksh93u+
+	// 2012-08-01 yes; bash 5.3.20, zsh 5.9.2 and dash no (#7168). A `{ …; }`
+	// group runs the handler at once and carries on in all four, and a
+	// pipeline element ksh93 forks runs on there too.
+	//
+	// It is the trapped half of SubshellRunsOnAfterSignalingTheShell, and
+	// asked only where that one is not: in a subshell the dialect may run
+	// in its own process, for a trapped signal aimed at `$$`. See
+	// subshelltrappedsignal.go for the rows.
+	//
+	// unpinned bash: no corpus row has a trapped `kill $$` inside a
+	// subshell; pinned by TestASubshellEndsOnATrappedSignalToTheShellInOneDialect.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestASubshellEndsOnATrappedSignalToTheShellInOneDialect.
+	//
+	// unpinned zsh: the same reach, pinned by
+	// TestASubshellEndsOnATrappedSignalToTheShellInOneDialect.
+	//
+	// unpinned dash: the same reach, pinned by
+	// TestASubshellEndsOnATrappedSignalToTheShellInOneDialect.
+	//
+	// unpinned ash: not measured, there being no BusyBox here; it forks for
+	// a subshell, as SubshellRunsOnAfterSignalingTheShell records.
+	SubshellEndsWhenItSendsTheShellATrappedSignal Answer
+
 	// HangupIsAnOrderlyExit makes an untrapped SIGHUP end the shell the way
 	// `exit 1` would rather than by the signal's default action.
 	//
@@ -38444,6 +38480,9 @@ func PosixSemantics() Semantics {
 		// not the process the signal was aimed at, so it finishes its body.
 		// Five of the six as well.
 		SubshellRunsOnAfterSignalingTheShell: Yes,
+		// And the same copy runs on after a trapped signal: the handler is
+		// the parent's, and the parent runs it once the copy is done.
+		SubshellEndsWhenItSendsTheShellATrappedSignal: No,
 		// The standard describes `exit` as exiting and says nothing about a
 		// job left stopped, so the base leaves; bash and zsh, which stay and
 		// warn, override.

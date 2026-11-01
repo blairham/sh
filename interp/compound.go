@@ -244,6 +244,9 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// And a fatal signal from outside the body held is this shell's now.
 		// See unforkeddeath.go.
 		r.takeOverAHeldDeath(sub)
+		// And a trapped signal the body sent the shell ends the subshell
+		// around it too. See subshelltrappedsignal.go.
+		r.takeOverATrappedSignalEnd(sub)
 		// And a signal that ended the *parentheses themselves* is a child
 		// this shell has to say something about, in the dialect that says
 		// anything about one. It is the same sentence an external command

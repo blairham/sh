@@ -8438,6 +8438,12 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 	// What a valueless operand asks of the letters, answered once for the
 	// line: see lettersAsked. An operand that changes its copy asks again.
 	lineAsked := askLetters(f)
+	// A line with no letters may take an operand over a name with nothing
+	// standing under it without the questions below — see emptyshadow.go.
+	var plainScope *scope
+	if r.plainLocalLine(f) {
+		plainScope = r.scopes[len(r.scopes)-1]
+	}
 	for _, a := range args {
 		// The line's letters, copied per operand: what one operand adds to
 		// them is its own. A fresh local of one of the shell's own integer
@@ -8450,6 +8456,13 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 		name, value, hasValue, appends := r.declarationOperand(a)
 		// See declareNames: this line's numeric letter evaluates the value.
 		r.declarationEvaluatesItsValue = hasValue && (f.integer || f.float)
+		if plainScope != nil && !appends && r.shadowsNothing(plainScope, name) {
+			r.declareOverNothing(plainScope, name, value, hasValue, f, asked)
+			if hasValue && r.ctl == controlExit {
+				return r.status
+			}
+			continue
+		}
 		// The hide-in-scope letter asks for an ordinary local over the
 		// shell's own name, which is the one way past the second reason
 		// alone. Measured — see Runner.refusePrivateDeclaration. The bare

@@ -6543,8 +6543,8 @@ func (emptyReader) Read([]byte) (int, error) { return 0, io.EOF }
 // writer is not wrapped twice. See lockedWriter and streamseal.go.
 func (r *Runner) printf(format string, args ...any) {
 	r.releaseHeldTraceBeforeWriting()
-	if _, err := fmt.Fprintf(r.lockedStdout(), format, args...); err != nil {
-		r.writeFailed = err
+	if n, err := fmt.Fprintf(r.lockedStdout(), format, args...); err != nil {
+		r.writeFailed = failedPartWay(n, err)
 	}
 }
 

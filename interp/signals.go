@@ -138,7 +138,8 @@ type signalState struct {
 	// a write past `ulimit -f`'s XFSZ — so the kernel's own copies of them,
 	// forwarded whenever the shell has asked to handle one, are dropped
 	// rather than counted again. A count and not a flag, because a script may
-	// break several pipes before anything looks at the pending list.
+	// break several pipes before anything looks at the pending list, and one
+	// write that broke its pipe part-way can raise two (#7201).
 	//
 	// A credit nobody spends costs at most one later copy of the same signal
 	// from outside the process, which is not a thing a shell's own failed
@@ -1041,7 +1042,10 @@ func (r *Runner) selfSignaled(name string) {
 // above states from the other side. Recording it on the shared list is what a
 // naive fix does, and it makes the parent run its own PIPE handler for a
 // broken pipe an element caused: measured, no panel shell does that either.
-func (r *Runner) writeSignalAbsorbed(name string, deliver bool) {
+//
+// copies is how many of the runtime's copies the write may have raised. A
+// broken pipe can raise two, which is in brokenpartway.go.
+func (r *Runner) writeSignalAbsorbed(name string, deliver bool, copies int) {
 	if deliver && r.traps != nil {
 		// A subshell's own handler, for a signal that never left the
 		// subshell. Run between the subshell's commands, and once more as
@@ -1058,7 +1062,7 @@ func (r *Runner) writeSignalAbsorbed(name string, deliver bool) {
 	if s.writeAbsorbed == nil {
 		s.writeAbsorbed = map[string]int{}
 	}
-	s.writeAbsorbed[name]++
+	s.writeAbsorbed[name] += copies
 	s.poke()
 }
 

@@ -69,7 +69,7 @@ const (
 // it, and no panel shell runs that handler for a copy only the subshell had.
 func (r *Runner) answerAWritePastTheFileSizeLimit() overrunEnding {
 	arranged := r.signalArranged("XFSZ")
-	r.writeSignalAbsorbed("XFSZ", arranged == signalHandledBy)
+	r.writeSignalAbsorbed("XFSZ", arranged == signalHandledBy, 1)
 	if arranged != signalFatal {
 		return overrunFails
 	}

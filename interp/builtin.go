@@ -5026,8 +5026,8 @@ func biEcho(r *Runner, _ context.Context, args []string) int {
 				out += "\n"
 			}
 			if out != "" {
-				if _, err := r.stdout().Write([]byte(out)); err != nil {
-					r.writeFailed = err
+				if n, err := r.stdout().Write([]byte(out)); err != nil {
+					r.writeFailed = failedPartWay(n, err)
 				}
 			}
 			return r.status
@@ -5044,8 +5044,8 @@ func biEcho(r *Runner, _ context.Context, args []string) int {
 	}
 	// Recorded, not returned: whether a write that went nowhere fails the
 	// command is the dispatcher's question, answered once for every builtin.
-	if _, err := r.stdout().Write([]byte(out)); err != nil {
-		r.writeFailed = err
+	if n, err := r.stdout().Write([]byte(out)); err != nil {
+		r.writeFailed = failedPartWay(n, err)
 	}
 	return 0
 }

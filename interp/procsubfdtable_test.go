@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // highestInheritedFd is how far up the table the sweep below looks.
@@ -75,6 +77,10 @@ const quietFdTableTimeout = 2 * time.Minute
 // measure around it — applied where it holds for the whole run rather than for
 // the first instant of it.
 //
+// A child is a binary built the way this one was, so under -race it would sleep
+// a second before exiting, and that second was the whole of what a case cost
+// here; testenv.WithoutRaceExitPause is what takes it away.
+//
 // The one thing a child does not get for free is the descriptors the *host*
 // handed down: os/exec closes nothing it did not open, and an inherited number
 // without close-on-exec is inherited again. keepInheritedDescriptorsOutOfChildren
@@ -103,7 +109,7 @@ func measuredInAQuietDescriptorTable(t *testing.T) bool {
 	}
 	cmd := exec.Command(exe, "-test.run=^"+regexp.QuoteMeta(name)+"$", "-test.v",
 		"-test.timeout="+quietFdTableTimeout.String())
-	cmd.Env = append(os.Environ(), quietFdTableEnv+"=1")
+	cmd.Env = testenv.WithoutRaceExitPause(append(os.Environ(), quietFdTableEnv+"=1"))
 	out, runErr := cmd.CombinedOutput()
 	if !strings.Contains(string(out), "=== RUN   "+name+"\n") {
 		t.Fatalf("the quiet-table run of %s never started it (%v) — a child that "+
@@ -161,7 +167,7 @@ func measuredInACrowdedDescriptorTable(t *testing.T) bool {
 	}
 	cmd := exec.Command(exe, "-test.run=^"+regexp.QuoteMeta(name)+"$", "-test.v",
 		"-test.timeout="+quietFdTableTimeout.String())
-	cmd.Env = append(os.Environ(), crowdedFdTableEnv+"=1", quietFdTableEnv+"=1")
+	cmd.Env = testenv.WithoutRaceExitPause(append(os.Environ(), crowdedFdTableEnv+"=1", quietFdTableEnv+"=1"))
 	for range crowdedFdTableHeld {
 		held, err := os.Open(os.DevNull)
 		if err != nil {

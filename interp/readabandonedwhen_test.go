@@ -109,6 +109,12 @@ func TestEachReadingGivesUpAReadWhereItSays(t *testing.T) {
 		{ReadAbandonedOnlyAtTheStartOfALine, readOn, gaveUp, readOnLate, gaveUpAtOnce},
 	} {
 		t.Run(tc.reading.String(), func(t *testing.T) {
+			// Side by side with each other and with nothing else: every
+			// reading is Runners, a fifo and a directory of its own, the
+			// `kill $$` is delivered to the Runner's own trap rather than to
+			// the process, the test itself stays serial, and the readings'
+			// time is their scripts' sleeps (#7290).
+			t.Parallel()
 			sem := unansweredWhen()
 			sem.ReadAbandonedWhen = tc.reading
 			for _, c := range []struct{ name, src, want string }{

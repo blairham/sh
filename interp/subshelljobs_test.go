@@ -76,6 +76,10 @@ func TestASubshellsViewOfTheParentsJobs(t *testing.T) {
 		},
 	} {
 		t.Run(b.name, func(t *testing.T) {
+			// Side by side with each other and with nothing else: every row
+			// is a Runner, a directory and a job of its own, the test itself
+			// stays serial, and the rows' time is the job's sleep (#7290).
+			t.Parallel()
 			src := `/bin/sleep 0.4 & first=$!; ` + b.body + tail
 			for _, a := range []struct {
 				name   string
@@ -87,6 +91,7 @@ func TestASubshellsViewOfTheParentsJobs(t *testing.T) {
 				{"kept outside a compound", SubshellJobsKeptOutsideACompound, b.outsideCompound},
 			} {
 				t.Run(a.name, func(t *testing.T) {
+					t.Parallel()
 					if got := strings.TrimSpace(subshellJobsRun(t, a.answer, src)); got != a.want {
 						t.Errorf("got %q, want %q", got, a.want)
 					}

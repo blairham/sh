@@ -107,6 +107,10 @@ wait`
 		{"a background job's own body", `{ /bin/sleep 0.1; jobs -p >s.txt; } & wait`},
 	} {
 		t.Run(b.name, func(t *testing.T) {
+			// Side by side with each other and with nothing else: every row
+			// is a Runner, a directory and a job of its own, the test itself
+			// stays serial, and the rows' time is the job's sleep (#7290).
+			t.Parallel()
 			src := "/bin/sleep 0.4 & first=$!\n" + b.body + tail
 			if got := subshellMonitorRun(t, true, src); got != "parents" {
 				t.Errorf("with the monitor on: got %q, want the parent's job", got)

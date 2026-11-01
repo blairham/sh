@@ -1168,7 +1168,7 @@ func (r *Runner) takeSelfPending() []string {
 // dash, bash 5.3, ksh93 and zsh all put the handler's output in that file, so
 // the handler runs while the redirection is still in force.
 func (r *Runner) runSelfRaisedTraps(ctx context.Context) {
-	if !r.inSubshell || len(r.selfPending) == 0 && r.inbox == nil {
+	if !r.inSubshell || len(r.selfPending) == 0 && r.inbox == nil && !r.copiesSignaled() {
 		return
 	}
 	r.runPendingTraps(ctx)
@@ -1502,6 +1502,12 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 				r.signalDeath(name, sig)
 				return
 			}
+		}
+		// And what a copy of this body aimed at it, which settles exactly
+		// as the body's own `kill` would have: a handler goes on the list
+		// read next, and a death ends the body here. See selfkillbody.go.
+		if r.settleCopiesSignals() {
+			return
 		}
 		pending := r.takeSelfPending()
 		if r.inbox != nil {

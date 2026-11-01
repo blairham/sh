@@ -3730,6 +3730,25 @@ And nothing leaves the process, which is the rule the core already holds for
 either, and that is part of the answer rather than an omission: a body that
 has just been handed its group id may be about to start something in it.
 
+**A copy of the body aiming at the same number is aiming at the body.** A
+pipeline element, a nested `( … )` or a command substitution inside it is a
+fork of its own, and the body's number is still the body:
+
+    ( trap 'echo U' USR1; p=$BASHPID; { kill -USR1 $p; echo l; } | cat; echo after )
+    ( trap 'echo T' TERM; p=$BASHPID; (kill $p; echo inner); echo after )
+
+    bash 5.3.20, zsh 5.9.2 ($sysparams[pid])  → l U after;  inner T after
+
+The handler runs once the copy is done and before the body's next command,
+or as the body ends when the copy was its last command. Untrapped, the
+*body* dies of it at 128 + N and the copy finishes its line first — `( p=$BASHPID;
+(kill $p; echo inner); echo after )` prints `inner` and leaves 143 — and an
+ignored one does nothing. That is every answer of the rule above, given by
+the body; the two references agree on all of it, measured 2026-11-01, so
+there is no axis. Before #7233 the copy's signal reached the body's
+placeholder, no handler ran, and a pipeline's next external, started into the
+placeholder's group as it died, failed with `operation not permitted`.
+
 ## The other fatal signal, which is fatal without being a death
 
     kill -HUP $$; echo after

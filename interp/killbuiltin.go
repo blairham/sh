@@ -1186,6 +1186,12 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 		if r.aimedAtThisBody(pid) {
 			return r.signalThisBody(name, sig)
 		}
+		// And the group of a body this runner is a copy of, which is that
+		// body's to answer and never its placeholder's (#7233).
+		if a := r.bodyAroundNamed(pid); a != nil {
+			r.signalTheBodyAround(a, name, sig)
+			return nil
+		}
 		if aimedAtTheShellsOwnGroup(pid) {
 			return r.signalTheShellsOwnGroup(pid, name, sig)
 		}

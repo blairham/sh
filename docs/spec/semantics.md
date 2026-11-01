@@ -12037,8 +12037,9 @@ So the split is one axis — does a builtin whose output write failed report
 three: `echo` and `printf` each promise a status greater than zero when "an
 error occurred" (POSIX XCU, EXIT STATUS), and a write that went nowhere is
 one. The message is a Diagnostics wording,
-`BuiltinWriteError`, empty where nothing is said: ksh93 fails silently, and
-zsh does not fail at all. zsh does print `write error: bad file descriptor`
+`BuiltinWriteError`, empty where nothing is said: ksh93 fails silently here,
+and zsh does not fail at all. Both are answers about EBADF; see *Every other
+errno* below. zsh does print `write error: bad file descriptor`
 — status still 0 — when the closed stream came from `exec >&-` or a group
 redirect rather than from the simple command's own; that wording-without-
 failure is measured, recorded here, and not reproduced.
@@ -12047,6 +12048,73 @@ Two corners deliberately not modeled beyond the record: ksh93's `pwd >&-`
 reports 0 where its `echo hi >&-` reports 1, so its answer is per builtin
 in a way one axis does not carry; and zsh's exec-closed message above. Both
 are visible in the corpus if a case ever asks.
+
+### Every other errno
+
+`>&-` is EBADF, and a pipe nobody reads is EPIPE; both have an axis. A write
+past `ulimit -f` with SIGXFSZ ignored or handled is EFBIG, and a write onto a
+full disk is ENOSPC, and neither is a question: every reference fails the
+command at 1. Measured 2026-11-01 on macOS, each shell in a session of its
+own — GNU bash 5.3.20 (also as `sh`), `/bin/bash` 3.2.57, `/bin/dash`,
+`/bin/ksh` 93u+, zsh 5.9.2:
+
+    trap '' XFSZ; ulimit -f 1; printf "%4000s" x > f; echo after=$?
+      bash 5.3, as sh   printf: File too large
+                        printf: write error: File too large      after=1
+      bash 3.2          printf: write error: File too large      after=1
+      dash              dash: 1: printf: printf: I/O error       after=1
+      ksh93             ksh: printf: write to 1 failed [File too large]   after=1
+      zsh               zsh:printf:1: write error: file too large         after=1
+
+`echo "$x" > f` with a 2000-byte `$x` answers the same in every column, bash
+5.3 with one line. A handler in place of the ignore (`trap 'echo caught >&2'
+XFSZ`) leaves the same complaint and the same 1 and runs after the complaint;
+zsh runs it twice before its complaint and once after, which is not modeled.
+The same `printf` and `echo` onto a pre-created file on a full disk image are
+1 in bash 5.3, dash, ksh93 and zsh, each in its wording above, with `No space
+left on device` wherever the wording carries a reason.
+
+So the errno that is odd in zsh is EBADF, not EFBIG: zsh fails `echo hi >&-`
+not at all and fails EPIPE, EFBIG and ENOSPC at 1, naming the builtin.
+`BuiltinWriteErrorFailsTheCommand` is asked for EBADF alone, and every errno
+but EBADF and EPIPE fails the command without asking. EBADF is the key rather
+than "closed": a descriptor open for reading refuses a write with the same
+errno, and `exec 3</etc/hosts; echo hi >&3` is 0 in zsh and a silent 1 in
+ksh93, exactly as `echo hi >&-` is.
+
+ksh93 is EBADF's other odd column, for the wording rather than the status. It
+fails a closed descriptor in silence and words every other failure as `write
+to 1 failed [<reason>]` behind the builtin's name — that is
+`Diagnostics.BuiltinWriteError` with
+`Diagnostics.BuiltinWriteErrorSilentForABadDescriptor`. The number is 1 in
+every row: `printf … >&4` says `write to 1 failed` too. `print -u4` into a
+file past the limit is 0 and silent, where `print -u1` is 1 and says the
+sentence, so a write `-u` moved off 1 is not checked for anything but EBADF.
+
+Which builtins fail is still `BuiltinWriteErrorFailsOnlyThese`, read now for
+every errno but EPIPE. zsh names the same three ksh93 does: `set`, `typeset
+-p`, `alias` and `export` past the limit are 0 and silent, and so is `set`
+onto a full disk. ksh93's listings do something neither dialect models: `set >
+f` past the limit says `ksh: write to 1 failed [File too large]` with no
+builtin named and ends the shell at 1, as a special builtin's error does, and
+`export > f` the same with `export:` in front.
+
+**bash 5.3's first `printf` line is recorded and not modeled.** It is keyed on
+how much `printf` produced past the limit, not on the errno — a full disk
+draws it as well — and only on output from a conversion: `printf "$x"` with a
+3000-byte `$x` as the format is one line, and `printf "${x}%s" y` is two.
+`echo` never draws it, and bash 3.2 does not have it. Measured on one `%Ns`
+conversion into a fresh file, the second line appears once N passes:
+
+    limit (bytes)    512    1024    2048    4096
+    one line up to  1024    2048    3072    5120
+    two lines from  1025    2049    3073    5121
+
+That is the limit rounded down to a multiple of 1024, plus 1024 — the shape of
+an output buffer of 1024 bytes being flushed mid-conversion and failing, as
+opposed to only failing at the end. Reproducing it would mean modeling the
+reference's own output buffering, which this shell does not have, so the line
+is left unsaid (#7172).
 
 
 ## Locale, decided as a policy
@@ -33011,6 +33079,11 @@ and ash; zsh keeps the builtin's own status and quietly loses the text.
 write.** The other errno is
 `BrokenPipeWriteErrorFailsTheCommand` below, and it exists because two
 dialects answer the pair in opposite directions.
+
+It is keyed on **EBADF** — a descriptor closed, or open only for reading —
+and asked for nothing else: a write past `ulimit -f` with SIGXFSZ arranged
+away, or onto a full disk, fails the command at 1 in every reference, zsh
+included, and needs no axis (#7172; see *Every other errno*).
 
 Whether anything is *said* about it is the dialect's wording rather than
 a second axis. Asked only when a write has actually failed, so `echo hi`

@@ -132,7 +132,7 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		expanded, stopped := expandPrintEscapes(text)
 		if stopped {
 			_, err := io.WriteString(out, expanded)
-			recordPrintWriteError(r, err)
+			recordPrintWriteError(r, opts.fd, err)
 			return 0
 		}
 		text = expanded
@@ -141,7 +141,7 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 		text += "\n"
 	}
 	_, err := io.WriteString(out, text)
-	recordPrintWriteError(r, err)
+	recordPrintWriteError(r, opts.fd, err)
 	return 0
 }
 
@@ -153,8 +153,17 @@ func printBuiltin(r *interp.Runner, ctx context.Context, args []string) int {
 // ended answers 0 and the shell lives, measured 2026-09-13 (see the ksh test
 // TestAnOutputDuplicationDoesNotRetireAnUnnamedCoprocess), and handing EPIPE
 // over would make it the SIGPIPE death an untrapped pipe write is.
-func recordPrintWriteError(r *interp.Runner, err error) {
-	if errors.Is(err, syscall.EPIPE) {
+//
+// And so is any other errno on a descriptor `-u` moved off 1, short of EBADF.
+// Measured 2026-11-01 on ksh93u+, past `ulimit -f 1` with XFSZ ignored:
+// `exec 4>f; print -u4 "$long"` is 0 and says nothing, where `print -u1
+// "$long" > f` is 1 and says `ksh: print: write to 1 failed [File too large]`
+// -- the sentence names 1 because 1 is the only descriptor it is said for.
+// EBADF on such a descriptor still fails: `exec 4</etc/hosts; print -u4 hi`
+// is 1, with a sentence of its own (`bad file unit number [Bad file
+// descriptor]`) that this does not reproduce (#7172).
+func recordPrintWriteError(r *interp.Runner, fd int, err error) {
+	if errors.Is(err, syscall.EPIPE) || fd != 1 && !errors.Is(err, syscall.EBADF) {
 		return
 	}
 	r.BuiltinWriteFailed(err)

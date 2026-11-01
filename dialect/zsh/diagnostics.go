@@ -1018,12 +1018,14 @@ func Diagnostics() interp.Diagnostics {
 		// Neither the builtin nor the number is named, so the format has one
 		// verb where the others have two (#1363).
 		InheritedClosedStreamWriteError: "write error: %[2]s",
-		// The builtin's own complaint, reached only where the write failed
-		// with EPIPE -- the closed-descriptor axis answers No above and
-		// returns before this is read, which is why one wording serves both
-		// errnos here without making the quiet route speak. The builtin is
-		// named by the location rather than by a verb, so the format uses
-		// only the reason, exactly as the sentence above it does (#770).
+		// The builtin's own complaint, reached wherever the write failed with
+		// anything but EBADF -- the closed-descriptor axis answers No and
+		// returns before this is read, which is why one wording serves EPIPE,
+		// EFBIG and ENOSPC here without making the quiet route speak:
+		// `zsh:printf:1: write error: file too large` past `ulimit -f` with
+		// XFSZ ignored (#7172). The builtin is named by the location rather
+		// than by a verb, so the format uses only the reason, exactly as the
+		// sentence above it does (#770).
 		BuiltinWriteError: "write error: %[2]s",
 		// A conditional with no `:` is its own sentence; a conditional
 		// missing either value is the ordinary end of input, so

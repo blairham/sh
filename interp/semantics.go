@@ -3410,11 +3410,39 @@ type Semantics struct {
 	// This one is about a **closed descriptor** and not about every failed
 	// write; see BrokenPipeWriteErrorFailsTheCommand for the other errno,
 	// which two dialects answer the opposite way round.
+	//
+	// **Keyed on EBADF, and every errno but EBADF and EPIPE is no question at
+	// all.** A write past `ulimit -f` with SIGXFSZ ignored or handled (EFBIG)
+	// and a write onto a full disk (ENOSPC) fail `echo` and `printf` at 1 in
+	// every panel shell — zsh included, which says `zsh:printf:1: write
+	// error: file too large` where it says nothing for `>&-`. Measured
+	// 2026-11-01 on macOS, each shell in a session of its own: `trap ''
+	// XFSZ; ulimit -f 1; printf '%4000s' x > f` is 1 in bash 5.3 (also as
+	// `sh`), bash 3.2, dash, ksh93 and zsh, with a handler as with an
+	// ignore, and `echo` with a long operand is the same; and `printf` and
+	// `echo` onto a pre-created file on a full disk image are 1 in bash 5.3,
+	// dash, ksh93 and zsh. So EBADF is the odd
+	// errno in zsh rather than EFBIG an odd one out, and the axis is asked
+	// only for EBADF. That holds for a descriptor open for *reading* as well
+	// as a closed one — `exec 3</etc/hosts; echo hi >&3` is 0 in zsh and 1,
+	// silent, in ksh93, exactly as `echo hi >&-` is — so the key is the
+	// errno and not whether anything is open there (#7172).
 	BuiltinWriteErrorFailsTheCommand Answer
-	// BuiltinWriteErrorFailsOnlyThese narrows the axis above to the builtins
-	// named, space-separated: a failed write into a closed descriptor fails
-	// these and leaves every other builtin at its own status, in silence.
-	// Empty means every builtin, which is what bash, dash and ash do.
+	// BuiltinWriteErrorFailsOnlyThese narrows a failed write that fails the
+	// command to the builtins named, space-separated: these fail and every
+	// other builtin keeps its own status, in silence. Empty means every
+	// builtin, which is what bash, dash and ash do.
+	//
+	// Read for every errno but EPIPE — a closed descriptor once the axis above
+	// has said Yes, and a write past `ulimit -f` or onto a full disk, which
+	// fails the command without asking. zsh names the same three as ksh93 for
+	// those: `set`, `typeset -p`, `alias` and `export` past `ulimit -f` with
+	// SIGXFSZ ignored leave 0 and say nothing, and so does `set` onto a full
+	// disk, where `echo`, `print` and `printf` fail at 1 (measured 2026-11-01,
+	// zsh 5.9.2). ksh93 does something else again with those listings — it
+	// says `write to 1 failed […]` and ends the shell at 1, as a special
+	// builtin's error does — which is not modeled: the dialect keeps them at
+	// 0, in silence, as it did before (#7172).
 	//
 	// ksh93 is the narrow one. Measured 2026-10-03 on ksh93u+ with
 	// `( cmd >&- ) 2>e >/dev/null; echo "st=$?"`: `echo hi`, `print hi` and
@@ -3426,8 +3454,7 @@ type Semantics struct {
 	// those (corpus rows redir/pwd-writing-to-a-closed-descriptor and its
 	// export and readonly neighbors).
 	//
-	// Read only where the axis above has already said Yes and the write was
-	// into a closed descriptor; a broken pipe is the other axis's question.
+	// A broken pipe is the other axis's question and never reads this.
 	BuiltinWriteErrorFailsOnlyThese string
 
 	// BrokenPipeWriteErrorFailsTheCommand is the same question for a write

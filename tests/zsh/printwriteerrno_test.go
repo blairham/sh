@@ -34,9 +34,9 @@ import (
 // location, which is this shell's InheritedClosedStreamWriteError — is absent
 // on every row the command redirected for itself and present on every row it
 // inherited. The errno moves the *first* sentence and the status, which is a
-// different axis (BuiltinWriteErrorFailsTheCommand, still answered No here:
-// the rows above where zsh names the builtin and leaves 1 are residue on
-// #4436, not this).
+// different axis: BuiltinWriteErrorFailsTheCommand, keyed on EBADF and
+// answered No here, so ENOSPC fails the command at 1 with the builtin named,
+// on both routes, as the rows above where zsh names the builtin say (#7172).
 //
 // This was keyed on `EBADF` when it went in, and a grid of seven closed-stream
 // shapes could not tell: every row in it had the same errno. The check is a
@@ -44,19 +44,21 @@ import (
 // holds the errno fixed and changes the ownership.
 func TestTheSilenceIsForTheOwnerOfTheRedirectionNotTheErrno(t *testing.T) {
 	const said = "zsh:1: write error: no space left on device\n"
+	own := func(b string) string { return "zsh:" + b + ":1: write error: no space left on device\n" }
 	for _, tc := range []struct{ name, src, wantErr string }{
 		// The command's own redirection, with an errno that is not EBADF:
-		// silent, exactly as `>&-` is.
-		{"its own redirection, out of space", "print foo 1>&1\n", ""},
-		{"its own, written the other way", "print foo >&1\n", ""},
+		// the builtin's sentence and not the stream's, where `>&-` has
+		// neither.
+		{"its own redirection, out of space", "print foo 1>&1\n", own("print")},
+		{"its own, written the other way", "print foo >&1\n", own("print")},
 		// And the same failed write on a stream it did not redirect, which
 		// is the row that keeps this from being "stop complaining".
-		{"inherited, out of space", "print foo\n", said},
-		{"inherited, echo for comparison", "echo foo\n", said},
+		{"inherited, out of space", "print foo\n", own("print") + said},
+		{"inherited, echo for comparison", "echo foo\n", own("echo") + said},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			errs := runZshWithFullDisk(t, tc.src+"print -u2 -r -- \"st $?\"\n")
-			if want := tc.wantErr + "st 0\n"; errs != want {
+			if want := tc.wantErr + "st 1\n"; errs != want {
 				t.Errorf("said %q, want %q", errs, want)
 			}
 		})

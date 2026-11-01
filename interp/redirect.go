@@ -2812,19 +2812,26 @@ func (r *Runner) builtinWriteStatus(name string, st int) int {
 	// a closed descriptor and a pipe nobody is reading are the same event to
 	// five of the panel and opposite events to the other two. See
 	// Semantics.BrokenPipeWriteErrorFailsTheCommand for the measurement.
-	fails := false
-	if errors.Is(err, syscall.EPIPE) {
+	//
+	// And every other errno — a write past `ulimit -f` with SIGXFSZ arranged
+	// away, a full disk — is not a question at all: the whole panel fails the
+	// command at 1. EBADF is the odd one out, in the two dialects that part
+	// from the rest, and is what the closed-descriptor axis is keyed on. See
+	// Semantics.BuiltinWriteErrorFailsTheCommand.
+	fails := true
+	switch {
+	case errors.Is(err, syscall.EPIPE):
 		fails = r.ask(r.sem().BrokenPipeWriteErrorFailsTheCommand,
 			"a builtin's failed write into a broken pipe failing the command")
-	} else {
+	case errors.Is(err, syscall.EBADF):
 		fails = r.ask(r.sem().BuiltinWriteErrorFailsTheCommand,
 			"a builtin's failed write failing the command")
-		if only := r.sem().BuiltinWriteErrorFailsOnlyThese; fails && only != "" &&
-			!slices.Contains(strings.Fields(only), name) {
-			// A builtin outside the dialect's list keeps its own status and
-			// says nothing. See Semantics.BuiltinWriteErrorFailsOnlyThese.
-			fails = false
-		}
+	}
+	if only := r.sem().BuiltinWriteErrorFailsOnlyThese; fails && only != "" &&
+		!errors.Is(err, syscall.EPIPE) && !slices.Contains(strings.Fields(only), name) {
+		// A builtin outside the dialect's list keeps its own status and
+		// says nothing. See Semantics.BuiltinWriteErrorFailsOnlyThese.
+		fails = false
 	}
 	// The builtin's own complaint comes first where both are said. Measured
 	// 2026-09-12 on the one dialect that has both sentences, writing into a
@@ -2834,7 +2841,8 @@ func (r *Runner) builtinWriteStatus(name string, st int) int {
 	if fails {
 		d := r.diag()
 		if w := d.BuiltinWriteError; w != "" &&
-			(d.BuiltinWriteErrorFrom == "" || slices.Contains(strings.Fields(d.BuiltinWriteErrorFrom), name)) {
+			(d.BuiltinWriteErrorFrom == "" || slices.Contains(strings.Fields(d.BuiltinWriteErrorFrom), name)) &&
+			(!d.BuiltinWriteErrorSilentForABadDescriptor || !errors.Is(err, syscall.EBADF)) {
 			line := fmt.Sprintf(w, name, d.reasonText(reason(err)))
 			if d.BuiltinWriteErrorNamesTheShellAlone {
 				// See Diagnostics.BuiltinWriteErrorNamesTheShellAlone.

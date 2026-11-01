@@ -5257,11 +5257,16 @@ func Diagnostics() interp.Diagnostics {
 		// open at 5 is `5-: cannot open [Bad file descriptor]`, where bash
 		// names the number alone.
 		NamesTheMoveSuffixInTheTarget: true,
-		// No BuiltinWriteError: `echo hi >&-` reports 1 here and says
-		// nothing, which is the semantics axis answering and the wording
-		// staying empty. A broken pipe is silent as well, and there the
-		// status is 0 -- see BrokenPipeWriteErrorFailsTheCommand, the axis
-		// this shell and zsh answer the opposite way round.
+		// A failed write is worded for every errno but EBADF: `echo hi >&-`
+		// reports 1 here and says nothing, and a write past `ulimit -f` with
+		// XFSZ ignored or handled, or onto a full disk, reports 1 and says
+		// `ksh: printf: write to 1 failed [File too large]` (measured
+		// 2026-11-01; see Diagnostics.BuiltinWriteErrorSilentForABadDescriptor).
+		// A broken pipe is silent as well, but there the status is 0, so no
+		// wording is reached -- see BrokenPipeWriteErrorFailsTheCommand, the
+		// axis this shell and zsh answer the opposite way round (#7172).
+		BuiltinWriteError:                        "%[1]s: write to 1 failed [%[2]s]",
+		BuiltinWriteErrorSilentForABadDescriptor: true,
 		// Measured: ksh93 reports a failed open at the line before the redirect.
 		RedirectFailureLine: interp.LineBeforeRedirect,
 		// A descriptor number the process cannot hold names the thing rather

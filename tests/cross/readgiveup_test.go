@@ -46,6 +46,25 @@ func aLineStillArriving(open, then, read, next string) string {
 		read + `; s=$?; ` + next + `; echo "st=$s len=${#l} next=${#m}"; wait`
 }
 
+// aBlockStillArriving is aLineStillArriving with thenUSR1, for the row whose
+// answer hangs on INT landing while there are bytes still to read: a read
+// given up at the next byte keeps part of the line only if there is a next
+// byte. Sent after the second block, INT has at most a fifo's worth left to
+// land in, and a fifo on macOS holds 8 KiB: a reader that took those first
+// met INT in its wait, and gave the whole line up with nothing left for the
+// next read — which is what a read given up only in a wait does, so the row
+// cannot accept it (#7184). So the writer says so through q just before a
+// third block, of 128 KiB, and another job sends INT on that word while the
+// block is being written. That widens the margin from what a fifo holds to
+// the block; it does not order the two. ksh93u+ printed `T, U, st=258
+// len=131072 next=131072` for it on 2026-10-31, as for the arriving rows.
+func aBlockStillArriving(open, read, next string) string {
+	return `mkfifo p q; c=a; i=0; while [ $i -lt 16 ]; do c=$c$c; i=$((i+1)); done; ` + open + `; ` +
+		`trap "echo T" INT; trap "echo U" USR1; (read -r x <q; kill -INT $$) & ` +
+		`{ printf %s "$c"; printf %s "$c"; echo >q; printf %s "$c$c"; ` + thenUSR1 + ` echo; echo tail; } >p & ` +
+		read + `; s=$?; ` + next + `; echo "st=$s len=${#l} next=${#m}"; wait`
+}
+
 // partOfALine has `first` waiting before the read, sends INT 0.3 s in while
 // the read waits for the rest, and writes `cd` and `end` half a second after
 // that: a read given up has what was first, and the next one `cd`; a read
@@ -123,7 +142,9 @@ func TestATrappedSignalGivesUpAReadWhereTheShellsDo(t *testing.T) {
 		// waiting. In dash the second signal lands in a wait and gives the
 		// read up — and so does the first if it found the reader already
 		// waiting, which leaves the same two lines; ksh93 reading a line it
-		// has begun reads on.
+		// has begun reads on. ksh93 both ways gives it up at INT, which has
+		// to find bytes still to read for that to differ from giving it up
+		// in a wait, so its row has a block after INT (aBlockStillArriving).
 		{
 			"second signal, both ways", "dash", aLineStillArriving(bothWays, thenUSR1, redirect, redirect2),
 			"T\nU\nst=1 len=131072 next=0\n", 0,
@@ -136,7 +157,7 @@ func TestATrappedSignalGivesUpAReadWhereTheShellsDo(t *testing.T) {
 			"second signal, reading only", "ksh", aLineStillArriving(readingOnly, thenUSR1, redirect, redirect2),
 			"T\nU\nst=0 len=131072 next=4\n", 0,
 		},
-		{"second signal, both ways", "ksh", aLineStillArriving(bothWays, thenUSR1, redirect, redirect2), "", 131072},
+		{"second signal, both ways", "ksh", aBlockStillArriving(bothWays, redirect, redirect2), "", 262144},
 		// Part of a line in, and a wait the signal lands in. dash gives it
 		// up whatever the descriptor; ksh93 reads on only on its standard
 		// input from a descriptor open for reading alone, reading to a

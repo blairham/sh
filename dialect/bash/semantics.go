@@ -2379,6 +2379,12 @@ func Semantics() interp.Semantics {
 	// dies at once, the parentheses writing `in` at 2 s. Measured 2026-10-31 on
 	// bash 5.3.20; bash 3.2.57 waits for a substitution (#7068).
 	s.SignalDeathWaitsForAnUnforkedSubshell = interp.No
+	// And a death that lands while the shell waits for a pipeline shows the
+	// EXIT trap the status the pipeline began with: `trap 'echo "bye $?"'
+	// EXIT; (exit 7); /bin/sleep 2 | /bin/cat` with TERM from another process
+	// writes `bye 7`, and `bye 0` behind `true &&`. Measured 2026-11-01 on
+	// bash 5.3.20; bash 3.2.57 writes `bye 0` (#7160).
+	s.DeathDuringAPipelineShowsTheStatusBeforeIt = interp.Yes
 	// And a builtin's write past `ulimit -f` with an EXIT trap set is the
 	// death it is without one, the trap run for it: `trap 'echo t $?' EXIT;
 	// ulimit -f 1; (exit 5); printf '%4000s' x > f` writes `t 5` and dies of

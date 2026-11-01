@@ -8733,10 +8733,13 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 		}
 		r.recordSingleStatus(p)
 	} else {
-		before := r.line
+		before, began := r.line, r.status
 		if err := r.runPipeline(ctx, p, timing, timed, quiet); err != nil {
 			return err
 		}
+		// A fatal signal from outside that landed while the shell waited:
+		// what the EXIT trap reads for it. See outsidedeath.go.
+		r.aPipelineGaveUpForADeath(began)
 		// A pipeline is not a command, so nothing dispatched it and nothing
 		// moved the line record onto it, and where every element ran in a
 		// copy nothing moved it at all: what the shell said or ran next,

@@ -465,6 +465,37 @@ func (r *Runner) actOnOutsideDeath() bool {
 	return true
 }
 
+// aPipelineGaveUpForADeath settles what the EXIT trap reads for a death from
+// outside that landed while the shell at the top waited for a pipeline,
+// which began at began.
+//
+// A pipeline is not a command, so nothing recorded the status it began with,
+// and its elements are copies that stop where they stand, so what the shell
+// held when it took the death was whatever the copies left, or the status a
+// command before the pipeline began with. bash 5.3 shows the status the
+// pipeline began with; ksh93 shows 0. See
+// Semantics.DeathDuringAPipelineShowsTheStatusBeforeIt.
+//
+// The shell's wait for the pipeline is given up as its wait for a program
+// is, so the death is marked as one a wait was given up for, and the shell
+// shows the status settled here as the one the interrupted command began
+// with when it takes the death at its next command. Only for a death still
+// waiting to be taken: one a `( … )` held to its end is that subshell's.
+func (r *Runner) aPipelineGaveUpForADeath(began int) {
+	s := r.signals
+	if s == nil || r.inSubshell || s.outside.state.Load() != outsidePosted ||
+		r.sem().ExitTrapRunsOnSignalDeath != Yes {
+		return
+	}
+	shown := 0
+	if r.ask(r.sem().DeathDuringAPipelineShowsTheStatusBeforeIt,
+		"the `$?` the EXIT trap reads after a death during a pipeline") {
+		shown = began
+	}
+	s.outside.abandoned.Store(true)
+	r.statusWhenTheCommandBegan = shown
+}
+
 // abandonsForADeath is what a wait this runner makes selects on to be given
 // up for a fatal signal from outside: closed once one has been handed to the
 // shell, and nil where none could be — nothing for the shell at the top to

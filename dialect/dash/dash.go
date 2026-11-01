@@ -1300,6 +1300,10 @@ func Semantics() interp.Semantics {
 	// /bin/sleep 2; echo in )` kills dash at once with no trap run, the
 	// parentheses writing `in` at 2 s (#7068).
 	s.SignalDeathWaitsForAnUnforkedSubshell = interp.No
+	// Nor a status to show for a death during a pipeline: measured 2026-11-01,
+	// TERM during `/bin/sleep 2 | /bin/cat` kills dash with nothing run
+	// (#7160).
+	s.DeathDuringAPipelineShowsTheStatusBeforeIt = interp.No
 	// Nor a write past `ulimit -f` to give up over: measured 2026-11-01,
 	// `trap 'echo t $?' EXIT; ulimit -f 1; printf '%4000s' x > f` dies of
 	// XFSZ with no trap run (#7173).

@@ -6831,6 +6831,49 @@ type Semantics struct {
 	// unpinned ash: never asked, for the same reason.
 	SignalDeathWaitsForAnUnforkedSubshell Answer
 
+	// DeathDuringAPipelineShowsTheStatusBeforeIt shows the EXIT trap of a
+	// fatal signal from outside that landed while the shell waited for a
+	// pipeline the `$?` the pipeline began with. No shows it 0.
+	//
+	//	trap 'echo "bye $?"' EXIT; (exit 7); /bin/sleep 2 | /bin/cat; echo after
+	//
+	// with TERM from another process 0.4 s in writes `bye 7` and dies of TERM
+	// at once in bash 5.3, and `bye 0` in ksh93 and bash 3.2. With `(exit
+	// 5)` after the `(exit 7)` bash 5.3 reads 5, and with `true &&` in front
+	// of the pipeline it reads 0: the pipeline's own beginning, not the
+	// statement's. ksh93 reads 0 in all three, and with the last element a
+	// `read` or a `{ … }` it runs in its own process, which is the 0 it holds
+	// while a pipeline runs: `(exit 7); true | echo $?` writes 0 there.
+	//
+	// **Keyed on the route, not on what the elements were doing.** A last
+	// element that is a subshell, `: | ( /bin/sleep 2; echo in )`, and one
+	// that is a busy loop no wait is given up in, `: | while :; do :; done`,
+	// read 7 in bash 5.3 as the program does. A `( … )` or a lone program in
+	// the same place reads 7 in both bash columns without this axis, as the
+	// status the interrupted command began with. Measured 2026-11-01, each
+	// shell in a session of its own: bash 5.3.20 yes; ksh93u+ no. bash 3.2.57
+	// reads 0 except for `(exit 3) | /bin/sleep 2`, where it reads 7, and no
+	// dialect models it (#7160).
+	//
+	// Reached only where ExitTrapRunsOnSignalDeath says yes, by the shell at
+	// the top, once a pipeline ends with a death from outside handed over and
+	// not yet taken. A death a `( … )` that the shell runs in its own process
+	// waited out is that subshell's, and reads what it left. zsh, dash and
+	// BusyBox ash run no EXIT trap on a death and never ask.
+	//
+	// unpinned bash: no corpus row sends the shell a signal from outside;
+	// pinned by TestADeathFromOutsideDuringAPipelineInOneDialect.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestADeathFromOutsideDuringAPipelineInOneDialect.
+	//
+	// unpinned zsh: never asked, since no EXIT trap runs on a death.
+	//
+	// unpinned dash: never asked, for the same reason.
+	//
+	// unpinned ash: never asked, for the same reason.
+	DeathDuringAPipelineShowsTheStatusBeforeIt Answer
+
 	// CaughtWritePastTheFileSizeLimitIsAFatalError makes a builtin's write
 	// past `ulimit -f`, with SIGXFSZ left at its default in a shell that has
 	// caught it, an error the shell gives up over rather than a death: the

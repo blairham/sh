@@ -3014,6 +3014,12 @@ func Semantics() interp.Semantics {
 	// and dies of TERM at 2 s. Measured 2026-10-31 on ksh93u+ 2012-08-01,
 	// alone in the panel (#7068).
 	s.SignalDeathWaitsForAnUnforkedSubshell = interp.Yes
+	// And a death that lands while the shell waits for a pipeline shows the
+	// EXIT trap 0, which is what it holds while one runs: `trap 'echo "bye
+	// $?"' EXIT; (exit 7); (exit 5); /bin/sleep 2 | /bin/cat` with TERM from
+	// another process writes `bye 0`, as does `/bin/sleep 2 | read x`.
+	// Measured 2026-11-01 on ksh93u+ 2012-08-01 (#7160).
+	s.DeathDuringAPipelineShowsTheStatusBeforeIt = interp.No
 	// And a builtin's write past `ulimit -f` with XFSZ untrapped, once an
 	// EXIT trap has caught the signal, is a failed write it gives up over
 	// rather than a death: `trap 'echo t $?' EXIT; ulimit -f 1; (exit 5);

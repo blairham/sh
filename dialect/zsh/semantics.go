@@ -471,10 +471,12 @@ func Semantics() interp.Semantics {
 	// prints none. The trailer is the one piece of the answer that is this
 	// option's alone, and it is the piece that reads the shell's own name.
 	//
-	// Generated from this dialect's three option tables rather than
-	// committed — see helpBlock, where the measurement that settles that
-	// choice is.
-	s.HelpOption = interp.HelpOption{Spellings: "--help", Trailer: helpBlock()}
+	// Generated from this dialect's three option tables rather than pasted —
+	// see helpBlock, where the measurement that settles that choice is. The
+	// generated text is committed as helpBlockText, so a start does not build
+	// it from the tables: that was 14 page faults and ~0.04 ms of every start
+	// on macOS, for a block only `--help` reads (#6491).
+	s.HelpOption = interp.HelpOption{Spellings: "--help", Trailer: helpBlockText}
 	// And `--emulate MODE`, which is the `emulate` builtin run before a line
 	// is read rather than a spelling of an option name. zsh alone on the
 	// panel; measured 2026-09-18 on 5.9.2 under `env -i PATH=/usr/bin:/bin

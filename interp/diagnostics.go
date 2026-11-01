@@ -3352,6 +3352,23 @@ type Diagnostics struct {
 	// (#5389).
 	WaitIsQuietForTerminate bool
 
+	// WaitIsQuietForATrappedSignal keeps a `wait` silent over a job that died
+	// of a signal the shell has a trap for — a handler or an ignore — when it
+	// waits. Kept apart from KilledCommandNoticeForATrappedSignal because the
+	// two routes part: the foreground one writes a bare notice and this one
+	// writes nothing at all.
+	//
+	// bash 5.3. Measured 2026-11-01 on bash 5.3.20, each shell in a process
+	// group of its own: `trap 'echo T' USR1; /bin/sleep 1 & /bin/sleep 0.3;
+	// kill -USR1 $!; wait $!` is st=158 in silence, through `wait %1` and a
+	// bare `wait` alike, where the same line with USR2 trapped instead writes
+	// the located notice. It is the table at the wait that decides: a trap
+	// set after the job died and before the `wait` silences it, and one
+	// removed in between brings the notice back. bash 3.2 is silent too but
+	// asks the table as it stood when the job died; dash and ksh93 write
+	// what they always write, and zsh writes nothing either way (#7164).
+	WaitIsQuietForATrappedSignal bool
+
 	// JobUnknownCommand is printed in the command column of a job whose text
 	// the shell did not keep. No verbs.
 	//

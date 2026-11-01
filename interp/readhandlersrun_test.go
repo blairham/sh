@@ -14,7 +14,10 @@ import (
 // during a `read` the signal does not end runs (#7031).
 
 // handlersOn is the test vector with reads that go on through a trapped
-// signal, and the moment their handlers run set to moment. Two different
+// signal, and the moment their handlers run set to moment. A handler's
+// `return` there ends the read with no name touched, which is bash's and
+// ksh93's answer; TestAHandlersReturnInTheMiddleOfAReadAsksTheDialect is the
+// test about the other. Two different
 // conditions can wait together in some rows, so the order they run in is
 // answered too, lowest signal number first, and so are the jobs a command
 // substitution sees, which the rows that raise a signal from one pass on the
@@ -23,6 +26,7 @@ func handlersOn(moment ReadHandlerMoment) Semantics {
 	s := testSemantics()
 	s.ReadIsAbandonedByATrappedSignal = No
 	s.ReadHandlersRun = moment
+	s.ReadLeftByAHandlersReturnAssignsWhatArrived = No
 	s.WaitingHandlersRun = WaitingHandlersRunUpTheSignalNumbers
 	s.SubshellJobTable = SubshellJobsKept
 	return s
@@ -195,5 +199,74 @@ func TestTheReadHandlerMomentIsAskedOnlyWhereItDecides(t *testing.T) {
 				t.Errorf("got %q at %d, want %q at 0 and nothing asked", out, st, tc.want)
 			}
 		})
+	}
+}
+
+// Semantics.ReadLeftByAHandlersReturnAssignsWhatArrived: a handler run in the
+// middle of a read that returns from the function the read is in (#7176).
+
+// aReturnInAWait has `ab` in a fifo and the read, in f, waiting for the rest
+// when USR1 lands and its handler returns 5; `cd` comes a second later.
+const aReturnInAWait = `mkfifo p q; exec 4<>p 3<p; l=old; trap 'return 5' USR1; ` +
+	`f() { read -r l <&3; echo in; }; ` +
+	`(read y <q; sleep 1; kill -USR1 $$; sleep 1; echo cd >p) & ` +
+	`printf ab >p; echo >q; f; echo "out st=$? l=[$l]"; read -r m <&3; echo "m=[$m]"; wait`
+
+// aReturnAsItBegins has USR1 waiting as the read begins, raised in its own
+// redirection, so the handler returns before a byte is taken.
+const aReturnAsItBegins = `mkfifo p; exec 4<>p 3<p; l=old; trap 'return 5' USR1; ` +
+	`f() { read -r l <&3 5>"$(kill -USR1 $$)/dev/null"; echo in; }; ` +
+	`printf 'ab\ncd\n' >p; f; echo "out st=$? l=[$l]"; read -r m <&3; echo "m=[$m]"`
+
+// TestAHandlersReturnInTheMiddleOfAReadAsksTheDialect: yes ends the read as at
+// the end of its input — what arrived assigned, the name cleared where nothing
+// had, and the read's 1 the function's status in place of the `return`'s 5 —
+// and no ends it with no name touched at 5. Either way the rest of the line is
+// the next reader's. Unanswered, it is refused by name at 2 with no name
+// touched.
+func TestAHandlersReturnInTheMiddleOfAReadAsksTheDialect(t *testing.T) {
+	const asked = "a `read` a handler's `return` left in the middle assigning what arrived: " + shellsDisagree
+	for _, tc := range []struct {
+		answer              Answer
+		inAWait, asItBegins string
+	}{
+		{Yes, "out st=1 l=[ab]\nm=[cd]\n", "out st=1 l=[]\nm=[ab]\n"},
+		{No, "out st=5 l=[old]\nm=[cd]\n", "out st=5 l=[old]\nm=[ab]\n"},
+		{Unspecified, "out st=2 l=[old]\nm=[cd]\n", "out st=2 l=[old]\nm=[ab]\n"},
+	} {
+		t.Run(tc.answer.String(), func(t *testing.T) {
+			t.Parallel()
+			sem := handlersOn(ReadHandlersRunAsSoonAsTheyArrive)
+			sem.ReadLeftByAHandlersReturnAssignsWhatArrived = tc.answer
+			for _, row := range []struct{ name, src, want string }{
+				{"in a wait", aReturnInAWait, tc.inAWait},
+				{"as it begins", aReturnAsItBegins, tc.asItBegins},
+			} {
+				out, st := run(t, row.src, withSem(sem))
+				refused := strings.Contains(out, asked)
+				if !strings.HasSuffix(out, row.want) || st != 0 || refused != (tc.answer == Unspecified) {
+					t.Errorf("%s: got %q at %d, want %q at 0, refused only where unanswered", row.name, out, st, row.want)
+				}
+			}
+		})
+	}
+}
+
+// TestAHandlersReturnIsTheOnlyLeavingThatAsks: unanswered, the axis is asked
+// of nothing but a `return` — not of an `exit`, which ends the read with no
+// name touched in every column, and not of a handler that does not leave, after
+// which the read goes on.
+func TestAHandlersReturnIsTheOnlyLeavingThatAsks(t *testing.T) {
+	sem := handlersOn(ReadHandlersRunAsSoonAsTheyArrive)
+	sem.ReadLeftByAHandlersReturnAssignsWhatArrived = Unspecified
+	out, st := run(t, `mkfifo p; exec 4<>p 3<p; l=old; trap 'echo "E st=$? l=[$l]"' EXIT; trap 'exit 3' USR1; `+
+		`printf 'ab\n' >p; read -r l <&3 5>"$(kill -USR1 $$)/dev/null"; echo not reached`, withSem(sem))
+	if want := "E st=3 l=[old]\n"; out != want || st != 3 {
+		t.Errorf("exit: got %q at %d, want %q at 3", out, st, want)
+	}
+	out, st = run(t, `mkfifo p; exec 4<>p 3<p; l=old; trap 'echo T' USR1; `+
+		`f() { read -r l <&3 5>"$(kill -USR1 $$)/dev/null"; echo "in st=$? l=[$l]"; }; printf 'ab\n' >p; f`, withSem(sem))
+	if want := "T\nin st=0 l=[ab]\n"; out != want || st != 0 {
+		t.Errorf("a handler that stays: got %q at %d, want %q at 0", out, st, want)
 	}
 }

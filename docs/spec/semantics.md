@@ -35832,10 +35832,43 @@ job, whose `kill` reaches this shell without the kernel, the read wakes before
 the rest have landed, and the order is mostly not bash's.
 
 A handler that leaves the shell ends the read with no name touched: after
-`exit 3` in one, an EXIT trap reads `l=[old]` and 3 in bash, zsh and ksh93. One
-that returns from the function the read is in returns at once with the
-handler's status in bash 5.3 and ksh93, and the rest of the line is the next
-reader's (`m=[cd]`).
+`exit 3` in one, with the read at the top level, an EXIT trap reads `l=[old]`
+and 3 in bash, zsh and ksh93.
+
+**One that returns from the function the read is in** is
+`Semantics.ReadLeftByAHandlersReturnAssignsWhatArrived` (#7176), and zsh is the
+column that differs. Measured 2026-10-31 from `-c`, with the read the shell's
+standard input as above, the handler `echo T; return 5`, and `f() { read -r l;
+echo in; }; l=old; f; echo "out st=$? l=[$l]"; read -r m`:
+
+| | output |
+| --- | --- |
+| zsh 5.9.2 | `T`, `out st=1 l=[ab]`, `W`, `m=[cd]` |
+| bash 5.3.20, ksh93u+ | `T`, `out st=5 l=[old]`, `W`, `m=[cd]` |
+| bash 3.2.57 | `T`, `out st=0 l=[old]`, `W`, `m=[cd]` (#7222) |
+
+So bash and ksh93 return at once with the handler's status and no name
+touched. zsh first ends the read as at the end of its input — it assigns what
+arrived and reports 1 — and the function returns with that 1: `return`,
+`return 0` and `false; return` all give `out st=1`. With nothing in before the
+signal the name is cleared (`out st=1 l=[]`), as an end of input with nothing
+before it clears it. zsh's answer held with the read in a group and in a loop
+inside the function, and for `-d x`, `-t 5`, `-A`, two names and `-k 4 -u 0`.
+In every column the rest of the line is the next reader's (`m=[cd]`).
+
+The question is keyed on the `return`, and is asked only where a handler run in
+the middle of a read returned from the function it is in. The other ways out
+part the columns differently, which is why they are not this axis's:
+
+| handler, `ab` in | zsh 5.9.2 | bash 5.3.20, ksh93u+ |
+| --- | --- | --- |
+| `exit 3`, read at the top level | EXIT trap: `st=3 l=[old]` | the same |
+| `exit 3`, read in `f` | EXIT trap: `st=3 l=[ab]` | `st=3 l=[old]` |
+| `break` / `continue`, read in a `while` | `out st=1 l=[ab]`, before `W` | `out st=0 l=[abcd]`, after `W`, and `m=[ef]` |
+
+zsh ends the read as at its end for each of them, except an `exit` that ends
+the shell from the top level; bash and ksh93 read on to the end of the line
+before a `break` or `continue` takes effect.
 
 The question is asked only where a trapped signal with a handler is waiting
 while a `read` that goes on looks for its next byte, on a stream that can make
@@ -35855,8 +35888,10 @@ ksh93 already paid for being given up.
   for a read, and the handler's `$?` is the substitution's rather than zsh's 1.
 - A file read here is never watched, because it never waits, so zsh's handler
   runs after it.
-- zsh's handler that returns from the function the read is in assigns what
-  arrived and returns 1 (`out st=1 l=[ab]`); here it returns the handler's
-  status with nothing assigned, as bash and ksh93 do.
+- zsh's handler that runs `exit` with the read inside a function, or `break`
+  or `continue`, ends the read as at its end first; and bash and ksh93 read on
+  to the end of the line before a handler's `break` or `continue` leaves. Here
+  all three leave at once with no name touched, as for a `return` in bash.
+- bash 3.2's function returns 0 for the handler's `return 5` (#7222).
 - ksh93 shows a handler run as the read begins `$?` 258 when the signal came
   from its own command substitution's `kill`; from another process it shows 0.

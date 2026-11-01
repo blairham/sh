@@ -2196,6 +2196,12 @@ func Semantics() interp.Semantics {
 	// file a byte at a time — and the read then goes on. Measured 2026-10-31
 	// on 5.9.2; see interp.ReadHandlerMoment (#7031).
 	s.ReadHandlersRun = interp.ReadHandlersRunAsSoonAsTheyArrive
+	// And a handler's `return` there ends the read as at the end of its input
+	// before the function returns: `ab` in, `return 5` mid-read is `out st=1
+	// l=[ab]`, the read's 1 whatever the `return` said, and the name is
+	// cleared where nothing had arrived. Measured 2026-10-31 on 5.9.2; see
+	// interp.Semantics.ReadLeftByAHandlersReturnAssignsWhatArrived (#7176).
+	s.ReadLeftByAHandlersReturnAssignsWhatArrived = interp.Yes
 	s.ArithLeadingZeroIsOctal = interp.No
 	// Nothing makes a leading zero octal here, so `let` and `(( ))` read one
 	// alike and the axis that parts them elsewhere has nothing to change.

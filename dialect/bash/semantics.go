@@ -1179,6 +1179,12 @@ func Semantics() interp.Semantics {
 	// read's end. Measured 2026-10-31 on 5.3.20 and 3.2.57; see
 	// interp.ReadHandlerMoment (#7031).
 	s.ReadHandlersRun = interp.ReadHandlersRunWhenAWaitIsInterrupted
+	// A handler's `return` there ends the read with no name touched, and the
+	// function returns the handler's status: `return 5` mid-read is `out st=5
+	// l=[old]`. Measured 2026-10-31 on 5.3.20; 3.2.57 touches no name either
+	// and returns 0 (#7222). See
+	// interp.Semantics.ReadLeftByAHandlersReturnAssignsWhatArrived (#7176).
+	s.ReadLeftByAHandlersReturnAssignsWhatArrived = interp.No
 	// A directory the PATH search walked past leaves no trace: with nothing
 	// runnable anywhere, bash says the name was never found at all.
 	s.DirectoryOnPathIsACandidate = interp.No

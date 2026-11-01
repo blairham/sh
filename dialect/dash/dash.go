@@ -1959,6 +1959,8 @@ func Semantics() interp.Semantics {
 	// once the read is over. Measured 2026-10-31; see
 	// interp.ReadHandlerMoment (#7031).
 	s.ReadHandlersRun = interp.ReadHandlersRunAfterTheRead
+	// unanswered ReadLeftByAHandlersReturnAssignsWhatArrived: a handler never
+	// runs in the middle of a read here, so none can return out of one.
 	s.CommandRejectsUnknownOption = interp.Yes
 	// Whether `command -v` answers for every name it was given, and what
 	// decides the status when it found some of them. See

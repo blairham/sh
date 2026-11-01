@@ -494,8 +494,9 @@ func (w *readWatch) momentNow() ReadHandlerMoment {
 // runHandlers runs the handlers waiting, in the middle of the read, and
 // reports whether the read ends there: a handler left the shell — `exit`, a
 // `return` out of the function the read is in — or one was refused. A read
-// that ends so touches no name; the builtin hands back the status the
-// handler left. See Semantics.ReadHandlersRun.
+// that ends so touches no name, and the builtin hands back the status the
+// handler left, except where a `return` ends it as at the end of its input
+// (Runner.readLeftByAReturnEndsAsAtTheEnd). See Semantics.ReadHandlersRun.
 //
 // **The handler sees `$?` as it stands.** The read has not finished, so it
 // has no status of its own for the dialect that shows a handler the status
@@ -514,6 +515,25 @@ func (w *readWatch) runHandlers() bool {
 	r.statusBefore = before
 	w.began, w.firstByte = 0, 0
 	return r.ctl != controlNone || r.unspecified
+}
+
+// readLeftByAReturnEndsAsAtTheEnd reports whether a read a handler left in the
+// middle of — r.ctl is set, by runHandlers — ends as at the end of its input
+// rather than with no name touched: only where the handler returned from the
+// function the read is in, and the dialect says so. The read then assigns what
+// arrived, and its own status is the one the function returns with. An
+// unanswered axis is refused there, with r.unspecified set.
+//
+// Asked of `return` alone: zsh ends a read the same way for a handler's
+// `break`, `continue`, and `exit` inside a function, but bash and ksh93 answer
+// those otherwise than they answer `return`, so they are not this axis's
+// question. See Semantics.ReadLeftByAHandlersReturnAssignsWhatArrived.
+func (r *Runner) readLeftByAReturnEndsAsAtTheEnd() bool {
+	if r.ctl != controlReturn {
+		return false
+	}
+	return r.ask(r.sem().ReadLeftByAHandlersReturnAssignsWhatArrived,
+		"a `read` a handler's `return` left in the middle assigning what arrived")
 }
 
 // endsTheFirstWait is the question of a timed read that goes on, asked of a

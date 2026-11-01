@@ -328,12 +328,12 @@ jobs:
     needs: changes
     runs-on: ubuntu-latest
     # Not report-only. `.goreleaser.yaml` is otherwise exercised for the first
-    # time by the release workflow, which runs on a `v*` tag -- so a mistake in
-    # it fails at the **last** step of a release, with every artifact built and
-    # the tag already public. The file's own `changelog:` comment records one
-    # that would have: 188,381 characters of release body against GitHub's
-    # 125,000 limit, measured at v0.0.0. Nothing before the tag could have said
-    # so. This is what says so.
+    # time by the release workflow, which runs when release-please's pull
+    # request merges -- so a mistake in it fails at the **last** step of a
+    # release, with every artifact built and the tag already public. One would
+    # have at v0.0.0: 188,381 characters of release body against GitHub's
+    # 125,000 limit (#2550). Nothing before the tag could have said so. This
+    # is what says so.
     #
     # It renders on every push to main too, not only when the packaging files
     # moved: go-changes answers every filter `true` outside a pull request.
@@ -343,10 +343,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: fromJSON(needs.changes.outputs.matches).packaging == 'true'
         with:
-          # GoReleaser reads the tag history to build a changelog, and the
-          # `changelog:` gate is `eq .PreviousTag ""` -- so a shallow checkout
-          # would render the one case the config special-cases and never the
-          # ordinary one.
+          # GoReleaser reads the tag history for the previous tag, which the
+          # release footer's compare link names -- so a shallow checkout would
+          # render the first-tag case and never the ordinary one.
           fetch-depth: 0
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         if: fromJSON(needs.changes.outputs.matches).packaging == 'true'

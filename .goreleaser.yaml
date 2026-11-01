@@ -160,51 +160,22 @@ signs:
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
 
+# **The published notes are the tag's section of CHANGELOG.md**, which
+# release-please writes from each pull request's Conventional Commit title.
+# go-release.yml hands that section to GoReleaser as `--release-notes`, which
+# skips this stage's own list, so nothing here shapes a published release.
+# Never set `disable`: it also skips the stage that reads `--release-notes`.
+#
+# The subsystem groups that used to be here are gone with the subjects they
+# matched (`interp: …` is now `fix(interp): …`), and CHANGELOG.md groups by
+# type instead. What is left is for a snapshot: `use: github` falls back to
+# `git` whenever the compare is unavailable, and git's default line carries
+# the full SHA and the author's name and address, where the subject already
+# ends in its pull request number.
 changelog:
-  # **A first tag has no predecessor, so there is nothing to compare against
-  # and the whole history becomes the changelog.** Measured on this tree at
-  # v0.0.0: 1224 entries and 188,381 characters, against GitHub's limit of
-  # 125,000 for a release body — so the release would have failed at the very
-  # last step, with every artifact built and the tag already public. It is also
-  # not a changelog anybody wants: "everything, since the beginning" is what a
-  # first release means. The header in `release:` below is the note instead.
-  disable: '{{ eq .PreviousTag "" }}'
   sort: asc
   use: github
-  # `use: github` falls back to `git` whenever the compare is unavailable — a
-  # first tag, a shallow clone — and git's default line carries the full 40
-  # character SHA and the author's name and address. That is about ninety bytes
-  # a line of what no reader asked for, and one copy of an email address per
-  # commit on a public page; the subject already ends in its pull request
-  # number, which is the link worth having.
   format: '{{ .Message }}'
-  groups:
-    # **Grouped by the subsystem each subject already names.** This tree does not
-    # write conventional commits, and the `feat:`/`fix:` groups that used to be
-    # here matched **zero of 1224** subjects — so every entry fell through to
-    # "Other" and the two groups were decoration that read as curation. These
-    # prefixes are the ones actually in use; run
-    # `git log --format='%s' | sed -E 's/[:,].*//' | sort | uniq -c | sort -rn`
-    # before changing them.
-    - title: Dialects
-      regexp: '^(bash|zsh|ksh|dash|ash|dialect)[,:]'
-      order: 0
-    - title: The interactive shell
-      regexp: '^(repl|zle|blocks)[,:]'
-      order: 1
-    - title: The language and the interpreter
-      regexp: '^(interp|syntax|expansion|pattern|arrays|declarations|traps|printer|diagnostics|driver)[,:]'
-      order: 2
-    - title: Other
-      order: 999
-  filters:
-    exclude:
-      # These are live, unlike the groups that used to sit above: 19 `docs:`,
-      # 3 `test:` and 2 `chore:` on this tree. Checked rather than assumed —
-      # the groups were not.
-      - '^docs:'
-      - '^test:'
-      - '^chore:'
 
 # A formula, like everything else in blairham/homebrew-tap — the tap has only
 # Formula/. GoReleaser marks `brews` deprecated in favor of `homebrew_casks`,
@@ -333,8 +304,7 @@ release:
   # cannot have, and creating the release fails with a 403.
   prerelease: auto
   mode: replace
-  # The changelog is suppressed only for a first tag — see `changelog:` above —
-  # so from v0.0.1 on this header sits above a real one. It stays because a
+  # This header sits above the tag's CHANGELOG.md section. It stays because a
   # changelog says what moved and never what the thing is: this says what it is,
   # what it scored, and what is missing, in that order. Keep it version-agnostic
   # so a tag needs no edit here; the table and the case count are the exceptions.

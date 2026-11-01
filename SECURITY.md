@@ -38,25 +38,34 @@ unsigned.
 Releases are built by `.github/workflows/release.yml`, which runs the shared
 release workflow in [blairham/.github](https://github.com/blairham/.github)
 (`.github/workflows/go-release.yml`). The signing identity is that shared
-workflow; the certificate also names this repository and the tag.
+workflow; the certificate also names this repository and the commit the
+release was built from.
 
 **Downloads.** `checksums.txt` is signed; it lists the digest of every archive.
-Verify the signature, then the archives against it:
+Verify the signature, then the archives against it. A release is built by the
+Release Please run on the push to `main` that merged its release pull request,
+not by a tag push, so the certificate names `refs/heads/main` rather than the
+tag. Pin it to the commit the tag points to instead:
 
 ```sh
-VERSION=v0.0.31
+VERSION=v0.0.39
+# Or `git rev-parse "$VERSION^{commit}"` in a clone.
+SHA=$(gh api "repos/blairham/sh/commits/$VERSION" --jq .sha)
 cosign verify-blob \
   --certificate-identity-regexp '^https://github\.com/blairham/\.github/\.github/workflows/go-release\.yml@' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-github-workflow-repository blairham/sh \
-  --certificate-github-workflow-ref "refs/tags/$VERSION" \
+  --certificate-github-workflow-sha "$SHA" \
   --bundle checksums.txt.sigstore.json checksums.txt
 sha256sum --check --ignore-missing checksums.txt
 ```
 
-A release re-run with `workflow_dispatch` is signed with the ref it was
-dispatched from, usually `refs/heads/main`, rather than the tag; use that ref
-in `--certificate-github-workflow-ref` for such a release.
+This holds for every release since the move to blairham/.github (`v0.0.31`
+on): the ones before release-please were built by a push of the tag itself, at
+the same commit. One exception: `v0.0.37`'s release was re-run by hand from
+`main` at `e6c28a6`, so verify it with
+`SHA=e6c28a619ce128527426bdd2bd9426c76752d7e5`. A release re-run that way is
+signed from the commit it was dispatched at, which that run's page shows.
 
 **Build provenance.** The same releases carry SLSA build provenance for every
 archive — which workflow run, commit and tag produced it. It is in GitHub's

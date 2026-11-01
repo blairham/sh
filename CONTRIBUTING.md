@@ -48,6 +48,9 @@ The agreement text is in `CLA.md`.
 
 - Work on a branch and open a pull request; do not commit to `main`.
 - Commit messages explain the **why**, not a restatement of the diff.
+- Title the pull request as a Conventional Commit — `fix(interp): …`,
+  `feat(zsh): …`, `docs: …`. The title becomes the changelog entry and the
+  version bump; see `AGENTS.md`, *Pull request titles*.
 - No AI-attribution trailers in commit messages or pull request bodies.
 - Every `.go` file carries the two-line SPDX header — see `AGENTS.md`.
   CI fails without it.

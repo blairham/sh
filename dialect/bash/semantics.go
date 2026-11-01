@@ -1157,6 +1157,15 @@ func Semantics() interp.Semantics {
 	// interp.Semantics.ReadCountOfZeroIsNoCount (#7036).
 	s.ReadCountOfZeroIsNoCount = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes
+	// A count reads a pipe at a number past 2 as it reads anything else, and
+	// a count that found the end leaves the next read to find it too:
+	// `printf 'abcdef\nxyz\n' | bash -c 'exec 3<&0; read -r -n 4 -u3 l; read
+	// -r -u3 m'` is l=abcd at 0 and m=ef, and `: | bash -c 'read -r -n 4 l;
+	// read -r m'` is 1 and then 1. Measured 2026-10-31 on bash 5.3.20. See
+	// interp.Semantics.ReadCountOfAPipeExecOpenedFindsItsEnd and
+	// ReadCountAtTheEndSticksTheDescriptor (#7179).
+	s.ReadCountOfAPipeExecOpenedFindsItsEnd = interp.No
+	s.ReadCountAtTheEndSticksTheDescriptor = interp.No
 	s.ReadTimeoutKeepsWhatArrived = interp.Yes
 	s.ReadTimeoutBoundsReadability = interp.No
 	// A trapped signal that lands while a `read` waits for input stops it to

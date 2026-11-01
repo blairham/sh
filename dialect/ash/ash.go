@@ -2723,6 +2723,14 @@ func Semantics() interp.Semantics {
 	// reads nothing. Measured 2026-10-31 in the pinned image, BusyBox
 	// v1.37.0; the rows are on the field (#7036).
 	s.ReadCountOfZeroIsNoCount = interp.Yes
+	// A count reads a pipe at a number past 2 as it reads anything else, and
+	// a count that found the end leaves the next read to find it too:
+	// `printf 'abcdef\nxyz\n' | { exec 3<&0; read -r -n 4 -u 3 l; read -r -u
+	// 3 m; }` is l=abcd at 0 and m=ef, the same from a fifo, and `: | { read
+	// -r -n 4 l; read -r m; }` is 1 and then 1. Measured 2026-10-31 in the
+	// pinned image, BusyBox v1.37.0 (#7179).
+	s.ReadCountOfAPipeExecOpenedFindsItsEnd = interp.No
+	s.ReadCountAtTheEndSticksTheDescriptor = interp.No
 
 	// `set -e` stops for a failure only pipefail saw: `set -eo pipefail;
 	// false | true; echo reached` reaches nothing and the shell ends at 1,

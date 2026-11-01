@@ -11688,6 +11688,46 @@ The letters themselves diverge before the behaviors do:
   stream either, but assigns bytes it never read, different on every run.
   `ReadCountOfZeroIsNoCount` (oracle runs, 2026-10-31, #7036). Asked only
   of `-n`: BusyBox has no `-N`.
+- **A count of a pipe `exec` opened.** `printf 'abcdef\nxyz\n' | { exec
+  3<&0; read -r -n 4 -u3 l; }` is st=1 with `l` empty in ksh93u+, and the
+  line is still in the pipe: `read m <&3` after it takes `abcdef`, and
+  `cat <&3` prints all eleven bytes. bash 5.3.20 and BusyBox ash 1.37.0 read
+  `abcd` at 0. ksh93 keys it on two things, and only those two, each found
+  by a pair of cases that holds the other fixed:
+  - **The number is one `exec` put there** — `exec 3<p`, `exec 3<&0`, `exec
+    4<&3`, `exec 3<&3`, `exec 4<&3-`, `exec {v}<&0`, and a function's or a
+    subshell's read of one. An inherited 3, pipe or fifo, reads `abcd`; so
+    does the read's own `3<&0` or `3<p`, a group's or a function's
+    redirection, and the read's own `3<&3` over an `exec`'d 3. `-u0`, and
+    `-u1` or `-u2` after `exec 2<&0`, read it too.
+  - **The stream is neither a regular file nor a terminal.** A pipe, a fifo,
+    a process substitution and `/dev/zero` give it up; a regular file, a
+    here-string (a temporary file there) and a terminal read the count.
+
+  `-n` and nothing else: `-N 4` and a plain read take the line. The same
+  with or without `-r`, under `-n 10` past the line's end, with a 70000-byte
+  line, and with the line in the pipe already or 0.2s behind — ten runs a
+  row, one answer each. With the line a second behind, the read waits the
+  second and then answers 1; under `-t 0.3` it times out instead (st=1,
+  the name untouched) and the next read takes the line.
+  `ReadCountOfAPipeExecOpenedFindsItsEnd` (oracle runs, 2026-10-31, #7179).
+  Not modeled: `-n 0` there answers 1 in ksh93, and `-p` leaves it saying
+  the coprocess is gone.
+- **A count that finds the end sticks the number, in ksh93.** `: | { read
+  -n 4 l; read m; }` is st=1 and then st=0 in ksh93u+, where bash and
+  BusyBox ash answer 1 twice. Every later `read` of that number — counted
+  or not, `-N`, `-d` — answers 0 with each name it fills empty and takes
+  nothing, `read -A x` one empty element: `: >f; exec 3<f; read -n 4 -u3 l;
+  echo abc >>f; read -u3 m` leaves `m` empty at 0, three times running. It
+  holds for 0, 2 and 3 alike, and a subshell's read of the number is stuck
+  too. What ends it is the number opened again (`exec 3<f`, `exec 3<&0`); a
+  copy reads on (`exec 4<&3; read -u4`), and so does `read m <&3`. Only a
+  `-n` read that took nothing: a short count (`ab` under `-n 4`, st=0 in
+  ksh93), `-N 4` at the end and a plain read at the end leave the next read
+  at the end as usual. So the bullet above is half of what #7179 saw: the
+  count finds the pipe at its end, and then the number is stuck with the
+  line still in it. `ReadCountAtTheEndSticksTheDescriptor` (oracle runs,
+  2026-10-31, #7179).
 - **A timeout of zero is not a timeout.** `-t 0` is a question about the
   state of the stream, and every dialect with the letter treats it as one.
   Measured three ways (oracle runs, 2026-09-05): a whole line already

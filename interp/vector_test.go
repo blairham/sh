@@ -259,6 +259,11 @@ func testSemantics() Semantics {
 	// A count of zero reads nothing, which is bash 5's answer. The test
 	// that is about both is TestACountOfZeroAsksTheDialect.
 	s.ReadCountOfZeroIsNoCount = No
+	// A count reads a pipe at a number past 2, and a count at the end
+	// sticks nothing, which is bash's answer to both. The test that is about
+	// both is TestACountedReadOfAPipeAsksTheDialect.
+	s.ReadCountOfAPipeExecOpenedFindsItsEnd = No
+	s.ReadCountAtTheEndSticksTheDescriptor = No
 	// A count splits what it took across the names, which is bash's answer.
 	// The suite that is about both is readcountwhole_test.go.
 	s.ReadCountFillsTheFirstNameWhole = No

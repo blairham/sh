@@ -6454,6 +6454,10 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		r.diagf("%s\n", Wording(w, w, strconv.Itoa(readFd)))
 		return 1
 	}
+	// The stream readFd names, before anything below stands something else
+	// in for it: what a `-n` read that finds it at its end sticks, in the
+	// dialect where that sticks. See countedreadend.go.
+	stream := in
 
 	// The first operand, judged before the stream is *read* in the dialects
 	// that judge it there. Observable only through the input — a refusal that
@@ -6716,6 +6720,27 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		}
 		in = strings.NewReader(text)
 	}
+	// A number a `-n` read found at its end, in the dialect where that
+	// sticks, reads as an empty record without a byte being asked for; and
+	// in the dialect that finds a pipe `exec` opened at its end under a
+	// count, the stream is read as though it had ended once it has something
+	// to read (#7179). See countedreadend.go. Neither is about `-p`, `-k` or
+	// `-z`.
+	stuck := false
+	if coprocSource < 0 && !readsKeys && !buffered {
+		stuck = r.readIsStuck(readFd, stream)
+		if !stuck && count > 0 && !exact && r.execFds[readFd] {
+			if f, finds := countedReadFindsItsEnd(in); finds {
+				if r.ask(r.sem().ReadCountOfAPipeExecOpenedFindsItsEnd,
+					"a `read -n` of a pipe `exec` opened finding it at its end") {
+					in = streamAtItsEnd{ctx: ctx, f: f}
+				}
+				if r.unspecified {
+					return 2
+				}
+			}
+		}
+	}
 	// Blocks put back on a regular file, a byte per call on anything else —
 	// see lineByteSource. The give-back runs as soon as the segment is read,
 	// ahead of the assignment, so that nothing an assignment can run reads
@@ -6817,8 +6842,11 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// Runner.readDropsNul.
 		next = r.readNulFilter(next)
 	}
-	text, lits, end := readSegment(next, raw, delim, wideDelim, count, exact,
-		r.countsTheLocalesCharacters, r.readCharacterWidth)
+	text, lits, end := "", []bool(nil), endDelim
+	if !stuck {
+		text, lits, end = readSegment(next, raw, delim, wideDelim, count, exact,
+			r.countsTheLocalesCharacters, r.readCharacterWidth)
+	}
 	giveBack()
 	if r.unspecified {
 		return 2
@@ -6831,6 +6859,20 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		// returns 5 in bash 5.3 and ksh93. The status is the handler's. See
 		// Semantics.ReadHandlersRun.
 		return r.status
+	}
+	// A `-n` read that found the end before its first character, which one
+	// dialect remembers against the number it read. Not one a trapped signal
+	// gave up: that is not the end of anything. See
+	// Semantics.ReadCountAtTheEndSticksTheDescriptor.
+	if end == endEOF && text == "" && count > 0 && !exact && r.readAbandonedBy == 0 &&
+		coprocSource < 0 && !readsKeys && !buffered {
+		if r.ask(r.sem().ReadCountAtTheEndSticksTheDescriptor,
+			"a `read -n` that found the end sticking the descriptor it read") {
+			r.stickRead(readFd, stream)
+		}
+		if r.unspecified {
+			return 2
+		}
 	}
 
 	// A `read` that fails still assigns. All four shells clear the variables

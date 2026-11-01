@@ -674,8 +674,10 @@ dash  ProducedParameterListing
 dash  RangeOperandBackslash
 dash  ReadArrayDefault
 dash  ReadArrayTakesOneNameOnly
+dash  ReadCountAtTheEndSticksTheDescriptor
 dash  ReadCountFillsTheFirstNameWhole
 dash  ReadCountJudgesTheNamesAfterTheFirst
+dash  ReadCountOfAPipeExecOpenedFindsItsEnd
 dash  ReadCountOfZeroIsNoCount
 dash  ReadDelimiterIsTheLocalesCharacter
 dash  ReadEchoLettersWriteTheValues
@@ -892,8 +894,10 @@ zsh   PrintfHexFloatDefaultIsTwelveDigits
 zsh   PrintfHexFloatZeroFillPrecedesThePrefix
 zsh   PrintfOutputPrecedesComplaint
 zsh   PrintfReportsAMissingHexDigit
+zsh   ReadCountAtTheEndSticksTheDescriptor
 zsh   ReadCountFillsTheFirstNameWhole
 zsh   ReadCountJudgesTheNamesAfterTheFirst
+zsh   ReadCountOfAPipeExecOpenedFindsItsEnd
 zsh   ReadCountOfZeroIsNoCount
 zsh   ReadExactCountKeepsPartial
 zsh   ReadPartialCountSucceeds

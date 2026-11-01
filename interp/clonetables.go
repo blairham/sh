@@ -178,6 +178,7 @@ func (c *Runner) ownTables(r *Runner) {
 	c.fds = maps.Clone(r.fds)
 	c.execFds = maps.Clone(r.execFds)
 	c.dupFds = maps.Clone(r.dupFds)
+	c.stuckReads = maps.Clone(r.stuckReads)
 	// The commands started beside the shell under a name, on the terms the
 	// jobs slice is on and for a measured reason rather than a symmetrical
 	// one: the *table* is the subshell's and the commands in it are shared.

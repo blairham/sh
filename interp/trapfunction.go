@@ -311,10 +311,7 @@ func (r *Runner) restoreTrapFunction(cond, fname string, decl *syntax.FuncDecl) 
 	if fname == "" || decl == nil {
 		return
 	}
-	if r.funcs == nil {
-		r.funcs = map[string]*syntax.FuncDecl{}
-	}
-	r.funcs[fname] = decl
+	r.setFunc(fname, decl)
 	if r.trapFuncs == nil {
 		r.trapFuncs = map[string]string{}
 	}

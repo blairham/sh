@@ -2569,13 +2569,13 @@ func (r *Runner) removeFunction(name string) {
 // stood for, for the callers that are already changing that condition and
 // would otherwise undo their own work on the way past.
 func (r *Runner) removeFunctionQuietly(name string) {
-	delete(r.funcs, name)
+	r.dropFunc(name)
 	r.ownFuncOrigins()
 	delete(r.funcOrigins, name)
 	delete(r.exportedFuncs, name)
 	r.forgetFunctionTrace(name)
 	if prelude := r.preludeFuncs[name]; prelude != nil {
-		r.funcs[name] = prelude
+		r.setFunc(name, prelude)
 	}
 }
 

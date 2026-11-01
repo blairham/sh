@@ -218,6 +218,7 @@ func (r *Runner) cellFor(name string) *varCell {
 	r.cellSlab = append(r.cellSlab, varCell{name: name})
 	i := int32(len(r.cellSlab) - 1)
 	r.cellIndex[name] = i
+	r.cellsMade++
 	r.rememberCell(name, i)
 	return &r.cellSlab[i]
 }

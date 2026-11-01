@@ -359,17 +359,29 @@ func (r *Runner) publishExitTrap() {
 // passes it over.
 //
 // Asked between every two statements where there is no EXIT trap, so it
-// builds nothing: the list's name is kept once it has been spelled.
+// builds nothing: the list's name is kept once it has been spelled. And it
+// asks nothing either, in the shell that has neither a hook nor a list, which
+// is nearly every one: that answer is kept while the function table has not
+// been written and no variable has been made, which is the only way the list
+// could come to exist. Two hashed lookups that both answered no were most of
+// what a statement cost the dialect with a hook over the one without (#6496).
 func (r *Runner) exitHookStandsForAHangup() bool {
 	sem := r.sem()
 	name := sem.ExitHook
 	if name == "" || sem.HangupIsAnOrderlyExit != Yes {
 		return false
 	}
+	if r.exitHookAbsent.holds(r, name, sem.HookListSuffix) {
+		return false
+	}
 	if _, ok := r.funcs[name]; ok {
 		return true
 	}
-	if sem.HookListSuffix == "" || r.arraysLen() == 0 {
+	if sem.HookListSuffix == "" {
+		r.exitHookAbsent.record(r, name, sem.HookListSuffix)
+		return false
+	}
+	if r.arraysLen() == 0 {
 		return false
 	}
 	list := r.exitHookList
@@ -378,16 +390,47 @@ func (r *Runner) exitHookStandsForAHangup() bool {
 		list = name + sem.HookListSuffix
 		r.exitHookList = list
 	}
-	a, ok := r.arraysLookup(list)
-	if !ok {
+	c := r.cell(list)
+	if c == nil {
+		r.exitHookAbsent.record(r, name, sem.HookListSuffix)
 		return false
 	}
-	for _, fn := range r.readArray(a) {
+	if c.has&slotArray == 0 {
+		return false
+	}
+	for _, fn := range r.readArray(c.array) {
 		if _, ok := r.funcs[fn]; ok {
 			return true
 		}
 	}
 	return false
+}
+
+// exitHookAbsence is Runner.exitHookStandsForAHangup's no, kept where it found
+// no function by the hook's name and no variable by its list's, with the
+// counts that say nothing has changed since. funcsGen moves with every write
+// to the function table and cellsMade with every name the variable store
+// makes, and a name the store has not made has no value, so while both stand
+// the two lookups would answer as they did. A write that only removes, or a
+// value given to a name that already had a record, cannot turn either no into
+// a yes — the second is why the list is kept only where it had no record at
+// all. The hook and the suffix are the key, as an emulation can change them.
+type exitHookAbsence struct {
+	hook, suffix        string
+	funcsGen, cellsMade uint64
+	valid               bool
+}
+
+func (m *exitHookAbsence) holds(r *Runner, hook, suffix string) bool {
+	return m.valid && m.funcsGen == r.funcsGen && m.cellsMade == r.cellsMade &&
+		m.hook == hook && m.suffix == suffix
+}
+
+func (m *exitHookAbsence) record(r *Runner, hook, suffix string) {
+	*m = exitHookAbsence{
+		hook: hook, suffix: suffix,
+		funcsGen: r.funcsGen, cellsMade: r.cellsMade, valid: true,
+	}
 }
 
 // takeOutsideDeath is the shell acting on a fatal signal from outside that

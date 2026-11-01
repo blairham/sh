@@ -148,6 +148,9 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 		}
 	}
 
+	// `$?` as the substitution found it, for a handler that runs as it ends.
+	// See Runner.runHandlersAsASubstitutionEnds.
+	before := r.status
 	var out bytes.Buffer
 	sub := r.clone()
 	// Deferred first so that it runs last, once nothing below reads the
@@ -306,7 +309,14 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 		// finished. See unforkeddeath.go.
 		return ""
 	}
-	return r.substitutedValue(out.String())
+	v := r.substitutedValue(out.String())
+	// A trapped signal another process sent while the body ran is handled
+	// here in the dialects that handle it before the rest of the command's
+	// words. After the value is taken, which the handler cannot reach: what
+	// it writes goes where the shell's output goes. See
+	// Semantics.HandlersRunAsASubstitutionEnds.
+	r.runHandlersAsASubstitutionEnds(ctx, before)
+	return v
 }
 
 // currentShellSubst runs a `${ … ;}` or `${| … ;}` body on this runner.

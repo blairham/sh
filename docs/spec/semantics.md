@@ -35881,11 +35881,11 @@ ksh93 already paid for being given up.
 
 **Not modeled**:
 
-- zsh runs the handler of a signal that lands during any command substitution
-  as that substitution ends, before the command it belongs to runs: `echo Y
-  "$(/bin/kill -INT $$)" "$(echo E >&3)"` prints `T` before `E`. Here it runs
-  at the next command, or, for a `read`, as the read begins — the same output
-  for a read, and the handler's `$?` is the substitution's rather than zsh's 1.
+- zsh runs the handler for a substitution's own `kill $$` in the read's
+  redirection as that substitution ends. Here it runs as the read begins: the
+  same output, but the handler's `$?` is the substitution's rather than zsh's
+  1. A signal from another process is `HandlersRunAsASubstitutionEnds`, below
+  (#7175).
 - A file read here is never watched, because it never waits, so zsh's handler
   runs after it.
 - zsh's handler that runs `exit` with the read inside a function, or `break`
@@ -35895,3 +35895,77 @@ ksh93 already paid for being given up.
 - bash 3.2's function returns 0 for the handler's `return 5` (#7222).
 - ksh93 shows a handler run as the read begins `$?` 258 when the signal came
   from its own command substitution's `kill`; from another process it shows 0.
+
+#### When a handler runs for a signal that lands during a command substitution
+
+`Semantics.HandlersRunAsASubstitutionEnds` (#7175). A trapped signal can come
+from another process while a command substitution runs. zsh and ksh93 run its
+handler as that substitution ends, before the rest of the command's words are
+expanded and before the command runs. bash, dash and ash hold it until the
+command is over, as they do for a signal that lands during any other command.
+Measured 2026-10-31 from `-c` against zsh 5.9.2, ksh93u+ 2012-08-01, bash
+5.3.20, bash 3.2.57, dash 0.5.12 and BusyBox ash 1.37.0 in the pinned alpine
+image, with fd 3 the terminal:
+
+```sh
+trap 'echo "T st=$?"' INT; false; echo Y "$(/bin/kill -INT $$)" "$(echo E >&3)"; echo "after st=$?"
+```
+
+| | output |
+| --- | --- |
+| zsh | `T st=1`, `E`, `Y`, `after st=0` |
+| ksh93 | `T st=0`, `E`, `Y`, `after st=0` |
+| bash 5.3, bash 3.2, dash, ash | `E`, `Y`, `T st=0`, `after st=0` |
+| this shell before | `E`, `Y`, `T st=1` (zsh) or `T st=0`, `after st=0` |
+
+The rule is keyed on the substitution, not on where it is written. Each of
+these gives the same split, with `T` before the second substitution's `E` in
+zsh and ksh93 and after the command elsewhere:
+
+- `x=$(/bin/kill -INT $$) y=$(echo E >&3)`, a substitution in an assignment
+- `echo Y 4>"$(/bin/kill -INT $$)/dev/null" 5>"$(echo E >&3)/dev/null"`, in a
+  redirection target
+- the line above with backquotes for `$( )`
+- the script's own background job sending the signal while the substitution
+  waits on a fifo, which is another process in every column
+
+The handler's `$?` differs too:
+
+| first part of the command | zsh | ksh93 | bash, dash, ash |
+| --- | --- | --- | --- |
+| `true; echo Y "$(/bin/kill -INT $$; exit 3)"` | 0 | 3 | 0 |
+| `false; echo Y "$(exit 4)" "$(/bin/kill -INT $$)"` | 4 | 0 | 0 |
+
+ksh93's handler sees the status the substitution left. zsh's sees the status
+from before that substitution, which here is the status an earlier
+substitution in the same command left, not the status from before the
+statement. That is `SignalHandlerSeesEarlierStatus` asked at a substitution.
+In bash, dash and ash the handler sees the command's status.
+
+The question is asked only where the shell itself, not a subshell, finishes a
+command substitution while a handler is waiting for a signal it did not raise
+from inside one. These ask nothing:
+
+- a substitution nothing arrives during
+- an ignored signal
+- a child's death
+- a substitution's own `kill $$`
+- a substitution in a subshell, whose arrivals the shell takes once the
+  subshell is done
+
+A handler that runs `exit 3` there ends the shell at once. zsh and ksh93 write
+`T` and nothing more, and exit 3.
+
+**Not modeled**:
+
+- zsh runs the handler as soon as the signal arrives, while the substitution
+  is still running. `$(/bin/kill -INT $$; sleep 1; echo M >&3)` writes `T`
+  before `M` in zsh, and after it in ksh93 and here (#7224).
+- The substitution's own `kill $$` is left out of the axis. zsh runs its
+  substitution in a process of its own, so there it is a signal from another
+  process and runs as it arrives (#7224). ksh93 runs it after the command, as
+  this shell does, and loses it entirely when a second substitution follows
+  (#7225).
+- ksh93 loses the handler when the substitution starts another program after
+  the signal lands (`/bin/sleep 1` after the `kill`). It also does not run the
+  rest of a body whose builtin `sleep` the signal interrupts (#7225).

@@ -17,12 +17,16 @@ var plainPatternShortcut = true
 // in some dialect under some option: the POSIX three, the escape, every
 // character an extended or ksh-style pattern spells an operator with, and
 // the bracket a numeric range is written in. A pattern that holds none of
-// them, apart from a star at either end, is a string to compare.
+// them, apart from stars and the angle brackets innerStarsOnly admits, is a
+// string to compare, or strings joined by stars.
 const plainPatternSpecials = "*?[]\\()|<>^#~!@+"
 
 // plainPatternMatch answers a whole-subject match for the patterns that need
-// no matcher: a literal, `*`, and a literal with a star at one end or both.
-// ok is false for every other pattern, which goes to the matcher as before.
+// no matcher: a literal, `*`, a literal with a star at one end or both, and
+// literals joined by single stars, which is the shape of F-Sy-H's table
+// search `${out[(i)<*>_${k}]}` — a few hundred searches a start, each one
+// matched against every key in turn (#6363). ok is false for every other
+// pattern, which goes to the matcher as before.
 //
 // These are most of what a real configuration matches. A startup on a
 // prompt theme and a plugin manager (#5873) matched 91,220 patterns, and
@@ -60,13 +64,19 @@ func (r *Runner) plainPatternMatch(pattern, s string, surface patternSurface) (m
 	if trail {
 		lit = lit[:len(lit)-1]
 	}
+	// inner is set when the literal has stars inside it as well, which is
+	// what a table search like `${out[(i)<*>_${k}]}` asks of every key.
+	var inner bool
 	if strings.IndexByte(lit, '\\') >= 0 {
 		var ok bool
 		if lit, ok = unescapePlainPattern(lit, r.sem().PatternEscapeReaches); !ok {
 			return false, false
 		}
 	} else if strings.ContainsAny(lit, plainPatternSpecials) {
-		return false, false
+		var ok bool
+		if inner, ok = innerStarsOnly(lit); !ok {
+			return false, false
+		}
 	}
 	// A literal that is not whole characters is left to the matcher, which
 	// is what knows whether the units are characters: there a lone lead
@@ -80,8 +90,11 @@ func (r *Runner) plainPatternMatch(pattern, s string, surface patternSurface) (m
 	if r.MatchOption(MatchFoldsCase) {
 		return false, false
 	}
-	if (lead || trail) && surface == patternInACondition && r.recordsAPatternMatch() {
+	if (lead || trail || inner) && surface == patternInACondition && r.recordsAPatternMatch() {
 		return false, false
+	}
+	if inner {
+		return matchStarSegments(s, lit, lead, trail), true
 	}
 	switch {
 	case lead && trail:
@@ -92,6 +105,90 @@ func (r *Runner) plainPatternMatch(pattern, s string, surface patternSurface) (m
 		return strings.HasPrefix(s, lit), true
 	}
 	return s == lit, true
+}
+
+// innerStarsOnly reports whether the specials in a literal with no
+// backslash are stars with text on both sides of each, and angle brackets
+// that cannot open a numeric range — and so whether lit is still a string to
+// compare, in pieces. inner says a star was among them.
+//
+// A star beside another star is left to the matcher, which is the one that
+// knows what a doubled star means where it means anything. An angle bracket
+// is the bracket a numeric range is written in and nothing else to the
+// matcher: `<` opens one only where `<`, digits, `-`, digits and `>` follow
+// in that order (splitNumericRange), and `>` never opens anything. Every
+// other `<` is a character, as `<*>_default` is a `<`, anything, and
+// `>_default` — the key F-Sy-H's theme loader searches its table with.
+func innerStarsOnly(lit string) (inner, ok bool) {
+	for i := 0; i < len(lit); i++ {
+		switch c := lit[i]; {
+		case c == '*':
+			if i == 0 || i == len(lit)-1 || lit[i+1] == '*' {
+				return false, false
+			}
+			inner = true
+		case c == '<':
+			if opensNumericRange(lit[i:]) {
+				return false, false
+			}
+		case c == '>':
+		case strings.IndexByte(plainPatternSpecials, c) >= 0:
+			return false, false
+		}
+	}
+	return inner, true
+}
+
+// opensNumericRange reports whether p starts with the shape of a numeric
+// range, `<n-m>` with either bound left out. It reads the shape only, so a
+// bound too large to hold — which the matcher reads as text — is still
+// counted here, and the pattern goes to the matcher, which is the safe side.
+func opensNumericRange(p string) bool {
+	i := 1
+	for i < len(p) && isDigit(p[i]) {
+		i++
+	}
+	if i >= len(p) || p[i] != '-' {
+		return false
+	}
+	i++
+	for i < len(p) && isDigit(p[i]) {
+		i++
+	}
+	return i < len(p) && p[i] == '>'
+}
+
+// matchStarSegments is a whole-subject match of a literal whose pieces are
+// joined by stars, with a star in front of it and after it where lead and
+// trail say so. The first piece is a prefix unless a star leads, the last a
+// suffix unless one trails, and each piece between is found leftmost in what
+// is left, which is the whole answer for stars and text alone: taking a
+// piece any later only leaves the pieces after it less room.
+func matchStarSegments(s, lit string, lead, trail bool) bool {
+	pieces := strings.Split(lit, "*")
+	if !lead {
+		if !strings.HasPrefix(s, pieces[0]) {
+			return false
+		}
+		s = s[len(pieces[0]):]
+		pieces = pieces[1:]
+	}
+	if !trail {
+		last := pieces[len(pieces)-1]
+		if !strings.HasSuffix(s, last) {
+			return false
+		}
+		s = s[:len(s)-len(last)]
+		pieces = pieces[:len(pieces)-1]
+	}
+	for _, piece := range pieces {
+		i := strings.Index(s, piece)
+		if i < 0 {
+			return false
+		}
+		s = s[i+len(piece):]
+	}
+	return true
 }
 
 // escapedAtEnd reports whether the byte after text would be escaped: whether

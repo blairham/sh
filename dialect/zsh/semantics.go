@@ -2202,6 +2202,14 @@ func Semantics() interp.Semantics {
 	// cleared where nothing had arrived. Measured 2026-10-31 on 5.9.2; see
 	// interp.Semantics.ReadLeftByAHandlersReturnAssignsWhatArrived (#7176).
 	s.ReadLeftByAHandlersReturnAssignsWhatArrived = interp.Yes
+	// A signal another process sends while a command substitution runs has
+	// its handler run before the rest of the command's words: `echo Y
+	// "$(/bin/kill -INT $$)" "$(echo E >&3)"` writes `T` before `E`, and the
+	// handler sees the status from before the substitution. zsh runs it as
+	// soon as it arrives, while the body is still running, which this shell
+	// only meets as the substitution ends (#7224). Measured 2026-10-31 on
+	// 5.9.2; see interp.Semantics.HandlersRunAsASubstitutionEnds (#7175).
+	s.HandlersRunAsASubstitutionEnds = interp.Yes
 	s.ArithLeadingZeroIsOctal = interp.No
 	// Nothing makes a leading zero octal here, so `let` and `(( ))` read one
 	// alike and the axis that parts them elsewhere has nothing to change.

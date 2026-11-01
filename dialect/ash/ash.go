@@ -2403,6 +2403,12 @@ func Semantics() interp.Semantics {
 	s.ReadHandlersRun = interp.ReadHandlersRunAfterTheRead
 	// unanswered ReadLeftByAHandlersReturnAssignsWhatArrived: a handler never
 	// runs in the middle of a read here, so none can return out of one.
+	// A signal another process sends while a command substitution runs has
+	// its handler run after the command: `echo Y "$(/bin/kill -INT $$)"
+	// "$(echo E >&3)"` writes `E`, `Y` and then `T`. Measured 2026-10-31 on
+	// BusyBox 1.37.0 in the pinned image; see
+	// interp.Semantics.HandlersRunAsASubstitutionEnds (#7175).
+	s.HandlersRunAsASubstitutionEnds = interp.No
 
 	// ---- control flow and redirection ----
 

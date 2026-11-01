@@ -19873,6 +19873,63 @@ type Semantics struct {
 	// unpinned ksh: the same reach. Pinned by
 	// TestAHandlersReturnInTheMiddleOfAReadWhereTheShellsDo.
 	ReadLeftByAHandlersReturnAssignsWhatArrived Answer
+	// HandlersRunAsASubstitutionEnds is when the handler of a trapped signal
+	// that another process sends while a command substitution runs runs. Yes
+	// runs it as that substitution ends, before the rest of the command's
+	// words are expanded and before the command runs. No holds it until the
+	// command is over, as for a signal that lands during any other command.
+	//
+	// zsh 5.9.2 and ksh93u+ 2012-08-01 answer yes; bash 5.3.20, bash 3.2.57,
+	// dash 0.5.12 and BusyBox ash 1.37.0 no. Measured 2026-10-31 from -c,
+	// with fd 3 the terminal: `trap 'echo "T st=$?"' INT; false; echo Y
+	// "$(/bin/kill -INT $$)" "$(echo E >&3)"; echo "after st=$?"`:
+	//
+	//	zsh                       T st=1, E, Y, after st=0
+	//	ksh93                     T st=0, E, Y, after st=0
+	//	bash 5.3, 3.2, dash, ash  E, Y, T st=0, after st=0
+	//
+	// The rule is keyed on the substitution, not on where it is written: a
+	// substitution in an assignment's value, in a redirection target, and in
+	// backquotes gives the same split. The signal sent by the script's own
+	// background job gives it too, since that job is another process.
+	//
+	// The handler sees `$?` as the substitution left it in ksh93 — `true;
+	// echo "$(/bin/kill -INT $$; exit 3)"` shows 3 — and, in zsh, the status
+	// from before the substitution (SignalHandlerSeesEarlierStatus): 1 after
+	// `false`, and 4 after an earlier `$(exit 4)` in the same command.
+	//
+	// Not modeled: zsh runs the handler as soon as the signal arrives, while
+	// the substitution is still running — `$(/bin/kill -INT $$; sleep 1; echo
+	// M >&3)` writes `T` before `M` there, and after it in ksh93 and here
+	// (#7224). A signal from the substitution's own `kill $$` is not this
+	// axis's: zsh's substitution is a process of its own and runs that
+	// handler as it arrives (#7224), while ksh93 runs it after the command,
+	// and loses it where a second substitution follows (#7225). ksh93 also
+	// loses the handler where the body starts another program after the
+	// signal lands (#7225). See docs/spec/semantics.md, "When a handler runs
+	// for a signal that lands during a command substitution".
+	//
+	// Asked only where the shell itself — not a subshell — finishes a command
+	// substitution with a handler waiting for a signal it did not raise from
+	// inside one. A substitution nothing arrives during, an ignored signal, a
+	// child's death and a substitution's own `kill $$` ask nothing.
+	//
+	// unpinned zsh: no corpus row times a signal from another process
+	// against a command substitution. Pinned by
+	// TestAHandlerRunsAsASubstitutionEndsWhereTheShellsRunIt.
+	//
+	// unpinned ksh: the same reach. Pinned by
+	// TestAHandlerRunsAsASubstitutionEndsWhereTheShellsRunIt.
+	//
+	// unpinned bash: the same reach. Pinned by
+	// TestAHandlerRunsAsASubstitutionEndsWhereTheShellsRunIt.
+	//
+	// unpinned dash: the same reach. Pinned by
+	// TestAHandlerRunsAsASubstitutionEndsWhereTheShellsRunIt.
+	//
+	// unpinned ash: the same reach. Pinned by
+	// TestAHandlerRunsAsASubstitutionEndsWhereTheShellsRunIt.
+	HandlersRunAsASubstitutionEnds Answer
 	// DisownRemovesTheJob makes `disown` take the job out of the table, so
 	// a later `jobs` no longer lists it: bash and zsh. ksh93's disown only
 	// shields the job from the HUP an exiting shell would send, and its
@@ -38107,6 +38164,10 @@ func PosixSemantics() Semantics {
 		// it arrived during has completed, and dash and ash answer this. See
 		// the field.
 		ReadHandlersRun: ReadHandlersRunAfterTheRead,
+		// And the handler of one that lands during a command substitution
+		// runs after the command the substitution is in, for the same reason:
+		// bash, dash and ash answer this. See the field.
+		HandlersRunAsASubstitutionEnds: No,
 		// And a read given up keeps what arrived, as at the end of the
 		// input, its names past what arrived cleared: dash and ksh93, two of
 		// the three columns that give one up. BusyBox ash keeps only the
@@ -39146,11 +39207,12 @@ func (o WaitingHandlerOrder) String() string {
 // assigns what arrived before the shell exits (`l=[ab]`, still 3); zsh's
 // `break` and `continue` there end the read as its `return` does, where bash
 // and ksh93 read on to the end of the line first; ksh93's read reports 258 to
-// a handler for a signal its own command substitution sent; zsh runs a
-// handler for a signal that lands during any command substitution at the end
-// of that substitution rather than at the next command; and a file read in
-// this shell, which is never watched because it never waits, runs zsh's
-// handlers after it.
+// a handler for a signal its own command substitution sent; zsh runs the
+// handler for a substitution's own `kill $$` as that substitution ends, where
+// this shell runs it as the read begins (a signal from another process is
+// Semantics.HandlersRunAsASubstitutionEnds); and a file read in this shell,
+// which is never watched because it never waits, runs zsh's handlers after
+// it.
 type ReadHandlerMoment uint8
 
 const (

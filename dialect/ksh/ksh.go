@@ -4180,6 +4180,13 @@ func Semantics() interp.Semantics {
 	// l=[old]`. Measured 2026-10-31 on ksh93u+; see
 	// interp.Semantics.ReadLeftByAHandlersReturnAssignsWhatArrived (#7176).
 	s.ReadLeftByAHandlersReturnAssignsWhatArrived = interp.No
+	// A signal another process sends while a command substitution runs has
+	// its handler run as that substitution ends, before the rest of the
+	// command's words: `echo Y "$(/bin/kill -INT $$)" "$(echo E >&3)"` writes
+	// `T` before `E`, and the handler sees the substitution's status.
+	// Measured 2026-10-31 on ksh93u+; see
+	// interp.Semantics.HandlersRunAsASubstitutionEnds (#7175).
+	s.HandlersRunAsASubstitutionEnds = interp.Yes
 	// And this is the column where the monitor is *not* enough: `set -m` is
 	// granted in a script with no terminal, and `fg` still answers 1 without
 	// a word — on a pseudo-terminal too, which is what says the missing

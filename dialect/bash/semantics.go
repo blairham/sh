@@ -1185,6 +1185,12 @@ func Semantics() interp.Semantics {
 	// and returns 0 (#7222). See
 	// interp.Semantics.ReadLeftByAHandlersReturnAssignsWhatArrived (#7176).
 	s.ReadLeftByAHandlersReturnAssignsWhatArrived = interp.No
+	// A signal another process sends while a command substitution runs has
+	// its handler run after the command, as for any other: `echo Y
+	// "$(/bin/kill -INT $$)" "$(echo E >&3)"` writes `E`, `Y` and then `T`.
+	// Measured 2026-10-31 on 5.3.20 and 3.2.57; see
+	// interp.Semantics.HandlersRunAsASubstitutionEnds (#7175).
+	s.HandlersRunAsASubstitutionEnds = interp.No
 	// A directory the PATH search walked past leaves no trace: with nothing
 	// runnable anywhere, bash says the name was never found at all.
 	s.DirectoryOnPathIsACandidate = interp.No

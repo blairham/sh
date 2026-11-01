@@ -54,9 +54,9 @@ func (h *heldOutput) flushLocked() error {
 	if len(h.buf) == 0 {
 		return nil
 	}
-	_, err := h.out.Write(h.buf)
+	n, err := h.out.Write(h.buf)
 	h.buf = h.buf[:0]
-	return err
+	return failedPartWay(n, err)
 }
 
 // flush writes out what is held so far and goes on holding.

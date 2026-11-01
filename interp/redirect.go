@@ -2801,7 +2801,7 @@ func (r *Runner) builtinWriteStatus(name string, st int) int {
 		// element. The *outer* shell's handler is nobody's here, and stays
 		// so: signalArranged read the element's own table, so an inherited
 		// handler was never one of these.
-		r.writeSignalAbsorbed("PIPE", arranged == signalHandledBy)
+		r.writeSignalAbsorbed("PIPE", arranged == signalHandledBy, kernelPipeCopies(err))
 	}
 	// A write past `ulimit -f` is the same shape with another signal. See
 	// filesizedeath.go.

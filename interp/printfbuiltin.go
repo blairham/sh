@@ -3683,8 +3683,8 @@ func (p *printfWriter) write(s string) {
 		// succeeds in every shell measured.
 		return
 	}
-	if _, err := io.WriteString(p.w, s); err != nil {
-		p.r.writeFailed = err
+	if n, err := io.WriteString(p.w, s); err != nil {
+		p.r.writeFailed = failedPartWay(n, err)
 	}
 }
 

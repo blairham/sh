@@ -79,9 +79,9 @@ func (t *redirTrace) flush() {
 // descriptor always written out, the operator, a space, and the target as it
 // expanded, unquoted. `>& 1`, `<& -` and `<& 0-` keep the space too.
 //
-// ksh93u+ spells a `<>` with no number as `1<>`, though it opens standard
-// input. That is a fact about the trace and not about the open, so it is
-// spelled here and nowhere else.
+// ksh93u+ spells a `<>` with no number as `1<>`, which is the descriptor it
+// opens: the one dialect that traces this line is the one that answers
+// Semantics.BareReadWriteRedirectionIsStandardOutput Yes (#7178).
 func redirTracePiece(rd *syntax.Redirect, target string) string {
 	var b strings.Builder
 	switch lit := rd.N.Literal(); {

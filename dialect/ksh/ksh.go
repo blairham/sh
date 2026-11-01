@@ -777,6 +777,10 @@ func Semantics() interp.Semantics {
 	s.WritingSubstitutionIsWaitedForAtTheCommand = interp.No
 	// `<>` onto a process substitution this command made: `<> <(…)` opens the path and is refused, as in bash; `<> >(…)` does not parse (#5514).
 	s.ReadWriteRedirectionTakesTheSubstitutionsEnd = interp.No
+	// And `<>` with no number in front of it is standard output: `echo hi
+	// <>f` writes into `f`, measured 2026-10-31 (#7178). See
+	// interp.Semantics.BareReadWriteRedirectionIsStandardOutput.
+	s.BareReadWriteRedirectionIsStandardOutput = interp.Yes
 	// And it names the path under /dev/fd wherever it runs, which is bash's
 	// answer again: measured 2026-09-21, `echo <(true)` is `/dev/fd/3` in
 	// the pinned Linux image, where /proc/self/fd exists and zsh prefers it

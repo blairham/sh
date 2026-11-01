@@ -4382,6 +4382,33 @@ body ran to the end of the input — and the interpreter answers the
 question, because the two shells read the same text and hand the command
 different bytes.
 
+## A `<>` with no number: standard input, except in ksh93
+
+XCU opens `<>word` on standard input when no number is written in front of
+it, and so do six of the seven columns. ksh93u+ opens it on **standard
+output**, which is what its own manual says ("as standard output"), and its
+trace writes the descriptor it opened: `set -x; echo a <>f` traces `+ 1<> f`.
+Measured 2026-10-31 (#7178) under `-c`, an empty `f`, standard input on
+`/dev/null`:
+
+| | ksh93u+ 2012-08-01 | bash 5.3, bash 3.2, bash as `sh`, zsh 5.9, dash, BusyBox 1.38.0 |
+| --- | --- | --- |
+| `echo hi <>f` | `f` holds `hi` | `hi` on standard output |
+| `read -r l <>f` over `abcdef` | `st=1 l=[]` | `st=0 l=[abcdef]` |
+| `read -r l 0<>f` | `st=0 l=[abcdef]` | the same |
+
+The operator decides, and nothing about the command does. In ksh93 `exec
+<>f`, an external command, a function, a brace group, a subshell, a `for`
+loop and a command inside `$( )` all write into `f`. A number written in
+front is honored everywhere — `0<>f` reads and `3<>f` is descriptor 3 — and
+`{v}<>f` picks a descriptor as every `{v}` does.
+
+So it is one axis, `Semantics.BareReadWriteRedirectionIsStandardOutput`,
+asked only where `<>` has no number. The standard's preset and the core
+answer standard input and ksh overrides it. The formatter is not affected:
+it writes a descriptor back as written, and the layouts that drop a default
+are bash's and zsh's, whose default for `<>` is 0.
+
 ## Where a redirection is expanded, and what that costs
 
 A redirection on a command the shell runs as a process of its own is set up

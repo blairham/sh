@@ -939,8 +939,8 @@ func (r *Runner) applyRedirList(
 		case syntax.TokLessGreat:
 			// `<>` opens for reading and writing, creating the file and
 			// never truncating it — `exec 3<> state` keeps what the file
-			// held. Unanimous and POSIX, and with no descriptor number it
-			// is standard input, exactly as a plain `<` is.
+			// held. Unanimous and POSIX. Which descriptor it is with no
+			// number in front is not: see below.
 			flags = os.O_RDWR | os.O_CREATE
 		case syntax.TokAmpGreat, syntax.TokAmpGreatClobber, syntax.TokAmpGreatBang,
 			syntax.TokAmpDGreat, syntax.TokAmpDGreatClobber, syntax.TokAmpDGreatBang,
@@ -995,8 +995,24 @@ func (r *Runner) applyRedirList(
 		default:
 			return closers, fmt.Errorf("not implemented yet: the %s redirection", rd.Op)
 		}
-		if rd.N == nil && (flags == os.O_RDONLY || op == syntax.TokLessGreat) {
+		if rd.N == nil && flags == os.O_RDONLY {
 			fd = 0
+		}
+		if rd.N == nil && op == syntax.TokLessGreat {
+			// Standard input, as a plain `<` is, in the standard and in six
+			// of the seven columns; standard output in ksh93u+, for every
+			// command alike and for `exec`. Asked here and only here, where
+			// no number was written: `0<>f` and `3<>f` are what they say
+			// everywhere. See Semantics.BareReadWriteRedirectionIsStandardOutput.
+			fd = 0
+			if r.ask(r.sem().BareReadWriteRedirectionIsStandardOutput,
+				"a `<>` with no descriptor number opening standard output") {
+				fd = 1
+			}
+			if r.unspecified {
+				r.redirErr = true
+				return closers, nil
+			}
 		}
 		if fdVar == "" && (fd == 1 || fd == -1) {
 			// Standard output, alone or with standard error. See bodyOutput.

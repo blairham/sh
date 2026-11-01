@@ -14165,6 +14165,38 @@ type Semantics struct {
 	// gone by the time the word is used, and the same here.
 	ReadWriteRedirectionTakesTheSubstitutionsEnd Answer
 
+	// BareReadWriteRedirectionIsStandardOutput opens a `<>` written with no
+	// descriptor number on standard output, rather than on standard input.
+	//
+	// Measured 2026-10-31 (#7178) under `-c`, with an empty `f` and standard
+	// input on /dev/null:
+	//
+	//	                             ksh93u+          bash 5.3, bash 3.2, bash as
+	//	                                              sh, zsh 5.9, dash, BusyBox 1.38
+	//	echo hi <>f                  `f` holds `hi`   `hi` on standard output
+	//	read -r l <>f  (f: abcdef)   st=1 l=[]        st=0 l=[abcdef]
+	//	read -r l 0<>f               st=0 l=[abcdef]  the same
+	//
+	// The operator is what decides, and nothing about the command: in ksh93
+	// `exec <>f`, an external command, a function, a group, a subshell, a
+	// loop and a command inside `$( )` all write into `f`. A number written
+	// in front is honored — `0<>f` reads and `3<>f` is descriptor 3 — and
+	// `{v}<>f` picks a descriptor as every `{v}` does. ksh93's own manual
+	// words the operator this way ("as standard output"), and its trace
+	// writes the number it opened, `+ 1<> f`. XCU puts it on standard input.
+	//
+	// Asked only of a `<>` with no number in front of it, which is the only
+	// spelling the two readings part over.
+	//
+	// Answered No by the standard's own preset and by CoreSemantics, because
+	// XCU words it that way, six of the seven columns do, and it is what
+	// this package did before the axis existed. ksh overrides it.
+	//
+	// unpinned: no corpus row writes a `<>` with no number in front of it.
+	// TestABareReadWriteRedirectionOpensTheDialectsDescriptor pins both
+	// answers.
+	BareReadWriteRedirectionIsStandardOutput Answer
+
 	// SubstitutionPathPrefersProcSelfFd names a `<(cmd)` or a `>(cmd)` under
 	// /proc/self/fd where that directory is there, rather than under /dev/fd.
 	//
@@ -36429,6 +36461,10 @@ func PosixSemantics() Semantics {
 		// seven columns do. The one that keeps a register of its own
 		// overrides it; see Semantics.BareExitReportsTheUnitsOwnStatus.
 		BareExitReportsTheUnitsOwnStatus: No,
+		// 2.7.7 opens a `<>` with no number on standard input, and six of
+		// the seven columns do. The one that opens standard output
+		// overrides it; see Semantics.BareReadWriteRedirectionIsStandardOutput.
+		BareReadWriteRedirectionIsStandardOutput: No,
 		// 2.6.5's field splitting reads the expansion's result, and a quoted
 		// null is a field there: bash, dash and BusyBox ash all keep it, and
 		// ksh93 is the departure.
@@ -38368,7 +38404,12 @@ func CoreSemantics() Semantics {
 		// leave: see Semantics.BareExitReportsTheUnitsOwnStatus, whose other
 		// answer is one shell's register and not a second reading of `$?`.
 		BareExitReportsTheUnitsOwnStatus: No,
-		LengthOfSpecialIsCount:           Yes,
+		// Standard input, which is XCU's reading, six of the seven columns'
+		// and what this package did before the axis existed — so a Runner
+		// with no dialect does not refuse a `<>f`. See
+		// Semantics.BareReadWriteRedirectionIsStandardOutput.
+		BareReadWriteRedirectionIsStandardOutput: No,
+		LengthOfSpecialIsCount:                   Yes,
 		// The redirections open first, which is the standard's own order —
 		// XCU 2.9.1 performs them in step 3 and expands the assignments in
 		// step 4 — and three of the five columns. Answered here rather than

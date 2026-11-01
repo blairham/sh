@@ -8704,8 +8704,24 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 			}
 		}
 		r.recordSingleStatus(p)
-	} else if err := r.runPipeline(ctx, p, timing, quiet); err != nil {
-		return err
+	} else {
+		before := r.line
+		if err := r.runPipeline(ctx, p, timing, quiet); err != nil {
+			return err
+		}
+		// A pipeline is not a command, so nothing dispatched it and nothing
+		// moved the line record onto it, and where every element ran in a
+		// copy nothing moved it at all: what the shell said or ran next,
+		// before the next command, named the statement in front of the
+		// pipeline. Measured 2026-11-01 under `-c`, `:` on line 2 and `{ kill
+		// -USR1 $$; } | /bin/cat` on line 4: `trap 'echo L=$LINENO' USR1`
+		// writes `L=4` in ksh93u+ and zsh 5.9.2 (here `L=2`), and bash 5.3.20
+		// locates the warnings of Diagnostics.WaitingSignalLostItsTrap at the
+		// pipeline's line (#7170). An element that ran in this shell has moved
+		// it already, and keeps what it set.
+		if r.line == before {
+			r.line = r.pipelineLine(p)
+		}
 	}
 	if p.Negated && r.negationInverts() {
 		// `!` applies to the whole pipeline and inverts its status.

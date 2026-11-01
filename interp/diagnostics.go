@@ -1816,6 +1816,26 @@ type Diagnostics struct {
 	// killed reports.
 	WaitForJobStopped string
 
+	// WaitingSignalLostItsTrap is what a shell says at the turn of a signal
+	// that was waiting with a handler and lost it to an earlier handler of
+	// the same batch — Semantics.WaitingSignalWithoutItsTrapIsResent. Two
+	// verbs: the signal's number on this platform, and 0 where the trap went
+	// back to the default or 1 where it now ignores the signal. Empty means
+	// nothing is said.
+	//
+	// Measured 2026-11-01 on bash 5.3.20 under `-c`: `bash: line 2: warning:
+	// run_pending_traps: bad value in trap_list[31]: 0x0` for USR2 on darwin
+	// after `trap - USR2`, and `0x1` after `trap '' USR2`, on the line of the
+	// command the two signals waited for. bash 3.2.57 says the same with no
+	// line. No other column says anything.
+	WaitingSignalLostItsTrap string
+	// WaitingSignalResent is the second thing the same shell says, where the
+	// trap went back to the default, as it sends the signal to itself again.
+	// Two verbs: the signal's number on this platform, and its name without
+	// the SIG. Measured with the first: `run_pending_traps: signal handler is
+	// SIG_DFL, resending 31 (SIGUSR2) to myself`, with the same prefix.
+	WaitingSignalResent string
+
 	// DeclarePrintBadLayout is the declaration builtin refusing a `-p`
 	// number it has no layout for — `%[1]s` the builtin, `%[2]s` the number.
 	// Empty is the core's wording, which is zsh's: `bad argument to -p: 2`.

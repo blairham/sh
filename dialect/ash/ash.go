@@ -1980,6 +1980,11 @@ func Semantics() interp.Semantics {
 	// `busybox:latest`: USR1 TERM HUP USR2 sent during a `/bin/sleep` run
 	// HUP USR1 USR2 TERM. See interp.WaitingHandlerOrder (#7039).
 	s.WaitingHandlersRun = interp.WaitingHandlersRunUpTheSignalNumbers
+	// And one of them that lost its trap to an earlier one before its turn
+	// runs nothing, whether the trap was reset or ignored. Measured
+	// 2026-11-01 on BusyBox 1.38.0 in `busybox:latest`; see
+	// interp/waitingtrapgone.go (#7170).
+	s.WaitingSignalWithoutItsTrapIsResent = interp.No
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
 	// The ERR trap stays in the frame that set it, and errtrace carries it
 	// into a function but not into a subshell. Measured 2026-10-03 in the

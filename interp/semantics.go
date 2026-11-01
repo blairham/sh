@@ -6084,6 +6084,24 @@ type Semantics struct {
 	// a handler each, in one batch. One handler waiting, or one condition
 	// waiting twice, runs as it is whatever the answer.
 	WaitingHandlersRun WaitingHandlerOrder
+	// WaitingSignalWithoutItsTrapIsResent makes a signal that was waiting
+	// with a handler, and lost it to an earlier handler of the same batch
+	// before its turn came, say so at its turn; and where the trap went back
+	// to the default, send the signal again, so that the default action
+	// happens to the shell after all. No runs nothing for it and goes on.
+	// See waitingtrapgone.go for the measurements (#7170).
+	//
+	// bash alone, 5.3.20 and 3.2.57 alike: `trap - USR2` in HUP's handler
+	// with both waiting writes the two warnings of
+	// Diagnostics.WaitingSignalLostItsTrap and WaitingSignalResent and dies
+	// of USR2; `trap '' USR2` writes the first warning and goes on. dash,
+	// BusyBox ash 1.38.0, ksh93u+ and zsh 5.9.2 run nothing for it, each in
+	// the order WaitingHandlersRun gives it. A replaced trap runs its new
+	// action everywhere, and needs no answer.
+	//
+	// Asked only where it decides something: at the first turn of a waiting
+	// condition that had a handler as the batch was taken and has none now.
+	WaitingSignalWithoutItsTrapIsResent Answer
 	// ArithInfAndNaNAreConstants reads the names `inf` and `nan`, in any
 	// case, as the two floating constants rather than as parameters — before
 	// any parameter of that name. Measured 2026-10-02: with `Inf=4`, zsh

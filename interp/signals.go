@@ -1546,6 +1546,9 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 	if !ok {
 		return
 	}
+	// What each arrival had to run as the batch was taken, so that a turn can
+	// tell a handler an earlier one took away. See waitingtrapgone.go.
+	had := r.handledAsTheBatchIsTaken(pending)
 	for _, name := range pending {
 		s.mu.Lock()
 		body, ok := s.traps[name]
@@ -1554,7 +1557,12 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 			origin, s.origins[name] = q[0], q[1:]
 		}
 		s.mu.Unlock()
+		firstTurn := had[name]
+		delete(had, name)
 		if !ok || body == "" {
+			if firstTurn && r.waitingSignalLostItsTrap(name, ok) {
+				return
+			}
 			continue
 		}
 		r.runTrapHandlerFrom(ctx, name, body, origin)

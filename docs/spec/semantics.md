@@ -28097,6 +28097,50 @@ Not answered here: the three sorting columns run a condition that arrived
 twice once, and zsh once per arrival (#7166); this axis keeps both arrivals,
 side by side.
 
+**`WaitingSignalWithoutItsTrapIsResent`** — bash yes · dash, ash, ksh93, zsh
+no
+
+What a signal waiting with a handler does when an earlier handler of the same
+batch took that handler away before its turn. bash says so at the turn, and
+where the trap went back to the default it sends the signal to itself again,
+so the default action happens after all. Everywhere else nothing runs for it
+and the script goes on. Measured 2026-11-01 under `-c`, USR2 and HUP sent by
+`{ kill -USR2 $$; kill -HUP $$; } | /bin/cat` on line 2, HUP's handler `echo
+HUP; <change>` (darwin numbers: USR2 31, WINCH 28):
+
+| change | bash 5.3.20 · 3.2.57 | dash · BusyBox ash 1.38.0 |
+| --- | --- | --- |
+| `trap - USR2` | HUP, two warnings, dies of USR2 (159) | HUP after |
+| `trap '' USR2` | HUP, the first warning, after | HUP after |
+| `trap "echo NEW" USR2` | HUP NEW after | HUP NEW after |
+| `trap - WINCH` (WINCH sent) | HUP, two warnings, after | HUP after |
+
+The warnings are `bash: line 2: warning: run_pending_traps: bad value in
+trap_list[31]: 0x0` — `0x1` after an ignore — and `bash: line 2: warning:
+run_pending_traps: signal handler is SIG_DFL, resending 31 (SIGUSR2) to
+myself`; bash 3.2 writes them with no line, and the number is the platform's
+(12 for USR2 on Linux). What follows the second is what an untrapped signal
+does to the shell: an EXIT trap runs first and reads the status the batch
+waited on, then USR2, TERM, PIPE and ALRM kill it; WINCH and URG do nothing;
+QUIT, which bash ignores untrapped when not interactive, does nothing. INT is
+the exception: bash keeps a handler of its own for it, and runs and says
+nothing. CHLD ends bash 5.3 with a segmentation fault either way, which is not
+modeled; nothing runs for it, as in every other column. bash 5.3 under the name
+`sh` is bash.
+
+ksh93u+ and zsh 5.9.2 reach it in their own order and run nothing: USR2's
+handler resetting HUP's in ksh93 is `USR2 after`, and HUP's resetting USR2's
+where HUP came first in zsh is `HUP after`. A condition whose own handler
+resets its trap and that arrived twice runs once and goes on in every column,
+bash included.
+
+Asked only at the first turn of a waiting condition that had a handler as its
+batch was taken and has none now. The warnings are located at the line of the
+command the batch waited for, which for a pipeline is the pipeline's own: the
+line record now moves onto a pipeline whose elements all ran in copies, which
+also puts a ksh93 or zsh handler's `$LINENO` after one on the pipeline's line,
+as both shells do.
+
 **`ReadHandlersRun`** — bash when a wait is interrupted · zsh, ksh93 as soon
 as they arrive · dash, ash after the read
 

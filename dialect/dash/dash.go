@@ -1748,6 +1748,10 @@ func Semantics() interp.Semantics {
 	// order they came in. Measured 2026-10-31; see interp.WaitingHandlerOrder
 	// (#7039).
 	s.WaitingHandlersRun = interp.WaitingHandlersRunUpTheSignalNumbers
+	// And one of them that lost its trap to an earlier one before its turn
+	// runs nothing, whether the trap was reset or ignored. Measured
+	// 2026-11-01; see interp/waitingtrapgone.go (#7170).
+	s.WaitingSignalWithoutItsTrapIsResent = interp.No
 	// unanswered ArithStoreRefusalIsAnError: there are no arrays to store an
 	// element of.
 	// unanswered PrintfQuoteOfNoArgumentIsEmpty: `%q` is `invalid

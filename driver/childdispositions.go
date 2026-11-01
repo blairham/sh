@@ -28,6 +28,7 @@ import (
 // signal is what exec resets to its default; the ignore goes back on after,
 // and an ignored signal has no subscriptions to lose.
 func startWithDispositions(ignore, reset []syscall.Signal, start func() error) error {
+	awaitTheWatch()
 	var ignored []syscall.Signal
 	var defaulted []os.Signal
 	for _, sig := range ignore {

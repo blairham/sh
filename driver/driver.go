@@ -3496,6 +3496,13 @@ func (sh *Shell) runInput(in source) int {
 	// none, decided from the environment after the invocation's options and
 	// before the files. See interp.Runner.TurnEditingOffInsideEmacs.
 	r.TurnEditingOffInsideEmacs()
+	// The first of the person's commands is next — a startup file, then the
+	// script — so the watch must hold every subscription before it: a signal
+	// sent once anything has run ends the shell as it always did. Here and
+	// not where the watch is set up, so its round trips overlap the prelude
+	// and the rest above instead of adding to them (#7263). See
+	// fatalsignal.go.
+	awaitTheWatch()
 	if code := sh.startup(r, loginShellOption(sh, r, in)); code != 0 {
 		return code
 	}

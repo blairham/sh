@@ -251,6 +251,79 @@ func TestADeathFromOutsideWaitsForAnUnforkedSubshellInOneDialect(t *testing.T) {
 	}
 }
 
+// What each dialect's EXIT trap reads for an INT from another process that
+// lands while a `( … )` waits for a program (#7159).
+//
+// Measured 2026-11-01, each shell in a session of its own, INT from
+// `/bin/kill` in another process 0.4 s in, `trap 'echo "bye $?"' EXIT; (exit
+// 7)` in front of each line:
+//
+//	( /bin/sleep 2; echo in ); echo after
+//	    ksh93u+               in, bye 0, killed by INT at 2 s
+//	    bash 5.3.20           in, after, bye 0, exit 0
+//	    zsh 5.9.2             in, killed by INT at 2 s
+//	( /bin/sleep 2; exit 3 ); echo after
+//	    ksh93u+               bye 3, killed by INT at 2 s
+//	( ( /bin/sleep 2; echo inner ); echo outer ); echo after
+//	    ksh93u+               inner, bye 258, killed by INT at 2 s
+//	    the same with TERM    inner, bye 271, killed by TERM at 2 s
+//
+// ksh93 reads what the parentheses left, or 256 plus the number where the
+// outer ones ended as killed, for INT as for TERM. This shell's ksh read 130
+// in all three for INT: the interrupt is held for the program by a route of
+// its own, and ended the shell as the parentheses ended.
+func TestAnInterruptFromOutsideHeldForParenthesesInOneDialect(t *testing.T) {
+	const wait = `/bin/sh -c 'printf r >"$1"; exec sleep 2.5' sh "$READY"`
+	const trap = `trap 'echo "bye $?"' EXIT; (exit 7); `
+	for _, c := range []struct {
+		dialect, name, script string
+		sig                   syscall.Signal
+		// dies is the signal the shell must die of, or 0 for an exit at 0.
+		dies syscall.Signal
+		out  string
+	}{
+		{
+			"ksh", "INT, parentheses", trap + `( ` + wait + `; echo in ); echo after`,
+			syscall.SIGINT, syscall.SIGINT, "in\nbye 0\n",
+		},
+		{
+			"ksh", "INT, parentheses that exit", trap + `( ` + wait + `; exit 3 ); echo after`,
+			syscall.SIGINT, syscall.SIGINT, "bye 3\n",
+		},
+		{
+			"ksh", "INT, nested parentheses",
+			trap + `( ( ` + wait + `; echo inner ); echo outer ); echo after`,
+			syscall.SIGINT, syscall.SIGINT, "inner\nbye 258\n",
+		},
+		{
+			"ksh", "TERM, nested parentheses",
+			trap + `( ( ` + wait + `; echo inner ); echo outer ); echo after`,
+			syscall.SIGTERM, syscall.SIGTERM, "inner\nbye 271\n",
+		},
+		{
+			"bash", "INT, parentheses", trap + `( ` + wait + `; echo in ); echo after`,
+			syscall.SIGINT, 0, "in\nafter\nbye 0\n",
+		},
+		{
+			"zsh", "INT, parentheses", trap + `( ` + wait + `; echo in ); echo after`,
+			syscall.SIGINT, syscall.SIGINT, "in\n",
+		},
+	} {
+		t.Run(c.dialect+"/"+c.name, func(t *testing.T) {
+			ws, out := diesFromOutside(t, c.dialect, c.sig, c.script)
+			switch {
+			case c.dies != 0 && (!ws.Signaled() || ws.Signal() != c.dies):
+				t.Errorf("ended %v, want killed by %v", ws, c.dies)
+			case c.dies == 0 && (ws.Signaled() || ws.ExitStatus() != 0):
+				t.Errorf("ended %v, want an exit at 0", ws)
+			}
+			if out != c.out {
+				t.Errorf("wrote %q, want %q", out, c.out)
+			}
+		})
+	}
+}
+
 // What each dialect's EXIT trap reads for a fatal signal from another process
 // that lands while the shell waits for a pipeline (#7160).
 //

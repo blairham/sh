@@ -2836,6 +2836,10 @@ func Semantics() interp.Semantics {
 	// echo in )` kills it at once with no trap run, the parentheses writing
 	// `in` at 2 s. Measured 2026-10-31 on zsh 5.9.2 (#7068).
 	s.SignalDeathWaitsForAnUnforkedSubshell = interp.No
+	// Nor a write past `ulimit -f` to give up over: measured 2026-11-01 on
+	// zsh 5.9.2, `trap 'echo t $?' EXIT; ulimit -f 1; printf '%4000s' x > f`
+	// dies of XFSZ with no trap run (#7173).
+	s.CaughtWritePastTheFileSizeLimitIsAFatalError = interp.No
 	s.ExitTrapRunsInsideTheExitingCall = interp.No
 	// But it does run inside the `eval` text or the sourced file the stop
 	// was raised in, once any function frames are left: `( trap…; eval

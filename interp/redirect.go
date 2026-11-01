@@ -2805,8 +2805,11 @@ func (r *Runner) builtinWriteStatus(name string, st int) int {
 	}
 	// A write past `ulimit -f` is the same shape with another signal. See
 	// filesizedeath.go.
-	if errors.Is(err, syscall.EFBIG) && r.diedOfAWritePastTheFileSizeLimit() {
-		return r.status
+	overrun := overrunFails
+	if errors.Is(err, syscall.EFBIG) {
+		if overrun = r.answerAWritePastTheFileSizeLimit(); overrun == overrunDies {
+			return r.status
+		}
 	}
 	// Which axis decides is the errno's, not one axis for every failed write:
 	// a closed descriptor and a pipe nobody is reading are the same event to
@@ -2879,6 +2882,13 @@ func (r *Runner) builtinWriteStatus(name string, st int) int {
 		r.inBuiltin = ""
 		r.diagf("%s\n", fmt.Sprintf(w, name, r.diag().reasonText(reason(err))))
 		r.inBuiltin = outer
+	}
+	if overrun == overrunGivesUp {
+		// Said as any failed write is, and then given up over, whichever
+		// builtin wrote. See
+		// Semantics.CaughtWritePastTheFileSizeLimitIsAFatalError.
+		r.fatalAtStatus(1)
+		return 1
 	}
 	if !fails {
 		return st

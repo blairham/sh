@@ -40,26 +40,57 @@ import "syscall"
 //
 // With an EXIT trap the death runs it in the dialects that run one on a
 // death, and the trap reads the status from before the builtin: `trap 'echo
-// t $?' EXIT; (exit 5); printf … > f` writes `t 5` in bash 5.3 and ksh93,
-// and nothing in dash and zsh, which die where they stand. Two columns part
-// from that and are not modeled: bash 3.2 lets the builtin complain first,
-// so its trap reads 1, and ksh93 also lets it complain and then exits 1
-// rather than dying of the signal.
+// t $?' EXIT; (exit 5); printf … > f` writes `t 5` in bash 5.3, and nothing
+// in dash and zsh, which die where they stand. bash 3.2 lets the builtin
+// complain first, so its trap reads 1, and no dialect models it.
+//
+// ksh93 does not die there at all. Once an EXIT trap has been set it has
+// caught the signal, and the write is a failed write the shell gives up
+// over: `ksh: printf: write to 1 failed [File too large]`, then `t 5`, then
+// exit 1, as over `echo $((1/0))` in the same place. That is
+// Semantics.CaughtWritePastTheFileSizeLimitIsAFatalError, and the rows it
+// does not reach — a POSIX-form function, a `( … )` — are recorded there.
 
-// diedOfAWritePastTheFileSizeLimit answers the SIGXFSZ a builtin's write past
-// `ulimit -f` raised, and reports whether the shell died of it.
+// overrunEnding is how a builtin's write past `ulimit -f` ends: as any failed
+// write does, in a death, or in a failed write the shell then gives up over.
+type overrunEnding uint8
+
+const (
+	overrunFails overrunEnding = iota
+	overrunDies
+	overrunGivesUp
+)
+
+// answerAWritePastTheFileSizeLimit answers the SIGXFSZ a builtin's write past
+// `ulimit -f` raised, and reports how the write ends.
 //
 // The kernel's copy is taken out of the runtime's hands on every road, the
 // death included: a handler the shell above a subshell set is subscribed for
 // it, and no panel shell runs that handler for a copy only the subshell had.
-func (r *Runner) diedOfAWritePastTheFileSizeLimit() bool {
+func (r *Runner) answerAWritePastTheFileSizeLimit() overrunEnding {
 	arranged := r.signalArranged("XFSZ")
 	r.writeSignalAbsorbed("XFSZ", arranged == signalHandledBy)
 	if arranged != signalFatal {
-		return false
+		return overrunFails
+	}
+	if r.caughtOverrunIsAFatalError() {
+		return overrunGivesUp
 	}
 	shown := r.status
 	r.signalDeath("XFSZ", syscall.SIGXFSZ)
 	r.showTheExitTrap(shown, "XFSZ", syscall.SIGXFSZ)
-	return true
+	return overrunDies
+}
+
+// caughtOverrunIsAFatalError reports whether the shell has caught the
+// SIGXFSZ an untrapped write past the limit raised, and gives up over the
+// write rather than dying of it. Asked only of a shell that caught it: an
+// EXIT trap set at some point, in a dialect that runs one on a death, at the
+// shell's own level rather than in a subshell, and not at a prompt. See
+// Semantics.CaughtWritePastTheFileSizeLimitIsAFatalError.
+func (r *Runner) caughtOverrunIsAFatalError() bool {
+	return r.caughtByAnExitTrap && !r.inSubshell && !r.Interactive &&
+		r.sem().ExitTrapRunsOnSignalDeath == Yes &&
+		r.ask(r.sem().CaughtWritePastTheFileSizeLimitIsAFatalError,
+			"a builtin's write past the file-size limit once an EXIT trap has caught the signal")
 }

@@ -6798,6 +6798,58 @@ type Semantics struct {
 	// unpinned ash: never asked, for the same reason.
 	SignalDeathWaitsForAnUnforkedSubshell Answer
 
+	// CaughtWritePastTheFileSizeLimitIsAFatalError makes a builtin's write
+	// past `ulimit -f`, with SIGXFSZ left at its default in a shell that has
+	// caught it, an error the shell gives up over rather than a death: the
+	// builtin says what any failed write says, and the shell stops as it
+	// does over a division by zero.
+	//
+	//	trap 'echo t $?' EXIT; ulimit -f 1; (exit 5); printf '%4000s' x > f; echo after=$?
+	//
+	// is `ksh: printf: write to 1 failed [File too large]`, `t 5` and exit 1
+	// in ksh93, and `t 5` and a death by XFSZ in bash 5.3. With `exit 6`
+	// last in the trap ksh93 exits 6, and with `(exit 4)` last it still
+	// exits 1: the trap reads the status from before the builtin and the
+	// shell leaves at 1, which is ExitTrapAfterAGiveUpSeesEarlierStatus
+	// answering, exactly as it does for `echo $((1/0))` in the same place.
+	// `echo` and `print` are the same, and so is a brace group with the
+	// redirection on it. A `function name { … }` call is a boundary for it
+	// as for that error: the complaint, then the caller carrying on at 1.
+	// Measured 2026-11-01, each shell in a session of its own: ksh93u+ yes;
+	// bash 5.3.20 no (#7173).
+	//
+	// **Keyed on the route, not the signal.** `trap 'echo t $?' EXIT; (exit
+	// 5); kill -XFSZ $$` runs the trap and dies of XFSZ in ksh93 as in bash.
+	// And caught means what it means for SignalDeathEndsAtAKeywordFunctionCall,
+	// an EXIT trap set at any point: `trap '' EXIT`, and one set and then
+	// taken away with `trap - EXIT`, give the same complaint and the same 1,
+	// where an INT trap or an ERR trap leaves the death.
+	//
+	// Not modeled, and recorded in docs/spec/semantics.md: in a POSIX-form
+	// function ksh93 complains and then dies of XFSZ, its trap reading 1; a
+	// `( … )` it runs in its own process ends the whole shell at 1 with the
+	// complaint unnamed, where this shell keeps a subshell's write the
+	// subshell's death; and ksh93 also catches XFSZ once it has had an XFSZ
+	// trap of its own, or once a `( … )` has set an EXIT trap (#7156).
+	//
+	// Reached only where ExitTrapRunsOnSignalDeath says yes, outside a
+	// subshell, in a shell that is not interactive, so zsh, dash and BusyBox
+	// ash never ask; an interactive shell was not measured, and keeps the
+	// death.
+	//
+	// unpinned bash: no corpus row sets a file-size limit; pinned by
+	// TestACaughtWritePastTheFileSizeLimitIsAFatalErrorInOneDialect.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestACaughtWritePastTheFileSizeLimitIsAFatalErrorInOneDialect.
+	//
+	// unpinned zsh: never asked, since no EXIT trap runs on a death.
+	//
+	// unpinned dash: never asked, for the same reason.
+	//
+	// unpinned ash: never asked, for the same reason.
+	CaughtWritePastTheFileSizeLimitIsAFatalError Answer
+
 	// ExitTrapRunsInsideTheExitingCall runs the EXIT trap at the point `exit`
 	// was written, with the call that ran it still standing, rather than
 	// after the stack has unwound.

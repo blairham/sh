@@ -12116,6 +12116,88 @@ opposed to only failing at the end. Reproducing it would mean modeling the
 reference's own output buffering, which this shell does not have, so the line
 is left unsaid (#7172).
 
+### A write past the limit once the signal is caught
+
+Left at its default, SIGXFSZ ends every reference where the write stands, and
+an EXIT trap runs for the death in the two that run one (#7171). ksh93 parts
+from that once an EXIT trap has been set: it has caught the signal by then,
+and the write is a failed write it gives up over. Measured 2026-11-01 on
+macOS, each shell in a session of its own — `/bin/ksh` 93u+, GNU bash 5.3.20,
+`/bin/dash`, zsh 5.9.2:
+
+    trap 'echo t $?' EXIT; ulimit -f 1; (exit 5); printf "%4000s" x > f; echo after=$?
+      ksh93       ksh: printf: write to 1 failed [File too large]
+                  t 5                                            exit 1
+      bash 5.3    t 5                                            killed by XFSZ
+      dash, zsh   (nothing)                                      killed by XFSZ
+
+The complaint is #7172's wording, the trap reads the status from before the
+builtin, and the shell leaves at 1 — `exit 6` last in the trap makes it 6, and
+`(exit 4)` last leaves it 1. That is exactly how ksh93 ends over `echo
+$((1/0))` in the same place, so this shell models it as that:
+`Semantics.CaughtWritePastTheFileSizeLimitIsAFatalError` turns the write into
+a fatal error after the complaint, and `ExitTrapAfterAGiveUpSeesEarlierStatus`
+supplies the `t 5`. The rest follows from the same give-up, each row measured
+the same day in ksh93 and matched here:
+
+    `echo "$x" > f`, `print -r -- "$x" > f`      the same, naming echo and print
+    `{ printf …; echo in; } > f`                 the same; `in` is not written
+    `function f { printf … > f; echo in; }; f`   ksh: f[1]: printf: …, after=1, t 0, exit 0
+    `trap - EXIT` after setting it               the complaint, no trap, exit 1
+    `trap '' EXIT`                               the complaint, exit 1
+
+**Keyed on the route, not the signal.** `trap 'echo t $?' EXIT; (exit 5); kill
+-XFSZ $$` writes `t 5` and dies of XFSZ in ksh93 as in bash 5.3. And
+**"caught" is an EXIT trap set at any point**, the same sticky state the
+outside-death axes read (`SignalDeathEndsAtAKeywordFunctionCall`): the row
+with the trap taken away still gives up, and an INT trap or an ERR trap in
+its place leaves the death.
+
+**Recorded, not modeled.** Each of these differs here, and each needs
+something this shell does not have:
+
+    f() { printf … > f; echo in; }; f, the trap set
+      ksh93   the complaint, t 1, killed by XFSZ
+      here    the complaint, t 5, exit 1 (the give-up above)
+    set > f, the trap set
+      ksh93   ksh: write to 1 failed [File too large], t 5, exit 1
+      here    t 5, exit 1 — `set` is not one of the builtins that complain
+    (printf … > f; echo in); echo after=$?, the trap set
+      ksh93   ksh: write to 1 failed [File too large], t 0, exit 1
+      here    ksh: 0: Exceeded file size limit, after=153, t 0, exit 0
+    (printf … > f; echo in); echo after=$?, no trap
+      ksh93   the whole shell killed by XFSZ, nothing written
+      here    ksh: 0: Exceeded file size limit, after=153
+    exec 4>f; ulimit -f 1; (printf … >&4; echo in); echo after=$?
+      ksh93   the whole shell killed by XFSZ
+      here    as the row above
+    y=$(printf … > f; echo in); echo after=$?, no trap
+      ksh93   ksh: <pid>: Exceeded file size limit, after=281
+      here    after=153
+    trap 'h' XFSZ; trap - XFSZ; then the printf, no EXIT trap
+      ksh93   the complaint, exit 1
+      here    killed by XFSZ
+    (trap 'echo st' EXIT); then the printf
+      ksh93   st, the complaint, exit 1
+      here    st, killed by XFSZ
+
+The four subshell rows are ksh93 running `( … )` in its own process, so the
+subshell's death — or, once caught, its give-up — is the whole shell's, and a
+substitution here is a forked child that died of the signal (256 + 25). This
+shell keeps a subshell's write the subshell's death (#7171), and nothing in it
+makes a subshell's own ending the shell's: the in-process machinery it does
+have holds a death from *outside* (`SignalDeathWaitsForAnUnforkedSubshell`).
+So the axis is not asked in a subshell at all, and the rows keep the answer
+they had. The last two rows are ksh93 catching the signal for reasons this
+shell does not track — an XFSZ trap of its own, ever (#7156), and an EXIT trap
+a subshell set, which in ksh93 is the shell's process setting one. The
+POSIX-form function row takes the death after the give-up, which no other row
+does. Pinned by `TestACaughtWritePastTheFileSizeLimitIsAFatalErrorInOneDialect`
+(#7173).
+
+bash 3.2 differs on the first row too — the complaint first, then `t 1`, then
+the death — and no dialect models bash 3.2.
+
 
 ## Locale, decided as a policy
 

@@ -1772,6 +1772,11 @@ func Semantics() interp.Semantics {
 	// absence from the other side — the axis is an extra firing of a trap
 	// this shell does not have, and its `set -e` half is already the ordinary
 	// pipeline judging.
+	// A pipeline waits for every element, not only its last: `{ sleep 0.3;
+	// echo first >&2; } | :; echo after` writes `first` before `after`.
+	// Measured 2026-11-01; see
+	// interp.Semantics.PipelineEndsWithItsLastElement (#7169).
+	s.PipelineEndsWithItsLastElement = interp.No
 	// No implicit `return` for a failure. Measured 2026-09-25 on dash:
 	// `f() { false; echo x; }; f; echo "post=$?"; echo done` writes `x`,
 	// `post=0` and `done` at 0, and `errexit` is the one name in this

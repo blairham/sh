@@ -2777,6 +2777,11 @@ func Semantics() interp.Semantics {
 	// A subshell as the last element of a pipeline is judged once, as it is
 	// everywhere but bash.
 	s.ASubshellAsTheLastPipelineElementJudgesItself = interp.No
+	// A pipeline waits for every element, not only its last: `{ sleep 0.3;
+	// echo first >&2; } | :; echo after` writes `first` before `after`.
+	// Measured 2026-11-01 on BusyBox 1.37.0 in the pinned image; see
+	// interp.Semantics.PipelineEndsWithItsLastElement (#7169).
+	s.PipelineEndsWithItsLastElement = interp.No
 	// The status pipefail hands back for an element a signal killed is the
 	// ordinary 128-plus-the-signal and not the bare number: a `{ echo "$v";
 	// } | true` over a value grown past the pipe buffer is 141, and so is

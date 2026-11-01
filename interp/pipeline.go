@@ -321,10 +321,11 @@ func (r *Runner) lockReader(in io.Reader) io.Reader {
 // timing, when non-nil, collects each element's wall time and external CPU
 // for a `time` clause whose layout reports per element. One slot per element,
 // already sized by the caller, so the goroutines write disjoint slots.
+// timed says the pipeline is a `time` clause's own, whatever its layout.
 // quiet says the pipeline is an operand of an `&&`/`||` list that has
 // already fired for the whole list, so neither the pipeline nor its elements
 // fire anything of their own — see Semantics.DebugTrapSublists.
-func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pipelineTiming, quiet bool) error {
+func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pipelineTiming, timed, quiet bool) error {
 	r.pipeLast = pipelineLast{}
 	n := len(p.Cmds)
 	readers := make([]*os.File, n)
@@ -475,6 +476,19 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 	var fgJob *Job
 	if inCurrent && n > 1 {
 		fgJob = r.pipelineJob(p)
+	}
+	// And whether the pipeline may end with its last element and leave the
+	// ones before it running, which one dialect does — unless the monitor or
+	// pipefail asks for every element, the pipeline is timed or backgrounded,
+	// something above lists or refuses its elements one at a time, or what
+	// the elements would go on writing into is not a descriptor. See
+	// Semantics.PipelineEndsWithItsLastElement and strayelements.go. Read,
+	// not asked, and nil in every other dialect, which then waits as it
+	// always has.
+	var tail *pipelineTail
+	if skip == nil && timing == nil && !timed && tracked == nil && fgJob == nil && r.bg == nil &&
+		!r.monitor && !r.pipefail && r.sem().PipelineEndsWithItsLastElement == Yes && r.streamsAreDescriptors() {
+		tail = newPipelineTail(n, !inCurrent)
 	}
 	// The reading end of every pipe, as the shell being imitated numbers it:
 	// held from here to the end of the pipeline, in the order the pipes are
@@ -642,6 +656,25 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		if readers[i] != nil {
 			sub.pipeMultio.in = readers[i]
 		}
+		if tail != nil && i < n-1 {
+			// An element the pipeline may leave running holds its own copy
+			// of its error stream, as the process ksh93 forks for it does.
+			// What it writes after it has been left then still reaches a
+			// file a redirection around the pipeline has closed since, and
+			// a reader waiting for that stream to end waits for it: `{ {
+			// sleep 0.3; echo first >&2; } | :; echo after; } 2>&1 | cat`
+			// is `after`, `first` in ksh93u+. Its input and the rest of its
+			// table are already copies; see ownDescriptors. A copy that
+			// could not be made leaves the element sharing the shell's, and
+			// the pipeline then waits for it.
+			if out, release, ok := sub.ownWritingSubstOutput(sharedErr); ok {
+				sub.Stderr = out
+				held := releaseFds[i]
+				releaseFds[i] = func() { held(); release() }
+			} else if _, discard := sharedErr.(closedFd); !discard && sharedErr != io.Discard {
+				tail.shared = true
+			}
+		}
 		if timing != nil {
 			// The element's externals bill its own slot, wherever inside
 			// it they run — the clone hands the pointer down.
@@ -711,8 +744,13 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			subs[i].endSubshell(ctx)
 			// Every element is a fork of its own, and the shell reaps every
 			// one of them — a pipeline of two counts two. See
-			// Runner.childReaped.
-			r.childReapedWithoutNoticing()
+			// Runner.childReaped. An earlier element of a pipeline that may
+			// end without it asks first whether the pipeline has gone.
+			if tail != nil && i < n-1 {
+				tail.reaped(r)
+			} else {
+				r.childReapedWithoutNoticing()
+			}
 			if timing != nil {
 				timing.elems[i].wall = time.Since(start)
 			}
@@ -753,6 +791,15 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			// And this element's copies of the table, which nothing after
 			// the element is entitled to.
 			releaseFds[i]()
+			if tail != nil {
+				// Last, so that an element is not counted as ended before
+				// its pipe and its copies are gone.
+				if i == n-1 {
+					close(tail.lastEnded)
+				} else {
+					tail.handedOver(i, subs[i], errs[i])
+				}
+			}
 		})
 	}
 	if inCurrent {
@@ -870,7 +917,22 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			}
 		}()
 	}
-	wg.Wait()
+	left := false
+	if tail != nil {
+		if tail.lastEnded != nil {
+			<-tail.lastEnded
+		}
+		if st, sigs, es, ok := tail.leave(r, statuses, signals, errs); ok {
+			// The pipeline ends here, and what it reports is read from what
+			// had ended by now rather than from the slices the elements left
+			// running still write.
+			statuses, signals, errs, left = st, sigs, es, true
+			r.leaveElementsBehind(tail.done)
+		}
+	}
+	if !left {
+		wg.Wait()
+	}
 	// The forked elements have been reaped, which is a moment the shell
 	// notices what else has ended. See Runner.noticeElementEnds.
 	if last > 0 {

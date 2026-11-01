@@ -2969,6 +2969,12 @@ func Semantics() interp.Semantics {
 	// here — `trap 'printf E' ERR; true | ( false )` writes one E, where bash
 	// writes two.
 	s.ASubshellAsTheLastPipelineElementJudgesItself = interp.No
+	// A pipeline ends when its last element does, with the monitor off and
+	// pipefail unset: `{ sleep 0.3; echo first >&2; } | :; echo after` writes
+	// `after` and then `first`, from -c and from a script alike, and a bare
+	// `wait` waits for the element still running. Measured 2026-11-01 on
+	// ksh93u+; see interp.Semantics.PipelineEndsWithItsLastElement (#7169).
+	s.PipelineEndsWithItsLastElement = interp.Yes
 	// Alone in the panel: `PATH=` finds nothing here, where dash, bash and
 	// zsh still search the current directory.
 	s.EmptyPathIsTheCurrentDirectory = interp.No

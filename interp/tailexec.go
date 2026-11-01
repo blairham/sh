@@ -54,8 +54,9 @@ import (
 //
 // **Not modeled here**, and forked instead:
 //
-//   - a shell that still has a job running, or has ever made a process
-//     substitution. Those are goroutines here and would die with the
+//   - a shell that still has a job running, or a pipeline element it left
+//     running (Semantics.PipelineEndsWithItsLastElement), or has ever made a
+//     process substitution. Those are goroutines here and would die with the
 //     process. zsh, dash and ksh93 replace themselves anyway, and bash 5.3
 //     forks;
 //   - a file the kernel will not start by itself, a script with no `#!`.
@@ -159,7 +160,10 @@ func (r *Runner) replacesItselfHere() bool {
 	if r.procSubHome != nil && r.procSubHome.seq.Load() > 0 {
 		return false
 	}
-	return true
+	// Nor a pipeline's element left running: ksh93 becomes the program and
+	// the element, a process, writes after it, where here the element would
+	// go too. See strayelements.go.
+	return !r.strays.anyRunning()
 }
 
 // subshellBecomesTheTail is whether a `( … )` is the last thing this shell

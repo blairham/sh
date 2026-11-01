@@ -2174,6 +2174,11 @@ func Semantics() interp.Semantics {
 	// one writes one, and an element that is not the last does not fire at
 	// all.
 	s.ASubshellAsTheLastPipelineElementJudgesItself = interp.Yes
+	// A pipeline waits for every element, not only its last: `{ sleep 0.3;
+	// echo first >&2; } | :; echo after` writes `first` before `after`.
+	// Measured 2026-11-01 on 5.3.20, 3.2.57 and 5.3 as `sh`; see
+	// interp.Semantics.PipelineEndsWithItsLastElement (#7169).
+	s.PipelineEndsWithItsLastElement = interp.No
 	// `[ ( -n x ) ]` is 0: the group is read like any other (#3419).
 	s.TestGroupedUnaryAloneLosesTheClosingParen = interp.No
 	// A four-word `!` in front of a negation negates it, the way a

@@ -2654,6 +2654,11 @@ func Semantics() interp.Semantics {
 	// writes one E here and two in bash, which is what separates the two
 	// mechanisms.
 	s.ASubshellAsTheLastPipelineElementJudgesItself = interp.No
+	// A pipeline waits for every element, not only its last, whichever
+	// element runs in the shell: `{ sleep 0.3; echo first >&2; } | :; echo
+	// after` writes `first` before `after`. Measured 2026-11-01 on 5.9.2; see
+	// interp.Semantics.PipelineEndsWithItsLastElement (#7169).
+	s.PipelineEndsWithItsLastElement = interp.No
 	// Alone in refusing an argument to `times`; dash and bash ignore it.
 	s.TimesRejectsArguments = interp.Yes
 	// `[ ( -n x ) ]` is 0 here (#3419).

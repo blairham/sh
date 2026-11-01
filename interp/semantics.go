@@ -12151,6 +12151,98 @@ type Semantics struct {
 	// in this shell, so `echo x | read v` sets v. True in ksh93 and zsh.
 	LastPipelineElementInCurrentShell Answer
 
+	// PipelineEndsWithItsLastElement lets a pipeline end as soon as its last
+	// element has ended. The elements before it that are still running go on
+	// running, and the shell runs the next command without waiting for them.
+	// No waits for every element, as five of the six columns do. POSIX allows
+	// both: the shell waits for the last command and "may also wait for all
+	// commands to complete".
+	//
+	// ksh93u+ 2012-08-01 answers yes. bash 5.3.20, bash 3.2.57, bash 5.3
+	// under argv[0] `sh`, zsh 5.9.2, dash 0.5.12 and BusyBox ash 1.37.0
+	// answer no. Measured 2026-11-01, both streams on one pipe:
+	//
+	//	{ /bin/sleep 0.3; echo first >&2; } | LAST; echo after
+	//
+	//	LAST                 ksh93           the other columns
+	//	:                    after, first    first, after
+	//	true                 after, first    first, after
+	//	/usr/bin/true        after, first    first, after
+	//	echo x >/dev/null    after, first    first, after
+	//	( :; )               after, first    first, after
+	//	/bin/cat             first, after    first, after
+	//
+	// So it is not about whether the last element is a builtin or runs in
+	// the shell. A last element that reads the pipe to its end, like
+	// `/bin/cat`, cannot end before the element writing into it, so there is
+	// nothing to tell apart. A script file gives the same rows as -c. The
+	// same goes for a pipeline inside a function, a `( … )` or a command
+	// substitution, and for one under `!`.
+	//
+	// ksh93 waits for every element in three cases:
+	//
+	//   - with `set -o pipefail`, since the status needs every element:
+	//     `set -o pipefail; { sleep 0.3; echo first >&2; exit 3; } | :;
+	//     echo "after $?"` is `first`, `after 3`;
+	//   - with the monitor on (`set -m`), from -c as at a prompt. An
+	//     interactive shell started with `-i` waits, and the same shell after
+	//     `set +m` does not, so the rule is keyed on the monitor and not on
+	//     the shell being interactive;
+	//   - under `time`, which reports the whole pipeline.
+	//
+	// A backgrounded pipeline is not modeled: ksh93's `{ sleep 0.3; echo
+	// first >&2; } | : & wait; echo after` writes `after` first too, so its
+	// job is the last element alone, and here the job still waits for every
+	// element (#7235).
+	//
+	// What the shell sees afterwards. `$?` is the last element's status:
+	// `{ sleep 0.3; exit 3; } | :; echo $?` is 0. A bare `wait` waits for the
+	// elements still running and returns 0. ksh93 also lists each of them as
+	// a job, `[1] + Running <command unknown>`, still listed as running once
+	// they have ended, and `wait %1` returns 0 at once without waiting. This
+	// shell does not list them; that half is not modeled (#7235). The shell
+	// exits without waiting for them, and an element still running writes
+	// after the shell has gone. Here an element is a goroutine and not a
+	// process, so it would end with the process: the shell at the top waits
+	// for the elements it left behind when it ends, after the EXIT trap, and
+	// `exec` and a command string's last program wait for them before they
+	// replace the process. The output is the same as ksh93's; only the moment
+	// the process exits differs, and it is the moment it exited before this
+	// axis existed. See docs/spec/semantics.md, "A pipeline that ends with its
+	// last element".
+	//
+	// Where the shell runs the last element itself and lists the elements
+	// before it as a job of their own while it does (zsh; see
+	// Runner.pipelineJob), the pipeline waits for them whatever this says.
+	// So it does where what an element would go on writing into is not a
+	// descriptor it can hold its own copy of — a command substitution's
+	// value, an embedder's io.Writer — and ksh93 is seen to wait there too:
+	// `x=$( { { sleep 0.3; echo first >&2; } | :; echo after; } 2>&1 )` holds
+	// `first` and then `after`. See strayelements.go.
+	//
+	// Read and not asked. The two answers differ only where an earlier
+	// element is still running when the last one ends, and in an ordinary
+	// pipeline that is a matter of timing: in `yes | head -1`, `yes` goes on
+	// running after `head` has gone, until its next write fails. An ask there
+	// would refuse such pipelines or not depending on the scheduler. A vector
+	// with no answer waits for every element, which is the common answer.
+	//
+	// unpinned ksh: no corpus row has an element that outlives the last one.
+	// Pinned by TestAPipelineEndsWithItsLastElementWhereTheShellsDo.
+	//
+	// unpinned bash: the same reach. Pinned by
+	// TestAPipelineEndsWithItsLastElementWhereTheShellsDo.
+	//
+	// unpinned zsh: the same reach. Pinned by
+	// TestAPipelineEndsWithItsLastElementWhereTheShellsDo.
+	//
+	// unpinned dash: the same reach. Pinned by
+	// TestAPipelineEndsWithItsLastElementWhereTheShellsDo.
+	//
+	// unpinned ash: the same reach. Pinned by
+	// TestAPipelineEndsWithItsLastElementWhereTheShellsDo.
+	PipelineEndsWithItsLastElement Answer
+
 	// RedirectTargetIsAnOrdinaryWord expands a redirection's target the way
 	// an argument is expanded — split into fields and matched as a pattern —
 	// and requires the result to be exactly one word. True in bash alone:
@@ -37336,7 +37428,10 @@ func PosixSemantics() Semantics {
 		// takes the 1.
 		LetKeepsTheValueBeforeAnIllegalByte: No,
 		LastPipelineElementInCurrentShell:   No,
-		ShiftPastEndFatal:                   Yes,
+		// The standard lets a pipeline wait for every element or for its
+		// last one only. Every column but ksh93 waits for every element.
+		PipelineEndsWithItsLastElement: No,
+		ShiftPastEndFatal:              Yes,
 		// The standard describes one refusal and says nothing about a
 		// second, so the preset stops at the first the way three of the
 		// panel do.

@@ -143,6 +143,15 @@ func (r *Runner) warnAboutTheScope(name string, kind scopeWarningKind) {
 	if r.writingADeclarationsOperand || r.inFunc == "" {
 		return
 	}
+	// A name the running function made local answers almost every store a
+	// function makes, and it is one lookup in one scope. Every question below
+	// it is an early return with nothing to write, so which of them is asked
+	// first changes no answer — and asked first, this one spares the rest:
+	// scopeLintPassesOverTheShellsOwn alone is three producer tables and two
+	// attribute reads, and it was 1.4% of an F-Sy-H highlight call (#6423).
+	if r.localInTheInnermostScope(name) {
+		return
+	}
 	if r.engineOwns(name) {
 		// The engine's own state, written on the script's behalf by
 		// something the script did — `print -P %B` setting the terminal up,
@@ -183,9 +192,6 @@ func (r *Runner) warnAboutTheScope(name string, kind scopeWarningKind) {
 		// function that sources a file is still the innermost function while
 		// the file runs, and what the file does is not this call's doing.
 		// The same rule a diagnostic's location turns on.
-		return
-	}
-	if r.localInTheInnermostScope(name) {
 		return
 	}
 	if kind == scopeWarningScalar && r.arithStoring != arithNotStoring {

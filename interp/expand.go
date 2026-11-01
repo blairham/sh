@@ -6637,6 +6637,11 @@ func writtenArmReaches(op syntax.ParamOp, search bool) bool {
 	return trimTakesLongest(op) && (trimsPrefix(op) || search)
 }
 
+// spanAsked is called with each piece spanByLength hands the matcher, and is
+// nil outside a test: how many pieces a trim asks about is the one measure of
+// what its analyses skipped that does not depend on the clock.
+var spanAsked func(lo, hi int)
+
 // spanByLength is trimSpan's length reading: the piece of the value the
 // pattern matches, chosen by where a match may begin and by how much of one
 // the operator asked for.
@@ -6694,6 +6699,36 @@ func spanByLength(value, pattern string, op syntax.ParamOp, o patternOpts,
 		first, final, step = last, 0, -1
 	}
 
+	// And for a pattern with no upper bound, the ends a match from each start
+	// could reach, so that the walk asks the matcher only about those — the
+	// pass the substitution makes, for the same reason. See
+	// interp/substreach.go: the set may hold an end the matcher refuses and
+	// never lacks one it accepts, and the matcher's answer is still the one
+	// taken, so which end wins is decided exactly as before.
+	//
+	// It is what an alternation needs, because the edge literals above refuse
+	// any pattern holding a `|`. F-Sy-H's git chroma trims each option group
+	// with `${(M)e##\(*\)(:add|:del)}`, and on a 359-byte group that was every
+	// prefix handed to the matcher, each a full walk of the `*`: about 1.35ms
+	// an expansion here against under 25us in zsh 5.9.2 (#7275). One pass
+	// from the start says no end is reachable, and the matcher is asked once.
+	//
+	// **Only where the end is free to move.** An unflagged suffix trim pins
+	// it to the end of the value, so each start has one candidate and the
+	// pass would cost what the one match it could skip costs.
+	//
+	// **And only once the matcher has said no.** The pass reads the subject
+	// from the start onwards, which a trim whose first candidate matches
+	// never needed to: `${v##*/}` asks about the longest prefix the edge
+	// literals admit and takes it, and building the set first made that trim
+	// about 40% slower over a 40-byte path. So the first question is asked
+	// as it always was, and the set is built at the first miss — which is
+	// where the walk starts asking questions whose answer may be no.
+	reachable := !bounded && (prefix || search)
+	var rs *reachSet
+	var reach *reachEnds
+	defer func() { rs.release() }()
+
 	// The `I` flag: which match, counted one per starting position in the
 	// direction the search runs. See matchIndexFlag for the rows.
 	want := 1
@@ -6716,6 +6751,10 @@ func spanByLength(value, pattern string, op syntax.ParamOp, o patternOpts,
 			low = max(low, sort.SearchInts(stops, lo+least))
 			high = min(high, sort.SearchInts(stops, lo+most+1)-1)
 		}
+		if reach != nil && !reach.from(lo) {
+			// Nothing starting here can match, so no end is asked about.
+			low, high = 1, 0
+		}
 		// The candidate ends, walked in the order the operator asked for.
 		// `at` rather than a range so that one loop serves both directions;
 		// on the 13.5KB subject BenchmarkLongestPrefixTrimOnAPromptCache
@@ -6731,6 +6770,9 @@ func spanByLength(value, pattern string, op syntax.ParamOp, o patternOpts,
 		for n := high - low; n >= 0; n-- {
 			hi := stops[at]
 			at += ahead
+			if reach != nil && !reach.may(hi) {
+				continue
+			}
 			piece := value[lo:hi]
 			if !edgeLiteralsFit(piece, head, tail, edges) {
 				continue
@@ -6739,6 +6781,9 @@ func spanByLength(value, pattern string, op syntax.ParamOp, o patternOpts,
 			// piece starting at 0 and a `(#e)` only one ending at the last
 			// unit. Measured on zsh 5.9.2, `x=abcd; ${x#ab(#e)}` leaves
 			// `abcd` alone where `${x#abcd(#e)}` empties it.
+			if spanAsked != nil {
+				spanAsked(lo, hi)
+			}
 			if ok, m := matchPatternIn(pattern, piece, value, lo, o); ok {
 				if want--; want == 0 {
 					return lo, hi, m, true
@@ -6747,6 +6792,17 @@ func spanByLength(value, pattern string, op syntax.ParamOp, o patternOpts,
 					found, firstLo, firstHi, firstM = true, lo, hi, m
 				}
 				break
+			}
+			if reachable {
+				// The first miss, so the analysis is built — once, whatever it
+				// answers — and asked about this start before the next end.
+				reachable = false
+				if r, ok := newReachSet(pattern, o); ok {
+					rs, reach = r, newReachEnds(r, value, stops)
+					if !reach.from(lo) {
+						break
+					}
+				}
 			}
 		}
 		if a == final {

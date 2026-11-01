@@ -14,11 +14,12 @@ import (
 // keywordDeathSem is selfAimedSem in the shape of the one dialect that ends a
 // `function name { … }` call on a death — the death taken as `kill` returns,
 // a call's trap table its own, 256 plus the signal, a subshell that stops
-// once it has signaled the shell, a HUP that is a death — with the answer
-// this file is about.
+// once it has signaled the shell, a HUP that is a death, 0 for a death during
+// a pipeline — with the answer this file is about.
 func keywordDeathSem(ends Answer) Semantics {
 	s := selfAimedSem(No, Yes)
 	s.SignalDeathStatusIsTwoFiftySix = Yes
+	s.DeathDuringAPipelineShowsTheStatusBeforeIt = No
 	s.SubshellRunsOnAfterSignalingTheShell = No
 	s.HangupIsAnOrderlyExit = No
 	s.FunctionLocalTraps = TrapsGoBackAtTheReturnOfAKeywordFunction

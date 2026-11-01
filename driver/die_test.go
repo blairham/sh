@@ -150,6 +150,7 @@ func dieRunningAsAShell() {
 		sh.Semantics.DeathInAFunctionEndsTheCallAsKilled = interp.No
 		sh.Semantics.SignalDeathEndsAtAKeywordFunctionCall = interp.No
 		sh.Semantics.SignalDeathWaitsForAnUnforkedSubshell = interp.No
+		sh.Semantics.DeathDuringAPipelineShowsTheStatusBeforeIt = interp.No
 	}
 	if os.Getenv(dyingTrapEnds) == "yes" {
 		sh.Semantics.FatalSignalInTheExitTrapEndsOnlyTheTrap = interp.Yes

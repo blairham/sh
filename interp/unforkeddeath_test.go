@@ -117,8 +117,9 @@ func TestADeathFromOutsideWaitsForAnUnforkedSubshellInOneDialect(t *testing.T) {
 			"their own trap", `( trap 'echo sub' EXIT; P; echo in ); echo after`,
 			killedByTERM("in\nsub\nbye 0\n"), killedByTERM("bye 7\n"),
 		},
-		// The pipeline's own status where it is given up, which is bash 5.3's
-		// `bye 7` and not this shell's: see #7160.
+		// Not waited out, the death is one during a pipeline, which this
+		// dialect's shape shows as 0: see
+		// TestADeathFromOutsideDuringAPipelineInOneDialect.
 		{
 			"a pipeline's last element", ": | ( P; echo in ); echo after",
 			killedByTERM("in\nbye 0\n"), killedByTERM("bye 0\n"),

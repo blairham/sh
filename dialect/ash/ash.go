@@ -2131,6 +2131,9 @@ func Semantics() interp.Semantics {
 	s.SignalDeathEndsAtAKeywordFunctionCall = interp.No
 	// Nor a subshell to wait out, for the same reason (#7068).
 	s.SignalDeathWaitsForAnUnforkedSubshell = interp.No
+	// Nor a status to show for a death during a pipeline, for the same reason
+	// (#7160).
+	s.DeathDuringAPipelineShowsTheStatusBeforeIt = interp.No
 	// Nor a write past `ulimit -f` to give up over instead of dying (#7173).
 	s.CaughtWritePastTheFileSizeLimitIsAFatalError = interp.No
 	// And a `-c` string ending over an error the shell reported still runs

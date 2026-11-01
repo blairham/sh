@@ -22141,6 +22141,52 @@ Not modeled:
 - An INT from outside held for parentheses reads `bye 130` here, where
   ksh93 reads the status the parentheses left (#7159).
 
+**`DeathDuringAPipelineShowsTheStatusBeforeIt`** — bash yes · dash no ·
+ksh93 no · zsh no · ash no
+
+Shows the EXIT trap of a fatal signal from outside, landing while the shell
+waits for a pipeline, the `$?` the pipeline began with. No shows it 0.
+
+    trap 'echo "bye $?"' EXIT; (exit 7)
+    /bin/sleep 2 | /bin/cat; echo after
+
+With TERM from another process 0.4 s in, bash 5.3 writes `bye 7` and dies
+of TERM at once. ksh93 and bash 3.2 write `bye 0`. zsh and dash die and run
+no trap, so they never ask. Measured 2026-11-01, each shell in a session of
+its own (#7160).
+
+In bash 5.3 it is the pipeline's own beginning, not the statement's:
+
+| before the pipeline        | bash 5.3 | ksh93 |
+| -------------------------- | -------- | ----- |
+| `(exit 7);`                | `bye 7`  | `bye 0` |
+| `(exit 7); (exit 5);`      | `bye 5`  | `bye 0` |
+| `(exit 7); true &&`        | `bye 0`  | `bye 0` |
+
+It is keyed on the route, not on what the elements were doing. A
+subshell last, `: | ( /bin/sleep 2; echo in )`, and a busy loop last, in
+which no wait is given up, `: | while :; do :; done`, both read `bye 7` in
+bash 5.3. ksh93 reads `bye 0` with a `read` or a `{ /bin/sleep 3; }` as
+the last element too, which it runs in its own process. 0 is what ksh93
+holds while a pipeline runs: `(exit 7); true | echo $?` writes `0` there
+and `7` in bash, zsh and dash.
+
+A `( … )` or a lone program in the same place reads `bye 7` in both bash
+columns and in ksh93 without this axis. That is the status the interrupted
+command began with. A pipeline is not a command, so before this nothing
+recorded the status it began with, and the trap read whatever a command
+before it had begun with.
+
+Not modeled:
+
+- bash 3.2 reads 0 for most pipelines but `bye 7` for `(exit 3) |
+  /bin/sleep 2`.
+- In ksh93, `$?` is 0 inside the last element of a pipeline that it runs in
+  its own process. Here it is the status from before the pipeline, so a
+  death taken at a later command inside a `{ … }` there reads that status:
+  `/bin/sleep 2 | { /bin/sleep 3; echo x; }` reads `bye 7` here and `bye 0`
+  in ksh93 (#7253).
+
 **`ExitTrapRunsInsideTheExitingCall`** — bash yes · dash yes · ksh93 no ·
 zsh no · ash yes
 

@@ -51,7 +51,7 @@ jobs:
             exit 0
           fi
           if ! printf '%s' "$TITLE" | grep -Eq "$CONVENTIONAL"; then
-            echo "::error::the title must be a Conventional Commit: 'feat(scope): …' (minor), 'fix: …' (patch), 'feat!: …' (breaking), or docs/ci/build/refactor/test/chore/style for a change nobody using the shell can see. See AGENTS.md, *Pull request titles*."
+            echo "::error::the title must be a Conventional Commit: 'fix(interp): …', 'feat(zsh): …', 'perf: …' or 'revert: …' for a change somebody using the shell would notice, 'feat!: …' for a breaking one, or docs/ci/build/refactor/test/chore/style for one nobody would. See AGENTS.md, *Pull request titles*."
             exit 1
           fi
 

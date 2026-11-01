@@ -30,7 +30,8 @@ func endsWithLast(a Answer) Semantics {
 // did however loaded the machine is: a shell that moves on writes `after`
 // first, and one that waits writes `first` first, after the four seconds the
 // element looks for.
-const outlivesTheLast = `{ i=0; until [ -e go ] || [ $i -ge 80 ]; do /bin/sleep 0.05; i=$((i+1)); done; echo first >&2; } | :`
+const outlivesTheLast = `{ i=0; until [ -e go ] || [ $i -ge 80 ]; do /bin/sleep 0.05; i=$((i+1)); done; ` +
+	`echo first >&2; } | :`
 
 // runToAFile runs src with both streams on one file and returns what the file
 // holds once the run is over. A file and not a buffer, because an element is

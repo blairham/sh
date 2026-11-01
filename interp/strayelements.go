@@ -289,7 +289,12 @@ func (t *pipelineTail) handedOver(i int, sub *Runner, err error) {
 // elements write: an element left running has no status yet and is recorded
 // as 0, which nothing can read in the one dialect that leaves one — ksh93 has
 // no name for the record.
-func (t *pipelineTail) leave(r *Runner, statuses []int, signals []syscall.Signal, errs []error) ([]int, []syscall.Signal, []error, bool) {
+func (t *pipelineTail) leave(
+	r *Runner,
+	statuses []int,
+	signals []syscall.Signal,
+	errs []error,
+) ([]int, []syscall.Signal, []error, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.running == 0 || t.shared || r.monitor || r.pipefail {

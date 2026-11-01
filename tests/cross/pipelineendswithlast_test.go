@@ -35,7 +35,8 @@ import (
 // The streams are a file rather than the usual buffer, because an element is
 // left running only where what it writes into is a descriptor it can hold a
 // copy of, as ksh93's process does. See interp/strayelements.go.
-const outlivesTheLast = `{ i=0; until [ -e go ] || [ $i -ge 80 ]; do /bin/sleep 0.05; i=$((i+1)); done; echo first >&2; exit 3; }`
+const outlivesTheLast = `{ i=0; until [ -e go ] || [ $i -ge 80 ]; do /bin/sleep 0.05; i=$((i+1)); done; ` +
+	`echo first >&2; exit 3; }`
 
 func TestAPipelineEndsWithItsLastElementWhereTheShellsDo(t *testing.T) {
 	t.Parallel()

@@ -61,27 +61,36 @@ pre() { local pz; show pz; pz=in; }; pz=1 pre; show pz
 fi2() { local cnt; cnt=$((cnt + 1)); p "$cnt"; }; fi2; fi2; show cnt
 (typeset -n ref=ov; r() { local ov; ov=x; p "$ref"; }; r; p "$ov")
 command eval 'local top'; echo "<top $?>"
+ou=outer; k2() { local ou; unset ou; local ou; ou=in; show ou; }; k2; show ou
+lt() { local -i li; li=2+3; local -x lx=1; local -r lr=1; local -a la; local -u lu=abc; show li lx lr la lu
+  case "$(export -p)" in *lx=*) echo lx-exported;; *) echo lx-not;; esac; }; lt; show li lx lr la lu; lr=w; p "$lr"
+ap() { local an+=x; show an; local an+=y; show an; }; ap; show an
+tt() { local TIED; TIED=a:b; show TIED tied; local REFUSED=bad; echo "<refused $?>"; }; tt; show TIED tied REFUSED
+pe() { local BORN; printenv BORN || echo no-born; BORN=in; printenv BORN || echo no-born; }; pe; printenv BORN
 `
 
 // emptyShadowVectors are the answers the route's store and shadow lean on,
 // each moved away from the base: whether a valueless declaration sets the
-// name, whether a local inherits the export attribute, whether a valueless
+// name, whether a local inherits the export attribute (the base says it
+// does), whether a valueless
 // one hides the outer value, and whether a declaration may shadow a frozen
-// name.
+// name. The last one is the base with locals inheriting the outer value,
+// which the runner is told rather than the vector.
 func emptyShadowVectors() map[string]Semantics {
 	base := plainParamVectors()["first element"]
 	base.LocalOptions = "aAilnprux"
+	base.DeclarationTakesAnAppendOperand = Yes
 	empty := base
 	empty.DeclaredNameWithoutValueIsEmpty = Yes
-	inherits := base
-	inherits.LocalInheritsTheExportAttribute = Yes
+	drops := base
+	drops.LocalInheritsTheExportAttribute = No
 	hides := base
 	hides.ValuelessDeclarationHidesTheOuterValue = Yes
 	shadows := empty
 	shadows.DeclarationMayShadowAReadonly = Yes
 	return map[string]Semantics{
-		"base": base, "empty": empty, "inherits export": inherits, "hides outer": hides,
-		"shadows readonly": shadows,
+		"base": base, "empty": empty, "drops export": drops, "hides outer": hides,
+		"shadows readonly": shadows, "inherits outer": base,
 	}
 }
 
@@ -111,6 +120,10 @@ func TestAnEmptyShadowAnswersAsTheFullRoadDoes(t *testing.T) {
 				r.SetDynamic("COUNT", func(*Runner) string { count++; return strings.Repeat("1", count) })
 				r.SetDynamicArray("LIST", func(*Runner) []string { return []string{"l1", "l2"} })
 				r.Tie("TIED", "tied", ":")
+				r.RefuseValues("REFUSED", func(v string) (string, bool) { return "refused " + v, v == "bad" })
+				// A local starting as the outer binding, which the route
+				// leaves to the full road.
+				r.SetLocalInheritsTheOuterValue(name == "inherits outer")
 				st, err := r.Run(context.Background(), f)
 				if err != nil {
 					t.Fatalf("route %v: %v", on, err)
@@ -124,7 +137,11 @@ func TestAnEmptyShadowAnswersAsTheFullRoadDoes(t *testing.T) {
 			}
 			// The comparison compares something: the route answered operands
 			// with it on and none with it off.
-			if fullTaken != 0 || taken < 20 {
+			if name == "inherits outer" {
+				if taken != 0 {
+					t.Errorf("the route took %d operands where locals inherit the outer value; want none", taken)
+				}
+			} else if fullTaken != 0 || taken < 20 {
 				t.Errorf("the route took %d operands with it on and %d with it off; want at least 20 and 0", taken, fullTaken)
 			}
 			// And the rows it leans on, so a script that stopped early

@@ -214,9 +214,11 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 			// Runner.TailReached.
 			r.tailReached = true
 		}
-		if sub.interruptAtParenthesesEnd() {
+		if sub.interruptAtParenthesesEnd() && !sub.holdsAnInterruptAtItsEnd() {
 			// An interrupt left pending inside the parentheses ends the
-			// shell as they end. See interruptAtParenthesesEnd.
+			// shell as they end. See interruptAtParenthesesEnd. Unless they
+			// wait a death out, where it is the death they hold, handed on
+			// below. See unforkeddeath.go.
 			sub.signalDeath("INT", syscall.SIGINT)
 			sub.heldInterruptDeath = true
 		}

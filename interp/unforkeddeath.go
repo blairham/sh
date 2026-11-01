@@ -3,7 +3,10 @@
 
 package interp
 
-import "sync/atomic"
+import (
+	"sync/atomic"
+	"syscall"
+)
 
 // A fatal signal from outside that a `( … )` or `$( … )` the shell runs in its
 // own process waits out.
@@ -60,9 +63,20 @@ import "sync/atomic"
 // `in` and `bye 7` at 2.0 s, where this shell dies at 0.4 s — and ksh93 loses
 // some of a builtin's output after a substitution that held a death: `echo
 // "got $(/bin/sleep 2; echo in)"` writes `got in` without its newline and
-// reads `bye 271`, and `printf` writes nothing. And an INT held for
-// parentheses reads `bye 130` here, where ksh93 reads the status they left:
-// that interrupt is held by the route in foregroundinterrupt.go (#7159).
+// reads `bye 271`, and `printf` writes nothing.
+//
+// An INT is held by a route of its own while the program runs, because it is
+// held with or without an EXIT trap and for the program's sake: see
+// foregroundinterrupt.go. Still pending as the parentheses end, it becomes the
+// death they hold, so the rule above decides what the trap reads. Measured
+// 2026-11-01 on ksh93u+, INT from another process 0.4 s in, the same prefix:
+//
+//	( /bin/sleep 2; echo in ); echo after      in, bye 0, killed by INT
+//	( /bin/sleep 2; exit 3 ); echo after       bye 3, killed by INT
+//	( ( /bin/sleep 2; echo inner ); echo outer ); echo after
+//	                                           inner, bye 258, killed by INT
+//
+// where this shell's ksh read `bye 130` in all three (#7159).
 //
 // # The route
 //
@@ -174,6 +188,32 @@ func (r *Runner) holdTheDeath() bool {
 		return true
 	}
 	return o.state.Load() == outsideHeld
+}
+
+// holdsAnInterruptAtItsEnd is the end of r, such a subshell's `( … )` body,
+// with an interrupt still pending from a program inside it (see
+// Runner.interruptAtParenthesesEnd): it is held as the death r holds, for
+// takeOverAHeldDeath to hand on as it hands on any other. It reports whether
+// it is held so; false leaves the interrupt to end the shell as r ends, which
+// is where no EXIT trap was ever set, or a death is already handed over.
+func (r *Runner) holdsAnInterruptAtItsEnd() bool {
+	if !r.inAnUnforkedSubshell() {
+		return false
+	}
+	s := r.signals
+	o := &s.outside
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if o.state.Load() != outsideNone {
+		return false
+	}
+	// As holdTheDeath leaves one the front end handed over: taken, so a
+	// later signal from outside is taken as this one.
+	o.name, o.sig = "INT", syscall.SIGINT
+	o.state.Store(outsideHeld)
+	close(o.claimed)
+	o.heldDepth = r.unforked.depth
+	return true
 }
 
 // aProgramLetsAHeldDeathGo is a program about to be waited for inside such a

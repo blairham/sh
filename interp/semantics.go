@@ -7202,6 +7202,13 @@ type Semantics struct {
 	// stop at once and print nothing, so there is no question to ask
 	// anywhere but here.
 	//
+	// A no stops the subshell's EXIT trap with it, and every unforked
+	// subshell around it: `trap 'echo bye' EXIT; (trap 'echo sub' EXIT; kill
+	// -TERM $$)` writes `bye` alone in ksh93u+, measured 2026-11-01, where
+	// the five that fork run the child's trap (#7153). Not a field of its
+	// own: no shell in the panel stops the body and still runs the trap. See
+	// subshelltrappedsignal.go.
+	//
 	// The preset says yes. POSIX has `( )` execute "in a subshell
 	// environment" and describes that environment as a copy, which is the
 	// forking reading, and it is five of the six.

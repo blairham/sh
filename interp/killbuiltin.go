@@ -1331,6 +1331,10 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 					r.status = 256 + int(sig)
 				}
 				r.stopTheShell()
+				// And it ended where the signal landed, so it runs no EXIT
+				// trap of its own, nor does an unforked subshell around it
+				// (#7153). See subshelltrappedsignal.go.
+				r.endedWhereAFatalSignalLanded()
 			}
 			return nil
 		}

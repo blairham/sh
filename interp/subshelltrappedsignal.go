@@ -52,6 +52,37 @@ import "syscall"
 // the shell's list, and then ends the subshell at the killed status. Each
 // unforked subshell around it ends as it ends, and the shell at the top runs
 // the handler at its next command, as it runs any arrival.
+//
+// # Its EXIT trap, and the untrapped fatal half
+//
+// A subshell ended where its signal landed runs no EXIT trap of its own, and
+// neither does any unforked subshell around it: the process that would run
+// one is the shell, and only the shell's own trap runs, as the shell ends or
+// at its own end. The same holds for an untrapped fatal signal, where
+// Semantics.SubshellRunsOnAfterSignalingTheShell already stops the subshell
+// in this dialect. Measured 2026-11-01 under `-c` on ksh93u+, each shell in
+// a process group of its own, `trap 'echo bye' EXIT` in front of each row
+// (#7153):
+//
+//	(trap 'echo sub' EXIT; kill -TERM $$; echo s2)    bye, killed by TERM
+//	x=$(trap 'echo sub >&2' EXIT; kill -TERM $$; …)   bye, killed by TERM
+//	: | (trap 'echo sub' EXIT; kill -TERM $$; …)      bye, killed by TERM
+//	( (trap 'echo in' EXIT; kill -TERM $$); echo s2 ) bye, killed by TERM
+//	(trap 'echo sub' EXIT; kill -SEGV $$; echo s2)    nothing, killed by SEGV
+//	trap 'echo T' USR1, then the first row with USR1  T, after 286, bye
+//
+// with `trap 'echo outer' EXIT` on the outer parentheses of the fourth row and
+// `echo "after $?"` after each. bash 5.3.20, zsh 5.9.2 and dash run every
+// subshell's body and its trap to the end in every row: each ran the
+// parentheses in a child the signal never reached. Here, before, ksh wrote
+// `sub` (and `outer`) where ksh93 wrote nothing. The SEGV row is the first
+// row with the shell's own trap skipped as well, which
+// Semantics.UntrappedSegvEndsTheShellWhereItLands already answers.
+//
+// It is the signal aimed by the subshell's own `kill` and not any death
+// during it: `/bin/kill -TERM $$` from inside the parentheses, the signal
+// coming from another process while the shell waits for that child, writes
+// `s2`, `sub` and `bye` in ksh93 as it does here.
 
 // endsTheSubshellOnATrappedSignal ends r, a subshell the dialect runs in the
 // shell's own process, after it has sent the shell a trapped signal, where
@@ -64,19 +95,30 @@ func (r *Runner) endsTheSubshellOnATrappedSignal(sig syscall.Signal) bool {
 	}
 	r.status = r.signalDeathStatus(sig)
 	r.stopTheShell()
-	r.endedByATrappedSignal = true
+	r.endedWhereItsSignalLanded = true
 	return true
 }
 
-// takeOverATrappedSignalEnd is the end of sub, a subshell r ran, which a
-// trapped signal it sent the shell ended: where r is an unforked subshell as
-// well, it ends at the same status. It reports whether r has been ended.
-func (r *Runner) takeOverATrappedSignalEnd(sub *Runner) bool {
-	if !sub.endedByATrappedSignal || !r.subshellUnforked || !r.inTheShellsOwnProcess() {
+// endedWhereAFatalSignalLanded notes that r, a subshell the dialect has just
+// stopped after it sent the shell an untrapped fatal signal, ended where the
+// signal landed, when that was in the shell's own process. See
+// Semantics.SubshellRunsOnAfterSignalingTheShell, which decided the stop.
+func (r *Runner) endedWhereAFatalSignalLanded() {
+	if r.subshellUnforked && r.inTheShellsOwnProcess() {
+		r.endedWhereItsSignalLanded = true
+	}
+}
+
+// takeOverAnEndWhereASignalLanded is the end of sub, a subshell r ran, which a
+// signal it sent the shell ended where it landed: where r is an unforked
+// subshell as well, it ends at the same status. It reports whether r has been
+// ended.
+func (r *Runner) takeOverAnEndWhereASignalLanded(sub *Runner) bool {
+	if !sub.endedWhereItsSignalLanded || !r.subshellUnforked || !r.inTheShellsOwnProcess() {
 		return false
 	}
 	r.status = sub.status
 	r.stopTheShell()
-	r.endedByATrappedSignal = true
+	r.endedWhereItsSignalLanded = true
 	return true
 }

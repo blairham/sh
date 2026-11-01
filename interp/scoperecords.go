@@ -207,6 +207,18 @@ const restoredRecords = recValue | recArray | recAssoc | recRemovedBefore |
 	recSavedHideInScope | recHiddenShadow | recProducer | recAttrs |
 	recAssigned | recExported | flagMemberNamespace
 
+// freshShadowRecords are the records Runner.shadow writes for every name it
+// takes fresh, each of them whether or not there was anything to save, and
+// compoundShadowRecords the three it writes beside them once per name per
+// scope. Named so that the shadow of a name with nothing to save — see
+// emptyshadow.go — is the same set of records and cannot fall behind the
+// shadow it stands in for.
+const (
+	freshShadowRecords = recValue | recRemovedBefore | recSavedReadonly | recSavedHideInScope |
+		recHiddenShadow | recAttrs | recExported | recAssigned
+	compoundShadowRecords = recArray | recAssoc | recDeclaredOnlyBefore
+)
+
 // recordIndexAt is how many records a scope holds before it keeps an index of
 // them by name. Below it a lookup compares names along the list, which for
 // the handful a function body declares is cheaper than hashing one; past it

@@ -7053,8 +7053,7 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		rec.put(recAssigned, spoken)
 		rec.assigned = assigned
 		delete(r.assigned, name)
-		sc.made |= recValue | recRemovedBefore | recSavedReadonly | recSavedHideInScope |
-			recHiddenShadow | recAttrs | recExported | recAssigned
+		sc.made |= freshShadowRecords
 		if tookThePrefixEntry {
 			// The cell is the prefix's now, so what this scope gives back on
 			// return is what the *prefix* would have given back and not the
@@ -7116,7 +7115,7 @@ func (r *Runner) shadow(name string) (fresh, redeclared bool) {
 		rec.put(recDeclaredOnlyBefore, r.attrHas(name, attrDeclaredOnlyCompound))
 		rec.setFlag(flagHeldAnElementBefore, r.attrHas(name, attrHeldAnElement))
 		rec.setFlag(flagScalarHeldBefore, r.attrHas(name, attrScalarUnderTheArrayLetter))
-		sc.made |= recArray | recAssoc | recDeclaredOnlyBefore
+		sc.made |= compoundShadowRecords
 		// And the local starts with no record of having held an element.
 		// Measured 2026-10-03 on ksh93u+, `typeset -a x; x[0]=p; unset
 		// 'x[0]'; function f { typeset -a x; typeset -p x; }; f` lists

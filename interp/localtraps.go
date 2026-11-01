@@ -202,7 +202,7 @@ func (r *Runner) setPseudoTrapOrigin(name string, frame int, inherited bool) {
 // back.
 func (r *Runner) restoreLocalTraps(sc *scope) {
 	if sc.trapTableWasTaken {
-		r.emptyTheTrapTable()
+		r.emptyTheTrapTable(sc.savedTraps)
 	}
 	for _, name := range sortedTrapNames(sc.savedTraps) {
 		s := sc.savedTraps[name]
@@ -251,10 +251,31 @@ func sortedTrapNames(m map[string]savedTrapState) []string {
 // function q { echo mark1; kill -USR1 $$; echo mark2; }; q; echo mark3`
 // writes `mark1` and `mark3` in four runs out of four — the signal found no
 // handler, the rest of the body did not run, and the caller's handler was not
-// reached either.
+// reached either. That the call ends there and the shell does not is the
+// shell catching a signal it has ever had a trap for: see keywordcalldeath.go
+// (#7156).
 //
 // That model explains every row the per-modification save explains and two it
 // does not, which is why this is where the shell's answer lives.
+//
+// # An ignore stays
+//
+// What the call is not given is the caller's *handlers*. An ignore is not one
+// of those, and it stays in the call's table: the manual says it is the
+// caught traps that are reset in such a function, and measured 2026-11-01 on
+// ksh93u+, each shell in a session of its own —
+//
+//	trap '' TERM; function f { kill -TERM $$; echo inf; }; f; echo "after $?"
+//	        inf, after 0, exit 0
+//	trap '' TERM; function f { /bin/sleep 3; echo inf; }; f; echo "after $?"
+//	        inf, after 0, exit 0, with TERM from another process 0.5 s in
+//	trap '' TERM; function f { trap; }; f
+//	        trap -- '' TERM
+//
+// so the signal is still ignored in the call, and listed there. It is still
+// the caller's to have back: a body that moves it — `trap - TERM`, or a
+// handler — leaves `trap -- '' TERM` standing after the return. This shell
+// reset it with the handlers, and died of TERM in the first two (#7157).
 
 // takeTheTrapTable hands a call a trap table of its own, recording what it
 // displaced for the return. Signals and pseudo-conditions here; EXIT is taken
@@ -288,6 +309,11 @@ func (r *Runner) takeTheTrapTable(sc *scope) {
 			name: name, sig: sig, action: &action,
 			ignoredInherited: r.inheritedIgnored[name],
 		}
+		if action == "" {
+			// An ignore, which the call keeps: saved all the same, so that a
+			// body that moves it has it put back at the return.
+			continue
+		}
 		// Through the same door a `trap -` writes, so the arrangement with
 		// the operating system is unmade the way the restore makes it again.
 		r.trapSignal(name, sig, nil)
@@ -299,16 +325,26 @@ func (r *Runner) takeTheTrapTable(sc *scope) {
 // caller never had is not in the snapshot at all, and leaving it would be the
 // call's trap outliving the call. Measured — with no outer handler, `function
 // g { trap 'echo I' USR1; }; g; kill -USR1 $$` kills the shell.
-func (r *Runner) emptyTheTrapTable() {
+//
+// Except an ignore the call kept and still holds, which the restore would only
+// put back: clearing it first would leave the signal at its default for the
+// moment between the two.
+func (r *Runner) emptyTheTrapTable(saved map[string]savedTrapState) {
 	for _, name := range pseudoTrapNames {
 		if slot := r.pseudoTrapSlot(name); slot != nil {
 			*slot = nil
 		}
 	}
-	for _, name := range sortedTrapTableNames(r.trapTable()) {
-		if sig, ok := trappableSignals[name]; ok {
-			r.trapSignal(name, sig, nil)
+	table := r.trapTable()
+	for _, name := range sortedTrapTableNames(table) {
+		sig, ok := trappableSignals[name]
+		if !ok {
+			continue
 		}
+		if s, kept := saved[name]; kept && s.action != nil && *s.action == "" && table[name] == "" {
+			continue
+		}
+		r.trapSignal(name, sig, nil)
 	}
 }
 

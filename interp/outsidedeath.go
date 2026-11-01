@@ -150,8 +150,10 @@ type outsideDeath struct {
 	trapRunning atomic.Bool
 	// armed is one of the armedFor* constants: what the shell at the top
 	// has to run on its way out, where a front end has asked to hand it a
-	// death. See Runner.publishExitTrap.
-	armed atomic.Int32
+	// death. See Runner.publishExitTrap. callSignals is the signalSet a
+	// `function name { … }` call would end on, where armed says a call.
+	armed       atomic.Int32
+	callSignals atomic.Uint64
 	// heard says a front end took TakesAFatalSignal, which is the only way a
 	// death is ever handed over: a Runner nobody listens for is never armed,
 	// and its waits keep the plainer forms.
@@ -237,8 +239,10 @@ func (r *Runner) TakesAFatalSignal() func(syscall.Signal) (claimed <-chan struct
 				return nil, nil, false
 			}
 		case armedForACall:
-			// The call alone, which some signals do not end.
-			if !signalEndsAKeywordCall(name, sig) {
+			// The call alone, which some signals do not end, and which
+			// ends on the ones the shell has caught. See
+			// keywordcalldeath.go.
+			if !signalEndsAKeywordCall(name, sig) || !signalSet(o.callSignals.Load()).has(sig) {
 				return nil, nil, false
 			}
 		case armedForASubshell:
@@ -315,7 +319,7 @@ func (r *Runner) publishExitTrap() {
 	if s == nil {
 		return
 	}
-	armed := armedForNothing
+	armed, ends := armedForNothing, signalSet(0)
 	// And only until one has been handed over. Taken, it is what the shell is
 	// leaving by, and the EXIT trap and the hook it runs on the way out wait
 	// as any command does: armed, a wait of theirs would select on a death
@@ -325,17 +329,21 @@ func (r *Runner) publishExitTrap() {
 		switch {
 		case r.exitTrap != nil:
 			armed = armedForADeath
-		case r.aKeywordCallEndsOnADeath():
-			armed = armedForACall
+		case r.signalsAKeywordCallEndsOn() != 0:
+			armed, ends = armedForACall, r.signalsAKeywordCallEndsOn()
 		case r.aSubshellWaitsOutADeath():
 			armed = armedForASubshell
 		case r.exitHookStandsForAHangup():
 			armed = armedForAHangup
 		}
 	}
-	if armed == r.exitTrapPublished {
+	if armed == r.exitTrapPublished && ends == r.callSignalsPublished {
 		return
 	}
+	// The signals first, so a watch that reads the call never reads the
+	// set it had before.
+	r.callSignalsPublished = ends
+	s.outside.callSignals.Store(uint64(ends))
 	r.exitTrapPublished = armed
 	s.outside.armed.Store(armed)
 	if (armed == armedForADeath || armed == armedForACall || armed == armedForASubshell) &&

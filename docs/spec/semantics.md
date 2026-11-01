@@ -22061,6 +22061,21 @@ In ksh93:
   shell dies from inside the call. A trap set and then taken away, set to
   `''`, or set inside an earlier `function` call and fired at its return
   all leave the call ending; a trap on another signal does not.
+- **Or a trap on the signal itself, ever**, an ignore included, with no
+  EXIT trap anywhere. The call ends on that signal and the caller's handler
+  does not run, since inside the call the trap table is the call's own:
+  `trap 'echo O' USR1; function q { echo mark1; kill -USR1 $$; echo mark2;
+  }; q; echo "mark3 $?"; kill -USR1 $$; echo end` writes `mark1`, `mark3
+  286`, `O` and `end`. `trap 'echo term' TERM` before `function f {
+  /bin/sleep 3; echo inf; }; f; echo "after $?"` writes `after 271` with
+  TERM from another process during the `sleep`, and so does the trap set
+  and taken away again before the call, set to `''` and taken away, set
+  inside an earlier `function` call, or an ignore the call itself takes
+  away. A `trap - TERM` with nothing set before it leaves the shell dying,
+  and so does a trap on another signal. With the POSIX-form call the
+  caller's handler runs where it still stands, and the shell dies where it
+  does not. bash 5.3 and zsh 5.9.2 run the handler or die in every one of
+  these. Measured 2026-11-01, each shell in a session of its own (#7156).
 - **The innermost `function` call ends.** A POSIX-form call inside it is
   not a boundary — `g() { /bin/sleep 3; }; function f { g; echo inf; }`
   ends at `f` with `inf` unwritten — and a `function` call inside a
@@ -22075,11 +22090,19 @@ In ksh93:
   the complaint about the second and then ends the call.
 - **A second signal ends a second call** the same way.
 
-Not modeled: ksh93 also catches a signal it has ever had a trap of its own
-for — `trap 'echo t' TERM` at the top, or set and taken away — and ends a
-`function` call on it with the caller's handler unrun; and an ignored
-signal stays ignored inside the call, where this shell's `function` call
-takes the ignore away with the rest of the trap table (#7156, #7157).
+Not modeled: in ksh93 a trap set inside a `( … )` has the shell catching
+the signal as well, since the parentheses run in the shell's own process;
+and INT, with a trap for it set before the call, runs the caller's handler
+and then ends the call at 258.
+
+An ignored signal stays ignored inside the call. That is not this axis but
+the call's trap table, which is empty of the caller's handlers and keeps
+its ignores: `trap '' TERM; function f { kill -TERM $$; echo inf; }; f;
+echo "after $?"` writes `inf` and `after 0` in ksh93, with TERM from
+another process during a `sleep` in the body as well, and `trap` inside the
+call lists `trap -- '' TERM`. A body that sets a handler for the signal or
+resets it has the ignore back after the return. Measured 2026-11-01, each
+shell in a session of its own (#7157).
 
 **`SignalDeathWaitsForAnUnforkedSubshell`** — bash no · dash no · ksh93
 yes · zsh no · ash no

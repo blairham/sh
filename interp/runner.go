@@ -5062,6 +5062,12 @@ type Runner struct {
 	caughtByAnExitTrap bool
 	keywordCalls       int
 	deathTaken         takenDeath
+	// caughtSignals is the signals this shell has had a trap for at some
+	// point, an ignore included, which it goes on catching; and
+	// callSignalsPublished what the shell at the top last told the front end
+	// a `function name { … }` call would end on. See keywordcalldeath.go.
+	caughtSignals        signalSet
+	callSignalsPublished signalSet
 	// exitHookList is the name of the dialect's exit hook's list, spelled
 	// once rather than between every two statements. See
 	// Runner.exitHookStandsForAHangup.

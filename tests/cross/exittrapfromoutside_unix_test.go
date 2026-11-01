@@ -206,6 +206,70 @@ func TestAFatalSignalFromOutsideEndsAKeywordCallInOneDialect(t *testing.T) {
 	}
 }
 
+// What each dialect does with a fatal signal from another process while a
+// `function name { … }` call waits, with a trap on that signal set before the
+// call and no EXIT trap anywhere (#7156, #7157).
+//
+// Measured 2026-11-01, each shell in a session of its own, TERM from
+// `/bin/kill` while the call waits on `/bin/sleep 3`:
+//
+//	trap 'echo term' TERM; function f { WAIT; echo inf; }; f; echo "after $?"
+//	    ksh93u+               after 271, exit 0
+//	    bash 5.3.20, zsh 5.9.2  term, inf, after 0, exit 0
+//	trap 'echo t' TERM; trap - TERM; function f { WAIT; echo inf; }; f; echo "after $?"
+//	    ksh93u+               after 271, exit 0
+//	    bash 5.3.20, zsh 5.9.2  killed by TERM
+//	the same with f() { … }   ksh93u+: killed by TERM
+//	trap '' TERM; function f { WAIT; echo inf; }; f; echo "after $?"
+//	    ksh93u+, bash, zsh    inf, after 0, exit 0
+//
+// ksh93 goes on catching a signal it has ever had a trap for, and the call is
+// the boundary its death stops at, which is
+// Semantics.SignalDeathEndsAtAKeywordFunctionCall read through each preset
+// and the front end that owns the process; an ignore is not taken from the
+// call with the handlers. This shell's ksh died of TERM in the first, second
+// and last: the call's trap table had reset the signal, and nothing had the
+// front end hand it over.
+func TestASignalTheShellEverTrappedFromOutsideEndsAKeywordCallInOneDialect(t *testing.T) {
+	const wait = `/bin/sh -c 'printf r >"$1"; exec sleep 30' sh "$READY"`
+	// The ignore leaves the shell waiting for the program, so it is short.
+	const short = `/bin/sh -c 'printf r >"$1"; exec sleep 2' sh "$READY"`
+	const call = `function f { ` + wait + `; echo inf; }; f; echo "after $?"`
+	for _, c := range []struct {
+		dialect, name, script string
+		// sig is the signal the shell must die of, or 0 for an exit at 0.
+		sig syscall.Signal
+		out string
+	}{
+		{"ksh", "a handler standing", `trap 'echo term' TERM; ` + call, 0, "after 271\n"},
+		{"ksh", "a trap taken away", `trap 'echo t' TERM; trap - TERM; ` + call, 0, "after 271\n"},
+		{
+			"ksh", "the POSIX form",
+			`trap 'echo t' TERM; trap - TERM; f() { ` + wait + `; echo inf; }; f; echo "after $?"`,
+			syscall.SIGTERM, "",
+		},
+		{
+			"ksh", "an ignore", `trap '' TERM; function f { ` + short + `; echo inf; }; f; echo "after $?"`,
+			0, "inf\nafter 0\n",
+		},
+		{"bash", "a trap taken away", `trap 'echo t' TERM; trap - TERM; ` + call, syscall.SIGTERM, ""},
+		{"zsh", "a trap taken away", `trap 'echo t' TERM; trap - TERM; ` + call, syscall.SIGTERM, ""},
+	} {
+		t.Run(c.dialect+"/"+c.name, func(t *testing.T) {
+			ws, out := diesFromOutside(t, c.dialect, syscall.SIGTERM, c.script)
+			switch {
+			case c.sig != 0 && (!ws.Signaled() || ws.Signal() != c.sig):
+				t.Errorf("ended %v, want killed by %v", ws, c.sig)
+			case c.sig == 0 && (ws.Signaled() || ws.ExitStatus() != 0):
+				t.Errorf("ended %v, want an exit at 0", ws)
+			}
+			if out != c.out {
+				t.Errorf("wrote %q, want %q", out, c.out)
+			}
+		})
+	}
+}
+
 // What each dialect does with a fatal signal from another process that lands
 // while a `( … )` or `$( … )` waits for a program (#7068).
 //

@@ -199,3 +199,41 @@ func TestKeywordFunctionTakesThePseudoConditionsToo(t *testing.T) {
 		})
 	}
 }
+
+// An ignore is not one of the handlers the call is not given: it stays in the
+// call's table, still ignoring the signal and listed there, and a body that
+// moves it has it put back at the return (#7157).
+//
+// Measured 2026-11-01 on ksh93u+, each shell in a session of its own: `inf`
+// and `after 0` for the keyword form as for the POSIX one, the ignore listed
+// inside the call, and the ignore standing again after a body that set a
+// handler or reset it. This shell died of the signal in the keyword form,
+// having reset the ignore with the handlers.
+func TestKeywordFunctionKeepsTheCallersIgnore(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"the keyword form",
+			`trap '' USR1; function g { kill -USR1 $$; echo in; }; g; echo "after $?"`, "in\nafter 0\n",
+		},
+		{"the POSIX form", `trap '' USR1; g() { kill -USR1 $$; echo in; }; g; echo "after $?"`, "in\nafter 0\n"},
+		{
+			"a POSIX-form call inside it",
+			`trap '' USR1; p() { kill -USR1 $$; echo in-p; }; function g { p; }; g; echo "after $?"`,
+			"in-p\nafter 0\n",
+		},
+		{"listed in the call", `trap '' USR1; trap 'echo o' USR2; function g { trap; }; g`, "trap -- '' USR1\n"},
+		{
+			"a handler the body set",
+			`trap '' USR1; function g { trap 'echo h' USR1; kill -USR1 $$; }; g; trap; kill -USR1 $$; echo end`,
+			"h\ntrap -- '' USR1\nend\n",
+		},
+		{"a reset the body made", `trap '' USR1; function g { trap - USR1; }; g; trap`, "trap -- '' USR1\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := keywordTrapsRun(t, tc.src)
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q/%d, want %q", out, st, tc.want)
+			}
+		})
+	}
+}

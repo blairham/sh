@@ -50,7 +50,7 @@ func (r *Runner) storesAPlainScalar(a *syntax.Assign) bool {
 	}
 	// A valueless declaration's store is the other caller of storesPlainly,
 	// and it is the one place this is set — see Runner.declareEmpty.
-	return !r.declaringWithoutAValue && r.storesPlainly(a.Name) && r.valueOnlyReads(a.Value)
+	return !r.declaringWithoutAValue && r.storesPlainly(a.Name, 0) && r.valueOnlyReads(a.Value)
 }
 
 // storesPlainly reports whether every question the full road asks of a store
@@ -65,7 +65,14 @@ func (r *Runner) storesAPlainScalar(a *syntax.Assign) bool {
 // it skips the scope lint and allexport, which belong to an assignment, and
 // it skips the guard registered for the name, which a name accepted here does
 // not have (#6373).
-func (r *Runner) storesPlainly(name string) bool {
+//
+// folded is the attributes the caller folds the value through itself, with
+// attributeFolded, the full road's own fold: a name carrying any other
+// attribute is not a plain store. An assignment folds nothing, since its value
+// is the script's and folding it is arithmetic that can do anything; a
+// declaration's empty value folds through the integer attribute, which is the
+// whole of what `integer n` asks of the store.
+func (r *Runner) storesPlainly(name string, folded cellAttrs) bool {
 	if !plainScalarStoreShortcut {
 		return false
 	}
@@ -91,7 +98,7 @@ func (r *Runner) storesPlainly(name string) bool {
 	}
 	// The name holds nothing but a scalar, carries no attribute, and no
 	// table of the shell's has an entry for it.
-	if c := r.cell(name); c != nil && (c.has&^slotScalar != 0 || c.attrs != 0) {
+	if c := r.cell(name); c != nil && (c.has&^slotScalar != 0 || c.attrs&^folded != 0) {
 		return false
 	}
 	if r.disciplined[name] || r.compoundVariable[name] || r.capitalized[name] {

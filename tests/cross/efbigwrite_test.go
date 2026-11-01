@@ -128,3 +128,108 @@ func pastTheFileSizeLimitIn(t *testing.T, dir, dialect, src string) string {
 type fileTooLarge struct{}
 
 func (fileTooLarge) Write([]byte) (int, error) { return 0, syscall.EFBIG }
+
+// **Once an EXIT trap has caught the signal, ksh93 gives up over a write past
+// `ulimit -f` rather than dying of it** — the builtin's complaint, the trap
+// reading the status from before the builtin, and the shell leaving at 1, as
+// over `echo $((1/0))` in the same place (#7173). bash runs the trap and dies.
+//
+// Measured 2026-11-01, each shell in a session of its own, ksh93u+ and GNU
+// bash 5.3.20:
+//
+//	trap 'echo t $?' EXIT; ulimit -f 1; (exit 5); printf "%4000s" x > f; echo after=$?
+//	  ksh93   ksh: printf: write to 1 failed [File too large], t 5, exit 1
+//	  bash    t 5, killed by XFSZ
+//	the same with `exit 6` last in the trap      ksh93 6
+//	the same with `(exit 4)` last in the trap    ksh93 1
+//	the trap set, then `trap - EXIT`             ksh93 the complaint, exit 1
+//	`kill -XFSZ $$` in place of the printf       both t 5, killed by XFSZ
+//	inside `function f { …; echo in; }`          ksh93 ksh: f[1]: printf: …, after=1, t 0, exit 0
+//
+// The rows after them are recorded and not modeled — see
+// docs/spec/semantics.md, "A write past the limit once the signal is
+// caught" — and what is pinned for them is this shell's own answer:
+//
+//	inside `f() { …; echo in; }`                 ksh93 the complaint, t 1, killed by XFSZ
+//	(printf … > f; echo in), the trap set        ksh93 ksh: write to 1 failed [File too large], t 0, exit 1
+//	(printf … > f; echo in), no trap             ksh93 the whole shell killed by XFSZ
+//	y=$(printf … > f; echo in), no trap          ksh93 ksh: <pid>: Exceeded file size limit, after=281
+func TestACaughtWritePastTheFileSizeLimitIsAFatalErrorInOneDialect(t *testing.T) {
+	const (
+		trap      = `trap 'echo "t $?" >&2' EXIT; `
+		write     = `printf '%4000s' x 1>&1; echo "after=$?" >&2`
+		complaint = "ksh: printf: write to 1 failed [File too large]\n"
+		notice    = "ksh: 0: Exceeded file size limit\n"
+	)
+	killed := 128 + int(syscall.SIGXFSZ)
+	for _, c := range []struct {
+		dialect, src string
+		want         caughtOverrun
+	}{
+		{"ksh", trap + `(exit 5); ` + write, caughtOverrun{complaint + "t 5\n", 1, 0}},
+		{"bash", trap + `(exit 5); ` + write, caughtOverrun{"t 5\n", killed, syscall.SIGXFSZ}},
+		{
+			"ksh", `trap 'echo "t $?" >&2; exit 6' EXIT; (exit 5); ` + write,
+			caughtOverrun{complaint + "t 5\n", 6, 0},
+		},
+		{
+			"ksh", `trap 'echo "t $?" >&2; (exit 4)' EXIT; (exit 5); ` + write,
+			caughtOverrun{complaint + "t 5\n", 1, 0},
+		},
+		{"ksh", trap + `trap - EXIT; (exit 5); ` + write, caughtOverrun{complaint, 1, 0}},
+		{"bash", trap + `trap - EXIT; (exit 5); ` + write, caughtOverrun{"", killed, syscall.SIGXFSZ}},
+		// The route and not the signal.
+		{"ksh", trap + `(exit 5); kill -XFSZ $$; echo after >&2`, caughtOverrun{"t 5\n", killed, syscall.SIGXFSZ}},
+		{
+			"ksh", trap + `function f { printf '%4000s' x 1>&1; echo in >&2; }; (exit 5); f; echo "after=$?" >&2`,
+			caughtOverrun{"ksh: f[1]: printf: write to 1 failed [File too large]\nafter=1\nt 0\n", 0, 0},
+		},
+		// Recorded, not modeled: this shell's answers.
+		{
+			"ksh", trap + `f() { printf '%4000s' x 1>&1; echo in >&2; }; (exit 5); f; echo "after=$?" >&2`,
+			caughtOverrun{complaint + "t 5\n", 1, 0},
+		},
+		{
+			"ksh", trap + `(printf '%4000s' x 1>&1; echo in >&2); echo "after=$?" >&2`,
+			caughtOverrun{notice + "after=153\nt 0\n", 0, 0},
+		},
+		{"ksh", `(printf '%4000s' x 1>&1; echo in >&2); echo "after=$?" >&2`, caughtOverrun{notice + "after=153\n", 0, 0}},
+		// A substitution's own standard output is the capture, so the
+		// stream past the limit reaches it by a descriptor of its own.
+		{"ksh", `exec 4>&1; y=$(printf '%4000s' x >&4; echo in >&2); echo "after=$?" >&2`, caughtOverrun{"after=153\n", 0, 0}},
+	} {
+		if got := overrunWithATrap(t, c.dialect, c.src); got != c.want {
+			t.Errorf("%s: %s\n got %+v\nwant %+v", c.dialect, c.src, got, c.want)
+		}
+	}
+}
+
+// caughtOverrun is how a run past the file-size limit ended: what it said,
+// its status, and the signal it asked to die of.
+type caughtOverrun struct {
+	errs   string
+	status int
+	died   syscall.Signal
+}
+
+// overrunWithATrap runs src under the dialect with a standard output past the
+// file-size limit and a DieBySignal that records the signal rather than ending
+// this process.
+func overrunWithATrap(t *testing.T, dialect, src string) caughtOverrun {
+	t.Helper()
+	p := presets[dialect]
+	var e bytes.Buffer
+	var got caughtOverrun
+	r := p.Runner(dialecttest.Base{Dir: t.TempDir(), Stdout: fileTooLarge{}, Stderr: &e})
+	r.DieBySignal = func(s syscall.Signal) error {
+		got.died = s
+		return nil
+	}
+	r.ListenForFatalSignals = func() {}
+	st, err := r.Run(context.Background(), p.ParseThrough(t, r, src))
+	if err != nil {
+		t.Fatalf("%s: run %q: %v", dialect, src, err)
+	}
+	got.errs, got.status = e.String(), st
+	return got
+}

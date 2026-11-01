@@ -37,6 +37,10 @@ func fileSizeSem(runsTheExitTrap Answer) Semantics {
 	s := exitTrapDeathSem(No, No)
 	s.BuiltinWriteErrorFailsTheCommand = Yes
 	s.ExitTrapRunsOnSignalDeath = runsTheExitTrap
+	// The majority's answer: a caught write past the limit is still a death.
+	// TestACaughtWritePastTheLimitIsGivenUpOverWhereTheAxisSaysSo has the
+	// other.
+	s.CaughtWritePastTheFileSizeLimitIsAFatalError = No
 	return s
 }
 
@@ -159,6 +163,77 @@ func TestTheExitTrapOfAWritePastTheLimitReadsTheStatusBeforeTheBuiltin(t *testin
 		want := leaving{errs: c.errs, status: xfszDeathStatus, died: syscall.SIGXFSZ}
 		if got != want {
 			t.Errorf("ExitTrapRunsOnSignalDeath %v: ended %+v, want %+v", c.runs, got, want)
+		}
+	}
+}
+
+// Once an EXIT trap has caught the signal, one dialect gives up over the
+// write rather than dying of it: the builtin's complaint, then the trap
+// reading the status from before the builtin, then the shell leaving at 1
+// (#7173). See Semantics.CaughtWritePastTheFileSizeLimitIsAFatalError.
+func TestACaughtWritePastTheLimitIsGivenUpOverWhereTheAxisSaysSo(t *testing.T) {
+	const complaint = "testsh: echo: write error: File too large\n"
+	for _, c := range []struct {
+		name, src string
+		yes, no   leaving
+	}{
+		{
+			name: "the trap reads the status before the builtin",
+			src:  `trap 'echo "t $?" >&2' EXIT; (exit 5); echo hi; echo after >&2`,
+			yes:  leaving{errs: complaint + "t 5\n", status: 1},
+			no:   leaving{errs: "t 5\n", status: xfszDeathStatus, died: syscall.SIGXFSZ},
+		},
+		{
+			name: "an exit in the trap names the status",
+			src:  `trap 'echo "t $?" >&2; exit 6' EXIT; (exit 5); echo hi; echo after >&2`,
+			yes:  leaving{errs: complaint + "t 5\n", status: 6},
+			no:   leaving{errs: "t 5\n", status: 6, died: syscall.SIGXFSZ},
+		},
+		{
+			name: "the trap's own last status does not",
+			src:  `trap 'echo "t $?" >&2; (exit 4)' EXIT; (exit 5); echo hi; echo after >&2`,
+			yes:  leaving{errs: complaint + "t 5\n", status: 1},
+			no:   leaving{errs: "t 5\n", status: xfszDeathStatus, died: syscall.SIGXFSZ},
+		},
+		{
+			name: "caught by a trap since taken away",
+			src:  `trap 'echo "t $?" >&2' EXIT; trap - EXIT; echo hi; echo after >&2`,
+			yes:  leaving{errs: complaint, status: 1},
+			no:   leaving{status: xfszDeathStatus, died: syscall.SIGXFSZ},
+		},
+		{
+			// The route and not the signal: the same signal sent with
+			// `kill` is a death under either answer, its trap reading what
+			// `kill` left in this vector.
+			name: "kill is still a death",
+			src:  `trap 'echo "t $?" >&2' EXIT; (exit 5); kill -XFSZ $$; echo after >&2`,
+			yes:  leaving{errs: "t 0\n", status: xfszDeathStatus, died: syscall.SIGXFSZ},
+			no:   leaving{errs: "t 0\n", status: xfszDeathStatus, died: syscall.SIGXFSZ},
+		},
+		{
+			// And a subshell keeps its write its own death, the axis not
+			// reaching it.
+			name: "a subshell's write",
+			src:  `trap 'echo "t $?" >&2' EXIT; (echo hi; echo in >&2); echo "st=$?" >&2`,
+			yes:  leaving{errs: "st=" + strconv.Itoa(xfszDeathStatus) + "\nt 0\n"},
+			no:   leaving{errs: "st=" + strconv.Itoa(xfszDeathStatus) + "\nt 0\n"},
+		},
+	} {
+		for _, answer := range []Answer{Yes, No} {
+			sem := fileSizeSem(Yes)
+			sem.CaughtWritePastTheFileSizeLimitIsAFatalError = answer
+			// What the dialect that answers yes holds beside it: a give-up's
+			// trap reads the status from before the command, and a killed
+			// subshell is not announced.
+			sem.ExitTrapAfterAGiveUpSeesEarlierStatus = Yes
+			sem.ReportsACommandKilledBySignal = No
+			want := c.no
+			if answer == Yes {
+				want = c.yes
+			}
+			if got := pastTheLimit(t, c.src, sem); got != want {
+				t.Errorf("%s, answered %v: ended %+v, want %+v", c.name, answer, got, want)
+			}
 		}
 	}
 }

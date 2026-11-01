@@ -1296,6 +1296,10 @@ func Semantics() interp.Semantics {
 	// /bin/sleep 2; echo in )` kills dash at once with no trap run, the
 	// parentheses writing `in` at 2 s (#7068).
 	s.SignalDeathWaitsForAnUnforkedSubshell = interp.No
+	// Nor a write past `ulimit -f` to give up over: measured 2026-11-01,
+	// `trap 'echo t $?' EXIT; ulimit -f 1; printf '%4000s' x > f` dies of
+	// XFSZ with no trap run (#7173).
+	s.CaughtWritePastTheFileSizeLimitIsAFatalError = interp.No
 	// And a `-c` string ending over an error the shell reported still runs
 	// it: measured 2026-10-16 on dash, a division by zero, a readonly
 	// reassignment and an unset name under `set -u` each print the handler

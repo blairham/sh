@@ -2121,6 +2121,8 @@ func Semantics() interp.Semantics {
 	s.SignalDeathEndsAtAKeywordFunctionCall = interp.No
 	// Nor a subshell to wait out, for the same reason (#7068).
 	s.SignalDeathWaitsForAnUnforkedSubshell = interp.No
+	// Nor a write past `ulimit -f` to give up over instead of dying (#7173).
+	s.CaughtWritePastTheFileSizeLimitIsAFatalError = interp.No
 	// And a `-c` string ending over an error the shell reported still runs
 	// it: measured 2026-10-16 on BusyBox ash 1.37.0 in alpine:3, a division by zero, a readonly
 	// reassignment and an unset name under `set -u` each print the handler

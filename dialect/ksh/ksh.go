@@ -3008,6 +3008,13 @@ func Semantics() interp.Semantics {
 	// and dies of TERM at 2 s. Measured 2026-10-31 on ksh93u+ 2012-08-01,
 	// alone in the panel (#7068).
 	s.SignalDeathWaitsForAnUnforkedSubshell = interp.Yes
+	// And a builtin's write past `ulimit -f` with XFSZ untrapped, once an
+	// EXIT trap has caught the signal, is a failed write it gives up over
+	// rather than a death: `trap 'echo t $?' EXIT; ulimit -f 1; (exit 5);
+	// printf '%4000s' x > f` says `ksh: printf: write to 1 failed [File too
+	// large]`, writes `t 5` and exits 1, as over `echo $((1/0))`. Measured
+	// 2026-11-01 on ksh93u+ 2012-08-01, alone in the panel (#7173).
+	s.CaughtWritePastTheFileSizeLimitIsAFatalError = interp.Yes
 	// And a `-c` string ending over an error the shell reported still runs
 	// it: measured 2026-10-16 on ksh93, a division by zero, a readonly
 	// reassignment and an unset name under `set -u` each print the handler

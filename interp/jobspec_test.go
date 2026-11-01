@@ -207,6 +207,10 @@ func TestWaitNextJobIsTheFirstToSucceed(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			// Side by side with each other and with nothing else: every row
+			// is a Runner and jobs of its own, the test itself stays serial,
+			// and the rows' time is their jobs' sleeps (#7290).
+			t.Parallel()
 			out, errs, _ := declRun(t, tc.src, succeeds, Diagnostics{})
 			if !strings.Contains(out, tc.want) || errs != "" {
 				t.Errorf("stdout %q stderr %q, want %q — %s", out, errs, tc.want, tc.why)

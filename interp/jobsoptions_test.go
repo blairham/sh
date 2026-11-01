@@ -110,6 +110,10 @@ func TestJobsFormatLettersTheLastOneWins(t *testing.T) {
 		{"-lp is the ids where -p outranks", "-lp", Yes, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			// Side by side with each other and with nothing else: every row
+			// is a Runner and a job of its own, the test itself stays serial,
+			// and the rows' time is the job's sleep (#7290).
+			t.Parallel()
 			out, st := jobsRun(t, `sleep 0.3 & echo "bang=$!"; jobs `+tc.opts+`; wait`,
 				func(s *Semantics) {
 					s.JobsPidsOnlyOption = Yes

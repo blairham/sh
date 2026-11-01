@@ -65,6 +65,10 @@ func TestWaitDashNWaitsForTheJobsItWasGiven(t *testing.T) {
 		{"several operands take the first of those", "wait -n %1 %2", "st=4"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			// Side by side with each other and with nothing else: every row
+			// is a Runner and jobs of its own, the test itself stays serial,
+			// and the rows' time is their jobs' sleeps (#7290).
+			t.Parallel()
 			out, st := waitRun(t, twoJobs+c.wait+"\necho \"st=$?\"\nwait\n")
 			if st != 0 {
 				t.Fatalf("status %d: %q", st, out)

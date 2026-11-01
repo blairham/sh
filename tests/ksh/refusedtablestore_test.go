@@ -84,3 +84,40 @@ func TestARefusedStoresKeyIsDeclaredAheadOfTheRefusal(t *testing.T) {
 		})
 	}
 }
+
+// TestARefusedStoreIntoAFrozenIndexedArrayLeavesItAsItWas: the same writers,
+// refused by the same freeze, leave an indexed array exactly as it was — the
+// key trace above is keyed on the table, and an indexed array is not one.
+//
+// This is **not** ksh93u+'s answer, and is not claimed to be. Measured
+// 2026-10-31, `-c`, ksh93u+ 2012-08-01: every one of these leaves a counted
+// element no subscript lists — `${#a[@]}` is 3, `typeset -p` switches to
+// `([0]=1 [1]=2)` — which is the "allocated, unset" slot docs/spec/semantics.md
+// records under ArithKeyReadCreatesTheElement and does not model, now reached
+// by a third route (#7186). bash 5.3.20 and zsh 5.9.2 leave the array as it
+// was, and so does this shell; the rows pin that, so that the table's key
+// cannot quietly start being left in an indexed array as a real element.
+func TestARefusedStoreIntoAFrozenIndexedArrayLeavesItAsItWas(t *testing.T) {
+	const unchanged = "typeset -r -a a=(1 2)\nn=2\n"
+	for _, c := range []struct{ name, src string }{
+		{"read", `read 'a[5]' <<< x`},
+		{"read -A", `read -A 'a[5]' <<< x`},
+		{"getopts", `getopts x 'a[5]' -x`},
+		{"let", `let 'a[5]=5'`},
+		{"(( ))", `(( a[5]=5 ))`},
+		{"a default", `: ${a[5]:=x}`},
+		{"the statement", `a[5]=5`},
+		{"a declaration's operand", `typeset 'a[5]=1'`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			src := "trap 'typeset -p a; echo n=${#a[@]}' EXIT; a=(1 2); readonly a; " + c.src
+			out, _ := runKsh(t, t.TempDir(), src)
+			if !strings.Contains(out, "is read only") {
+				t.Errorf("got %q, want the refusal", out)
+			}
+			if !strings.HasSuffix(out, unchanged) {
+				t.Errorf("got %q, want it to end with %q", out, unchanged)
+			}
+		})
+	}
+}

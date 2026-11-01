@@ -11,8 +11,8 @@ package interp
 //	                                        bash 5.3.20   ksh93u+       zsh 5.9.2
 //	declare -A a; readonly a; let 'a[k]=5'  a=()          a=([k]=)      taken
 //	… read 'a[k]' <<< x                     a             a=([k]=)      ends
-//	declare -a a; readonly a; (( a[5]=5 ))  a=()          (#7186)       a=(  )
-//	… a[5]=5                                a             (#7186)       ends
+//	declare -a a; readonly a; (( a[5]=5 ))  a=()          slot (#7186)  a=(  )
+//	… a[5]=5                                a             slot (#7186)  ends
 //
 // The two traces are keyed on different nouns, which is why they are two
 // questions and not one. bash's is the **writer**: an arithmetic store, and
@@ -22,6 +22,12 @@ package interp
 // `getopts`, an expression, a reference — leaves the refused key behind,
 // declared and holding nothing. Each is asked only once the freeze has
 // refused, so an unfrozen store asks neither.
+//
+// The "slot" cells are a third trace and are not modeled: refused, ksh93
+// leaves an indexed array counting an element no subscript lists, which is
+// the allocated, unset slot docs/spec/semantics.md records whole under
+// ArithKeyReadCreatesTheElement. This shell leaves the array as it was, as
+// bash and zsh do.
 
 // refusedArithStoreSetsTheArray is the trace bash leaves: the freeze has
 // refused name, and where the refusal is of an arithmetic expression's store

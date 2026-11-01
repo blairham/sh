@@ -309,7 +309,7 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 		// finished. See unforkeddeath.go.
 		return ""
 	}
-	if r.takeOverATrappedSignalEnd(sub) {
+	if r.takeOverAnEndWhereASignalLanded(sub) {
 		// And so does a trapped signal the body sent the shell. See
 		// subshelltrappedsignal.go.
 		return ""

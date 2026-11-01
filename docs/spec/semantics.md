@@ -3661,8 +3661,53 @@ arrivals here at the top level too, which is #7166's question. The pipeline
 row is the shell running its handler while it waits for the element, which
 is the forked route and not this one.
 
-The untrapped, fatal half of the in-process route — which EXIT trap runs as
-the shell dies — is #7153.
+### And the subshell's own EXIT trap
+
+    trap 'echo bye' EXIT; (trap 'echo sub' EXIT; kill -TERM $$; echo s2); echo after
+
+    ksh93  → bye, killed by TERM        bash 5.3 → s2, sub, bye, killed by TERM
+                                        zsh 5.9, dash → s2, sub, killed by TERM
+
+A subshell ended where its signal landed runs **no EXIT trap of its own**,
+and neither does any unforked subshell around it. The process that would
+run one is the shell, and only the shell's own trap runs. The five that
+fork ran the child's trap because the child was never signaled. Measured
+2026-11-01 under `-c`, each shell in a process group of its own, ksh93u+
+2012-08-01, `trap 'echo bye' EXIT` in front of each row (#7153):
+
+    row                                                 ksh93                 here, before
+    (trap 'echo sub' EXIT; kill -TERM $$; echo s2)      bye                   sub, bye
+    x=$(trap 'echo sub >&2' EXIT; kill -TERM $$; …)     bye                   sub, bye
+    : | (trap 'echo sub' EXIT; kill -TERM $$; …)        bye                   sub, bye
+    (trap 'echo outer' EXIT; (trap 'echo in' EXIT;      bye                   in, s2, outer, bye
+      kill -TERM $$; echo s3); echo s2)
+    (trap 'echo sub' EXIT; kill -SEGV $$; echo s2)      nothing               sub
+    USR1 trapped as `echo T`, the first row with USR1   T, after 286, bye     sub, T, after 286, bye
+
+Each row is followed by `echo "after $?"`, and the five rows that send a
+fatal signal end the shell by it. Here, after: as ksh93 on every row. The
+nested row moved twice, because the outer parentheses also ran on to `echo
+s2`; they end now as they do for a trapped signal. The SEGV row writes
+nothing because the shell's own trap is skipped too, which
+`Semantics.UntrappedSegvEndsTheShellWhereItLands` already answers (#7069).
+
+**It is the subshell's own `kill`, not a death that happens during it.**
+`(trap 'echo sub' EXIT; /bin/kill -TERM $$; echo s2)` writes `s2`, `sub`,
+`bye` in ksh93. The signal comes from another process while the shell waits
+for that child, and the subshell runs on to its end. Ours does the same.
+
+**Not a field of its own.** It is asked on the axis that already stops the
+body, `SubshellRunsOnAfterSignalingTheShell` and, for a trapped signal,
+`SubshellEndsWhenItSendsTheShellATrappedSignal`. Every shell in the panel
+that stops the body skips the trap, and every one that runs the body on
+runs it, so nothing measured needs the two apart.
+
+A builtin `sleep` in place of `/bin/kill`, with TERM sent from another
+process 0.3 s in, ends the parentheses in ksh93 and writes `bye` alone. Ours
+does the same, on the outside route in `unforkeddeath.go`. When the sender is
+a background job of the same script, `p=$$; (sleep 0.3; kill -TERM $p) &`,
+ours still runs the parentheses on: the job's `kill` is taken in-process.
+That is #7260 and is not this section's rule.
 
 
 ## What a shell with no child subshells reports for a pid

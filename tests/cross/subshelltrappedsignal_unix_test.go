@@ -75,3 +75,51 @@ func TestASubshellEndsOnATrappedSignalToTheShellInOneDialect(t *testing.T) {
 		}
 	}
 }
+
+// And the subshell's own EXIT trap, which a subshell ended where its signal
+// landed does not run, nor any unforked subshell around it (#7153): the
+// process that would run one is the shell. Measured 2026-11-01 under `-c`,
+// each shell in a process group of its own, ksh93u+ 2012-08-01, bash 5.3.20,
+// zsh 5.9.2 and dash, `trap 'echo bye' EXIT` in front of each row:
+//
+//	(trap 'echo sub' EXIT; kill -TERM $$; echo s2)  ksh93 bye; bash s2, sub, bye; zsh, dash s2, sub
+//	x=$(trap 'echo sub >&2' EXIT; kill -TERM $$; …) ksh93 bye
+//	: | (trap 'echo sub' EXIT; kill -TERM $$; …)    ksh93 bye
+//	( (trap … EXIT; kill -TERM $$); echo s2 )       ksh93 bye
+//	(trap 'echo sub' EXIT; kill -SEGV $$; echo s2)  ksh93 nothing
+//	the first row with USR1 trapped                 ksh93 T, after 286, bye
+//
+// each killed by the signal but the last. Here ksh wrote `sub` before `bye`.
+func TestASubshellEndedWhereItsSignalLandedRunsNoExitTrap(t *testing.T) {
+	const bye = `trap 'echo bye' EXIT; `
+	term := strconv.Itoa(128 + int(syscall.SIGTERM))
+	sub := `(trap 'echo sub' EXIT; kill -TERM $$; echo s2); echo after`
+	for _, c := range []struct{ dialect, src, want, status string }{
+		{"ksh", bye + sub, "bye", term},
+		{"bash", bye + sub, "s2 sub bye", term},
+		{"zsh", bye + sub, "s2 sub", term},
+		{"dash", bye + sub, "s2 sub", term},
+		{"ksh", bye + `x=$(trap 'echo sub >&2' EXIT; kill -TERM $$; echo s2 >&2); echo after`, "bye", term},
+		{"ksh", bye + `: | (trap 'echo sub' EXIT; kill -TERM $$; echo s2); echo after`, "bye", term},
+		{
+			"ksh", bye + `(trap 'echo outer' EXIT; (trap 'echo in' EXIT; kill -TERM $$; echo s3); echo s2); echo after`,
+			"bye", term,
+		},
+		{
+			"ksh", bye + `(trap 'echo sub' EXIT; kill -SEGV $$; echo s2); echo after`,
+			"", strconv.Itoa(128 + int(syscall.SIGSEGV)),
+		},
+		{
+			"ksh", `trap 'echo T' USR1; ` + bye + `(trap 'echo sub' EXIT; kill -USR1 $$; echo s2); echo "after $?"`,
+			"T after " + strconv.Itoa(256+int(syscall.SIGUSR1)) + " bye", "0",
+		},
+	} {
+		out, st, err := presets[c.dialect].Combined(t, dialecttest.Base{Dir: t.TempDir()}, c.src)
+		if err != nil {
+			t.Fatalf("%s: %s: %v", c.dialect, c.src, err)
+		}
+		if got := strings.Join(strings.Fields(out), " "); got != c.want || strconv.Itoa(st) != c.status {
+			t.Errorf("%s: %s\n got %q at %d\nwant %q at %s", c.dialect, c.src, got, st, c.want, c.status)
+		}
+	}
+}

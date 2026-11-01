@@ -272,6 +272,27 @@ echo done`, withSem(s))
 	}
 }
 
+// And a subshell stopped where its signal landed runs no EXIT trap of its own,
+// nor does the one around it: the process that would run one is the shell.
+// Where the axis lets it run on, it runs its body and its trap to the end, as
+// a child would (#7153).
+func TestASubshellStoppedWhereItSignalledTheShellRunsNoExitTrap(t *testing.T) {
+	const src = `(trap 'echo outer' EXIT; (trap 'echo sub' EXIT; kill -INT $$; echo s3); echo s2); echo done`
+	for _, c := range []struct {
+		runsOn Answer
+		want   string
+	}{
+		{No, ""},
+		{Yes, "s3\nsub\ns2\nouter\n"},
+	} {
+		s := trapSem()
+		s.SubshellRunsOnAfterSignalingTheShell = c.runsOn
+		if got, st := run(t, src, withSem(s)); got != c.want || st != 130 {
+			t.Errorf("runs on %v: got %q status %d, want %q status 130", c.runsOn, got, st, c.want)
+		}
+	}
+}
+
 // And the preset's own answer is the majority's, read from the preset rather
 // than written into the case.
 //

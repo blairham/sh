@@ -49,10 +49,15 @@ func TestPlainPatternsAnswerAsTheMatcherDoes(t *testing.T) {
 	patterns := []string{
 		"abc", "ab", "''", "'*'", "'**'", "ab'*'", "'*'bc", "'*'b'*'", "'*'é'*'",
 		"-p", "x=y", "a.c", `"a b"`, "é", "AB'*'",
+		// Stars inside the literal as well (#6363).
+		"a'*'c", "a'*'b'*'c", "ab'*'ab", "'*'a'*'c", "a'*'c'*'", "'*'b'*'c'*'", "é'*'é", "x'*'=y",
 		// Neither shape, so the matcher answers either way.
-		"a?c", "[ab]*", `a\*`, "*b?", "ab**",
+		"a?c", "[ab]*", `a\*`, "*b?", "ab**", "a'**'c", "a'*'?c",
 	}
-	subjects := []string{"abc", "", "ab", "xabcx", "a b", "é", "-p", "ABC", "x=y", "a*", `\377\376`}
+	subjects := []string{
+		"abc", "", "ab", "xabcx", "a b", "é", "-p", "ABC", "x=y", "a*", `\377\376`,
+		"abab", "aXbYc", "acac", "éé", "x==y", "bcb",
+	}
 	for _, c := range plainPatternRuns {
 		var b strings.Builder
 		if c.records {
@@ -180,5 +185,83 @@ func TestEscapedPatternsAnswerAsTheMatcherDoes(t *testing.T) {
 		if !strings.Contains(want, "c01 ") || !strings.Contains(want, "c00 ") {
 			t.Errorf("%s: the rows did not run: %q", c.name, want)
 		}
+	}
+}
+
+// TestAngleLiteralsAnswerAsTheMatcherDoes is the same comparison for patterns
+// holding `<` and `>`, which the shortcut reads as characters wherever they
+// cannot open a numeric range, and for the stars between them (#6363). The
+// patterns arrive through a variable so the grammar never reads the angle
+// brackets as a redirection, and a run with numeric ranges on is the one
+// where `<1-5>` and `<->` must stay the matcher's.
+func TestAngleLiteralsAnswerAsTheMatcherDoes(t *testing.T) {
+	patterns := []string{
+		"<*>_default", "<base>_*", "*_<x>", "<x>", "<", ">", "a<b", "<-x", "<1-", "<1-*>", "<-*>",
+		"<1-5>", "<->", "x<->y", "<*>_<1-2>", "<1-2>*", "*<9>*", "<**>", "<*>?",
+	}
+	subjects := []string{
+		"<base>_default", "<theme>_palette", "<x>", "<", ">", "a<b", "3", "x12y", "<1-", "<1-5>",
+		"<->", "<-x", "<1-7>", "<>_default", "_<x>", "<9>", "x<9>y", "<x>_<1-2>", "<x>_2", "",
+	}
+	runs := append(plainPatternRuns[:len(plainPatternRuns):len(plainPatternRuns)], plainPatternRun{
+		name:   "numeric ranges",
+		enable: func(g *syntax.Dialect) { g.NumericRangePattern = true },
+		setup: func(r *Runner) {
+			d := numRangeDialect()
+			r.Dialect = &d
+		},
+	})
+	for _, c := range runs {
+		if c.extra != nil {
+			continue
+		}
+		var b strings.Builder
+		if c.records {
+			b.WriteString("[[ SEED =~ SEED ]]\n")
+		}
+		for _, p := range patterns {
+			fmt.Fprintf(&b, "p='%s'\n", p)
+			for i, s := range subjects {
+				fmt.Fprintf(&b, "s='%s'\n", s)
+				fmt.Fprintf(&b, "if [[ $s == $p ]]; then printf 'c%d1 '; else printf 'c%d0 '; fi\n", i, i)
+				if c.records {
+					b.WriteString(`printf '<%s> ' "${M[*]}"` + "\n")
+				}
+				fmt.Fprintf(&b, "case $s in $p) printf 'k%d1 ';; *) printf 'k%d0 ';; esac\n", i, i)
+			}
+			b.WriteString("printf '\\n'\n")
+		}
+		src := b.String()
+		run := func(on bool) string {
+			was := SetPlainPatternShortcutForTest(on)
+			defer SetPlainPatternShortcutForTest(was)
+			out, st := runGrammar(t, src, c.enable, c.setup)
+			return fmt.Sprintf("%s|%d", out, st)
+		}
+		want, got := run(false), run(true)
+		if got != want {
+			gl, wl := strings.Split(got, "\n"), strings.Split(want, "\n")
+			for i := range min(len(gl), len(wl)) {
+				if gl[i] != wl[i] {
+					t.Errorf("%s: the shortcut changed the answers for %s\nwith:    %q\nwithout: %q",
+						c.name, patterns[min(i, len(patterns)-1)], gl[i], wl[i])
+				}
+			}
+			if len(gl) != len(wl) {
+				t.Errorf("%s: %d lines with the shortcut, %d without", c.name, len(gl), len(wl))
+			}
+		}
+		// Both readings ran: the first pattern matches the first subject
+		// and misses the second.
+		if !strings.Contains(want, "c01 ") || !strings.Contains(want, "c10 ") {
+			t.Errorf("%s: the rows did not run: %q", c.name, want)
+		}
+	}
+	// And the range run did read ranges: `<1-5>` matched `3` there.
+	d := numRangeDialect()
+	out, _ := runGrammar(t, "p='<1-5>'; s=3; [[ $s == $p ]] && echo hit || echo miss\n",
+		func(g *syntax.Dialect) { g.NumericRangePattern = true }, func(r *Runner) { r.Dialect = &d })
+	if out != "hit\n" {
+		t.Errorf("numeric ranges were not on in the range run: %q", out)
 	}
 }

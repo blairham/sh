@@ -9,14 +9,22 @@ import (
 )
 
 // helpBlock is what `--help` writes, built from this dialect's own three
-// tables rather than committed as text.
+// tables rather than pasted as text.
 //
-// **Generated because a committed block is a claim about a roster it cannot
+// **What a start reads is helpBlockText, this function's output written
+// down** by TestTheCommittedHelpBlockIsTheTables, which fails on any commit
+// where the two differ and rewrites the file under `-write-help-block`.
+// Building it here at every start sorted three tables and made a few hundred
+// strings for a block only `--help` reads: 14 page faults and ~0.04 ms of
+// each start on macOS (#6491).
+//
+// **Generated because a pasted block is a claim about a roster it cannot
 // see.** The names are `zshOptions`, the aliases are `zshOptionAliases` and
 // the letters are `setLetterOptions`; a name added to any of them — which this
 // campaign does most weeks — moves this block on the commit that adds it, and
-// nothing has to remember. That is the same rule `docs/spec/` follows and the
-// same one the Unicode tables are generated under.
+// the test above is what will not let that commit forget. That is the same
+// rule `docs/spec/` follows and the same one the Unicode tables are generated
+// under.
 //
 // **And the alternative was measured, not argued.** The reference shell's own
 // `--help` misstates four of its own rows, which is what a paste would have

@@ -102,6 +102,18 @@ func TestNoAnsweredAxisRefusesAtRunTime(t *testing.T) {
 				"zero, so any other count reaches no question (#7036)",
 		},
 		{
+			"a count of a pipe exec opened",
+			`printf 'abcdef\n' | { exec 3<&0; read -r -n 4 -u3 l; echo "st=$? l=[$l]"; }`,
+			"ReadCountOfAPipeExecOpenedFindsItsEnd — asked only of a `-n` " +
+				"read of a pipe at a number `exec` put there (#7179)",
+		},
+		{
+			"a count at the end",
+			`: | { read -r -n 4 l; read -r m; echo "st=$?"; }`,
+			"ReadCountAtTheEndSticksTheDescriptor — asked only where a `-n` " +
+				"read found the end before a character (#7179)",
+		},
+		{
 			"which of echo -e -E decides",
 			`echo -e -E 'm\tn'`,
 			"EchoLastEscapeFlagWins",

@@ -192,6 +192,7 @@ func (r *Runner) applyRedirList(
 	// not have it either. See closeMovedSource.
 	var savedFds map[int]any
 	var savedExecFds, savedDupFds map[int]bool
+	var savedStuckReads map[int]io.Reader
 	saveFds := func() {
 		if fdsTouched {
 			return
@@ -203,12 +204,14 @@ func (r *Runner) applyRedirList(
 		// number for itself, and when the command ends the number goes back
 		// to being `exec`'s. Likewise a copy a command made over a number
 		// is that command's, and the number is what it was again after.
-		savedExecFds, savedDupFds = r.execFds, r.dupFds
+		savedExecFds, savedDupFds, savedStuckReads = r.execFds, r.dupFds, r.stuckReads
 		r.fds = maps.Clone(r.fds)
 		r.execFds = maps.Clone(r.execFds)
 		r.dupFds = maps.Clone(r.dupFds)
+		r.stuckReads = maps.Clone(r.stuckReads)
 		closers = append(closers, closerFunc(func() error {
 			r.fds, r.execFds, r.dupFds = savedFds, savedExecFds, savedDupFds
+			r.stuckReads = savedStuckReads
 			return nil
 		}))
 	}
@@ -2694,6 +2697,8 @@ func (r *Runner) setFd(fd int, v any) {
 	// the mark of a copy, which dupFd puts on after this.
 	delete(r.cloexecFds, fd)
 	delete(r.dupFds, fd)
+	// So is a `read -n` that stuck at the number: see Runner.readIsStuck.
+	delete(r.stuckReads, fd)
 }
 
 // builtinWriteStatus folds a failed output write into a builtin's status.

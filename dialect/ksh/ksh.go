@@ -2342,6 +2342,17 @@ func Semantics() interp.Semantics {
 	// (#7036).
 	s.ReadCountOfZeroIsNoCount = interp.No
 	s.ReadExactCountKeepsPartial = interp.No
+	// A `read -n 4 -u3` of a pipe or a fifo `exec` put at 3 answers 1 with
+	// the name empty and the line still in the pipe — `cat <&3` prints it —
+	// where an inherited 3, the read's own `3<&0`, -u0, -u2, -N, a plain read
+	// and a regular file read it. And a `-n` read that found the end, that
+	// way or really, sticks the number: every later `read -u3` answers 0
+	// with nothing, until 3 is opened again. Measured 2026-10-31 on ksh93u+
+	// 2012-08-01, ten runs a row. See
+	// interp.Semantics.ReadCountOfAPipeExecOpenedFindsItsEnd and
+	// ReadCountAtTheEndSticksTheDescriptor (#7179).
+	s.ReadCountOfAPipeExecOpenedFindsItsEnd = interp.Yes
+	s.ReadCountAtTheEndSticksTheDescriptor = interp.Yes
 	s.ReadTimeoutKeepsWhatArrived = interp.No
 	s.ReadTimeoutBoundsReadability = interp.No
 	// The escape is a byte's here, not a character's: `read` without -r takes

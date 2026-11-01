@@ -3178,6 +3178,105 @@ type Semantics struct {
 	// when the input ends short: bash assigns the partial text and ksh93
 	// assigns nothing, both reporting 1. Asked only on that partial text.
 	ReadExactCountKeepsPartial Answer
+	// ReadCountOfAPipeExecOpenedFindsItsEnd decides what a `read -n N` (N at
+	// least 1) makes of a `-u` number that `exec` put there — opened, copied
+	// or moved, `{v}` included — when the stream is neither a regular file
+	// nor a terminal: a pipe, a fifo, a process substitution, /dev/zero. Yes
+	// waits until the stream has something to read or has ended, then
+	// answers as at the end of the input: status 1, the first name empty, and
+	// nothing taken from the stream. No reads it as any other count does.
+	//
+	// ksh93u+ 2012-08-01 answers yes; bash 5.3.20 and BusyBox ash 1.37.0 in
+	// the pinned alpine image answer no. Measured 2026-10-31 from -c, the
+	// first rows ten runs each with one answer, `abcdef\nxyz\n` on the
+	// stream:
+	//
+	//	read                                  stream             ksh93          bash, ash
+	//	exec 3<&0; read -n 4 -u3 l            a pipe             st=1 l=[]      st=0 l=[abcd]
+	//	exec 3<p; read -n 4 -u3 l             a fifo             st=1 l=[]      st=0 l=[abcd]
+	//	exec 3<f; read -n 4 -u3 l             a regular file     st=0 l=[abcd]  st=0 l=[abcd]
+	//	exec 4<&3 (3 inherited); -u4          the pipe           st=1 l=[]      —
+	//	exec 3<&3, exec {v}<&0, exec 4<&3-    the pipe           st=1 l=[]      —
+	//	exec 3<&0; f, and ( … ), reading -u3  the pipe           st=1 l=[]      —
+	//	3 inherited, a pipe or a fifo         —                  st=0 l=[abcd]  —
+	//	read -n 4 -u3 l 3<&0, or 3<p          its own            st=0 l=[abcd]  st=0 l=[abcd]
+	//	exec 3<&0; read -n 4 -u3 l 3<&3       its own again      st=0 l=[abcd]  —
+	//	{ read -n 4 -u3 l; } 3<&0, f 3<&0     a group's          st=0 l=[abcd]  —
+	//	read -n 4 -u0 l                       the pipe           st=0 l=[abcd]  st=0 l=[abcd]
+	//	exec 2<&0 (or 1); read -n 4 -u2 l     the pipe           st=0 l=[abcd]  —
+	//	exec 3<&0; read -N 4 -u3 l            the pipe           st=0 l=[abcd]  st=0 l=[abcd]
+	//	exec 3</dev/zero; read -n 4 -u3 l     a character device st=1           —
+	//	read -n 4 -u0 l </dev/zero            the same           st=0           —
+	//	exec 3<<<abcdef; read -n 4 -u3 l      a here-string      st=0 l=[abcd]  —
+	//	exec 3<&0 on a terminal               a terminal         reads 4        —
+	//
+	// So it is `exec`'s number, past the three standard ones, and not the
+	// number alone: inherited it reads, and a command's own redirection over
+	// an `exec`'d number reads as well — the terms ExecOpenedFdReachesACommand
+	// keeps the mark on. The same in ksh93 with `-r` or without, `-n 10` past
+	// the line's end, a 70000-byte line, and the line already in the pipe or
+	// arriving 0.2s later; and the bytes stay: `cat <&3` after it prints all
+	// eleven. With the line a second away the read waits the second and then
+	// answers 1; under `-t 0.3` it times out instead, a timeout's answer with
+	// the name untouched, and the next read takes the line. What comes after
+	// the 1 is ReadCountAtTheEndSticksTheDescriptor's.
+	//
+	// Not modeled: `-n 0`, which ksh93 answers 1 on such a stream where this
+	// shell reads nothing at 0 (see ReadCountOfZeroIsNoCount), and `-p`,
+	// after which ksh93 says the coprocess is gone.
+	//
+	// Asked only of a `-n` count of at least 1 at such a number holding such
+	// a stream. zsh's `-n` is no count, and dash has neither letter.
+	//
+	// unpinned bash: no corpus row reads a count at a `-u` number from a
+	// pipe. Pinned by TestACountedReadOfAPipeReadsWhatTheShellsRead.
+	//
+	// unpinned ksh: the same reach, the same test.
+	//
+	// unpinned ash: the same reach. Pinned by TestNoAnsweredAxisRefusesAtRunTime.
+	ReadCountOfAPipeExecOpenedFindsItsEnd Answer
+	// ReadCountAtTheEndSticksTheDescriptor decides what follows a `read -n
+	// N` (N at least 1) that finds the end of its input before its first
+	// character. Yes leaves the number it read stuck: every later `read` of
+	// that number, counted or not, answers 0 with each name it fills empty
+	// and takes nothing from the stream, until the number is opened again.
+	// No leaves it as any read at the end leaves it.
+	//
+	// ksh93u+ 2012-08-01 answers yes; bash 5.3.20 and BusyBox ash 1.37.0 in
+	// the pinned alpine image answer no. Measured 2026-10-31 from -c, ten
+	// runs with one answer where it was timed:
+	//
+	//	script                                              ksh93            bash, ash
+	//	: | { read -n 4 l; read m; }                        st=1, st=0       st=1, st=1
+	//	exec 3<empty; read -n 4 -u3 l; read -u3 m           st=1, st=0       st=1, st=1
+	//	exec 3<&0 on `abcdef\nxyz\n`; -n 4 -u3 l (1);
+	//	  read -u3 m, three times                           st=0 m=[] each   —
+	//	  then read m <&3                                   st=0 m=[abcdef]  —
+	//	  then exec 4<&3; read -u4 m                        st=0 m=[abcdef]  —
+	//	  then exec 3<&0; read -u3 m                        st=0 m=[abcdef]  —
+	//	  then (read -u3 m)                                 st=0 m=[]        —
+	//	exec 3<ab (no newline); -n 4 -u3 l; read -u3 m      st=0 [ab], st=1  —
+	//	exec 3<empty; -N 4 -u3 l; read -u3 m                st=1, st=1       —
+	//	exec 3<empty; read -u3 l; read -u3 m                st=1, st=1       —
+	//
+	// So it is a `-n` read that took nothing, at any number — 0 and 2 as
+	// well as 3 — and not `-N`, a short count, or a plain read at the end.
+	// A stuck read fills every name it is given, `read a b` both empty and
+	// `read -A x` one empty element, and a `-N` or `-d` read answers the same.
+	// A copy of the number reads the stream, and so does a subshell's read
+	// of it only because the subshell inherits the mark.
+	//
+	// Asked only where a `-n` read of at least 1 found the end of its input
+	// with nothing read. zsh's `-n` is no count, and dash has no count
+	// letter.
+	//
+	// unpinned bash: no corpus row reads after a counted read at the end.
+	// Pinned by TestACountedReadAtTheEndSticksWhereTheShellsDo.
+	//
+	// unpinned ksh: the same reach, the same test.
+	//
+	// unpinned ash: the same reach. Pinned by TestNoAnsweredAxisRefusesAtRunTime.
+	ReadCountAtTheEndSticksTheDescriptor Answer
 	// ReadTimeoutKeepsWhatArrived decides what an expired `read -t` leaves
 	// behind: bash assigns whatever had arrived before the deadline and
 	// ksh93 and zsh touch no name at all, leaving the variable's earlier

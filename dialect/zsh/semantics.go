@@ -3517,6 +3517,12 @@ func Semantics() interp.Semantics {
 	// unanswered ReadCountFillsTheFirstNameWhole: see the line above.
 	// unanswered ReadCountOfZeroIsNoCount: the same reason — no `-n` here is
 	// a count, so `read -n 0 v` never reaches a count of zero.
+	// unanswered ReadCountOfAPipeExecOpenedFindsItsEnd: the same
+	// reason. Its count is `-k`, which reads a pipe at `-u 3` as any read
+	// does — `read -k 4 -u 3 l` takes abcd and the next read ef, measured
+	// 2026-10-31 on zsh 5.9 — and never reaches the question.
+	// unanswered ReadCountAtTheEndSticksTheDescriptor: the same reason; a
+	// `-k 4 -u 3` at the end is 1 and the read after it 1 again.
 	// This shell's `-n` is a flag rather than a count and its `-k` reads
 	// from the terminal — `printf 'XYZW\n' | zsh -c 'read -k 3 a'` answers
 	// `not interactive and can't open terminal` — so no count ever reaches

@@ -11787,7 +11787,7 @@ func (r *Runner) prefixJoined(a *syntax.Assign, value string) string {
 func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	r.execSerial = r.stmtSerial
 	if r.inbox != nil {
-		r.inbox.reachedATail(r.runningSimple, r.exitTrap != nil)
+		r.inbox.reachedATail(r.runningSimple, r.exitTrap != nil, r.inheritedIgnored)
 	}
 	if r.timedElemDirect {
 		r.timedElem.forked = true

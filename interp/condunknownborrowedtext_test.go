@@ -33,6 +33,7 @@ func condUnknownGrammar(d *syntax.Dialect) {
 //	eval "[[ -fail x ]]; print inner"; print after       after runs, at 2
 //	f(){ eval "…"; print fn }; f; print after            fn and after run
 func TestAnUnknownConditionIsGivenUpByBorrowedTextAndNotByTheShell(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The rows that must not move. `ENDED` is never reached.
 		{
@@ -108,6 +109,7 @@ func stripCondComplaint(out string) string {
 // `setopt continueonerror` and then each refusal prints the line after it, at
 // 2 and at 1 respectively, and without the switch neither does.
 func TestTheContinueOnErrorSwitchRescuesAFatalErrorWithItsOwnStatus(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		rescued   bool

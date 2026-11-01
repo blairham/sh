@@ -23,6 +23,7 @@ import (
 // stored the empty string (#6579). The table's rows, the traced rows and the
 // shapes only one grammar has are in the dialect packages.
 func TestAFailedElementWriteKeepsWhatTheElementHeld(t *testing.T) {
+	t.Parallel()
 	const show = "echo \"st=$? [${a[*]}] ${#a[@]} [${b-unset}]\"\n"
 	const want = "st=1 [1 2] 2 [unset]\n"
 	for _, c := range []struct{ name, src string }{

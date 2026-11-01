@@ -11,6 +11,7 @@ import "testing"
 // dialect (#6849). Measured 2026-10-16: bash 5.3.20, bash 3.2.57 and dash
 // expand `${9223372036854775808}` to nothing.
 func TestAPositionTooWideForAnyListIsUnset(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`set -- a b; echo "[${9223372036854775808}][${9223372036854775807}]"`, "[][]\n"},
 		{`set -- a b; echo "[${99999999999999999999999}]"`, "[]\n"},

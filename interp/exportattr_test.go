@@ -29,6 +29,7 @@ func importedEnv() []string { return append(testPATH(), "IMPORTED=first") }
 // followed by a build — the shell's own lookup found the new directory and
 // every command it started was told the old PATH.
 func TestAnImportedNameKeepsItsExportAttribute(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"assigned", `IMPORTED=second; env`},
 		{"assigned in a function", `f() { IMPORTED=second; }; f; env`},
@@ -53,6 +54,7 @@ func TestAnImportedNameKeepsItsExportAttribute(t *testing.T) {
 // with is still in the list, so without this the child receives both — and the
 // stale one *first*, which is the one an exec'd program reads.
 func TestAnAssignmentSupersedesTheInheritedEntry(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `IMPORTED=second; env | grep -c '^IMPORTED='`,
 		func(r *Runner) { r.Env = importedEnv() })
 	if strings.TrimSpace(out) != "1" {
@@ -67,6 +69,7 @@ func TestAnAssignmentSupersedesTheInheritedEntry(t *testing.T) {
 // one this shell has never heard of, so assigning to it afterwards makes an
 // ordinary shell variable and no child is told about it.
 func TestUnsetTakesTheExportAttributeOff(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `unset IMPORTED; IMPORTED=second; env`,
 		func(r *Runner) { r.Env = importedEnv() })
 	if strings.Contains(out, "IMPORTED=") {
@@ -81,6 +84,7 @@ func TestUnsetTakesTheExportAttributeOff(t *testing.T) {
 // off, and never spoken about — because deleting the record puts the question
 // back to the environment, which answers that the name is exported.
 func TestTheExportAttributeCanBeTakenOffAndLeaveTheValue(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `export -n IMPORTED; echo "[$IMPORTED]"; env`, unexporting)
 	if !strings.HasPrefix(out, "[first]\n") {
 		t.Errorf("out = %q, want the shell still reading the value", out)
@@ -95,6 +99,7 @@ func TestTheExportAttributeCanBeTakenOffAndLeaveTheValue(t *testing.T) {
 // tri-state. Without it the name would be re-exported by being written to,
 // since the environment it came from still names it.
 func TestTakingTheAttributeOffSurvivesAReassignment(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `export -n IMPORTED; IMPORTED=second; echo "[$IMPORTED]"; env`, unexporting)
 	if !strings.HasPrefix(out, "[second]\n") {
 		t.Errorf("out = %q, want the shell reading the new value", out)

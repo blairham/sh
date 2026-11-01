@@ -29,6 +29,7 @@ func runDupWidth(t *testing.T, src string, refuses Answer) (out string, status i
 // the script, and a shell that complained and carried on would otherwise look
 // the same in the first assertion alone.
 func TestAWideDuplicationTargetIsRefusedWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	out, st := runDupWidth(t, "echo hi >&10\necho after\n", Yes)
 	if !strings.Contains(out, "refused: too wide") {
 		t.Errorf("got %q, want the dialect's wording", out)
@@ -57,6 +58,7 @@ func TestAWideDuplicationTargetIsRefusedWhereTheAxisSaysSo(t *testing.T) {
 // which is what keeps this separate from the axis about numbers the open-file
 // limit will not give out.
 func TestTheRefusalIsAboutTheWidthAndNotTheValue(t *testing.T) {
+	t.Parallel()
 	if out, _ := runDupWidth(t, "echo hi >&08\n", Yes); !strings.Contains(out, "refused: too wide") {
 		t.Errorf("got %q, want a two-digit 8 refused", out)
 	}
@@ -75,6 +77,7 @@ func TestTheRefusalIsAboutTheWidthAndNotTheValue(t *testing.T) {
 // what says it cannot belong to the lexer: the same source is refused or not
 // depending on what a variable holds when the redirection is applied.
 func TestTheWidthIsMeasuredAfterTheTargetExpands(t *testing.T) {
+	t.Parallel()
 	out, _ := runDupWidth(t, "n=10\necho hi >&$n\necho after\n", Yes)
 	if !strings.Contains(out, "refused: too wide") || strings.Contains(out, "after") {
 		t.Errorf("got %q, want the expanded word refused", out)
@@ -93,6 +96,7 @@ func TestTheWidthIsMeasuredAfterTheTargetExpands(t *testing.T) {
 // is not a number at all, which is a different question with a different
 // answer in the dialects that have `&>`.
 func TestClosingAndNonNumbersAreNotAskedAbout(t *testing.T) {
+	t.Parallel()
 	if out, st := runDupWidth(t, "exec 3>&-\necho after\n", Yes); !strings.Contains(out, "after") || st != 0 {
 		t.Errorf("got %q status %d, want a close to be a close", out, st)
 	}
@@ -104,6 +108,7 @@ func TestClosingAndNonNumbersAreNotAskedAbout(t *testing.T) {
 // Reading is refused the same way writing is: the rule is about the width of
 // the word, not the direction of the operator.
 func TestTheRefusalCoversBothDirections(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"echo hi >&10\necho after\n", "cat <&10\necho after\n"} {
 		out, _ := runDupWidth(t, src, Yes)
 		if !strings.Contains(out, "refused: too wide") || strings.Contains(out, "after") {
@@ -114,6 +119,7 @@ func TestTheRefusalCoversBothDirections(t *testing.T) {
 
 // With no answer the shell refuses rather than guessing, and names the axis.
 func TestWithNoAnswerTheWidthAxisIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	out, _ := runDupWidth(t, "echo hi >&10\n", Unspecified)
 	if !strings.Contains(out, "a duplication target of more than one digit") {
 		t.Errorf("got %q, want the axis named in the refusal", out)

@@ -22,6 +22,7 @@ import (
 // all five columns, so a fix applied to both spellings passes every other
 // line here and fails that one.
 func TestALineContinuationInsideBackquotesIsRemovedBeforeTheTextIsParsed(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"inside single quotes", "echo \"[`printf %s 'a\\\nb'`]\"", "[ab]"},
 		{"inside double quotes", "echo \"[`printf %s \"a\\\nb\"`]\"", "[ab]"},

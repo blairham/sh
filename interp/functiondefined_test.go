@@ -18,6 +18,7 @@ import (
 // what a mark keyed on the function has to see, and a difference between the
 // name sets around a piece of code cannot.
 func TestAtFunctionDefinitionIsToldAboutEveryDefinition(t *testing.T) {
+	t.Parallel()
 	var seen []string
 	src := "f() { :; }\ng() { :; }\nf() { echo again; }\nf\n"
 	out, st := run(t, src, func(r *Runner) {
@@ -57,6 +58,7 @@ func TestAtFunctionDefinitionRunsBeforeTheFirstCall(t *testing.T) {
 // A definition made through the builtin seam is a definition, so a dialect
 // that defines functions in Go is told about those too.
 func TestAtFunctionDefinitionCoversTheBuiltinSeam(t *testing.T) {
+	t.Parallel()
 	var seen []string
 	_, _ = run(t, "echo hi\n", func(r *Runner) {
 		r.AtFunctionDefinition(func(_ *Runner, name string) { seen = append(seen, name) })
@@ -72,6 +74,7 @@ func TestAtFunctionDefinitionCoversTheBuiltinSeam(t *testing.T) {
 // RunningFunction is the innermost body and is empty outside one, which is
 // the reading a hook at a call's own boundary needs.
 func TestRunningFunctionIsTheInnermostBody(t *testing.T) {
+	t.Parallel()
 	var at []string
 	src := "inner() { :; }\nouter() { inner; }\nouter\n"
 	_, _ = run(t, src, func(r *Runner) {

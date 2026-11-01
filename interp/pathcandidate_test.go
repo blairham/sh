@@ -25,6 +25,7 @@ import (
 // implementation that simply reported the last thing it touched would fail
 // them.
 func TestWhichFailedPathCandidateIsReported(t *testing.T) {
+	t.Parallel()
 	base := t.TempDir()
 	mk := func(name string, build func(dir string)) string {
 		dir := filepath.Join(base, name)

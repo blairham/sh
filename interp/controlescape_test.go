@@ -20,6 +20,7 @@ import (
 // NUL in IFS, and a listing that writes it raw is binary — `grep` answers
 // "Binary file (standard input) matches" instead of the line.
 func TestListingControlEscapesAreThreeVocabularies(t *testing.T) {
+	t.Parallel()
 	src := "v=$'\a\b\t\n\v\f\r\x1b\x01\x1f\x7f'\nset"
 	for _, tc := range []struct {
 		name  string
@@ -47,6 +48,7 @@ func TestListingControlEscapesAreThreeVocabularies(t *testing.T) {
 // A NUL is the byte that makes the difference visible: no style writes it as
 // itself, and the caret one is the only place it has a name.
 func TestAListedNulIsNeverWrittenRaw(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		style ControlEscapeStyle
 		want  string
@@ -73,6 +75,7 @@ func TestAListedNulIsNeverWrittenRaw(t *testing.T) {
 // shells drop the command word for the bare form alone and leave a plain
 // assignment, which no `-p` anywhere writes.
 func TestBareExportAndReadonlyHaveAShapeOfTheirOwn(t *testing.T) {
+	t.Parallel()
 	// TMPDIR arrives exported from the harness and PWD is exported by the
 	// startup, as it is in every shell in the panel; both would list too, and
 	// the case is about the shape of a row rather than about which rows there

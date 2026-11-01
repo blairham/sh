@@ -37,6 +37,7 @@ func callFreeze(answer Answer) func(*Semantics) {
 
 // The caller's name is writable after the call, and gets the value.
 func TestReadonlyFreezeStaysWithTheCall(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 	}{
@@ -76,6 +77,7 @@ func TestReadonlyFreezeStaysWithTheCall(t *testing.T) {
 // The freeze is still a freeze inside the call, and lands where it always did
 // on a name the call has already declared, or where there is no scope.
 func TestReadonlyFreezeStaysWithTheCallStillFreezes(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 	}{
@@ -111,6 +113,7 @@ func TestReadonlyFreezeStaysWithTheCallStillFreezes(t *testing.T) {
 // in, and with the axis answered no it never stays: either way the caller's
 // name is the one frozen.
 func TestReadonlyFreezeOutlivesACallWithNoScope(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src string
 		set       func(*Semantics)
@@ -129,6 +132,7 @@ func TestReadonlyFreezeOutlivesACallWithNoScope(t *testing.T) {
 // no local of its own: neither a top-level line nor the dialect that scopes
 // `readonly` reaches it, so an unanswered axis refuses neither.
 func TestAnOrdinaryReadonlyAsksNothingOfTheCallFreeze(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `readonly T=1; echo "[$T]"`, callFreeze(Unspecified), Diagnostics{})
 	if want := "[1]\n"; out != want || st != 0 || errs != "" {
 		t.Errorf("a top-level readonly = %q (stderr %q, status %d), want %q", out, errs, st, want)

@@ -36,6 +36,7 @@ func condArrayRun(t *testing.T, src string) (string, int) {
 // The quoted spelling, which no coincidence can make right: joining gives one
 // field and the shells give one per element.
 func TestConditionalExpansionsKeepTheArraysFields(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		// `-` and `+` already did, and are here as the pair the other two
 		// have to match rather than as new coverage.
@@ -68,6 +69,7 @@ func TestConditionalExpansionsKeepTheArraysFields(t *testing.T) {
 // mis-separated. Under `IFS=-` the buggy answer is one field `one-two`, which
 // no shell in the panel gives.
 func TestConditionalExpansionsKeepTheirFieldsUnderAChangedIFS(t *testing.T) {
+	t.Parallel()
 	for _, op := range []string{":=", ":?", "=", "?"} {
 		src := `IFS=-; a=(one two); set -- "${a[@]` + op + `d}"; printf "%d" "$#"; printf "[%s]" "$@"`
 		if out, st := condArrayRun(t, src); out != `2[one][two]` || st != 0 {
@@ -82,6 +84,7 @@ func TestConditionalExpansionsKeepTheirFieldsUnderAChangedIFS(t *testing.T) {
 // script that asked to be told its array was missing would silently receive
 // the array instead.
 func TestAFiredTestStillAssignsAndStillFails(t *testing.T) {
+	t.Parallel()
 	// `?` on an unset name is fatal, and the message is the operator's word.
 	out, st := condArrayRun(t, `a=(); printf "before"; printf "[%s]" "${a[@]:?e}"; printf "after"`)
 	if st == 0 || !strings.Contains(out, "e") || strings.Contains(out, "after") {
@@ -111,6 +114,7 @@ func TestAFiredTestStillAssignsAndStillFails(t *testing.T) {
 // The word side keeps the *word's* fields, which is the idiom's whole point,
 // and it is a different question from the parameter side. `=` reaches it too.
 func TestTheParameterSideAndTheWordSideAreDifferentQuestions(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`b=(p q); unset a; set -- "${a[@]:-${b[@]}}"; printf "%d" "$#"; printf "[%s]" "$@"`, `2[p][q]`},
 		{`b=(p q); a=(one); set -- "${a[@]:+${b[@]}}"; printf "%d" "$#"; printf "[%s]" "$@"`, `2[p][q]`},

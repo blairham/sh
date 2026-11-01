@@ -21,6 +21,7 @@ import (
 // `break` vanished — silently, at status 0. A script testing `$?` after a
 // misplaced `break` was told it had succeeded (#1236).
 func TestLoopControlWithNoLoopAroundIt(t *testing.T) {
+	t.Parallel()
 	const src = "echo t\nbreak\necho after\n"
 	for _, c := range []struct {
 		name    string
@@ -83,6 +84,7 @@ func TestLoopControlWithNoLoopAroundIt(t *testing.T) {
 // what the verb in the format is for — a wording that hardcoded `break` would
 // have named the wrong builtin here and no row above would have seen it.
 func TestTheMisusedBuiltinIsNamedInTheComplaint(t *testing.T) {
+	t.Parallel()
 	out, _ := loopControlRun(t, "continue\n", No, "%[1]s: only meaningful in a loop")
 	if !strings.Contains(out, "continue: only meaningful in a loop") {
 		t.Errorf("said %q, want the builtin's own name in it", out)
@@ -92,6 +94,7 @@ func TestTheMisusedBuiltinIsNamedInTheComplaint(t *testing.T) {
 // With a loop around it the question is never put, under either answer: a
 // `break` inside one is ordinary control flow in every shell in the panel.
 func TestLoopControlInsideALoopIsNeverRefused(t *testing.T) {
+	t.Parallel()
 	for _, fatal := range []Answer{Yes, No, Unspecified} {
 		out, st := loopControlRun(t, "while :; do break; done\necho ok\n", fatal, "%[1]s: not in a loop")
 		if !strings.Contains(out, "ok") || strings.Contains(out, "not in a loop") {
@@ -108,6 +111,7 @@ func TestLoopControlInsideALoopIsNeverRefused(t *testing.T) {
 // Runner carries the count with it. A lexical reading would have complained
 // here and left the subshell running.
 func TestLoopControlInsideASubshellInsideALoop(t *testing.T) {
+	t.Parallel()
 	out, st := loopControlRun(t,
 		"for i in 1 2; do ( break; echo insub ); echo body; done\necho after\n",
 		Yes, "%[1]s: not in a loop")
@@ -126,6 +130,7 @@ func TestLoopControlInsideASubshellInsideALoop(t *testing.T) {
 // Both were counting nothing, so a `break` inside either would have been
 // reported as having no loop around it — a complaint about correct script.
 func TestTheCountedLoopAndTheMenuAreLoops(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, stdin, ran string }{
 		{"a counted loop", "repeat 3; do echo x; break; done\necho after\n", "", "x"},
 		// A reply, so the body actually runs: a menu given nothing to read
@@ -157,6 +162,7 @@ func TestTheCountedLoopAndTheMenuAreLoops(t *testing.T) {
 // A shell with no answer refuses rather than guessing, and says which
 // question it could not answer.
 func TestLoopControlWithNoAnswerRecordedIsRefused(t *testing.T) {
+	t.Parallel()
 	out, _ := loopControlRun(t, "break\necho after\n", Unspecified, "")
 	if !strings.Contains(out, "break") || !strings.Contains(out, "disagree") {
 		t.Errorf("said %q, want the axis named", out)

@@ -25,6 +25,7 @@ func unquotingEscapes(r *Runner) {
 // with `x` set, and `$(echo hi)` — because a reading that reached for the
 // parser would answer those with the expansion and be wrong at status 0.
 func TestTheUnquotingFlag(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"single quotes go", `v="'a b'"; printf "[%s]" "${(Q)v}"`, "[a b]"},
 		{"double quotes too", `v='a="b c"'; printf "[%s]" "${(Q)v}"`, "[a=b c]"},
@@ -100,6 +101,7 @@ func TestTheUnquotingFlag(t *testing.T) {
 // and after the length, and before the ordering step — which is the one
 // constraint that moved the ordering step to the end of the group.
 func TestWhereTheUnquotingStepSits(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"q runs first, so the pair is a round trip", `v="'a b'"; printf "[%s]" "${(Qq)v}"`, "['a b']"},
 		{"either way round", `v="'a b'"; printf "[%s]" "${(qQ)v}"`, "['a b']"},

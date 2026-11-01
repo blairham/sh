@@ -62,6 +62,7 @@ func rereadKeyAxis(a Answer) func(*Runner) {
 const rereadKeyTable = `typeset -A m; k="q'r'z"; m[$k]=4; b='a\c'; m[$b]=11; `
 
 func TestASubscriptReReadOutOfAValueKeepsWhatItsExpansionProduced(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -122,6 +123,7 @@ func TestASubscriptReReadOutOfAValueKeepsWhatItsExpansionProduced(t *testing.T) 
 // rather than marking what its own expansion produced, would answer the
 // element under both readings and this is what says so.
 func TestQuotingSpelledInAReReadSubscriptIsStillRemoved(t *testing.T) {
+	t.Parallel()
 	const src = rereadKeyTable + `g="m[q'r'z]"; printf '[%s]' "$(( $g ))"`
 	out, st := runGrammar(t, src, rereadKeyGrammar, rereadKeyAxis(Yes))
 	if st != 0 {
@@ -146,6 +148,7 @@ func TestQuotingSpelledInAReReadSubscriptIsStillRemoved(t *testing.T) {
 // subscript, and that is an axis one preset answers the other way. Marking
 // for the key's sake must not reach it.
 func TestAReReadSubscriptForAnIndexedNameIsStillAnExpression(t *testing.T) {
+	t.Parallel()
 	const table = `a=(10 20 30); i=1; j='1]'; `
 	out, st := runGrammar(t, table+`e='a[$i]'; printf '[%s]' "$(( $e ))"`,
 		rereadKeyGrammar, rereadKeyAxis(Yes))

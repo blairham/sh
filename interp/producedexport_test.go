@@ -22,6 +22,7 @@ import (
 // and this shell put none of the three. #4196 had closed exactly this hole for
 // the bound option records; the rule is the same one and lives in one place.
 func TestAnExportedProducedParameterReachesAChild(t *testing.T) {
+	t.Parallel()
 	out, status := run(t, `export P; /usr/bin/env | grep '^P=' || echo "(none)"`,
 		func(r *Runner) {
 			r.SetDynamic("P", func(*Runner) string { return "produced" })
@@ -34,6 +35,7 @@ func TestAnExportedProducedParameterReachesAChild(t *testing.T) {
 // And one nothing exported reaches no child, which is the half that keeps this
 // from handing every command the whole parameter table.
 func TestAProducedParameterNobodyExportedReachesNoChild(t *testing.T) {
+	t.Parallel()
 	out, status := run(t, `/usr/bin/env | grep '^P=' || echo "(none)"`,
 		func(r *Runner) {
 			r.SetDynamic("P", func(*Runner) string { return "produced" })
@@ -46,6 +48,7 @@ func TestAProducedParameterNobodyExportedReachesNoChild(t *testing.T) {
 // A produced name that says it is not *there* is not handed down either — the
 // same answer an unset name gets everywhere else. See SetDynamicPresence.
 func TestAProducedParameterThatIsNotThereReachesNoChild(t *testing.T) {
+	t.Parallel()
 	out, status := run(t, `export P; /usr/bin/env | grep '^P=' || echo "(none)"`,
 		func(r *Runner) {
 			r.SetDynamic("P", func(*Runner) string { return "produced" })

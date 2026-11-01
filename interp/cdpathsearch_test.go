@@ -18,6 +18,7 @@ import (
 // looked for under each entry, and where the winning entry is not `.` the
 // shell may say where it went — three of the panel do, one moves in silence.
 func TestCdpathSearchesAndMayAnnounce(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name      string
 		announces Answer

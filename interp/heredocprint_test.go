@@ -23,6 +23,7 @@ import (
 // panel runs as `bodyEND`; `cat <<A <<B` came back with a blank line opening
 // B's body, and `cat <<A <<B` reads B.
 func TestPrintingAHereDocumentKeepsWhatItSaid(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		src  string

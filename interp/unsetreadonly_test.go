@@ -34,6 +34,7 @@ func runUnsetReadonly(t *testing.T, src string, fatal, statusIsOne Answer, d Dia
 // value surviving and the complaint are two thirds of the answer, and a shell
 // that reported 1 and deleted the name anyway would pass a status assertion.
 func TestUnsetOfAReadonlyNameIsRefused(t *testing.T) {
+	t.Parallel()
 	const src = `readonly x=1; unset x; echo "st=$? [${x-gone}]"; echo after`
 	const complaint = "sh: unset: x: cannot unset: readonly variable\n"
 
@@ -53,6 +54,7 @@ func TestUnsetOfAReadonlyNameIsRefused(t *testing.T) {
 // gave up at the first bad operand would leave `y` standing too, and the three
 // shells that carry on all remove it.
 func TestARefusedNameDoesNotStopTheRest(t *testing.T) {
+	t.Parallel()
 	const src = `readonly x=1; y=2; unset x y; echo "st=$? [${x-gone}][${y-gone}]"; echo after`
 	const complaint = "sh: unset: x: cannot unset: readonly variable\n"
 
@@ -67,6 +69,7 @@ func TestARefusedNameDoesNotStopTheRest(t *testing.T) {
 // shell in the panel complains about removing it — so the `gone` below is the
 // name never having had a value rather than the `unset` succeeding.
 func TestAReadonlyNameWithNoValueIsRefusedToo(t *testing.T) {
+	t.Parallel()
 	const src = `readonly y; unset y; echo "st=$? [${y-gone}]"; echo after`
 	const complaint = "sh: unset: y: cannot unset: readonly variable\n"
 
@@ -82,6 +85,7 @@ func TestAReadonlyNameWithNoValueIsRefusedToo(t *testing.T) {
 // stands ahead of the subscript rather than inside the element path, and the
 // subscript is never evaluated.
 func TestASubscriptedOperandIsRefusedByItsBase(t *testing.T) {
+	t.Parallel()
 	const src = `readonly a=1; unset a[0]; echo "st=$? [${a-gone}]"; echo after`
 	const complaint = "sh: unset: a: cannot unset: readonly variable\n"
 
@@ -95,6 +99,7 @@ func TestASubscriptedOperandIsRefusedByItsBase(t *testing.T) {
 // *after* rather than on the status alone: a shell that stopped and a shell
 // that carried on can report the same number.
 func TestUnsetOfAReadonlyNameEndsTheScriptWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	const src = `readonly x=1; unset x; echo "st=$?"; echo after`
 	const complaint = "sh: unset: x: cannot unset: readonly variable\n"
 
@@ -120,6 +125,7 @@ func TestUnsetOfAReadonlyNameEndsTheScriptWhereTheAxisSaysSo(t *testing.T) {
 // six panel shells stop or report at 1 and dash exits 2, and that split is
 // FatalErrorStatusIsOne's everywhere else too.
 func TestTheStoppedShellTakesTheVectorsFatalStatusForThisToo(t *testing.T) {
+	t.Parallel()
 	const src = `readonly x=1; unset x; echo after`
 	if _, st := runUnsetReadonly(t, src, Yes, Yes, Diagnostics{}); st != 1 {
 		t.Errorf("status %d, want 1", st)
@@ -134,6 +140,7 @@ func TestTheStoppedShellTakesTheVectorsFatalStatusForThisToo(t *testing.T) {
 // a builtin's name in the location must not put this one there, and a
 // substring assertion could not see the difference.
 func TestTheWordingIsTheDialects(t *testing.T) {
+	t.Parallel()
 	const src = `readonly x=1; unset x; echo after`
 	for _, c := range []struct{ name, wording, want string }{
 		{
@@ -184,6 +191,7 @@ func TestTheWordingIsTheDialects(t *testing.T) {
 // because that is what every dialect but the first was measured to do
 // (#2761).
 func TestWhetherTheLocationNamesTheBuiltinIsTheDialectsAnswer(t *testing.T) {
+	t.Parallel()
 	const src = `readonly x=1; unset x; echo after`
 	for _, tc := range []struct {
 		name      string
@@ -216,6 +224,7 @@ func TestWhetherTheLocationNamesTheBuiltinIsTheDialectsAnswer(t *testing.T) {
 // and no dialect in the tree would notice — bash is the only shell that
 // reaches SetPosixMode from a script, and bash starts with both axes No.
 func TestLeavingPosixModeRestoresBothAxesSeparately(t *testing.T) {
+	t.Parallel()
 	s := permissive()
 	s.RedirectErrorOnSpecialBuiltinFatal = No
 	s.UnsetReadonlyFatal = Yes

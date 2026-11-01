@@ -48,6 +48,7 @@ func lengthOpRun(t *testing.T, src string) (string, int) {
 // want is a different number from the 3 the bug returned, and from each other
 // where the operator allows, so no row can pass by accident.
 func TestTheLengthMeasuresWhatTheOperatorLeaves(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`v=abc; echo ${#v#a}`, "2"},
 		{`v=abc; echo ${#v##*}`, "0"},
@@ -81,6 +82,7 @@ func TestTheLengthMeasuresWhatTheOperatorLeaves(t *testing.T) {
 // the value, `${#a[@]}` counts elements, `${#@}` counts parameters — all
 // unanimous, and none of them is the pairing.
 func TestTheLengthWithoutAnOperatorIsUnchanged(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`v=abc; echo ${#v}`, "3"},
 		{`a=(xx yy); echo ${#a[@]}`, "2"},
@@ -98,6 +100,7 @@ func TestTheLengthWithoutAnOperatorIsUnchanged(t *testing.T) {
 // A subscript and an operator together: the subscript names the value and the
 // operator applies to it, then the length measures the result.
 func TestTheLengthOfASubscriptedValueUnderAnOperator(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(hello yy); echo ${#a[0]#he}`, "3"},
 		{`a=(hello yy); echo ${#a[0]:2}`, "3"},
@@ -131,6 +134,7 @@ func TestTheOperandOfALengthOperatorRunsOnce(t *testing.T) {
 // is reached. Asserted as a nonzero status with the text named, because "not 2"
 // would also pass against a silent 3.
 func TestWithoutTheFlagTheLengthTakesNoOperator(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`v=abc; echo ${#v#a}`,
 		`v=abc; echo ${#v:1}`,
@@ -157,6 +161,7 @@ func TestWithoutTheFlagTheLengthTakesNoOperator(t *testing.T) {
 // including the one whose grammar otherwise refuses an unknown operator while
 // reading — so the node is marked rather than failed at parse time.
 func TestTheRefusalIsDeferredToTheExpansion(t *testing.T) {
+	t.Parallel()
 	const src = `v=abc; if false; then echo ${#v#a}; fi; echo reached`
 	if out, st := run(t, src, nil); strings.TrimSpace(out) != "reached" || st != 0 {
 		t.Errorf("got %q status %d, want %q at 0", strings.TrimSpace(out), st, "reached")
@@ -205,6 +210,7 @@ func lengthOpListRun(t *testing.T, src string) (string, int) {
 // shell that builds this node; the corpus row is
 // `param/length-over-an-operator-counts-what-it-left`.
 func TestTheLengthOverAnOperatorCountsWhatItLeft(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(one two three); echo ${#a:#one}`, "2"},
 		{`a=(one two three); echo ${#a:#*}`, "0"},
@@ -254,6 +260,7 @@ func TestTheLengthOverAnOperatorCountsWhatItLeft(t *testing.T) {
 // Both answers are asserted, which is what makes it an axis rather than a
 // fix: the rows are the same script under the two readings.
 func TestAWholeSubscriptOnAScalarMeasuresTheValueOrCountsOne(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src           string
 		measures, one string

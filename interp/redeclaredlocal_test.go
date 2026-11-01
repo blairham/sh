@@ -34,6 +34,7 @@ func redeclareRun(t *testing.T, src string) (string, int) {
 
 // The headline: `local FOO=x; local FOO` leaves `x` standing.
 func TestASecondLocalOfTheSameNameLeavesTheValueStanding(t *testing.T) {
+	t.Parallel()
 	out, st := redeclareRun(t,
 		`export FOO=bar; f() { local FOO=x; local FOO; echo "read=[${FOO-UNSET}]"; }; f; echo "after=[$FOO]"`)
 	if want := "read=[x]\nafter=[bar]\n"; out != want {
@@ -49,6 +50,7 @@ func TestASecondLocalOfTheSameNameLeavesTheValueStanding(t *testing.T) {
 // Both directions in one test, because a fix that stopped hiding altogether
 // would pass the test above and break this.
 func TestAValuelessLocalInAnotherFunctionStillHidesTheCallersLocal(t *testing.T) {
+	t.Parallel()
 	out, st := redeclareRun(t,
 		`export FOO=bar; g() { local FOO; echo "read=[${FOO-UNSET}]"; }; `+
 			`f() { local FOO=x; g; echo "back=[${FOO-UNSET}]"; }; f`)
@@ -64,6 +66,7 @@ func TestAValuelessLocalInAnotherFunctionStillHidesTheCallersLocal(t *testing.T)
 // function, since that is the one all four shells with the builtin give a
 // scope to.
 func TestASecondTypesetOfTheSameNameLeavesTheValueStanding(t *testing.T) {
+	t.Parallel()
 	out, st := redeclareRun(t,
 		`export FOO=bar; function f { typeset FOO=x; typeset FOO; echo "read=[${FOO-UNSET}]"; }; f`)
 	if want := "read=[x]\n"; out != want {
@@ -78,6 +81,7 @@ func TestASecondTypesetOfTheSameNameLeavesTheValueStanding(t *testing.T) {
 // declaration that put anything in front of the name — and the value went away
 // anyway, because the scope had a shadow of its own from the line before.
 func TestAGlobalDeclarationOverThisFunctionsLocalLeavesTheValueStanding(t *testing.T) {
+	t.Parallel()
 	out, st := axisRun(t,
 		`export FOO=bar; f() { local FOO=x; typeset -g FOO; echo "read=[${FOO-UNSET}]"; }; f; echo "after=[$FOO]"`,
 		func(s *Semantics) {
@@ -102,6 +106,7 @@ func TestAGlobalDeclarationOverThisFunctionsLocalLeavesTheValueStanding(t *testi
 // reads unset. The point is that the two names on one line are answered
 // separately: `FOO` was declared before and keeps its value, `NEW` was not.
 func TestOnlyTheNameItsOwnScopeAlreadyDeclaredKeepsItsValue(t *testing.T) {
+	t.Parallel()
 	out, st := redeclareRun(t,
 		`export FOO=bar; export NEW=out; f() { local FOO=x; local FOO NEW; `+
 			`echo "read=[${FOO-UNSET}][${NEW-UNSET}]"; }; f`)
@@ -116,6 +121,7 @@ func TestOnlyTheNameItsOwnScopeAlreadyDeclaredKeepsItsValue(t *testing.T) {
 // The valueless declaration first and the value second, which is the ordinary
 // declare-then-assign shape and has to keep working: the assignment wins.
 func TestAValueAfterAValuelessDeclarationOfTheSameNameStands(t *testing.T) {
+	t.Parallel()
 	out, st := redeclareRun(t,
 		`export FOO=bar; f() { local FOO; local FOO=y; echo "read=[${FOO-UNSET}]"; }; f`)
 	if want := "read=[y]\n"; out != want {

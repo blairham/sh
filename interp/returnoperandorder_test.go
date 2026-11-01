@@ -24,6 +24,7 @@ import (
 // operand unread wherever both applied, and the status is 2 either way, so
 // nothing graded on status could see it (#2762).
 func TestAReturnOperandIsJudgedBeforeThePlace(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name         string
 		refusesPlace Answer

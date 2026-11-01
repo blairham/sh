@@ -52,6 +52,7 @@ func builtinPrefixSem() Semantics {
 // "taken off", and a name that was not separates "left alone" from "given the
 // attribute". Neither reading alone can tell all three apart.
 func TestThePrefixExportAtABuiltinHasThreePositions(t *testing.T) {
+	t.Parallel()
 	// `export -p` is the reading, because the shell can answer it itself: a
 	// child's environment would need a program, and this package starts none.
 	// Two runs rather than two listings in one, so each row reads a listing
@@ -86,6 +87,7 @@ func TestThePrefixExportAtABuiltinHasThreePositions(t *testing.T) {
 // And the attribute is the command's: whatever the answer moved, the name gets
 // its own back when the builtin ends.
 func TestThePrefixExportAtABuiltinIsGivenBack(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []PrefixExportAtABuiltinPolicy{
 		PrefixExportAtABuiltinOn, PrefixExportAtABuiltinUnchanged, PrefixExportAtABuiltinOff,
 	} {
@@ -107,6 +109,7 @@ export -p`, sem)
 // Unanswered is refused by name rather than guessed at, and the refusal is not
 // a silent fallback to one of the three.
 func TestAnUnansweredPrefixExportAtABuiltinIsRefused(t *testing.T) {
+	t.Parallel()
 	sem := builtinPrefixSem()
 	sem.DeclarationPromotesThePrefixEntry = No
 	_, errs := builtinPrefixRun(t, "c=1\nc=2 true", sem)
@@ -121,6 +124,7 @@ func TestAnUnansweredPrefixExportAtABuiltinIsRefused(t *testing.T) {
 // it back, and the two readings leave different values *and* different
 // attributes behind.
 func TestADeclarationKeepingItsOwnPrefixIsAnAxisWithTwoSides(t *testing.T) {
+	t.Parallel()
 	src := `b=7
 b=8 readonly b
 echo "[$b]"
@@ -151,6 +155,7 @@ echo "after [$b]"`
 // no attribute at all keeps nothing under either answer, so the axis is not a
 // second spelling of "a declaration builtin persists".
 func TestADeclarationNamingNoAttributeKeepsNothingEitherWay(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Yes, No} {
 		sem := builtinPrefixSem()
 		sem.PrefixExportAtABuiltin = PrefixExportAtABuiltinUnchanged
@@ -168,6 +173,7 @@ func TestADeclarationNamingNoAttributeKeepsNothingEitherWay(t *testing.T) {
 // standing in front of the name being declared — an ordinary `readonly` on its
 // own line asks nothing.
 func TestAnUnansweredDeclarationKeepingIsRefusedOnlyOverItsOwnPrefix(t *testing.T) {
+	t.Parallel()
 	sem := builtinPrefixSem()
 	sem.PrefixExportAtABuiltin = PrefixExportAtABuiltinUnchanged
 	if _, errs := builtinPrefixRun(t, "b=7\nreadonly b\nx=1 true", sem); errs != "" {
@@ -186,6 +192,7 @@ func TestAnUnansweredDeclarationKeepingIsRefusedOnlyOverItsOwnPrefix(t *testing.
 // columns that hide an outer value at all agree, and the other two never reach
 // the question.
 func TestAFreshDeclarationOverAPrefixKeepsTheValueInItsOwnCell(t *testing.T) {
+	t.Parallel()
 	sem := builtinPrefixSem()
 	sem.PrefixExportAtABuiltin = PrefixExportAtABuiltinUnchanged
 	sem.DeclarationPromotesThePrefixEntry = Yes
@@ -224,6 +231,7 @@ echo "gone [${c-UNSET}]"`, sem)
 // held for the entry behind it, which is what a substitution there hands a
 // child (#7003).
 func TestTheFourthPrefixExportPositionExportsAtExportAlone(t *testing.T) {
+	t.Parallel()
 	sem := builtinPrefixSem()
 	sem.PrefixExportAtABuiltin = PrefixExportAtABuiltinOffExceptAtExport
 	sem.DeclarationPromotesThePrefixEntry = No

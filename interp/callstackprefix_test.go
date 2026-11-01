@@ -34,6 +34,7 @@ func chainDiagnostics(on bool) Diagnostics {
 // neighboring SourceNaming enum has a *shell's* answer as its zero value, and
 // #2463 records what that cost.
 func TestTheChainIsOffByDefault(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "p.sh", "echo one\necho \"${NOPE?gone}\"\n")
 	out, _ := sourceRun(t, dir, ". ./p.sh\n", permissive(), chainDiagnostics(false))
@@ -49,6 +50,7 @@ func TestTheChainIsOffByDefault(t *testing.T) {
 // inside is a component carrying the line in it that entered the next, and
 // the innermost carries the location instead.
 func TestTheChainNamesEveryBorrowedText(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "p.sh", "echo one\necho \"${NOPE?gone}\"\n")
 	write(t, dir, "s.sh", "echo s1\n. ./p.sh\n")

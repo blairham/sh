@@ -98,6 +98,7 @@ func TestWhichReapedChildrenCountUnansweredIsRefusedByName(t *testing.T) {
 // a script that never trapped the condition is not refused for an axis it did
 // not ask about.
 func TestAnUntrappedConditionNeverAsksTheAxis(t *testing.T) {
+	t.Parallel()
 	src := "/bin/echo x >/dev/null\necho a\n"
 	out, status := run(t, src, func(r *Runner) {
 		s := *r.Semantics

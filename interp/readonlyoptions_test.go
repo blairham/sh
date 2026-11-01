@@ -22,6 +22,7 @@ import (
 // message about the disagreement — when the honest answer is that the letter
 // does not exist there.
 func TestReadonlyOptionLettersComeFromTheVector(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, letters, src string
 		want               func(out string) bool
@@ -80,6 +81,7 @@ func TestReadonlyOptionLettersComeFromTheVector(t *testing.T) {
 // `readonly -p` refused there would be a listing that vanished for a reason
 // nobody stated.
 func TestReadonlyOptionsUnsetIsThePosixLetter(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `readonly r=1; readonly -p`, func(r *Runner) {
 		s := permissive()
 		s.ReadonlyOptions = ""

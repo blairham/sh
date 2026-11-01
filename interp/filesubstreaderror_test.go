@@ -31,6 +31,7 @@ import (
 const readADirectory = `mkdir dir; v=$(<dir); printf "st=%s v=[%s]" "$?" "$v"`
 
 func TestAFailedReadInAFileSubstitutionIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		fails Answer
@@ -54,6 +55,7 @@ func TestAFailedReadInAFileSubstitutionIsAnAxis(t *testing.T) {
 // 3.2 proves has to be separate: here it is said over a substitution the axis
 // leaves succeeding.
 func TestTheReadFailuresSentenceIsIndependentOfTheStatus(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.ReadFailureInAFileSubstitutionFailsIt = No
 	out, _ := run(t, readADirectory, func(r *Runner) {
@@ -72,6 +74,7 @@ func TestTheReadFailuresSentenceIsIndependentOfTheStatus(t *testing.T) {
 // written and not the path the working directory made of it — which is what
 // the operand being a variable is here to show.
 func TestTheReadFailureNamesTheOperandAsItExpanded(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.ReadFailureInAFileSubstitutionFailsIt = Yes
 	out, _ := run(t, `mkdir dir; d=dir; v=$(<$d); printf "[%s]" "$v"`, func(r *Runner) {
@@ -86,6 +89,7 @@ func TestTheReadFailureNamesTheOperandAsItExpanded(t *testing.T) {
 // The axis is asked where the read fails and nowhere else, which keeps it off
 // the path every `$(<file)` takes: a Runner with no answer still reads a file.
 func TestTheReadFailureAxisIsAskedOnlyWhenTheReadFails(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.ReadFailureInAFileSubstitutionFailsIt = Unspecified
 
@@ -104,6 +108,7 @@ func TestTheReadFailureAxisIsAskedOnlyWhenTheReadFails(t *testing.T) {
 // status a name that will not open leaves is redirectFailureStatus, which is
 // already answered and is unmoved by this axis.
 func TestAnOpenThatFailedIsNotAReadThatFailed(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.ReadFailureInAFileSubstitutionFailsIt = No
 	out, st := run(t, `v=$(<nosuch); printf "st=%s" "$?"`, func(r *Runner) {

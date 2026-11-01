@@ -57,6 +57,7 @@ func expandAbandonRun(t *testing.T, src string, abandons Answer) (string, string
 // expansion" is several failures sharing the expandErr flag and a fix that
 // reached only the arithmetic one would pass a division-by-zero row alone.
 func TestAFailedExpansionGivesUpTheLineOrTheShell(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a division by zero", "echo pre\necho $((1/0))\necho after"},
 		{"an arithmetic expression the parser refused", "echo pre\necho $((1+))\necho after"},
@@ -98,6 +99,7 @@ func TestAFailedExpansionGivesUpTheLineOrTheShell(t *testing.T) {
 // *list* is given up under both answers, so this row cannot tell them apart
 // and is what every earlier probe looked like.
 func TestAFailedExpansionGivesUpTheRestOfItsListUnderEitherAnswer(t *testing.T) {
+	t.Parallel()
 	for _, abandons := range []Answer{Yes, No} {
 		out, _, st := expandAbandonRun(t, "echo pre; echo $((1/0)); echo after", abandons)
 		if strings.Contains(out, "after") {
@@ -150,6 +152,7 @@ func TestGivingUpTheLineUnwindsPastEveryEnclosingShape(t *testing.T) {
 // would mean the give-up had swallowed the failure's status along with the
 // rest of the line.
 func TestGivingUpTheLineLeavesTheFailuresStatusBehind(t *testing.T) {
+	t.Parallel()
 	if _, _, st := expandAbandonRun(t, "echo pre\necho $((1/0))", Yes); st != 2 {
 		t.Errorf("status %d, want the failure's 2", st)
 	}
@@ -165,6 +168,7 @@ func TestGivingUpTheLineLeavesTheFailuresStatusBehind(t *testing.T) {
 // a command-string argument. Both routes with both separators, because the
 // two cells that used to be compared were the diagonal of this square.
 func TestGivingUpTheLineDoesNotDependOnHowTheShellWasStarted(t *testing.T) {
+	t.Parallel()
 	for _, route := range []Route{RouteScriptFile, RouteCommandString} {
 		for _, tc := range []struct {
 			why, src string
@@ -214,6 +218,7 @@ func TestGivingUpTheLineDoesNotDependOnHowTheShellWasStarted(t *testing.T) {
 // place the two answers differ: within one line every shell abandons the rest
 // of the list, and the control above says so.
 func TestAFailedExpansionReachesTheSameFarInEveryPositionItCanStandIn(t *testing.T) {
+	t.Parallel()
 	for _, p := range []struct{ name, line string }{
 		{"a command word", `printf "[%s]" $((1/0))`},
 		{"an assignment", `x=$((1/0))`},
@@ -254,6 +259,7 @@ func TestAFailedExpansionReachesTheSameFarInEveryPositionItCanStandIn(t *testing
 // expanded to no fields and a `for` list that was abandoned read the same, and
 // so do a condition that was skipped and one that came out false.
 func TestAFailedExpansionProducesNothingDownstreamOfIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, unwanted string }{
 		{"echo one\nif [ x = $((1/0)) ]; then echo t; else echo f; fi\necho two", "f"},
 		{"echo one\nfor i in $((1/0)); do echo \"i=$i\"; done\necho two", "i="},

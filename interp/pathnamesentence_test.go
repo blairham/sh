@@ -18,6 +18,7 @@ import (
 // The field is empty in four of the five columns, whose two wordings are the
 // same string, and the rows below are what says an empty one changes nothing.
 func TestAPathnameOperandCanHaveASentenceOfItsOwn(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "onlyhere")
 	if err := testenv.WriteExecutable(exe, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {

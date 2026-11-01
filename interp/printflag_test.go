@@ -59,6 +59,7 @@ func withTestEscapes(r *interp.Runner) {
 // the construct — see docs/spec/grammar/parameter-expansion.md — with the
 // escape set narrowed to the two letters this package installs.
 func TestThePrintFlagReadsTheArgumentsBehindIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a join separator", `a=(x y); printf "[%s]" "${(pj:\n:)a}"`, "[x\ny]"},
 		{"and without the flag it is two characters", `a=(x y); printf "[%s]" "${(j:\n:)a}"`, `[x\ny]`},
@@ -87,6 +88,7 @@ func TestThePrintFlagReadsTheArgumentsBehindIt(t *testing.T) {
 // `\$s` row pins: it decodes to `$s`, so a reading that escaped first and
 // looked for a name second would substitute there and the shell does not.
 func TestThePrintFlagSubstitutesASoleParameter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a name on its own", `s=-; a=(x y); printf "[%s]" "${(pj:$s:)a}"`, "[x-y]"},
 		{"and its value is not then read for escapes", `s='\n'; a=(x y); printf "[%s]" "${(pj:$s:)a}"`, `[x\ny]`},
@@ -114,6 +116,7 @@ func TestThePrintFlagSubstitutesASoleParameter(t *testing.T) {
 // A positional is substituted whether or not it is there, where a name has to
 // be set. Measured with `set -- P Q`.
 func TestThePrintFlagSubstitutesAPositionalEvenWhenAbsent(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"one that is there", `set -- P Q; a=(x y); printf "[%s]" "${(pj:$2:)a}"`, "[xQy]"},
 		{"one that is not", `set -- P Q; a=(x y); printf "[%s]" "${(pj:$9:)a}"`, "[xy]"},
@@ -135,6 +138,7 @@ func TestThePrintFlagSubstitutesAPositionalEvenWhenAbsent(t *testing.T) {
 // expansion that was asked for the other thing — so the letter is carried
 // only where the escapes it modifies are.
 func TestThePrintFlagIsRefusedWithoutAnEscapeSet(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `a=(x y); printf "[%s]" "${(pj:\n:)a}"`, escapingFlags, nil)
 	want := "sh: ${(pj:\\n:)a}: the (p) expansion flag is not implemented\n"
 	if out != want {
@@ -149,6 +153,7 @@ func TestThePrintFlagIsRefusedWithoutAnEscapeSet(t *testing.T) {
 // what the `p` in front of them is for. The letter has to stand *before* the
 // padding letter, exactly as it does for a join separator.
 func TestThePrintFlagReachesThePaddingFills(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"left padding", `v=ab; printf "[%s]" "${(pl:5::-:)v}"`, "[---ab]"},
 		{"right padding", `v=ab; printf "[%s]" "${(pr:5::-:)v}"`, "[ab---]"},

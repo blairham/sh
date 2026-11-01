@@ -15,6 +15,7 @@ import (
 // A command that redirects one stream twice either fills both files or only
 // the last, and the axis is asked only where there *is* a second one.
 func TestRedirectsUseEveryTargetIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -57,6 +58,7 @@ func TestRedirectsUseEveryTargetIsAnAxis(t *testing.T) {
 // this asserts the *same field* decides both — a second field would be a
 // second place to forget when the option moves.
 func TestRedirectsUseEveryTargetReachesTheReadingSide(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -110,6 +112,7 @@ func readFile(t *testing.T, dir, name string) string {
 // TestReadWriteRedirection — `<>` opens both ways, creates, and never
 // truncates; with no descriptor number it is standard input.
 func TestReadWriteRedirection(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "f", "keep\n")
 	got, st, err := redirRunAt(t, dir, `exec 3<> f; exec 3>&-; cat f; exec 4<> made; echo "st=$?"`)

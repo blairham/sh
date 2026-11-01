@@ -27,6 +27,7 @@ import (
 // letter it spells in neither is refused by name. Nothing about the answer may
 // move with the table.
 func TestTheMathLetterIsExclusiveWhicheverTableTheOtherLetterIsIn(t *testing.T) {
+	t.Parallel()
 	run := func(t *testing.T, accepted, unimplemented string) (string, int) {
 		t.Helper()
 		var buf bytes.Buffer

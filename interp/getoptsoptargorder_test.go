@@ -18,6 +18,7 @@ import (
 // same vector keeps the rows free of every other OPTARG axis — empty or
 // unset, cleared at the end or not — which this one does not decide.
 func TestGetoptsOptargOrderPicksTheLastStore(t *testing.T) {
+	t.Parallel()
 	const show = `; echo "[${OPTARG-unset}]"`
 	rows := []struct {
 		name, spec, args string
@@ -65,6 +66,7 @@ func TestGetoptsOptargOrderPicksTheLastStore(t *testing.T) {
 // operand reaches no question — and the same line spelled OPTARG does, which
 // is the control that says the first half could have failed.
 func TestGetoptsOptargOrderIsAskedOnlyOverAnOperandSpelledOPTARG(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	out, _ := run(t, `getopts x: o -x6; echo "$o $OPTARG"`, withSem(sem))
 	if out != "x 6\n" {
@@ -81,6 +83,7 @@ func TestGetoptsOptargOrderIsAskedOnlyOverAnOperandSpelledOPTARG(t *testing.T) {
 // OPTARG is still refused, as an operand spelled `o` is, while the builtin's
 // own store beside an `o` goes through (#6498).
 func TestAFrozenOperandSpelledOPTARGIsRefusedAsTheOperand(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.GetoptsOwnParametersIgnoreAFreeze = Yes
 	sem.GetoptsOptargOrder = GetoptsOptargBeforeTheName
@@ -99,6 +102,7 @@ func TestAFrozenOperandSpelledOPTARGIsRefusedAsTheOperand(t *testing.T) {
 // store and leaves OPTARG as the call found it; under either other answer the
 // store was made first, or is still reached, and stands.
 func TestARefusedNameLeavesOptargUnwrittenWhereOptargComesLast(t *testing.T) {
+	t.Parallel()
 	for _, policy := range []GetoptsOptargOrderPolicy{
 		GetoptsOptargBeforeTheName, GetoptsOptargAfterTheNameOnAnError, GetoptsOptargAfterTheName,
 	} {

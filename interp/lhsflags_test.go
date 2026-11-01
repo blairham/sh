@@ -65,6 +65,7 @@ func lhsRunScalar(t *testing.T, character interp.Answer, src string) (string, in
 }
 
 func TestASubscriptFlagGroupOnTheLeftOfAnAssignment(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a search replaces the element it found",
@@ -154,6 +155,7 @@ func TestASubscriptFlagGroupOnTheLeftOfAnAssignment(t *testing.T) {
 // invalid subscript range`, because the operator's path evaluated the
 // subscript arithmetically as the assignment's did.
 func TestAFlagGroupReachesTheAssigningOperator(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a search that finds an empty element writes there",
@@ -205,6 +207,7 @@ func TestAFlagGroupReachesTheAssigningOperator(t *testing.T) {
 // and it says so in a sentence of its own — see
 // TestASearchWritingATableIsRefusedAsASlice below (#2288).
 func TestAnUnwritableFlagGroupIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, mentions string }{
 		{"a reverse search that matched nothing", `b=(x y z); b[(R)nomatch]=Q; printf "%d" "${#b[@]}"`, "nothing matched"},
 		{"a reverse index search that matched nothing", `b=(x y z); b[(I)nomatch]=W; printf "%d" "${#b[@]}"`, "nothing matched"},
@@ -274,6 +277,7 @@ func lhsRunFatal(t *testing.T, src string) (string, int) {
 }
 
 func TestAFlagGroupSelectingNothingIsAnOrdinaryKey(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset -A m; m[aa]=1; m[(e)aa]=Z; printf "[%s]%d" "${m[aa]}" "${#m[@]}"`, "[Z]1"},
 		{`typeset -A m; m[aa]=1; m[(e)zz]=Z; printf "[%s]%d" "${m[zz]}" "${#m[@]}"`, "[Z]2"},
@@ -300,6 +304,7 @@ func TestAFlagGroupSelectingNothingIsAnOrdinaryKey(t *testing.T) {
 // honest and the store it would have reached was not, so `s[(r)b]=Z` on `abc`
 // would have left ` Z` — a plausible wrong string at status 0 (#1532).
 func TestASearchOnTheLeftOverAStringNamesTheSameThingTheReadDoes(t *testing.T) {
+	t.Parallel()
 	// The element column writes an element at the index the search found and
 	// keeps the string as the *first* element, which is what an element
 	// write over a name holding a string does however the subscript was
@@ -344,6 +349,7 @@ func TestASearchOnTheLeftOverAStringNamesTheSameThingTheReadDoes(t *testing.T) {
 // The character store says so in its own words rather than by name, because
 // the subscript it was handed is the one `s[0]=Q` is refused for.
 func TestABackwardSearchThatMatchedNothingOverAStringIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`s=hello; s[(R)zz]=Q; printf "[%s]" "$s"`,
 		`s=hello; s[(I)zz]=Q; printf "[%s]" "$s"`,
@@ -360,6 +366,7 @@ func TestABackwardSearchThatMatchedNothingOverAStringIsRefused(t *testing.T) {
 // the operand behind a group is lexed as a word of its own, and a group the
 // source did not write has no operand to lex.
 func TestOnlyAGroupTheSourceWroteIsAGroup(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, mentions string }{
 		{"quoted", `b=(x y z); b["(r)y"]=Q; printf "[%s]" "${b[@]}"`, "(r)y"},
 		{"substituted", `g='(r)y'; b=(x y z); b[$g]=Q; printf "[%s]" "${b[@]}"`, "(r)y"},
@@ -400,6 +407,7 @@ func lhsRunSplicing(t *testing.T, src string) (string, int) {
 // to fall through to the arithmetic road, which globbed the group and then
 // read it as an expression (#6905). Measured 2026-10-27 on zsh 5.9.2.
 func TestAFlagGroupOnTheLeftOfAnElementLiteral(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a search splices the words over the element it found",

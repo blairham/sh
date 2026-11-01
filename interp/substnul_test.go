@@ -24,6 +24,7 @@ func substNul(t *testing.T, p NulInAValuePolicy, src string) (string, int) {
 // spelling that captures output — the axis is asked where the byte arrives and
 // not on the common path every `$( … )` takes.
 func TestASubstitutionWithNoNulAsksNothing(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`v=$(printf 'a\nb\n\n'); echo "[$v]"`,
 		"v=`echo a`; echo \"[$v]\"",
@@ -39,6 +40,7 @@ func TestASubstitutionWithNoNulAsksNothing(t *testing.T) {
 // **A NUL in a substitution is where the axis is asked**, and an unanswered
 // vector refuses by name at status 2, with an empty value.
 func TestANulInASubstitutionIsWhereTheAxisIsAsked(t *testing.T) {
+	t.Parallel()
 	out, _ := substNul(t, NulInAValueUnspecified, `v=old; v=$(printf 'a\0b'); echo "st=$? v=[$v]"`)
 	if !strings.Contains(out, "a NUL byte in what a command substitution takes in") ||
 		!strings.Contains(out, "the shells disagree here and no dialect was chosen") ||
@@ -75,6 +77,7 @@ printf 'f\0g\n' > in; v=$(<in); printf '<%s>' "$v"; echo`
 // backslash alone.** A field still carries its escaped form when it is cut,
 // and a backslash the value held in front of the NUL is content.
 func TestTheCutKeepsABackslashTheValueHeld(t *testing.T) {
+	t.Parallel()
 	out, st := substNul(t, NulCutInASubstitution, `printf '<%s>' "$(printf 'a\\\0b')"z $(printf 'c\\\0d'); echo`)
 	if want := "<a\\><c\\>\n"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q", out, st, want)
@@ -85,6 +88,7 @@ func TestTheCutKeepsABackslashTheValueHeld(t *testing.T) {
 // any other: measured on ksh93u+, `echo hi > "$(printf 'f\0g')h"` writes the
 // file `f`.
 func TestTheCutReachesARedirectionTarget(t *testing.T) {
+	t.Parallel()
 	out, st := substNul(
 		t,
 		NulCutInASubstitution,
@@ -99,6 +103,7 @@ func TestTheCutReachesARedirectionTarget(t *testing.T) {
 // words for it**, and in silence where it has none. The wording is the
 // dialect's; the count and the place are the substitution's.
 func TestADroppedNulIsSaidOncePerSubstitution(t *testing.T) {
+	t.Parallel()
 	const src = `v=$(printf 'a\0b\0c'); w="$(printf '\0')$(printf 'x')$(printf '\0')"; echo "[$v$w]"`
 	out, _ := runGrammar(t, src, nil, func(r *Runner) {
 		s := *r.Semantics

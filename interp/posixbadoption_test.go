@@ -20,6 +20,7 @@ import (
 // from knowing its successors: the measurement lives on the field, the dialect
 // packages hold the answers, and this asserts only that the knob reads them.
 func TestPosixModeTakesTheBadOptionAxisFromTheVector(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name              string
 		own, inMode, want Answer
@@ -59,6 +60,7 @@ func TestPosixModeTakesTheBadOptionAxisFromTheVector(t *testing.T) {
 // one: a vector may decline the bad-option move and still take the redirection
 // move, and one shell in the panel does exactly that.
 func TestPosixModeStillMovesTheOtherAxesWhenThisOneDeclines(t *testing.T) {
+	t.Parallel()
 	s := permissive()
 	s.RedirectErrorOnSpecialBuiltinFatal = No
 	s.BadOptionToSpecialBuiltinFatal = No
@@ -82,6 +84,7 @@ func TestPosixModeStillMovesTheOtherAxesWhenThisOneDeclines(t *testing.T) {
 // is why FatalErrorStatusIsOne is answered Yes here and the fatal run still
 // ends at 2. See setFatalStatus.
 func TestAUsageErrorIsFatalInPosixModeOnlyWhereTheVectorSaysSo(t *testing.T) {
+	t.Parallel()
 	const src = `export -q; echo after`
 
 	for _, tc := range []struct {

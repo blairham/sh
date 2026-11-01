@@ -36,6 +36,7 @@ func closedDupRun(t *testing.T, src string, diag Diagnostics) (out, errOut strin
 }
 
 func TestADuplicationFromAClosedStreamFailsTheRedirection(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src string }{
 		// Each of the three named streams, as both a source and a target,
 		// because the resolution that was wrong is shared by all of them and
@@ -58,6 +59,7 @@ func TestADuplicationFromAClosedStreamFailsTheRedirection(t *testing.T) {
 // something writable answers 0 here while answering the test above correctly,
 // which is exactly the state #1345 found.
 func TestADuplicationFromAClosedStreamFailsWithNothingToWrite(t *testing.T) {
+	t.Parallel()
 	out, errOut, _ := closedDupRun(t, `exec 2>&-; true >&2; echo st=$?`, Diagnostics{})
 	if out != "st=1\n" {
 		t.Errorf("stdout = %q, want st=1 — the command never ran, so it had no write to fail", out)
@@ -71,6 +73,7 @@ func TestADuplicationFromAClosedStreamFailsWithNothingToWrite(t *testing.T) {
 // than about `>&2` at all: the duplication is read first, so the stream it
 // copied outlives the close that follows it.
 func TestADuplicationReadBeforeTheCloseSurvivesIt(t *testing.T) {
+	t.Parallel()
 	out, errOut, st := closedDupRun(t, `echo z >&2 2>&-; echo st=$?`, Diagnostics{})
 	if errOut != "z\n" {
 		t.Errorf("stderr = %q, want the line to have reached the copy taken before the close", errOut)
@@ -84,6 +87,7 @@ func TestADuplicationReadBeforeTheCloseSurvivesIt(t *testing.T) {
 // dialect's number rather than a fixed 1. It said 1 whatever was answered,
 // which made a duplication and an open disagree about the same event.
 func TestADuplicationFailureCarriesTheRedirectFailureStatus(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		diag Diagnostics
@@ -106,6 +110,7 @@ func TestADuplicationFailureCarriesTheRedirectFailureStatus(t *testing.T) {
 // A closed source is named the way an unopened one is, so the two spellings of
 // "not a descriptor" produce one sentence rather than two.
 func TestAClosedDuplicationSourceIsNamedByItsNumber(t *testing.T) {
+	t.Parallel()
 	diag := Diagnostics{}
 	_, errOut, _ := closedDupRun(t, `exec 1>&-; exec 3>&1`, diag)
 	if !strings.Contains(errOut, "1: Bad file descriptor") {

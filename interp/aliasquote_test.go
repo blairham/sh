@@ -13,6 +13,7 @@ import (
 // Four engines and no two alike. Every want here is what the shell that owns
 // the style actually printed, quoted back exactly.
 func TestTheFourAliasQuotingEngines(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		style       ListingQuotingStyle
 		value, want string
@@ -82,6 +83,7 @@ func TestTheFourAliasQuotingEngines(t *testing.T) {
 
 // With no dialect chosen the substrate refuses rather than picking a spelling.
 func TestNoListingQuotingStyleMeansNoAnswer(t *testing.T) {
+	t.Parallel()
 	out, _ := aliasRun(t, func(s *Semantics) { s.AliasQuoting = ListingQuotingUnspecified },
 		Diagnostics{}, `alias a=1; alias a`)
 	if !strings.Contains(out, "no dialect was chosen") {

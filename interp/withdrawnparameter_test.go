@@ -17,6 +17,7 @@ import (
 // answers, because a seam that recorded the state and left the tables alone
 // would pass an accessor test and is exactly the bug this exists to fix.
 func TestAWithdrawnParameterReadsAsAnUnsetName(t *testing.T) {
+	t.Parallel()
 	install := func(r *Runner) {
 		r.SetDynamicAssoc("zzview", func(*Runner) AssocArray {
 			return AssocArray{"k": Scalar("v")}
@@ -64,6 +65,7 @@ func TestAWithdrawnParameterReadsAsAnUnsetName(t *testing.T) {
 // assignment — which is a refusal for a name this shell is claiming not to
 // have. The mark comes back with the producer.
 func TestAWithdrawnParameterCanBeAssignedAndGetsItsMarkBack(t *testing.T) {
+	t.Parallel()
 	install := func(r *Runner) {
 		r.SetDynamicAssoc("zzview", func(*Runner) AssocArray { return AssocArray{"k": Scalar("v")} })
 		r.MarkReadonly("zzview")
@@ -91,6 +93,7 @@ func TestAWithdrawnParameterCanBeAssignedAndGetsItsMarkBack(t *testing.T) {
 // shell this models never had anything to complain about — it was asked to
 // put the parameter down.
 func TestAWithdrawnParameterIsNotAnAbsentOne(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `echo "n=${#zzview[@]}"`, func(r *Runner) {
 		r.SetDynamicAssoc("zzview", func(*Runner) AssocArray { return AssocArray{"k": Scalar("v")} })
 		r.SetAbsentParameter("zzother", "parameter not implemented yet")
@@ -111,6 +114,7 @@ func TestAWithdrawnParameterIsNotAnAbsentOne(t *testing.T) {
 // which is what makes the seam about the *name* rather than about a producer.
 // The sentence comes back when the name does.
 func TestWithdrawingAnAbsentParameterSilencesItAndPuttingItBackSpeaksAgain(t *testing.T) {
+	t.Parallel()
 	absent := func(r *Runner) { r.SetAbsentParameter("zzother", "parameter not implemented yet") }
 	out, st := run(t, `echo "n=${#zzother[@]}"`, func(r *Runner) {
 		absent(r)
@@ -132,6 +136,7 @@ func TestWithdrawingAnAbsentParameterSilencesItAndPuttingItBackSpeaksAgain(t *te
 // The state is per-Runner and goes into a subshell with the tables it took
 // names out of, so a withdrawal made inside one does not reach back out.
 func TestAParameterWithdrawalDoesNotEscapeASubshell(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `( echo "in=${#zzview[@]}" ); echo "out=${#zzview[@]}"`, func(r *Runner) {
 		r.SetDynamicAssoc("zzview", func(*Runner) AssocArray { return AssocArray{"k": Scalar("v")} })
 	})

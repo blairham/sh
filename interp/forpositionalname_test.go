@@ -46,6 +46,7 @@ func runForPositionalName(t *testing.T, src string) (string, int) {
 }
 
 func TestALoopVariableThatIsANumberWritesThePositionalParameter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 	}{

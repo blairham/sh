@@ -14,6 +14,7 @@ import (
 // value is parenthesized, and the three conditions that decide it. See
 // interp/subscriptedcompound.go for the panel each row was measured from.
 func TestASubscriptedOperandHoldingACompoundIsSpokenAbout(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src string
 		want      string
@@ -62,6 +63,7 @@ func TestASubscriptedOperandHoldingACompoundIsSpokenAbout(t *testing.T) {
 // Nothing is said where the dialect has no wording, which is every column
 // but the one that re-reads a parenthesized value at all.
 func TestADialectWithNoWordingSaysNothingAboutASubscriptedCompound(t *testing.T) {
+	t.Parallel()
 	out, _ := runDeclareElement(t, `typeset a[1]="(var)"`, nil)
 	if strings.Contains(out, "deprecated") {
 		t.Errorf("a dialect with no wording said something:\n%s", out)
@@ -73,6 +75,7 @@ func TestADialectWithNoWordingSaysNothingAboutASubscriptedCompound(t *testing.T)
 // subscript nor the append spelling decides anything. See
 // Runner.letterDropsTheSubscript for the panel.
 func TestAnArrayLetterDropsASubscriptedCompound(t *testing.T) {
+	t.Parallel()
 	// Read back through the elements rather than through a listing, which is
 	// a question of its own with axes of its own.
 	const read = `; echo "[${a[0]-}] [${a[1]-}] [${a[2]-}] n=${#a[@]}"`
@@ -110,6 +113,7 @@ func TestAnArrayLetterDropsASubscriptedCompound(t *testing.T) {
 // value at all: there is nothing for the letter to drop the subscript *for*,
 // so the characters go where the subscript says.
 func TestADialectThatDoesNotRereadKeepsTheSubscript(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `typeset -a a[1]="(v)"; echo "[${a[0]-}] [${a[1]-}]"`, func(r *Runner) {
 		s := declareElementSemantics()
 		s.DeclarationRereadsAParenthesizedValue = No

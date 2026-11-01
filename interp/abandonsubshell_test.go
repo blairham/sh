@@ -57,6 +57,7 @@ func abandonSubshellRun(t *testing.T, src string) (string, string, int) {
 }
 
 func TestAGivenUpLineLeavesBorrowedTextOnlyInsideASubshell(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The row that moved. Nothing of the `eval` past the failing line
 		// runs, and nothing of the subshell after the `eval` runs either.

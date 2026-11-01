@@ -14,6 +14,7 @@ import "testing"
 // written with a slash on the end — where appending a second one would give
 // `//name`.
 func TestGlobJoinDoesNotClean(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ dir, name, want string }{
 		{"/base", ".", "/base/."},
 		{"/base", "..", "/base/.."},

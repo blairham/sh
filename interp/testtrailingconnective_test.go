@@ -42,6 +42,7 @@ func connectiveTakesAMissingOperand(on Answer) func(*Runner) {
 }
 
 func TestATrailingConnectiveTakesAMissingOperandWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src     string
 		takes   int
@@ -83,6 +84,7 @@ func TestATrailingConnectiveTakesAMissingOperandWhereTheDialectSaysSo(t *testing
 // every column, so a rule that read the last word as a connective before
 // counting would make `[ a -a -a ]` false where the whole panel answers true.
 func TestTheCountRulesStillWinOverATrailingConnective(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		want int
@@ -108,6 +110,7 @@ func TestTheCountRulesStillWinOverATrailingConnective(t *testing.T) {
 // parenthesis nothing closed is still a parenthesis nothing closed, so the
 // axis never gets that far and the refusal stands under either reading.
 func TestAGroupingTokenIsNotTheConnectivesLeftSide(t *testing.T) {
+	t.Parallel()
 	for _, on := range []Answer{Yes, No} {
 		if _, st := run(t, `test \( -a`, connectiveTakesAMissingOperand(on)); st != 2 {
 			t.Errorf("%v: `test ( -a` = %d, want 2", on, st)

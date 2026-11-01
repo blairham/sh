@@ -71,6 +71,7 @@ func badName(builtin string) string {
 // routes visible: it is a quoting construct to the operand scan and an
 // ordinary byte of a key.
 func TestUnsetTakesAKeyHoldingAQuoteThroughLexedBrackets(t *testing.T) {
+	t.Parallel()
 	const table = `typeset -A m; b="x'y"; m[$b]=v; `
 	for _, tc := range []struct{ name, src, want string }{
 		// The three spellings that write the brackets themselves. What is
@@ -101,6 +102,7 @@ func TestUnsetTakesAKeyHoldingAQuoteThroughLexedBrackets(t *testing.T) {
 // would pass three of those six rows for a reason that has nothing to do
 // with which brackets the parser read.
 func TestUnsetTakesAnOrdinaryKeyDownEitherRoute(t *testing.T) {
+	t.Parallel()
 	const table = "typeset -A m; b=plain; m[$b]=v; "
 	for _, tc := range []struct{ name, src string }{
 		{"lexed brackets", table + `unset m[$b]`},
@@ -122,6 +124,7 @@ func TestUnsetTakesAnOrdinaryKeyDownEitherRoute(t *testing.T) {
 // The table holds both answers, so a row says which key the operand reached
 // rather than only whether something was removed.
 func TestUnsetDoesNotRoundASubscriptTheParserRead(t *testing.T) {
+	t.Parallel()
 	const table = `typeset -A m; y=ZZZ; b='x$y'; m['x$y']=lit; m[xZZZ]=exp; `
 	const show = `; printf '[%s][%s]' "${m['x$y']-GONE}" "${m[xZZZ]-GONE}"`
 	for _, tc := range []struct{ name, src, want string }{
@@ -147,6 +150,7 @@ func TestUnsetDoesNotRoundASubscriptTheParserRead(t *testing.T) {
 // plain key goes through all of them, so a row saying the quoted key was not
 // reached is not saying the builtin was broken.
 func TestANeighboursOperandReadsBothRoutesAlike(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			name: "read",

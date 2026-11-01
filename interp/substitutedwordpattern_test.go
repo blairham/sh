@@ -31,6 +31,7 @@ import (
 // not. A word that were matched again would give the other answer to every
 // one of them.
 func TestASubstitutedWordInAPatternIsNeverMatchedAgainstTheFilesystem(t *testing.T) {
+	t.Parallel()
 	dir := globDir(t)
 	for _, tc := range []struct{ name, src, want string }{
 		// The word matches a file, and the file is not the subject: the
@@ -75,6 +76,7 @@ func TestASubstitutedWordInAPatternIsNeverMatchedAgainstTheFilesystem(t *testing
 // The condition is the fourth route through the same entry point, and it is
 // the one the real startup took.
 func TestASubstitutedWordInAConditionIsAPattern(t *testing.T) {
+	t.Parallel()
 	dir := globDir(t)
 	brackets := func(d *syntax.Dialect) { d.DoubleBracket = true }
 	for _, tc := range []struct{ name, src, want string }{
@@ -99,6 +101,7 @@ func TestASubstitutedWordInAConditionIsAPattern(t *testing.T) {
 // joined into an alternation, with the leading bar supplied by the `+` word so
 // that an empty list leaves no bar behind.
 func TestASubstitutedWordInAPatternIsNotFatalWhereAMissWouldBe(t *testing.T) {
+	t.Parallel()
 	dir := globDir(t)
 	fatal := permissive()
 	fatal.GlobNoMatchIsError = Yes

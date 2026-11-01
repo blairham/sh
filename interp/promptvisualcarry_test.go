@@ -19,6 +19,7 @@ import "testing"
 // and a walk that started empty wrote one escape too few between every
 // segment (#2113).
 func TestTheVisualStateOutlivesOneRendering(t *testing.T) {
+	t.Parallel()
 	st := visualStyle()
 	refuse := func(PromptField, string, bool) (string, bool) { return "", false }
 	render := func(t *testing.T, visual *promptVisualState, text string) string {

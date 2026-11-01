@@ -21,6 +21,7 @@ import (
 // with a **double** space in it, because a value left whole and a value split
 // and rejoined are the same nine characters otherwise.
 func TestAScalarContextJoinsAFlagGroupsWords(t *testing.T) {
+	t.Parallel()
 	const f = `f() { printf "b  b\na a\nc\n"; }; `
 	const g = `g() { printf "b\na\nb\n"; }; `
 	const h = `h() { printf "3\n1\n2\n"; }; `
@@ -95,6 +96,7 @@ func TestAScalarContextJoinsAFlagGroupsWords(t *testing.T) {
 // turned off would answer one field in the third, and a split nothing turns
 // off would answer three in the first.
 func TestASplitFlagDoesNotSplitInAScalarContext(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a separator split", `v=c,a,b; x=${(s:,:)v}; printf "[%s]" "$x"`, "[c,a,b]"},
 		{"where a list context splits", `v=c,a,b; printf "[%s]" ${(s:,:)v}`, "[c][a][b]"},
@@ -118,6 +120,7 @@ func TestASplitFlagDoesNotSplitInAScalarContext(t *testing.T) {
 // IFS and not with the separator the group named, which is the last row and
 // is what says the two joins are different joins.
 func TestTheShellSplitIsJoinedBackInAScalarContext(t *testing.T) {
+	t.Parallel()
 	const u = `u='b a'; `
 	for _, tc := range []struct{ name, src, want string }{
 		{"the ordering finds one word", u + `x=${(oZ+n+)u}; printf "[%s]" "$x"`, "[b a]"},
@@ -139,6 +142,7 @@ func TestTheShellSplitIsJoinedBackInAScalarContext(t *testing.T) {
 // one of these contexts: what it comes to is read by the operator around it
 // rather than by a command line, so its fields are values and not words.
 func TestANestedInnerIsNotAScalarContext(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a hole survives to the join", `a=(one "" two); printf "[%s]" "${(j:,:)${(@)${a[@]}}}"`, "[one,,two]"},
 		{"and to a count", `a=(one "" two); printf "[%s]" "${#${(@)${a[@]}}}"`, "[3]"},

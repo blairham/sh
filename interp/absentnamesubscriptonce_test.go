@@ -18,6 +18,7 @@ import (
 // 5.3.20, bash 3.2.57, ksh93u+ and zsh 5.9.2, as it is here once the name holds
 // anything (#7189).
 func TestASubscriptOnANameHoldingNothingIsEvaluatedOnce(t *testing.T) {
+	t.Parallel()
 	policies := []struct {
 		name string
 		p    SubscriptBeforeStartPolicy

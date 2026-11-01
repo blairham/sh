@@ -34,6 +34,7 @@ func runBig5Units(t *testing.T, answer Answer, src string) (string, int) {
 // MultibyteEncodingIsHonored already records — so this is a second encoding
 // under the existing axis rather than an axis of its own.
 func TestALengthCountsTheLocalesCharacters(t *testing.T) {
+	t.Parallel()
 	// Single-quoted throughout, because the trail byte of this character is
 	// a backslash and an unquoted one would quote the letter behind it.
 	const src = `v='` + big5Alpha + `Z'; printf '[%s][%s]' "${#v}" "${v:0:1}"`
@@ -65,6 +66,7 @@ func TestALengthCountsTheLocalesCharacters(t *testing.T) {
 // stepped one byte past it and left the backslash half of the letter on the
 // front of the next field.
 func TestASeparatorIsAWholeCharacterOfTheLocale(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		src  string

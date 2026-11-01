@@ -93,6 +93,7 @@ func promptDiagnostics() Diagnostics {
 // TestAGivenUpRenderingIsWorthWhatItDrew is the answer one dialect gives: the
 // text in front of the substitution that failed, and nothing after it.
 func TestAGivenUpRenderingIsWorthWhatItDrew(t *testing.T) {
+	t.Parallel()
 	drawn, diag, alive := renderPrompt(t, `PRE-$((1/0))-POST`, true, promptSemantics(No), promptDiagnostics())
 	if drawn != "PRE-" {
 		t.Errorf("drawn = %q, want %q: what the pass produced before it gave up", drawn, "PRE-")
@@ -109,6 +110,7 @@ func TestAGivenUpRenderingIsWorthWhatItDrew(t *testing.T) {
 // the reason this is a field rather than a rule: the same value, the same
 // failure, and a different thing handed back.
 func TestAGivenUpRenderingKeepsTheTextItWasHanded(t *testing.T) {
+	t.Parallel()
 	drawn, _, alive := renderPrompt(t, `PRE-$((1/0))-POST`, false, promptSemantics(No), promptDiagnostics())
 	if drawn != `PRE-$((1/0))-POST` {
 		t.Errorf("drawn = %q, want the text as it stood", drawn)
@@ -122,6 +124,7 @@ func TestAGivenUpRenderingKeepsTheTextItWasHanded(t *testing.T) {
 // that simply stopped at the failing span would get wrong: a substitution that
 // *succeeded* before the failure is thrown away with the rest.
 func TestWhatARenderingDrewStopsAtTheFirstSubstitution(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	sem, dg := promptSemantics(No), promptDiagnostics()
 	r := newTestRunner(t, &Runner{
@@ -144,6 +147,7 @@ func TestWhatARenderingDrewStopsAtTheFirstSubstitution(t *testing.T) {
 // both given up. An implementation that returned early from the whole rendering
 // would hand back the escape undrawn and pass every other test here.
 func TestTheEscapeTableStillReadsWhatAGivenUpRenderingDrew(t *testing.T) {
+	t.Parallel()
 	drawn, _, _ := renderPrompt(t, `PRE-%%-$((1/0))-POST`, true, promptSemantics(No), promptDiagnostics())
 	if drawn != "PRE-%-" {
 		t.Errorf("drawn = %q, want %q: the table read what the abandoned pass left", drawn, "PRE-%-")
@@ -154,6 +158,7 @@ func TestTheEscapeTableStillReadsWhatAGivenUpRenderingDrew(t *testing.T) {
 // keeps this from catching everything: the one operand a dialect reads as a
 // request to stop is not caught here, exactly as it is not caught at a file.
 func TestTheErrorOperatorIsNotCaughtAtARenderingWhenTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	_, diag, alive := renderPrompt(t, `PRE-${NOPE?gone}-POST`, true, promptSemantics(Yes), promptDiagnostics())
 	if diag != "testsh: line 0: NOPE: gone\n" {
 		t.Errorf("diagnostic = %q, want the operand's own word", diag)
@@ -167,6 +172,7 @@ func TestTheErrorOperatorIsNotCaughtAtARenderingWhenTheAxisSaysSo(t *testing.T) 
 // of the same axis, without which the test above passes for a boundary that
 // catches nothing at all.
 func TestTheErrorOperatorIsCaughtAtARenderingWhenTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	drawn, _, alive := renderPrompt(t, `PRE-${NOPE?gone}-POST`, true, promptSemantics(No), promptDiagnostics())
 	if drawn != "PRE-" {
 		t.Errorf("drawn = %q, want %q", drawn, "PRE-")

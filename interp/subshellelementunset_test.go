@@ -17,6 +17,7 @@ import (
 
 // The axis itself, and the parent's array behind it.
 func TestAnElementUnsetInASubshellEmptiesAnArrayItOnlyInherited(t *testing.T) {
+	t.Parallel()
 	const src = "a=(1 2 3)\n" +
 		`( unset 'a[1]'; echo "in=[${a[*]}] n=${#a[@]}" )` + "\n" +
 		`echo "after=[${a[*]}]"`
@@ -48,6 +49,7 @@ func TestAnElementUnsetInASubshellEmptiesAnArrayItOnlyInherited(t *testing.T) {
 // *before* the unset makes the unset ordinary, and an array the subshell made
 // itself is its own.
 func TestWhatAnInheritedArrayIsForThisAnswer(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"the copy alone", "a=(1 2 3)\n" + `( echo "in=[${a[*]}]" )`, "in=[1 2 3]"},
 		{"a write", "a=(1 2 3)\n" + `( a[0]=9; echo "in=[${a[*]}]" )`, "in=[9 2 3]"},
@@ -72,6 +74,7 @@ func TestWhatAnInheritedArrayIsForThisAnswer(t *testing.T) {
 // the same family as the bookkeeping #3511 is about, and not what this axis
 // decides.
 func TestATablesKeyIsNotEmptiedBySettingOneOfItsKeysAside(t *testing.T) {
+	t.Parallel()
 	out, _ := subshellUnsetRun(t, Yes, "typeset -A m; m[k]=v; m[j]=w\n"+
 		`( unset 'm[k]'; echo "in=[${m[j]}][${m[k]-gone}]" )`)
 	if !strings.Contains(out, "in=[w][gone]") {
@@ -106,6 +109,7 @@ func TestWhichContextsArraysAreAViewIn(t *testing.T) {
 // And a **nested** subshell answers for itself: the inner one empties its own
 // view and the outer one still has all three.
 func TestANestedSubshellEmptiesOnlyItsOwnView(t *testing.T) {
+	t.Parallel()
 	out, _ := subshellUnsetRun(t, Yes, "a=(1 2 3)\n"+
 		`( ( unset 'a[1]'; echo "in2=[${a[*]}]" ); echo "in1=[${a[*]}]" )`)
 	if !strings.Contains(out, "in2=[]") {
@@ -119,6 +123,7 @@ func TestANestedSubshellEmptiesOnlyItsOwnView(t *testing.T) {
 // Nothing of this happens outside a subshell, which is the other half of the
 // name: the same line at the top level removes the one element.
 func TestAnElementUnsetOutsideASubshellIsUntouchedByTheAnswer(t *testing.T) {
+	t.Parallel()
 	out, _ := subshellUnsetRun(t, Yes, "a=(1 2 3)\nunset 'a[1]'\n"+`echo "top=[${a[*]}]"`)
 	if !strings.Contains(out, "top=[1 3]") {
 		t.Errorf("out %q emptied an array at the top level", out)

@@ -51,6 +51,7 @@ const underscoreProbe = "inner() { :; }\n" +
 // TestTheCallerReadsTheCallsOwnLastArgument is the unanimous row and the whole
 // of #3134's first defect: the body's last command must not leak out.
 func TestTheCallerReadsTheCallsOwnLastArgument(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"before the body", "inside the body", "narrowed"} {
 		sem := tracks()
 		switch name {
@@ -68,6 +69,7 @@ func TestTheCallerReadsTheCallsOwnLastArgument(t *testing.T) {
 
 // TestABodyOpensWithWhatTheCallerHad is bash's and ksh93's reading.
 func TestABodyOpensWithWhatTheCallerHad(t *testing.T) {
+	t.Parallel()
 	got := underscoreOut(t, underscoreProbe, tracks())
 	if want := "body [outer] after [zz] call [two]\n"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -77,6 +79,7 @@ func TestABodyOpensWithWhatTheCallerHad(t *testing.T) {
 // TestABodyOpensWithTheCallsOwnArgument is zsh's, and it is the only line of
 // the three that moves when the axis does.
 func TestABodyOpensWithTheCallsOwnArgument(t *testing.T) {
+	t.Parallel()
 	sem := tracks()
 	sem.UnderscoreMovesBeforeAFunctionBody = Yes
 	got := underscoreOut(t, underscoreProbe, sem)
@@ -89,6 +92,7 @@ func TestABodyOpensWithTheCallsOwnArgument(t *testing.T) {
 // is the one that separates it from the two above: nothing inside the body
 // moves it at all.
 func TestTheNarrowedReadingMovesForALoneTopLevelCommand(t *testing.T) {
+	t.Parallel()
 	sem := tracks()
 	sem.UnderscoreMovesBeforeAFunctionBody = No
 	sem.UnderscoreMovesOnlyBetweenInputCommands = Yes
@@ -105,6 +109,7 @@ func TestTheNarrowedReadingMovesForALoneTopLevelCommand(t *testing.T) {
 // measured this column with, and a shell given the general rule answers `two`
 // there where ksh93 answers nothing at all.
 func TestTheNarrowedReadingIgnoresEverythingButALoneCommand(t *testing.T) {
+	t.Parallel()
 	sem := tracks()
 	sem.UnderscoreMovesBeforeAFunctionBody = No
 	sem.UnderscoreMovesOnlyBetweenInputCommands = Yes
@@ -147,6 +152,7 @@ func TestTheNarrowedReadingIgnoresEverythingButALoneCommand(t *testing.T) {
 // delivers it. Reading `$_` after the eval cannot see either: the answer is
 // the eval string whichever way round it happened.
 func TestTheNarrowedReadingIsBlindInsideAnEval(t *testing.T) {
+	t.Parallel()
 	sem := tracks()
 	sem.UnderscoreMovesBeforeAFunctionBody = No
 	sem.UnderscoreMovesOnlyBetweenInputCommands = Yes
@@ -161,6 +167,7 @@ func TestTheNarrowedReadingIsBlindInsideAnEval(t *testing.T) {
 // narrowing off, every row above moves the parameter. Without this the table
 // would pass for a shell that had simply stopped tracking `$_`.
 func TestTheGeneralReadingMovesForAllOfThem(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a semicolon list", ": alpha\n: beta; : gamma\n", "gamma"},
 		{"an and-or", ": alpha\n: beta && : gamma\n", "gamma"},
@@ -180,6 +187,7 @@ func TestTheGeneralReadingMovesForAllOfThem(t *testing.T) {
 // assignment is recorded as a message to the producer and the producer never
 // looked. See Runner.underscoreWrittenValue.
 func TestAWriteToUnderscoreStandsUntilTheNextInputCommand(t *testing.T) {
+	t.Parallel()
 	sem := tracks()
 	sem.UnderscoreMovesBeforeAFunctionBody = No
 	sem.UnderscoreMovesOnlyBetweenInputCommands = Yes
@@ -199,6 +207,7 @@ func TestAWriteToUnderscoreStandsUntilTheNextInputCommand(t *testing.T) {
 // is overwritten before anything can read it — which is what makes this the
 // same axis rather than a second one.
 func TestAWriteToUnderscoreIsLostWhereEveryCommandStampsIt(t *testing.T) {
+	t.Parallel()
 	sem := tracks()
 	sem.UnderscoreMovesOnlyBetweenInputCommands = No
 	const src = ": alpha\n_=TOP\nprintf 'write [%s]\\n' \"$_\"\n"
@@ -211,6 +220,7 @@ func TestAWriteToUnderscoreIsLostWhereEveryCommandStampsIt(t *testing.T) {
 // and looping a fixed number of times — both leave a value the script may then
 // read.
 func TestTheWaysAScriptWritesUnderscore(t *testing.T) {
+	t.Parallel()
 	sem := tracks()
 	sem.UnderscoreMovesBeforeAFunctionBody = No
 	sem.UnderscoreMovesOnlyBetweenInputCommands = Yes
@@ -239,6 +249,7 @@ const underscoreEvalProbe = ": outer\n" +
 	"printf 'out [%s]\\n' \"$_\"\n"
 
 func TestTheCallerReadsTheEvalsOwnLastArgument(t *testing.T) {
+	t.Parallel()
 	sem := tracks()
 	sem.UnderscoreHoldsTheCallAcrossEvalAndSource = Yes
 	// The entry half belongs to the function call's axis and is pinned here
@@ -257,6 +268,7 @@ func TestTheCallerReadsTheEvalsOwnLastArgument(t *testing.T) {
 // And the other reading, which is the one this shell had everywhere before the
 // axis existed: the text's last command writes through to the caller.
 func TestTheTextsLastCommandWritesThroughWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	sem := tracks()
 	sem.UnderscoreHoldsTheCallAcrossEvalAndSource = No
 	sem.UnderscoreMovesBeforeAFunctionBody = No
@@ -272,6 +284,7 @@ func TestTheTextsLastCommandWritesThroughWhereTheAxisSaysSo(t *testing.T) {
 // asked here would complain on every `eval` in a script that never reads the
 // name.
 func TestTheNarrowedReadingNeverAsksTheEvalAxis(t *testing.T) {
+	t.Parallel()
 	sem := tracks()
 	sem.UnderscoreMovesBeforeAFunctionBody = No
 	sem.UnderscoreMovesOnlyBetweenInputCommands = Yes

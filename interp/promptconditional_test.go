@@ -58,6 +58,7 @@ func drawField(f PromptField, arg string, _ bool) (string, bool) {
 }
 
 func TestTheWalkerReadsTheConditional(t *testing.T) {
+	t.Parallel()
 	st := conditionalStyle()
 	for _, tc := range []struct{ text, want string }{
 		// The arms, and the delimiter the writer chose.
@@ -90,6 +91,7 @@ func TestTheWalkerReadsTheConditional(t *testing.T) {
 // tells a reader looking at the diagnostic that `z` is a test and not an
 // escape of its own.
 func TestATestTheReaderCannotAnswerIsRefusedAndNamed(t *testing.T) {
+	t.Parallel()
 	st := conditionalStyle()
 	out, refused, ok := ExpandPromptStyle(st, "ab@[z.yes.no]cd", drawField, answerAll(80, 0))
 	if ok || refused != "[z" {
@@ -105,6 +107,7 @@ func TestATestTheReaderCannotAnswerIsRefusedAndNamed(t *testing.T) {
 // A table with no conditional never reads one, and never asks the reader for
 // a width either — the whole construct is a code the table does not know.
 func TestATableWithNoConditionalNeverReadsOne(t *testing.T) {
+	t.Parallel()
 	st := conditionalStyle()
 	st.Conditional, st.ConditionalEnd, st.Conditions = 0, 0, nil
 	asked := false
@@ -125,6 +128,7 @@ func TestATableWithNoConditionalNeverReadsOne(t *testing.T) {
 // is not the same as what is written: a code that draws nothing can occupy a
 // column and text between the non-printing markers occupies none.
 func TestTheColumnCountsWhatReachesTheScreen(t *testing.T) {
+	t.Parallel()
 	st := conditionalStyle()
 	st.Codes['s'] = FieldNonPrintingStart
 	st.Codes['e'] = FieldNonPrintingEnd
@@ -158,6 +162,7 @@ func TestTheColumnCountsWhatReachesTheScreen(t *testing.T) {
 // one after a line filled exactly. Each case here is got wrong by the other
 // reading on its own.
 func TestTheColumnWrapsBeforeAndAfter(t *testing.T) {
+	t.Parallel()
 	st := conditionalStyle()
 	for _, tc := range []struct {
 		width int
@@ -193,6 +198,7 @@ func TestTheColumnWrapsBeforeAndAfter(t *testing.T) {
 
 // The count's own grammar, read once for the walk and the skip alike.
 func TestThePromptCount(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		arg  string
 		want int

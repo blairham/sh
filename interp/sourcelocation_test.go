@@ -22,6 +22,7 @@ import (
 // resolved absolute path, which would name a different string on every
 // machine.
 func TestALocationMayNameTheCurrentFile(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, inc, src, want string
 	}{
@@ -78,6 +79,7 @@ func TestALocationMayNameTheCurrentFile(t *testing.T) {
 // from — which is what this printed for every dialect before the field
 // existed, and is still two of the four.
 func TestWithoutThatAnswerTheShellIsNamed(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{Location: LocationTightLine}
 	got := sourceLocRun(t, "nosuchcmd\n", ". ./inc.sh\n", dg)
 	if !strings.HasPrefix(got, "testsh:1: ") {
@@ -90,6 +92,7 @@ func TestWithoutThatAnswerTheShellIsNamed(t *testing.T) {
 // sourced file's top level names the file. That is one dialect's measured
 // pairing, asked here as the two flags rather than as the shell.
 func TestTheFunctionNameWinsOverTheCurrentFile(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		Location:                    LocationTightLine,
 		LocationNamesTheCurrentFile: true,

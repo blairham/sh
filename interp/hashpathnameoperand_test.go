@@ -31,6 +31,7 @@ import (
 // So the three readings are: passed over, searched for the only way PATH can
 // be searched and therefore missed, and taken as the path it names.
 func TestHashAndAnOperandWithASlash(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		ignores    Answer
@@ -92,6 +93,7 @@ func TestHashAndAnOperandWithASlash(t *testing.T) {
 // zsh, measured the same day: a hashed `zzc` whose file has been removed is
 // `zzc not found` at 1 there.
 func TestATrustedHashedPathIsReportedWithoutLookingForItAgain(t *testing.T) {
+	t.Parallel()
 	const gone = "/nosuchfile-zz"
 	for _, tc := range []struct {
 		name    string
@@ -132,6 +134,7 @@ func TestATrustedHashedPathIsReportedWithoutLookingForItAgain(t *testing.T) {
 // `hash: /tmp: Is a directory` at 1 with the table left empty. The complaint
 // is per name: `hash -p /tmp a b` prints it twice.
 func TestHashWillNotRememberADirectory(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	setup := func(r *Runner) {
 		s := testSemantics()

@@ -35,6 +35,7 @@ func rankedLetters(t *testing.T, src string, p NumericTypeLetterPrecedencePolicy
 // DeclareNumberDetachedOnlyAtTheWordEnd's question, and a table that mixed
 // the two could not say which one it was reading.
 func TestWhichNumericLetterWinsIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, first, rank string }{
 		{
 			"the integer letter in front of a float one",
@@ -78,6 +79,7 @@ func TestWhichNumericLetterWinsIsAnAxis(t *testing.T) {
 // A single numeric letter meets no question at all — under either answer and
 // under none, since the axis is asked only where more than one was written.
 func TestOneNumericLetterIsNeverRanked(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`typeset -F3 v=1.5; typeset -p v`, `typeset -F v="1.500"`},
 		{`typeset -E3 v=1.5; typeset -p v`, `typeset -E v="1.5"`},

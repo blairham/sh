@@ -19,6 +19,7 @@ import (
 // the ones #2727 was about — `strconv` hands back the infinity it overflowed
 // to *and* `ErrRange`, and the value was being discarded with the error.
 func TestPrintfReadsTheNumberCReads(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -58,6 +59,7 @@ func TestPrintfReadsTheNumberCReads(t *testing.T) {
 // whether anything is *said* about it is a dialect's, which is why this runs
 // with PrintfReportsBadNumber answered rather than under CoreSemantics.
 func TestPrintfRangeErrorKeepsTheValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -89,6 +91,7 @@ func TestPrintfRangeErrorKeepsTheValue(t *testing.T) {
 // something was read — which is what `abc` is here for, as a control rather
 // than as evidence.
 func TestPrintfNumberOperandIsThreeReadings(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name                       string
 		src                        string
@@ -150,6 +153,7 @@ func TestPrintfNumberOperandIsThreeReadings(t *testing.T) {
 // 2026-09-14: `printf '%d' 'x=5'` leaves `x` set to 5 in zsh 5.9.2 and
 // ksh93u+ and leaves it unset in the other five columns.
 func TestPrintfArithmeticOperandIsTheShellsArithmetic(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfNumberOperand = PrintfNumberArithmetic
 
@@ -179,6 +183,7 @@ func TestPrintfArithmeticOperandIsTheShellsArithmetic(t *testing.T) {
 // ksh93u+ answers 1000 for `printf '%d' 1e3abc`, which an integer reader
 // stopping at the `e` could not have produced.
 func TestPrintfRefusedArithmeticOperandKeepsItsLeadingNumber(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name         string
 		src          string
@@ -216,6 +221,7 @@ func TestPrintfRefusedArithmeticOperandKeepsItsLeadingNumber(t *testing.T) {
 // mistake: an implementation that never asked would pass the first and an
 // implementation that always asked would pass the second.
 func TestPrintfNumberOperandIsAskedWhereTheReadingsDiffer(t *testing.T) {
+	t.Parallel()
 	t.Run("an operand every reading takes whole needs no dialect", func(t *testing.T) {
 		for _, src := range []string{
 			`printf '[%d]' 42`,
@@ -286,6 +292,7 @@ func TestPrintfNumberOperandIsAskedWhereTheReadingsDiffer(t *testing.T) {
 // and dash write C's errno back in both directions where BusyBox ash writes
 // its ordinary bad-number line.
 func TestPrintfRangeErrorSaysAndCostsSeparately(t *testing.T) {
+	t.Parallel()
 	t.Run("the value survives whether or not anything is said", func(t *testing.T) {
 		for _, answer := range []Answer{Yes, No} {
 			sem := printfSem()
@@ -362,6 +369,7 @@ func TestPrintfRangeErrorSaysAndCostsSeparately(t *testing.T) {
 // are what a single positive row cannot state. See
 // Diagnostics.PrintfBadHexNumber for the measurement (#2764).
 func TestPrintfBadNumberCanNameTheBase(t *testing.T) {
+	t.Parallel()
 	diag := Diagnostics{
 		PrintfBadNumber:      "printf: %[1]s: invalid number",
 		PrintfBadHexNumber:   "printf: %[1]s: invalid hex number",
@@ -400,6 +408,7 @@ func TestPrintfBadNumberCanNameTheBase(t *testing.T) {
 // A dialect with no base-named sentence keeps the general one, which is what
 // every column but the one that has them says for the same operands.
 func TestPrintfBadNumberKeepsOneSentenceWithoutTheBaseWordings(t *testing.T) {
+	t.Parallel()
 	diag := Diagnostics{PrintfBadNumber: "printf: %[1]s: invalid number"}
 	for _, src := range []string{`printf '[%d]' 0x10zz`, `printf '[%d]' 08`, `printf '[%d]' abc`} {
 		sem := printfSem()
@@ -416,6 +425,7 @@ func TestPrintfBadNumberKeepsOneSentenceWithoutTheBaseWordings(t *testing.T) {
 // the range sentence, base or no base — the base wording is the *general*
 // sentence's refinement and not a reading of the operand's front.
 func TestPrintfRangeErrorIsNotBaseNamed(t *testing.T) {
+	t.Parallel()
 	diag := Diagnostics{
 		PrintfBadNumber:        "printf: %[1]s: invalid number",
 		PrintfBadHexNumber:     "printf: %[1]s: invalid hex number",
@@ -438,6 +448,7 @@ func TestPrintfRangeErrorIsNotBaseNamed(t *testing.T) {
 // line at all. The `%d` beside each `%f` is the control that keeps the
 // operand fixed while the conversion moves.
 func TestPrintfFloatOperandIsEvaluatedTwice(t *testing.T) {
+	t.Parallel()
 	base := printfSem()
 	base.PrintfNumberOperand = PrintfNumberArithmetic
 	base.PrintfRefusedOperandKeepsItsLeadingNumber = Yes
@@ -495,6 +506,7 @@ func TestPrintfFloatOperandIsEvaluatedTwice(t *testing.T) {
 // actually failed. Run *unanswered*, so a route that consults it refuses the
 // command and names the axis.
 func TestPrintfFloatDoublingIsAskedOnlyAtItsOwnDisagreement(t *testing.T) {
+	t.Parallel()
 	base := printfSem()
 	base.PrintfNumberOperand = PrintfNumberArithmetic
 	base.PrintfRefusedOperandKeepsItsLeadingNumber = Yes
@@ -527,6 +539,7 @@ func TestPrintfFloatDoublingIsAskedOnlyAtItsOwnDisagreement(t *testing.T) {
 // the expression around it did. The two are one observation and not two,
 // which is why one wording turns both on.
 func TestPrintfArithArgumentTypeIsTheStatusToo(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfNumberOperand = PrintfNumberArithmetic
 	sem.PrintfRefusedOperandKeepsItsLeadingNumber = Yes
@@ -605,6 +618,7 @@ func TestPrintfArithArgumentTypeIsTheStatusToo(t *testing.T) {
 // the same column says nothing about at `%f` — so the range is the
 // conversion's and not the operand's (#2765).
 func TestPrintfIntegerOverflowIsTheConversionsRange(t *testing.T) {
+	t.Parallel()
 	// The column that reports this carries its arithmetic in a double, so
 	// the numeral comes back from it as one and is clamped here — rather than
 	// being one of the integer readings ArithNumeralPastTheWord holds.
@@ -676,6 +690,7 @@ func TestPrintfIntegerOverflowIsTheConversionsRange(t *testing.T) {
 // what did *not* move: the flags, the field and the signed conversions are
 // what surrounds this one and are untouched by it.
 func TestPrintfUnsignedConversionsWriteTheBitPattern(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -748,6 +763,7 @@ func TestPrintfUnsignedConversionsWriteTheBitPattern(t *testing.T) {
 // whole operand keeps nothing and complains, and the one that evaluates takes
 // a trailing blank the way an expression takes one and says nothing (#2905).
 func TestPrintfTrailingBlankIsNotPartOfTheNumber(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		reading PrintfNumberReading
@@ -783,6 +799,7 @@ func TestPrintfTrailingBlankIsNotPartOfTheNumber(t *testing.T) {
 // Only the leading blanks go: the tail is still there, which is what says the
 // echo is of the reader's cursor rather than of a trimmed operand.
 func TestPrintfBadNumberEchoesPastTheBlanks(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		past bool
@@ -813,6 +830,7 @@ func TestPrintfBadNumberEchoesPastTheBlanks(t *testing.T) {
 // An integer operand may be carried through the shell's floating type, which
 // rounds it once it is past what a double holds exactly (#2907).
 func TestPrintfIntegerOperandGoesThroughTheFloatingType(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		through Answer
@@ -843,6 +861,7 @@ func TestPrintfIntegerOperandGoesThroughTheFloatingType(t *testing.T) {
 // And the axis is asked only where the two readings disagree, which is an
 // operand past 2^53: the ordinary one never meets it.
 func TestPrintfFloatingIntegerIsAskedOnlyAtItsOwnDisagreement(t *testing.T) {
+	t.Parallel()
 	t.Run("an operand a double holds exactly asks nothing", func(t *testing.T) {
 		for _, src := range []string{
 			`printf '[%d]' 42`,
@@ -874,6 +893,7 @@ func TestPrintfFloatingIntegerIsAskedOnlyAtItsOwnDisagreement(t *testing.T) {
 // rather than the builtin's, and the dialect that names a builtin in the
 // *location* leaves it out here (#2906).
 func TestPrintfArithComplaintLeavesTheBuiltinOutOfTheLocation(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		names bool
@@ -903,6 +923,7 @@ func TestPrintfArithComplaintLeavesTheBuiltinOutOfTheLocation(t *testing.T) {
 // One builtin in one dialect reports as the shell itself: the basename the
 // shell was invoked by, and no script, no line and no builtin name (#2913).
 func TestBuiltinCanNameTheShellAlone(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfReportsBadNumber = Yes
 	sem.PrintfNumberOperand = PrintfNumberWholeOperand
@@ -968,6 +989,7 @@ func TestBuiltinCanNameTheShellAlone(t *testing.T) {
 // the half a rule fitted to `1/0` alone cannot produce: `1/0+9` is 9 and
 // `8%0*2` is 16, and neither number is anywhere in the operand.
 func TestArithDivisionByZeroCanYieldAValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		yield Answer
@@ -1036,6 +1058,7 @@ func TestArithDivisionByZeroCanYieldAValue(t *testing.T) {
 // An infinity the *evaluator* produced is a value the integer conversion
 // cannot hold, and the column that reports an overflow reports this one too.
 func TestPrintfEvaluatedInfinityIsAnOverflow(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -1083,6 +1106,7 @@ func TestPrintfEvaluatedInfinityIsAnOverflow(t *testing.T) {
 // holds exactly, so a reading that went through one would be off in the last
 // digit — the row is chosen for that.
 func TestPrintfIntegerPastTheWordIsTheArithmeticsNumeral(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfNumberOperand = PrintfNumberArithmetic
 	sem.ArithNumeralPastTheWord = NumeralPastTheWordKeepsTheDigitsThatFit

@@ -39,6 +39,7 @@ func enclosingFreeze(a Answer) func(*Semantics) {
 // freeze as the caller's: the deeper declaration is an ordinary local, and
 // the caller's frozen value is untouched when the call returns.
 func TestADeclarationMayShadowACallersFrozenLocal(t *testing.T) {
+	t.Parallel()
 	const src = `inner() { local x=I; echo "inner=[$x]"; }
 outer() { local -r x=O; inner; echo "outer=[$x]"; }
 outer`
@@ -52,6 +53,7 @@ outer`
 // TestADeclarationIsRefusedOverACallersFrozenLocal is the other answer: the
 // freeze reaches every depth, so the callee reads the caller's value.
 func TestADeclarationIsRefusedOverACallersFrozenLocal(t *testing.T) {
+	t.Parallel()
 	const src = `inner() { local x=I; echo "inner=[$x]"; }
 outer() { local -r x=O; inner; echo "outer=[$x]"; }
 outer`
@@ -70,6 +72,7 @@ outer`
 // enclosing binding for it to stand in front of. This is the control that
 // keeps the narrower answer from reading as "a local is never refused".
 func TestAScopesOwnFreezeIsRefusedWhicheverWayTheAxisGoes(t *testing.T) {
+	t.Parallel()
 	const src = `a() { local -r x=1; local x=2; echo "a=[$x]"; }
 a`
 	for _, ans := range []Answer{Yes, No} {
@@ -103,6 +106,7 @@ a`
 //
 // This shell took the first and refused the second (#4178).
 func TestALetterOnTheScopesOwnFrozenCellIsNotAShadow(t *testing.T) {
+	t.Parallel()
 	const src = `a() { typeset -r -n v; typeset +n v; echo "st=[$?]"; typeset -p v; }
 a`
 	for _, ans := range []Answer{Yes, No} {
@@ -130,6 +134,7 @@ a`
 // depth — because the first refusal leaves no shadow for the second call to
 // be enclosed by.
 func TestATopLevelFreezeIsRefusedAtEveryDepth(t *testing.T) {
+	t.Parallel()
 	const src = `readonly g=G
 p1() { local g=L1; echo "p1=[$g]"; }
 p2() { local g=L2; p1; }

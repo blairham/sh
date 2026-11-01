@@ -25,6 +25,7 @@ import (
 // of the axis. That is the whole of the defect: nothing about producing a
 // value is supposed to change what reading it without a subscript means.
 func TestAProducedArrayReadsLikeAStoredOneWithoutASubscript(t *testing.T) {
+	t.Parallel()
 	elems := []string{"one", "two", "three"}
 	for _, whole := range []Answer{Yes, No} {
 		for _, tc := range []struct {
@@ -78,6 +79,7 @@ func TestAProducedArrayReadsLikeAStoredOneWithoutASubscript(t *testing.T) {
 // top level where `$#funcstack` is 0, and bash answers `${FUNCNAME+SET}`
 // empty outside a call.
 func TestAProducedArrayIsSetForTheParameterTests(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src       string
 		whole, notWhole string
@@ -114,6 +116,7 @@ func TestAProducedArrayIsSetForTheParameterTests(t *testing.T) {
 // answers `typeset -A h; ${+h}` with 1 and this shell answered 0, while
 // bash's `declare -A h; [[ -v h ]]` is false and was right by accident.
 func TestAnEmptyAssociationAnswersSetOnTheSameAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		whole Answer
 		want  string
@@ -158,6 +161,7 @@ func TestAnEmptyAssociationAnswersSetOnTheSameAxis(t *testing.T) {
 // the reason the produced array above is: nothing about producing a value is
 // supposed to change what listing it means.
 func TestAProducedScalarWithAnAttributeListsItsProducedValue(t *testing.T) {
+	t.Parallel()
 	produced, _ := runGrammar(t, `readonly -p`, nil, func(r *Runner) {
 		r.SetDynamic("n", func(*Runner) string { return "three" })
 		r.MarkReadonly("n")
@@ -180,6 +184,7 @@ func TestAProducedScalarWithAnAttributeListsItsProducedValue(t *testing.T) {
 // per listing and report something no later read repeats — and it is why the
 // branch above is guarded rather than unconditional.
 func TestAProducedScalarWithNoAttributeIsNotListed(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `readonly -p`, nil, func(r *Runner) {
 		r.SetDynamic("quiet", func(*Runner) string { return "drawn" })
 	})

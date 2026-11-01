@@ -31,6 +31,7 @@ func execPrefixRun(t *testing.T, src string, policy PrefixExportAtABuiltinPolicy
 }
 
 func TestAPrefixToExecReachesTheReplacement(t *testing.T) {
+	t.Parallel()
 	for _, policy := range []PrefixExportAtABuiltinPolicy{
 		PrefixExportAtABuiltinOn,
 		PrefixExportAtABuiltinUnchanged,
@@ -47,6 +48,7 @@ func TestAPrefixToExecReachesTheReplacement(t *testing.T) {
 // shell's own environment: the same replacement with nothing in front of it is
 // told nothing about the name.
 func TestExecWithNoPrefixHandsTheReplacementNothing(t *testing.T) {
+	t.Parallel()
 	out, st := execPrefixRun(t, "exec /usr/bin/env\n", PrefixExportAtABuiltinUnchanged)
 	if st != 0 || strings.Contains(out, "V=") {
 		t.Errorf("got %q status %d, want no V in the replacement's environment", out, st)
@@ -59,6 +61,7 @@ func TestExecWithNoPrefixHandsTheReplacementNothing(t *testing.T) {
 // not one of these rows — the replacement is the command, not a child of a
 // builtin.
 func TestAPrefixToAnOrdinaryBuiltinStillAsksTheAxis(t *testing.T) {
+	t.Parallel()
 	const probe = "V=1 eval '/usr/bin/env'\n"
 	for _, row := range []struct {
 		policy PrefixExportAtABuiltinPolicy

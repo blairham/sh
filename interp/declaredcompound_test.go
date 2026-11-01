@@ -46,6 +46,7 @@ func withArrayLetters(empty Answer) func(*Semantics) {
 }
 
 func TestAValuelessArrayDeclarationLeavesAnArray(t *testing.T) {
+	t.Parallel()
 	// One line per word that declares, because they are three loops rather
 	// than one and the mark went missing from exactly one of them.
 	for _, decl := range []string{"local -a a", "typeset -a a"} {
@@ -73,6 +74,7 @@ f`
 // The table letter, which is the half `local` already had — here so that the
 // shared mark cannot lose it while gaining the other.
 func TestAValuelessTableDeclarationLeavesATable(t *testing.T) {
+	t.Parallel()
 	for _, decl := range []string{"local -A m", "typeset -A m"} {
 		t.Run(decl, func(t *testing.T) {
 			src := "f() { " + decl + `; m[k]=v; echo "[${m[k]}] n=${#m[@]}"; }
@@ -100,6 +102,7 @@ f`
 // fail under each. The third reading refuses the letter outright and has a test
 // of its own in dialect/ksh.
 func TestThePlusSpellingBringsNoCompoundIntoBeing(t *testing.T) {
+	t.Parallel()
 	for _, p := range []ArrayAttributeRemovalPolicy{
 		ArrayAttributeRemovalRefusedForAnArray,
 		ArrayAttributeRemovalEmptiesTheName,
@@ -128,6 +131,7 @@ f`
 // changes nothing — the reason to run it is that the fold must not make the
 // third loop start doing something the other two do not.
 func TestASubscriptedArrayDeclarationLeavesAnArray(t *testing.T) {
+	t.Parallel()
 	src := `f() { local -a a[2]=v; echo "n=${#a[@]} [${a[2]}]"; }
 f`
 	out, errs, st := declRun(t, src, withArrayLetters(Yes), Diagnostics{})
@@ -166,6 +170,7 @@ func withScalarUnderACompound(array, table ScalarUnderACompoundPolicy) func(*Sem
 // The promoting answer: the value becomes the first element, and an append
 // after it goes behind rather than over.
 func TestAnArrayDeclarationOverAScalarCanKeepIt(t *testing.T) {
+	t.Parallel()
 	src := `b=1; typeset -a b; printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"
 b+=(9); printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`
 	out, errs, st := declRun(t, src,
@@ -180,6 +185,7 @@ b+=(9); printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`
 // The discarding answer: the name is an array of no elements, and `$b` reads
 // back empty where the promoting answer still answers `1`.
 func TestAnArrayDeclarationOverAScalarCanDiscardIt(t *testing.T) {
+	t.Parallel()
 	src := `b=1; typeset -a b; echo "[$b] n=${#b[@]}"
 b+=(9); printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`
 	out, errs, st := declRun(t, src,
@@ -201,6 +207,7 @@ b+=(9); printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`
 // other route — see appendedOverAScalar. A bare `typeset -a`, which lists
 // every name carrying the attribute, prints nothing for `b` in that shell.
 func TestAnArrayDeclarationOverAScalarCanLeaveItAScalar(t *testing.T) {
+	t.Parallel()
 	src := `b=1; typeset -a b; typeset -p b; echo "n=${#b[@]}"
 b+=(9); printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`
 	out, errs, st := declRun(t, src,
@@ -219,6 +226,7 @@ b+=(9); printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`
 // a+=([k]=v)` is two entries in bash and ksh93 and one in zsh, and the value
 // is already gone or already placed by the time the append runs.
 func TestATableDeclarationOverAScalarCanKeepItUnderKeyZero(t *testing.T) {
+	t.Parallel()
 	src := `a=1; typeset -A a; echo "n=${#a[@]} [${a[0]}]"
 a+=([k]=v); echo "n=${#a[@]} [${a[0]}][${a[k]}]"`
 	for _, c := range []struct {
@@ -244,6 +252,7 @@ a+=([k]=v); echo "n=${#a[@]} [${a[0]}][${a[k]}]"`
 // column does, and no count can tell an empty first element from no first
 // element.
 func TestAnArrayDeclarationOverAnEmptyScalarKeepsIt(t *testing.T) {
+	t.Parallel()
 	src := `b=; typeset -a b; printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`
 	out, errs, st := declRun(t, src,
 		withScalarUnderACompound(ScalarUnderACompoundBecomesTheFirstElement, ScalarUnderACompoundDiscardsIt),
@@ -256,6 +265,7 @@ func TestAnArrayDeclarationOverAnEmptyScalarKeepsIt(t *testing.T) {
 
 // The promoted value is one element however many words it looks like.
 func TestAnArrayDeclarationDoesNotSplitTheScalar(t *testing.T) {
+	t.Parallel()
 	src := `b="x y"; typeset -a b; printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`
 	out, errs, st := declRun(t, src,
 		withScalarUnderACompound(ScalarUnderACompoundBecomesTheFirstElement, ScalarUnderACompoundDiscardsIt),
@@ -274,6 +284,7 @@ func TestAnArrayDeclarationDoesNotSplitTheScalar(t *testing.T) {
 // promotion reading only `Runner.Vars` passes every other test here and drops
 // the value a script was started with.
 func TestAnArrayDeclarationOverAnInheritedScalarKeepsIt(t *testing.T) {
+	t.Parallel()
 	src := `typeset -a b; printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`
 	out, errs, st := declRunEnv(t, src,
 		withScalarUnderACompound(ScalarUnderACompoundBecomesTheFirstElement, ScalarUnderACompoundDiscardsIt),
@@ -293,6 +304,7 @@ func TestAnArrayDeclarationOverAnInheritedScalarKeepsIt(t *testing.T) {
 // implementation that promoted whatever the name read back as would put an
 // empty first element in front of the 9.
 func TestAnArrayDeclarationOverAnUnsetNameKeepsNothing(t *testing.T) {
+	t.Parallel()
 	src := `typeset -a b; echo "n=${#b[@]}"
 b+=(9); printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`
 	for _, p := range []ScalarUnderACompoundPolicy{
@@ -317,6 +329,7 @@ b+=(9); printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`
 // promoting row above and lose an array here, silently — which is the shape
 // #1535 had.
 func TestAnArrayDeclarationOverAnArrayKeepsItsElements(t *testing.T) {
+	t.Parallel()
 	src := `a=(1 2); typeset -a a; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`
 	for _, p := range []ScalarUnderACompoundPolicy{
 		ScalarUnderACompoundUnspecified,
@@ -335,6 +348,7 @@ func TestAnArrayDeclarationOverAnArrayKeepsItsElements(t *testing.T) {
 // A declaration carrying its own value replaces whatever the letter left, so
 // the promotion is invisible through it: one element, `9`, in every column.
 func TestAnArrayDeclarationWithAValueOverAScalarReplacesIt(t *testing.T) {
+	t.Parallel()
 	src := `b=1; typeset -a b=(9); printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`
 	out, errs, st := declRun(t, src,
 		withScalarUnderACompound(ScalarUnderACompoundBecomesTheFirstElement, ScalarUnderACompoundDiscardsIt),
@@ -358,6 +372,7 @@ func TestAnArrayDeclarationWithAValueOverAScalarReplacesIt(t *testing.T) {
 // ksh93 declares nothing local in a plain function, so the two shells with an
 // answer of their own reach the same place by their own route.
 func TestALocalArrayDeclarationOverALocalScalarKeepsNothing(t *testing.T) {
+	t.Parallel()
 	for _, decl := range []string{"local -a b", "typeset -a b"} {
 		t.Run(decl, func(t *testing.T) {
 			src := "f() { local b=1; " + decl + `; echo "n=${#b[@]}"; }
@@ -379,6 +394,7 @@ f`
 // already replaced. Measured — the same `n=0` in bash 5.3.15, bash 3.2.57 and
 // zsh whether `f` is called from the top level or from inside `g`.
 func TestALocalArrayDeclarationOverALocalScalarKeepsNothingWhenNested(t *testing.T) {
+	t.Parallel()
 	src := `f() { local b=1; local -a b; echo "n=${#b[@]}"; }
 g() { f; }
 g`
@@ -395,6 +411,7 @@ g`
 // global letter takes no shadow, so the value the name is holding is promoted
 // from inside a function exactly as it is at the top level.
 func TestAGlobalArrayDeclarationOverAScalarKeepsIt(t *testing.T) {
+	t.Parallel()
 	src := `b=1; f() { typeset -ga b; printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"; }
 f`
 	out, errs, st := declRun(t, src,
@@ -409,6 +426,7 @@ f`
 // An unanswered dialect is refused by name, and the declaration is not made
 // one way and reported afterwards.
 func TestACompoundDeclarationOverAScalarRefusesAnUnansweredDialect(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ decl, axis string }{
 		{"typeset -a b", "an array declaration over a name already holding a scalar"},
 		{"typeset -A b", "a table declaration over a name already holding a scalar"},
@@ -442,6 +460,7 @@ func TestACompoundDeclarationOverAScalarRefusesAnUnansweredDialect(t *testing.T)
 // store over the producer and the call stack would be a stale word from then
 // on. The producer is the name's value; there is nothing here to convert.
 func TestAnArrayDeclarationOverAProducedArrayLeavesItToItsProducer(t *testing.T) {
+	t.Parallel()
 	src := `FUNCS=x; typeset -a FUNCS; printf "[%s]" "${FUNCS[@]}"; echo " n=${#FUNCS[@]}"`
 	for _, p := range []ScalarUnderACompoundPolicy{
 		ScalarUnderACompoundBecomesTheFirstElement,
@@ -472,6 +491,7 @@ func TestAnArrayDeclarationOverAProducedArrayLeavesItToItsProducer(t *testing.T)
 // none of them joins a table's values *and* promotes under the table letter,
 // and which a name declared twice would reach the moment one did.
 func TestATableDeclarationOverATableDoesNotRePromoteItsOwnContents(t *testing.T) {
+	t.Parallel()
 	src := `typeset -A a; a[k]=v; a[j]=w; typeset -A a; echo "n=${#a[@]} zero=[${a[0]}]"`
 	out, st := runGrammar(t, src, nil, func(r *Runner) {
 		sem := *r.Semantics

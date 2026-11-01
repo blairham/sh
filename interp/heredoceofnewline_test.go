@@ -32,6 +32,7 @@ import (
 const unterminatedHeredoc = "cat <<X\nbody"
 
 func TestAnUnterminatedHeredocsLastLineIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		adds  Answer
@@ -66,6 +67,7 @@ func TestAnUnterminatedHeredocsLastLineIsAnAxis(t *testing.T) {
 // here must give the same bytes either way, and asserting one answer would
 // leave the other free to differ.
 func TestAnEmptyUnterminatedHeredocGainsNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		adds Answer
@@ -87,6 +89,7 @@ func TestAnEmptyUnterminatedHeredocGainsNothing(t *testing.T) {
 // And with nothing to ask about, the axis is not asked: a Runner holding no
 // answer runs the command rather than refusing it.
 func TestAnEmptyUnterminatedHeredocNeverAsks(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.UnterminatedHeredocGainsATrailingNewline = Unspecified
 	out, st := run(t, "cat <<X\n", withSem(sem))
@@ -98,6 +101,7 @@ func TestAnEmptyUnterminatedHeredocNeverAsks(t *testing.T) {
 // A quoted delimiter changes what the body is *expanded* to and not whether
 // it ends in a newline, so both spellings move together.
 func TestTheQuotedDelimiterAsksTheSameQuestion(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.UnterminatedHeredocGainsATrailingNewline = Yes
 	out, st := run(t, "cat <<'X'\nbody", withSem(sem))
@@ -110,6 +114,7 @@ func TestTheQuotedDelimiterAsksTheSameQuestion(t *testing.T) {
 // that reached its delimiter has a body ending in a newline already, so a
 // Runner with no answer still runs one.
 func TestATerminatedHeredocNeverAsks(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.UnterminatedHeredocGainsATrailingNewline = Unspecified
 	out, st := run(t, "cat <<X\nbody\nX\n", withSem(sem))
@@ -130,6 +135,7 @@ func TestATerminatedHeredocNeverAsks(t *testing.T) {
 // end of the input. Every other here-document leaves it off, which is what
 // keeps the question off the common path.
 func TestTheLexerMarksOnlyTheHeredocThatRanOut(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -169,6 +175,7 @@ func onlyRedirect(t *testing.T, f *syntax.File) *syntax.Redirect {
 // output; dash, ksh93 and zsh write `hi ` for the first two rows, which is
 // the No column.
 func TestAHeredocLineContinuedIntoTheEndIsUnended(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		yes, no   string
@@ -204,6 +211,7 @@ func TestAHeredocLineContinuedIntoTheEndIsUnended(t *testing.T) {
 // (#6286). See Semantics.UnterminatedHeredocLoneBackslash for the
 // measurements.
 func TestALoneBackslashEndingAnUnterminatedHeredoc(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer LoneBackslashAtTheEnd

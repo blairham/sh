@@ -24,6 +24,7 @@ func listingSem(hash Answer) Semantics {
 // front of it, and a value with something else in it needing quotes, are
 // quoted under both.
 func TestAListedHashIsBareWhereNoNamePrecedesIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ value, bare, quoted string }{
 		{"16#ff", "16#ff", "'16#ff'"},
 		{"99#zz", "99#zz", "'99#zz'"},
@@ -83,6 +84,7 @@ func listingPositionSem(hash Answer) Semantics {
 // are two axes and not one — a value whose `#` opens it is quoted under both,
 // and so is one with anything else in it needing quotes.
 func TestAListedHashIsBareUnlessItOpensTheValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ value, bare, quoted string }{
 		// Bare under the position rule, quoted under the name rule.
 		{"ab#cd", "ab#cd", "'ab#cd'"},

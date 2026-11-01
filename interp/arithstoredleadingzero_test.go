@@ -18,6 +18,7 @@ import (
 // written out is eight. The pairing is the test: an answer that moved both
 // would be a fix in the wrong place.
 func TestAZeroPaddedValueReadInsideAnExpression(t *testing.T) {
+	t.Parallel()
 	sem := func(a Answer) Semantics {
 		s := testSemantics()
 		s.ArithStoredValueReadsALeadingZeroAsDecimal = a

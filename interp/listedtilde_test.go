@@ -26,6 +26,7 @@ func listingTildeSem(tilde Answer) Semantics {
 // one whose `~` opens it, and one with something else in it needing quotes
 // are quoted under both.
 func TestAListedTildeIsBareWhereItCannotExpandTheValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ value, bare, quoted string }{
 		// A `~` that does not open the value.
 		{"a~b", "a~b", "'a~b'"},
@@ -83,6 +84,7 @@ func listingBothPositionsSem(answer Answer) Semantics {
 // it. Asking the two rules as separate passes would quote every row here,
 // which no column does — see Runner.positionallyBareValue.
 func TestTheTwoListedPositionRulesCompose(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ value, bare, quoted string }{
 		{"a#~b", "a#~b", "'a#~b'"},
 		{"a~b#c", "a~b#c", "'a~b#c'"},
@@ -123,6 +125,7 @@ func keyListingSem(answer Answer) Semantics {
 // this the key read the plainest predicate, which quotes every one of the
 // bare rows.
 func TestAListedKeyTakesThePositionRules(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ key, bare, quoted string }{
 		{"a~b", `[a~b]="v"`, `["a~b"]="v"`},
 		{"b~", `[b~]="v"`, `["b~"]="v"`},

@@ -51,6 +51,7 @@ func diagWordRun(t *testing.T, src string, fields Answer) string {
 
 // The headline. One script, one non-default IFS, two readings.
 func TestTheDiagnosticWordsFieldReadingIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `set -- 'a:b' c
 IFS=:
 unset e1; echo ${e1?$*}`
@@ -71,6 +72,7 @@ unset e1; echo ${e1?$*}`
 // answered, because the panel does not split there. Asking the question one
 // level up passes every row above and fails this one.
 func TestTheAssigningWordIsAValueWhicheverWayTheDiagnosticWordIsRead(t *testing.T) {
+	t.Parallel()
 	const src = `set -- 'a:b' c
 IFS=:
 unset u; : ${u:=$*}; printf '[%s]' "$u"`
@@ -86,6 +88,7 @@ unset u; : ${u:=$*}; printf '[%s]' "$u"`
 // readings produce the same string, so a probe that does not set IFS cannot
 // tell them apart and proves nothing about either.
 func TestTheDefaultSeparatorHidesTheDiagnosticWordsReading(t *testing.T) {
+	t.Parallel()
 	const src = `set -- 'a:b' c
 unset e1; echo ${e1?$*}`
 	yes, no := diagWordRun(t, src, Yes), diagWordRun(t, src, No)

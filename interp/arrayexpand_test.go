@@ -28,6 +28,7 @@ func runArray(t *testing.T, src string) (string, int) {
 // operator was skipped and each of these came back as the untouched element —
 // silently, with status 0.
 func TestAnOperatorReachesAnArrayElement(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(hello); echo "${a[0]#h}"`, "ello"},
 		{`a=(hello); echo "${a[0]##*l}"`, "o"},
@@ -59,6 +60,7 @@ func TestAnOperatorReachesAnArrayElement(t *testing.T) {
 // replace the whole array with one string, which is worse than the nothing
 // this used to do.
 func TestAssigningThroughASubscript(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `a=(x y); echo "${a[1]:=new}"; echo "[${a[@]}]"`)
 	if got := strings.TrimSpace(out); got != "y\n[x y]" {
 		t.Errorf("set element: got %q, want the test not to fire", got)
@@ -78,6 +80,7 @@ func TestAssigningThroughASubscript(t *testing.T) {
 // element and is a substring of it, and slicing a one-element list would be no
 // field at all.
 func TestSlicingTheWholeArrayButNotOneElement(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(p q r s); echo "${a[@]:1}"`, "q r s"},
 		{`a=(p q r s); echo "${a[@]:1:2}"`, "q r"},
@@ -104,6 +107,7 @@ func TestSlicingTheWholeArrayButNotOneElement(t *testing.T) {
 // `${!a[@]}` is the array's subscripts, not its elements. Answering with the
 // elements made the loop that exists to use it iterate the wrong thing.
 func TestArrayIndices(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `a=(p q r); echo "${!a[@]}"`)
 	if got := strings.TrimSpace(out); got != "0 1 2" {
 		t.Errorf("got %q, want the subscripts", got)
@@ -128,6 +132,7 @@ func TestArrayIndices(t *testing.T) {
 // on `(aa ab)` came back `a ab`, silently, with status 0. Unanimous in the
 // three shells with arrays, the anchored and case forms included.
 func TestAnOperatorDistributesOverTheElements(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(aa ab); printf "[%s]" "${a[@]#a}"`, "[a][b]"},
 		{`a=(aa ab); printf "[%s]" "${a[@]##*a}"`, "[][b]"},
@@ -157,6 +162,7 @@ func TestAnOperatorDistributesOverTheElements(t *testing.T) {
 // left, the third joins first and trims the joined string once — so which
 // string the operator sees is an axis, asked only on the star form.
 func TestTheStarFormOperatorIsAnAxis(t *testing.T) {
+	t.Parallel()
 	distributes := permissive()
 	distributes.OperatorDistributesOverStarSubscript = Yes
 	joins := permissive()
@@ -183,6 +189,7 @@ func TestTheStarFormOperatorIsAnAxis(t *testing.T) {
 // last element reads the same both ways, so a shell with no answers still
 // gets it — and `${a[@]}` never asks, because every shell distributes there.
 func TestTheStarAxisIsAskedOnlyWhereTheReadingsDiffer(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `a=(aa ab); printf "%s" "${a[*]%b}"`, withSem(CoreSemantics()))
 	if out != "aa a" || st != 0 {
 		t.Errorf("got %q status %d, want %q and 0", out, st, "aa a")

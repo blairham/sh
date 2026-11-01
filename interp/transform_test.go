@@ -33,6 +33,7 @@ func runTransform(t *testing.T, src string) (string, int) {
 }
 
 func TestTransformQuotesForReuse(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		// Single quotes even when nothing needs them, the quote itself
 		// spelled '\'', and a backslash left alone.
@@ -66,6 +67,7 @@ func TestTransformQuotesForReuse(t *testing.T) {
 }
 
 func TestTransformExpandsEscapes(t *testing.T) {
+	t.Parallel()
 	// @E reads the value under the $'…' rules: the same decoder, so the two
 	// cannot drift apart.
 	out, _ := runTransform(t, `x='a\tb'; echo "${x@E}"`)
@@ -83,6 +85,7 @@ func TestTransformExpandsEscapes(t *testing.T) {
 }
 
 func TestTransformChangesCase(t *testing.T) {
+	t.Parallel()
 	out, _ := runTransform(t, `x="abC dEf"; echo "${x@U}|${x@L}|${x@u}"`)
 	if strings.TrimSpace(out) != "ABC DEF|abc def|AbC dEf" {
 		t.Errorf("case letters said %q", strings.TrimSpace(out))
@@ -95,6 +98,7 @@ func TestTransformChangesCase(t *testing.T) {
 }
 
 func TestTransformReportsAttributes(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"integer", `typeset -i n=1; echo "[${n@a}]"`, `[i]`},
 		{"none", `x=plain; echo "[${x@a}]"`, `[]`},
@@ -118,6 +122,7 @@ func TestTransformReportsAttributes(t *testing.T) {
 }
 
 func TestTransformWritesAnAssignment(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		// A bare name is name='value'; attributes put a declare in front.
 		{"a scalar", `x="a b"; echo "${x@A}"`, `x='a b'`},
@@ -163,6 +168,7 @@ func TestTransformWritesAnAssignment(t *testing.T) {
 }
 
 func TestTransformListsKeysAndValues(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		// @K is one word, keys bare and values double-quoted; @k is the same
 		// pairs as separate words, values raw.
@@ -212,6 +218,7 @@ func TestTransformListsKeysAndValues(t *testing.T) {
 }
 
 func TestTransformDistributesOverAWholeArray(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		// One transformed word per element for [@], joined for [*] — the
 		// same split "$@" and "$*" already have.
@@ -284,6 +291,7 @@ func runPromptTransform(t *testing.T, src string, st PromptStyle) (string, int) 
 }
 
 func TestTransformReadsTheValueAsAPrompt(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		// The table is read, wherever a code stands in the word.
 		{"a code in the table", `x='[\u]'; echo "${x@P}"`, "[someone]"},
@@ -316,6 +324,7 @@ func TestTransformReadsTheValueAsAPrompt(t *testing.T) {
 // expands first hands the table what the expansion produced, so the same
 // value draws the code the parameter carried.
 func TestTransformTakesTheOrderFromTheStyle(t *testing.T) {
+	t.Parallel()
 	st := promptTransformTable()
 	st.ExpandBeforeEscapes = true
 	out, status := runPromptTransform(t, `c='\u'; x='X${c}Y'; echo "${x@P}"`, st)
@@ -330,6 +339,7 @@ func TestTransformTakesTheOrderFromTheStyle(t *testing.T) {
 // Element-wise over a stored array, like the rest of the family: three
 // elements in and three fields out, each read as a prompt of its own.
 func TestTransformReadsEachElementAsAPrompt(t *testing.T) {
+	t.Parallel()
 	const src = `a=(x '\u' y); printf "[%s]" "${a[@]@P}"; echo`
 	out, status := runPromptTransform(t, src, promptTransformTable())
 	if status != 0 {
@@ -343,6 +353,7 @@ func TestTransformReadsEachElementAsAPrompt(t *testing.T) {
 // A style with no escape character transforms nothing, which is the zero
 // value's promise: told nothing about the language, the value stands.
 func TestTransformWithNoTableLeavesTheValue(t *testing.T) {
+	t.Parallel()
 	out, status := runPromptTransform(t, `x='[\u]'; echo "${x@P}"`, PromptStyle{})
 	if status != 0 {
 		t.Errorf("status %d, want 0", status)
@@ -358,6 +369,7 @@ func TestTransformWithNoTableLeavesTheValue(t *testing.T) {
 // *dialect* does — a backslash here — so a reader is sent to the construct
 // their script really holds.
 func TestTransformRefusesAnEscapeItCannotAnswer(t *testing.T) {
+	t.Parallel()
 	out, st := runPromptTransform(t, `x='[\!]'; echo "hi ${x@P}"; echo after`, promptTransformTable())
 	if st == 0 {
 		t.Error("the refusal reported success")
@@ -373,6 +385,7 @@ func TestTransformRefusesAnEscapeItCannotAnswer(t *testing.T) {
 // A letter outside the set never became an operator, so it reports as the
 // deferred bad substitution it stayed.
 func TestUnknownTransformLetterIsABadSubstitution(t *testing.T) {
+	t.Parallel()
 	out, st := runTransform(t, `x=abc; echo "${x@Z}"`)
 	if st == 0 {
 		t.Error("an unknown letter reported success")
@@ -386,6 +399,7 @@ func TestUnknownTransformLetterIsABadSubstitution(t *testing.T) {
 // family, and its runtime report has a wording of its own — the parse-time
 // wording is a syntax error that would misreport what happened here.
 func TestDeferredBadSubstitutionUsesItsRunWording(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.BadSubstitutionAtParseTime = true
 	f, err := syntax.Parse(`echo "${x@Q}"`, d)

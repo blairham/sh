@@ -29,6 +29,7 @@ func runArithBody(t *testing.T, a Answer, src string) (string, int) {
 // expression's *value* where the dialect reads it that way, and to what the
 // command printed — nothing — where it does not.
 func TestASubstitutionWhoseWholeBodyIsArithmeticIsAnExpansion(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`echo "[$( (( 1+1 )) )]"`,
 		`echo "[${ (( 1+1 )); }]"`,
@@ -46,6 +47,7 @@ func TestASubstitutionWhoseWholeBodyIsArithmeticIsAnExpansion(t *testing.T) {
 // of the shell could allow — and is the row that says the body is not being
 // run at all.
 func TestAnArithmeticBodysAssignmentReachesTheShellThatWroteIt(t *testing.T) {
+	t.Parallel()
 	out, _ := runArithBody(t, Yes, `n=0; echo "[$( (( n+=5 )) )]"; echo "n=$n"`)
 	if !strings.Contains(out, "[5]") || !strings.Contains(out, "n=5") {
 		t.Errorf("got %q, want [5] and n=5", out)
@@ -59,6 +61,7 @@ func TestAnArithmeticBodysAssignmentReachesTheShellThatWroteIt(t *testing.T) {
 // background `&` and the backquoted spelling are all ordinary substitutions
 // under either answer.
 func TestOnlyAWholeArithmeticBodyIsAnExpansion(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`echo "[$( (( 1+1 )); echo hi )]"`,
 		`echo "[$( echo hi; (( 1+1 )) )]"`,
@@ -85,6 +88,7 @@ func TestOnlyAWholeArithmeticBodyIsAnExpansion(t *testing.T) {
 // stated cause: an expansion has no status for `set -e` to judge, where a
 // substitution holding a subshell or a call still has one.
 func TestErrExitDoesNotJudgeAnArithmeticOnlyBody(t *testing.T) {
+	t.Parallel()
 	run := func(a Answer, src string) (string, int) {
 		return runArithBody(t, a, src)
 	}

@@ -24,6 +24,7 @@ import (
 // 2026-09-08, because the name is interactive-only there: the same operand
 // under `-c` is refused by both shells, which is the last case below.
 func TestCdCorrectsOneEditPerComponent(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name        string
 		on          bool
@@ -113,6 +114,7 @@ func TestCdCorrectsOneEditPerComponent(t *testing.T) {
 // of the two — and ours takes the first by name, because readDir sorts. The
 // two agree wherever exactly one entry is within an edit.
 func TestCdCorrectionCommitsToEachComponent(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, d := range []string{"alpha/beta/gamma", "alpha/betta"} {
 		if err := os.MkdirAll(filepath.Join(dir, filepath.FromSlash(d)), 0o755); err != nil {
@@ -165,6 +167,7 @@ func TestCdCorrectionCommitsToEachComponent(t *testing.T) {
 // measured 2026-09-08: bash, dash, ksh93 and zsh all print
 // `/nonexistent-dir`, and none of them prints nothing.
 func TestCdWithNoOperandNamesHomeRatherThanCrashing(t *testing.T) {
+	t.Parallel()
 	gone := filepath.Join(t.TempDir(), "not-there")
 	out, errOut := &strings.Builder{}, &strings.Builder{}
 	sem := PosixSemantics()
@@ -196,6 +199,7 @@ func TestCdWithNoOperandNamesHomeRatherThanCrashing(t *testing.T) {
 // name typed here is one edit from a file and from nothing else, so a shell
 // that took it would take it silently.
 func TestCdDoesNotCorrectOntoAFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "notes"), nil, 0o644); err != nil {
 		t.Fatal(err)
@@ -231,6 +235,7 @@ func TestCdDoesNotCorrectOntoAFile(t *testing.T) {
 // puts an absolute, cleaned path into somebody's line where `cd` prints the
 // operand as it was typed.
 func TestCorrectedDirectoryAnswersAbsolutelyAndOnlyWhenAsked(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, sub := range []string{"documents", "alpha/beta"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
@@ -280,6 +285,7 @@ func TestCorrectedDirectoryAnswersAbsolutelyAndOnlyWhenAsked(t *testing.T) {
 // other: a shell told to correct a typed `cd` has not been told to correct a
 // Tab, and the other way about.
 func TestTheTwoSpellingSwitchesAreIndependent(t *testing.T) {
+	t.Parallel()
 	r := newTestRunner(t, &Runner{})
 	r.SetCorrectsCdSpelling(true)
 	if r.CorrectsCompletionSpelling() {

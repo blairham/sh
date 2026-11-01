@@ -79,6 +79,7 @@ func countedWords(t *testing.T, dir, src string) string {
 // under it that does not move is therefore the parenthesis deciding, rather
 // than the fixture being absent or this helper being dead.
 func TestACountInFrontOfAGroupIsNotABraceList(t *testing.T) {
+	t.Parallel()
 	dir := countedFixture(t)
 	for _, tc := range []struct{ name, src, want string }{
 		{"the control", `f {z,y}a`, `2 | [za] [ya]`},
@@ -123,6 +124,7 @@ func TestACountInFrontOfAGroupIsNotABraceList(t *testing.T) {
 // expansion at all — so these rows are the *matcher's* alone and the ones
 // above are the matcher and the brace scan together.
 func TestACountedGroupIsTheSameOperatorInEverySurface(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ subject, pattern, want string }{
 		// Three is inside the count, one is too few and four too many. A row
 		// that only asked whether `aaa` matched would pass for `+(a)`.
@@ -217,6 +219,7 @@ func countedMatch(t *testing.T, surface, subject, pattern string) string {
 // helper that refused every source would say the same — so the row above it
 // runs the identical text with the flag on and requires the match.
 func TestACountIsOneDialectsAlone(t *testing.T) {
+	t.Parallel()
 	dir := countedFixture(t)
 	if got := countedWords(t, dir, `f {2,3}(a)`); got != `2 | [aa] [aaa]` {
 		t.Fatalf("with the flag: %q, want %q", got, `2 | [aa] [aaa]`)

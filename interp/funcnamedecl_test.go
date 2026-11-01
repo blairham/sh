@@ -14,6 +14,7 @@ import (
 // define one — the axis one dialect answers yes, fatally and with a second
 // sentence for a dot.
 func TestAPunctuatedFunctionNameIsAnAxisAtDefinition(t *testing.T) {
+	t.Parallel()
 	refuse := func(r *Runner) {
 		sem := CoreSemantics()
 		sem.PunctuatedFunctionNameIsRefused = Yes

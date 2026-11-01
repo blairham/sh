@@ -21,6 +21,7 @@ import (
 // and `> $e` holding a pattern truncated whichever file happened to match —
 // a file the script never named.
 func TestARedirectionTargetIsNotSplit(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, wantFile string
 	}{
@@ -60,6 +61,7 @@ func TestARedirectionTargetIsNotSplit(t *testing.T) {
 // file it found. The old row asserted the first with the axis answered the
 // other way, which no shell does (#1792).
 func TestARedirectionTargetIsMatchedByTheSameAxisAsAWord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		globs Answer
@@ -98,6 +100,7 @@ func TestARedirectionTargetIsMatchedByTheSameAxisAsAWord(t *testing.T) {
 // the half no axis moves: `cat <p?` opens the file it found where the target
 // used to be opened as the four characters.
 func TestALiteralPatternTargetIsMatched(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	sem := CoreSemantics()
 	sem.GlobNoMatchIsError = No
@@ -118,6 +121,7 @@ func TestALiteralPatternTargetIsMatched(t *testing.T) {
 // was *written* — `$e`, not what `$e` came to, which by then is the only thing
 // left unless the parser kept the text.
 func TestARedirectionTargetThatIsNotOneWordIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"two words", `e="a b"; echo hi > $e`, "$e: ambiguous redirect"},
 		{"no words at all", `e=; echo hi > $e`, "$e: ambiguous redirect"},
@@ -141,6 +145,7 @@ func TestARedirectionTargetThatIsNotOneWordIsRefused(t *testing.T) {
 // And a target that is one word either way is not a question, so the core
 // answers it rather than refusing: `> f` is the same in all four.
 func TestARedirectionTargetIsAskedAboutOnlyWhenItMatters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		refuses   bool
@@ -180,6 +185,7 @@ func TestARedirectionTargetIsAskedAboutOnlyWhenItMatters(t *testing.T) {
 // as not expanding, and leaving it out of that path made `[[ -f ~/x ]]` false
 // in a home directory holding the file.
 func TestATildeExpandsWhereNothingIsSplit(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	touch(t, dir, "tf")
 	out, _ := run(t, `[[ -f ~/tf ]] && echo yes || echo no`, func(r *Runner) {
@@ -195,6 +201,7 @@ func TestATildeExpandsWhereNothingIsSplit(t *testing.T) {
 // A tilde expands in a redirection target too, which is the same rule as
 // inside `[[ ]]` reached by the other road.
 func TestATildeExpandsInARedirectionTarget(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if _, st := run(t, `echo hi > ~/tf`, func(r *Runner) {
 		sem := CoreSemantics()
@@ -216,6 +223,7 @@ func TestATildeExpandsInARedirectionTarget(t *testing.T) {
 // One dialect says something shorter for a target that expanded to nothing —
 // no reason attached, and "open" even where the redirection was creating.
 func TestAnEmptyTargetCanHaveAWordingOfItsOwn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"creating", `e=; echo hi > $e`, ": cannot open"},
 		{"and opening", `e=; cat < $e`, ": cannot open"},
@@ -250,6 +258,7 @@ func TestAnEmptyTargetCanHaveAWordingOfItsOwn(t *testing.T) {
 // `cd /tmp; cat < $unset` read the directory rather than failing, and only
 // once the shell had been told where it was.
 func TestAnEmptyTargetIsNotTheWorkingDirectory(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	touch(t, dir, "in-there")
 	out, st := run(t, `e=; cat < $e; echo "st=$?"`, func(r *Runner) {

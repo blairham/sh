@@ -22,6 +22,7 @@ func equalsSem(a Answer) Semantics {
 }
 
 func TestEqualsExpansionIsAnAxis(t *testing.T) {
+	t.Parallel()
 	// `echo =ls` prints a path where the axis is on and the literal text
 	// where it is off, with nothing reported either way — the `&>` failure
 	// mode in an expansion.
@@ -38,6 +39,7 @@ func TestEqualsExpansionIsAnAxis(t *testing.T) {
 }
 
 func TestEqualsExpansionOnlyAtTheHeadAndUnquoted(t *testing.T) {
+	t.Parallel()
 	sem := equalsSem(Yes)
 	for _, tc := range []struct{ src, want string }{
 		// An assignment does not begin with `=`.
@@ -54,6 +56,7 @@ func TestEqualsExpansionOnlyAtTheHeadAndUnquoted(t *testing.T) {
 }
 
 func TestEqualsExpansionFailureIsFatal(t *testing.T) {
+	t.Parallel()
 	// The name is reported through the EqualsNotFound wording and the script
 	// is abandoned, like any failed expansion here. The status rides the
 	// fatal-status axis, so that is named too.

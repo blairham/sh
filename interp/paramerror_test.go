@@ -19,6 +19,7 @@ import (
 // Which turns the standard way a script says "this variable is required" into
 // a quiet wrong answer, and is what Homebrew's `brew` failed on.
 func TestParameterErrorExpandsOrEndsTheScript(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want, gone string
 	}{
@@ -57,6 +58,7 @@ func TestParameterErrorExpandsOrEndsTheScript(t *testing.T) {
 // shell says so differently — including one that tells a parameter that is
 // there and empty from one that is absent.
 func TestTheDefaultWordForTheColonForm(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src string
 		dg        Diagnostics
@@ -114,6 +116,7 @@ func TestTheDefaultWordForTheColonForm(t *testing.T) {
 // It ends the script the same way an unset parameter under `set -u` does,
 // which is the other door to the same room.
 func TestTheTwoDoorsToAnUnexpandableParameter(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"unset V\necho \"${V?}\"\necho after\n",
 		"set -u\nunset V\necho \"$V\"\necho after\n",
@@ -148,6 +151,7 @@ func TestTheTwoDoorsToAnUnexpandableParameter(t *testing.T) {
 // with the fault in place, so `echo "${u?a.[a-c]}"` named the word before
 // this change and after it — a probe that cannot tell the two apart.
 func TestTheWordAnErrorComplainsWithIsNotAPattern(t *testing.T) {
+	t.Parallel()
 	dir := globDir(t)
 	var buf strings.Builder
 	sem := PosixSemantics()

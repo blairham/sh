@@ -22,6 +22,7 @@ func pipelineSem(a Answer) Semantics {
 }
 
 func TestLastPipelineElementRunsWhereTheDialectSays(t *testing.T) {
+	t.Parallel()
 	// The axis had a value in every preset and nothing read it. Asserting
 	// both sides is the point: taking the majority silently is what it did
 	// before, and that looks identical to an implementation on one side.
@@ -38,6 +39,7 @@ func TestLastPipelineElementRunsWhereTheDialectSays(t *testing.T) {
 // answer cannot be observed through an external command, so an ordinary
 // pipeline must not be refused for want of a dialect.
 func TestPipelineAxisIsAskedOnlyWhenItShows(t *testing.T) {
+	t.Parallel()
 	if got, st := run(t, `echo x | cat`, withSem(CoreSemantics())); got != "x\n" || st != 0 {
 		t.Errorf("a plain pipeline should need no answer: got %q status %d", got, st)
 	}
@@ -59,6 +61,7 @@ func TestPipelineAxisIsAskedOnlyWhenItShows(t *testing.T) {
 // TestPipelineStillPipes guards the plumbing the axis rearranged: the last
 // element reads the pipe whichever shell it runs in.
 func TestPipelineStillPipes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		sem  Semantics
@@ -126,6 +129,7 @@ func TestPipefailSubstitutesTheBareSignalIsItsOwnAxis(t *testing.T) {
 // reads. The status comes from inside this process rather than from a wait,
 // and the axis has to reach it just the same.
 func TestPipefailSubstitutesForABuiltinKilledWhereItStands(t *testing.T) {
+	t.Parallel()
 	const src = `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done
 { echo "$v"; } | true
 echo "st=$?"`
@@ -162,6 +166,7 @@ func TestPipefailLeavesTheLastElementsOwnStatusAlone(t *testing.T) {
 // An ordinary non-zero exit is substituted unchanged either way. Without this
 // the axis reads as a difference about pipefail in general.
 func TestPipefailSubstitutesAnOrdinaryFailureUnchanged(t *testing.T) {
+	t.Parallel()
 	for _, substituted := range []Answer{Yes, No} {
 		sem := pipefailSignalSem(Yes, substituted)
 		got, _ := runWithPath(t, "set -o pipefail\n(exit 42) | true\necho \"st=$?\"", sem)
@@ -278,6 +283,7 @@ func TestPipefailSubstitutesFromAWatchedWait(t *testing.T) {
 // asserts both: a switch that only ever reads on is indistinguishable from an
 // implementation that ignores it.
 func TestTheSessionCanKeepTheLastPipelineElement(t *testing.T) {
+	t.Parallel()
 	const src = `echo x | read v; echo "[$v]"`
 	keep := func(on bool) func(*Runner) {
 		return func(r *Runner) {
@@ -311,6 +317,7 @@ func TestTheSessionCanKeepTheLastPipelineElement(t *testing.T) {
 // set, `set -m` in front of the pipeline answers `[]` and `set -m; set +m`
 // answers `[hi]`, so it is the monitor's state *at the pipeline* that decides.
 func TestTheMonitorOverrulesTheKeptLastElement(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`set +m; echo x | read v; echo "[$v]"`, "[x]\n"},
 		{`set -m; echo x | read v; echo "[$v]"`, "[]\n"},
@@ -334,6 +341,7 @@ func TestTheMonitorOverrulesTheKeptLastElement(t *testing.T) {
 // the shape that would make the core refuse a pipeline it was about to run in
 // line. The axis is left Unspecified on purpose: the switch is the answer.
 func TestTheKeptLastElementNeedsNoAxis(t *testing.T) {
+	t.Parallel()
 	got, st := run(t, `echo x | read v; echo "[$v]"`, func(r *Runner) {
 		s := CoreSemantics()
 		r.Semantics = &s
@@ -348,6 +356,7 @@ func TestTheKeptLastElementNeedsNoAxis(t *testing.T) {
 // is a subshell in every shell in the panel, with or without the name, so this
 // is what parts an option from a shell that stopped piping.
 func TestTheKeptElementIsOnlyTheLastOne(t *testing.T) {
+	t.Parallel()
 	got, _ := run(t, `echo x | read v | cat; echo "[$v]"`, func(r *Runner) {
 		s := pipelineSem(No)
 		r.Semantics = &s
@@ -362,6 +371,7 @@ func TestTheKeptElementIsOnlyTheLastOne(t *testing.T) {
 
 // A subshell carries its own copy, so `( … )` turning it on stays inside.
 func TestTheKeptLastElementDoesNotEscapeASubshell(t *testing.T) {
+	t.Parallel()
 	got, _ := run(t, `( echo x | read v; echo "in[$v]" ); echo "out[$v]"`, func(r *Runner) {
 		s := pipelineSem(No)
 		r.Semantics = &s

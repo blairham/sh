@@ -21,6 +21,7 @@ import (
 // it, and a setter that did refused two corpus snippets under `emulate sh`
 // and `emulate ksh` that the reference takes.
 func TestTheCasePatternListReadingMovesAsOne(t *testing.T) {
+	t.Parallel()
 	for _, on := range []bool{true, false} {
 		d := syntax.Core()
 		d.CasePatternListSpansBlanks = !on
@@ -60,6 +61,7 @@ func TestTheCasePatternListReadingMovesAsOne(t *testing.T) {
 // a runner whose grammar has not moved does not hand the front end a fresh
 // pointer on every option word.
 func TestSettingTheCasePatternListReadingItAlreadyHasSwapsNothing(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.CasePatternListSpansBlanks = true
 	d.CasePatternListSpansNewlines = true
@@ -78,6 +80,7 @@ func TestSettingTheCasePatternListReadingItAlreadyHasSwapsNothing(t *testing.T) 
 // the case the early return has to get right: reading one field and writing
 // three means the two have to agree about what "already holds it" is.
 func TestAPartlyMovedCasePatternListReadingIsCompleted(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.CasePatternListSpansBlanks = true
 	d.CasePatternListSpansNewlines = false

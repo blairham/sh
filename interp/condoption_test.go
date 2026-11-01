@@ -16,6 +16,7 @@ import (
 // asserts that the operator answers *something* rather than that it answers
 // the state — a `-o` that returned true unconditionally passes half of this.
 func TestTheOptionTestReadsTheLiveState(t *testing.T) {
+	t.Parallel()
 	const src = `set -e; [[ -o errexit ]]; echo "on=$?"; set +e; [[ -o errexit ]]; echo "off=$?"`
 	out, st := run(t, src, nil)
 	if want := "on=0\noff=1\n"; out != want {
@@ -33,6 +34,7 @@ func TestTheOptionTestReadsTheLiveState(t *testing.T) {
 // finds none — measured, and the same in all three shells that have the
 // operator. A `-o` that matched names as patterns would answer true here.
 func TestTheOptionTestsOperandIsAnOrdinaryWord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -70,6 +72,7 @@ func TestTheOptionTestsOperandIsAnOrdinaryWord(t *testing.T) {
 // two a condition otherwise gives. Both sides carry on to the next command,
 // which is what separates this from `set -o nosuchoption` in the same shell.
 func TestAnUnknownConditionOptionHasTwoAnswers(t *testing.T) {
+	t.Parallel()
 	const src = `[[ -o nosuchoption ]]; echo "st=$?"; echo alive`
 	for _, tc := range []struct {
 		name string
@@ -107,6 +110,7 @@ func TestAnUnknownConditionOptionHasTwoAnswers(t *testing.T) {
 // that is never reached is never complained about, so the message's presence
 // is evidence about evaluation order and not only about wording.
 func TestAnUnknownConditionOptionIsNotAFalse(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -186,6 +190,7 @@ func TestAnUnknownConditionOptionIsNotAFalse(t *testing.T) {
 // that the status machinery below did not turn ordinary falsehood into
 // something else: `!` flips these to 0 and `||` walks past them to the right.
 func TestAnOrdinaryFalseIsStillAFalse(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -220,6 +225,7 @@ func TestAnOrdinaryFalseIsStillAFalse(t *testing.T) {
 // 3 standing. Widening the rule here would have taken a guess at that second
 // question, so the rule was left narrow and the difference written down.
 func TestAConditionRefusedForItsOwnReasonIsNotCarriedOn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -257,6 +263,7 @@ func TestAConditionRefusedForItsOwnReasonIsNotCarriedOn(t *testing.T) {
 // the question. Both halves are asserted: a name it claims, and one it does
 // not.
 func TestTheOptionTestAsksTheDialectsNamespace(t *testing.T) {
+	t.Parallel()
 	install := func(r *Runner) {
 		s := permissive()
 		s.UnknownConditionOptionIsAStatus = Yes
@@ -290,6 +297,7 @@ func TestTheOptionTestAsksTheDialectsNamespace(t *testing.T) {
 // With no namespace installed, the operator reads the `set -o` names — which
 // is bash's shape and ksh93's, where the two sets are the same set.
 func TestTheOptionTestFallsBackToTheSetOptionNames(t *testing.T) {
+	t.Parallel()
 	const src = `[[ -o braceexpand ]]; echo "declared=$?"; [[ -o pipefail ]]; echo "undeclared=$?"`
 	out, _ := run(t, src, func(r *Runner) {
 		s := permissive()
@@ -315,6 +323,7 @@ func TestTheOptionTestFallsBackToTheSetOptionNames(t *testing.T) {
 // mistake in the other direction too: a namespace that does not claim it must
 // shadow the `set -o` name here exactly as it does for the condition.
 func TestDialectOptionReadsTheNamespaceAndNotTheSetONames(t *testing.T) {
+	t.Parallel()
 	var r *Runner
 	// A Runner the package's own harness built, so this asks the shell a
 	// script would get rather than one assembled here.
@@ -371,6 +380,7 @@ func TestDialectOptionReadsTheNamespaceAndNotTheSetONames(t *testing.T) {
 // into the condition's own lookup would have made every `shopt` name answer
 // `[[ -o ]]` in a shell that answers none of them (#4149).
 func TestDialectOptionReachesTheSecondNamespaceAndTheConditionDoesNot(t *testing.T) {
+	t.Parallel()
 	var r *Runner
 	run(t, "true", func(got *Runner) { r = got })
 	if r == nil {

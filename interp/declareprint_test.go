@@ -47,6 +47,7 @@ func declareRun(t *testing.T, src string, set func(*Semantics), dg Diagnostics) 
 // cluster and `--` standing where there is no attribute, paired with the
 // always-double value spelling.
 func TestDeclarePrintClusteredForm(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`v=1; typeset -p v`, `declare -- v="1"`},
 		{`v=; typeset -p v`, `declare -- v=""`},
@@ -79,6 +80,7 @@ func TestDeclarePrintClusteredForm(t *testing.T) {
 // space per associative element, and an empty associative table listed with
 // no value at all — the attribute is the whole of what it has to say.
 func TestDeclarePrintClusteredArrays(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`arr=(x y); typeset -p arr`, `declare -a arr=([0]="x" [1]="y")`},
 		{`arr=(); typeset -p arr`, `declare -a arr=()`},
@@ -104,6 +106,7 @@ func TestDeclarePrintClusteredArrays(t *testing.T) {
 // scalar, which is spelled `export` with the `x` dropped; arrays wrapped in
 // padded parentheses with no subscripts, a gap being an empty element.
 func TestDeclarePrintExportSpelledForm(t *testing.T) {
+	t.Parallel()
 	form := func(s *Semantics) {
 		s.DeclareListing = DeclareListingExportSpelled
 		s.DeclareValueQuoting = ListingQuoteWhenNeededEscaped
@@ -143,6 +146,7 @@ func TestDeclarePrintExportSpelledForm(t *testing.T) {
 // TestDeclarePrintBareAssignmentsForm: each flag its own word, and a name
 // with no attributes written as a bare assignment with no command word.
 func TestDeclarePrintBareAssignmentsForm(t *testing.T) {
+	t.Parallel()
 	form := func(s *Semantics) {
 		s.DeclareListing = DeclareListingBareAssignments
 		s.DeclareValueQuoting = ListingQuoteWhenNeededDollar
@@ -183,6 +187,7 @@ func TestDeclarePrintBareAssignmentsForm(t *testing.T) {
 // dialect's wording and status 1, or passed over in silence with status 0 —
 // and the other names list either way.
 func TestDeclarePrintMissingName(t *testing.T) {
+	t.Parallel()
 	src := `v=1; typeset -p nosuch v`
 
 	out, errs, st := declareRun(t, src, nil, Diagnostics{})
@@ -217,6 +222,7 @@ func TestDeclarePrintMissingName(t *testing.T) {
 // three engines sort and the third promises nothing, so sorted is the
 // deterministic choice.
 func TestDeclarePrintWithNoNamesListsEverythingSorted(t *testing.T) {
+	t.Parallel()
 	f, err := syntax.Parse(`b=2; a=1; typeset -A m; m[k]=v; typeset -p`, syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -259,6 +265,7 @@ func TestDeclarePrintWithNoNamesListsEverythingSorted(t *testing.T) {
 // question of its own, so `-p` under it is a refusal rather than some shell's
 // format by default.
 func TestDeclarePrintRefusedWithoutADialect(t *testing.T) {
+	t.Parallel()
 	f, err := syntax.Parse(`v=1; typeset -p v`, syntax.Core())
 	if err != nil {
 		t.Fatal(err)

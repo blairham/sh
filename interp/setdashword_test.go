@@ -55,6 +55,7 @@ func runDashWord(t *testing.T, src string, declines Answer) (string, int) {
 // TestABareSetODeclinesADashWord is the row the issue is named for, read both
 // ways from one script.
 func TestABareSetODeclinesADashWord(t *testing.T) {
+	t.Parallel()
 	const src = "set -o -e >/dev/null\necho \"st=$?\"\ncase $- in *e*) echo e=on;; *) echo e=off;; esac\n"
 
 	out, st := runDashWord(t, src, Yes)
@@ -78,6 +79,7 @@ func TestABareSetODeclinesADashWord(t *testing.T) {
 // dialect that quietly skipped the word instead would pass the test above and
 // fail this one.
 func TestADeclinedWordLeavesABareSetOThatLists(t *testing.T) {
+	t.Parallel()
 	out, st := runDashWord(t, "set -o -e\necho done\n", Yes)
 	if st != 0 || !strings.Contains(out, "errexit") || !strings.HasSuffix(out, "done\n") {
 		t.Errorf("got %q at %d, want the option table on standard output and then `done`", out, st)
@@ -88,6 +90,7 @@ func TestADeclinedWordLeavesABareSetOThatLists(t *testing.T) {
 // rule: the axis is asked about the spelling of the word and not about the
 // `-o`, so `set -o errexit` reads alike under both answers.
 func TestANameShapedWordIsStillTheName(t *testing.T) {
+	t.Parallel()
 	const src = "set -o errexit\necho \"st=$?\"\ncase $- in *e*) echo e=on;; *) echo e=off;; esac\n"
 	for _, a := range []Answer{Yes, No} {
 		out, st := runDashWord(t, src, a)
@@ -101,6 +104,7 @@ func TestANameShapedWordIsStillTheName(t *testing.T) {
 // that decline — `set -o ""` lists there and leaves the empty word as the
 // first operand — and it is refused as one in the columns that do not.
 func TestABareSetODeclinesTheEmptyWord(t *testing.T) {
+	t.Parallel()
 	const src = "set -o \"\" >/dev/null\necho \"st=$? n=$# 1=[$1]\"\n"
 
 	out, st := runDashWord(t, src, Yes)
@@ -120,6 +124,7 @@ func TestABareSetODeclinesTheEmptyWord(t *testing.T) {
 // nowhere else, and with the decline off the same script reaches the name
 // table instead.
 func TestADeclinedWordIsSeenByTheValidatingPass(t *testing.T) {
+	t.Parallel()
 	const src = "set -o -Z\necho after\n"
 
 	sem := dashWordSem(Yes)
@@ -142,6 +147,7 @@ func TestADeclinedWordIsSeenByTheValidatingPass(t *testing.T) {
 // word to decline: a dialect that never writes the field still reads
 // `set -o errexit` and a bare `set -o`.
 func TestAnUnansweredDeclineIsAskedOnlyWhereItMatters(t *testing.T) {
+	t.Parallel()
 	out, st := runDashWord(t, "set -o -e\necho after\n", Unspecified)
 	if !strings.Contains(out, "declining a next word that begins with a dash") ||
 		!strings.Contains(out, "no dialect was chosen") {
@@ -168,6 +174,7 @@ func TestAnUnansweredDeclineIsAskedOnlyWhereItMatters(t *testing.T) {
 // would be what said so. It said so: closing #2699 reddened it, and this is
 // the same assertion with the answer moved.
 func TestABareDashIsADeclinedWord(t *testing.T) {
+	t.Parallel()
 	out, st := runDashWord(t, "set -o -\necho after\n", Yes)
 	if strings.Contains(out, "invalid option name") || !strings.Contains(out, "errexit") {
 		t.Errorf("got %q at %d, want the `-` declined and the table listed", out, st)
@@ -201,6 +208,7 @@ func TestABareDashIsADeclinedWord(t *testing.T) {
 // `set +v -` leaves verbose off under every reading, which is what says the
 // rule clears rather than toggles — a toggle would turn it back on.
 func TestABareOptionWordMeansThreeDifferentThings(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name             string
 		reading          BareOptionWordReading
@@ -251,6 +259,7 @@ func TestABareOptionWordMeansThreeDifferentThings(t *testing.T) {
 // errexit **on**, silent about `-Z`, and `$1` is `-Z`. Unanimous, so it is
 // asked of no dialect and holds under every reading of what the word *means*.
 func TestABareOptionWordEndsTheOptionParse(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		reading BareOptionWordReading

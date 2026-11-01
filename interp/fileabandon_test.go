@@ -56,6 +56,7 @@ const sourcedFatal = "echo IN-BEFORE\nset -u\necho X${NOPE}\necho IN-AFTER\n"
 // reads, so a fix that resumed the sourcing file with 0 would look right here
 // and be wrong.
 func TestAnErrorInASourcedFileEndsThatFileWhenTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "p.sh", sourcedFatal)
 	out, st := sourceRun(t, dir, ". ./p.sh\necho \"OUT-AFTER st=$?\"\n",
@@ -75,6 +76,7 @@ func TestAnErrorInASourcedFileEndsThatFileWhenTheAxisSaysSo(t *testing.T) {
 // and the assertion is again the whole output: the sourcing file's next line
 // must be absent, which is the half a "no diagnostic" check cannot see.
 func TestAnErrorInASourcedFileEndsTheShellWhenTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "p.sh", sourcedFatal)
 	out, st := sourceRun(t, dir, ". ./p.sh\necho \"OUT-AFTER st=$?\"\n",
@@ -94,6 +96,7 @@ func TestAnErrorInASourcedFileEndsTheShellWhenTheAxisSaysSo(t *testing.T) {
 // other, so the override has to be reachable and has to be the *only* thing
 // that changes.
 func TestTheStatusASourcedFileFailedWithIsItsOwnField(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "p.sh", sourcedFatal)
 	dg := abandonDiagnostics()
@@ -113,6 +116,7 @@ func TestTheStatusASourcedFileFailedWithIsItsOwnField(t *testing.T) {
 // against is a boundary that consumes controlExit without asking which kind it
 // is holding, and that bug is invisible under the answer that catches nothing.
 func TestExitInASourcedFileIsNotCaughtByTheBoundary(t *testing.T) {
+	t.Parallel()
 	for _, endsTheFileOnly := range []Answer{Yes, No} {
 		dir := t.TempDir()
 		write(t, dir, "p.sh", "echo IN-BEFORE\nexit 7\necho IN-AFTER\n")
@@ -131,6 +135,7 @@ func TestExitInASourcedFileIsNotCaughtByTheBoundary(t *testing.T) {
 // `.`, so a file sourced from a file sourced from the program loses one file
 // and the middle one runs the line after its own `.`.
 func TestAnErrorEndsOneSourcedFileAndNotTheStack(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "p.sh", sourcedFatal)
 	write(t, dir, "m.sh", "echo MID-BEFORE\n. ./p.sh\necho \"MID-AFTER st=$?\"\n")
@@ -152,6 +157,7 @@ func TestAnErrorEndsOneSourcedFileAndNotTheStack(t *testing.T) {
 // protected — would print OUT-AFTER, and is what an implementation keying on
 // the frame rather than on the builtin would do.
 func TestTheBoundaryIsTheRunningDotAndNotTheFileTheTextCameFrom(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "p.sh", "f() { echo F-BEFORE; set -u; echo X${NOPE}; echo F-AFTER; }\n")
 	out, st := sourceRun(t, dir, ". ./p.sh\nf\necho \"OUT-AFTER st=$?\"\n",
@@ -171,6 +177,7 @@ func TestTheBoundaryIsTheRunningDotAndNotTheFileTheTextCameFrom(t *testing.T) {
 // way: the boundary is wherever the `.` is, so the body carries on at the
 // command after it rather than the call unwinding.
 func TestADotInsideAFunctionResumesTheFunction(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "p.sh", sourcedFatal)
 	out, _ := sourceRun(t, dir,
@@ -190,6 +197,7 @@ func TestADotInsideAFunctionResumesTheFunction(t *testing.T) {
 // one dialect and a request to stop in another, and the pair is run with the
 // *same* file so the only difference is the answer.
 func TestTheErrorOperatorIsItsOwnAxisAtTheBoundary(t *testing.T) {
+	t.Parallel()
 	const file = "echo IN-BEFORE\necho X${NOPE?msg}\necho IN-AFTER\n"
 	dir := t.TempDir()
 	write(t, dir, "p.sh", file)
@@ -219,6 +227,7 @@ func TestTheErrorOperatorIsItsOwnAxisAtTheBoundary(t *testing.T) {
 // so a substrate with no dialect chosen has to say so rather than pick. The
 // error still ends the shell, which is the answer that loses nothing.
 func TestAnUnansweredSourcedAbandonmentAxisRefuses(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "p.sh", sourcedFatal)
 	out, _ := sourceRun(t, dir, ". ./p.sh\necho OUT-AFTER\n",
@@ -238,6 +247,7 @@ func TestAnUnansweredSourcedAbandonmentAxisRefuses(t *testing.T) {
 // and it is only reachable once the first one says the file is a boundary —
 // which is the whole point of asking it there and not at the operator.
 func TestAnUnansweredErrorOperatorAxisRefuses(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "p.sh", "echo IN-BEFORE\necho X${NOPE?msg}\n")
 	out, _ := sourceRun(t, dir, ". ./p.sh\necho OUT-AFTER\n",
@@ -253,6 +263,7 @@ func TestAnUnansweredErrorOperatorAxisRefuses(t *testing.T) {
 // must be silent about it — otherwise every `set -u` failure in a sourced file
 // would print a refusal nobody can act on.
 func TestAnUnsetParameterUnderNounsetNeverReachesTheErrorOperatorAxis(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "p.sh", sourcedFatal)
 	out, _ := sourceRun(t, dir, ". ./p.sh\necho \"OUT-AFTER st=$?\"\n",
@@ -292,6 +303,7 @@ func runAndGiveUp(t *testing.T, dir, text string, sem Semantics, dg Diagnostics)
 // reading whole files of its own needs — a shell's startup files. Without it,
 // one bad line in one startup file cost the whole invocation.
 func TestGiveUpTheFileEndsAFileAndNotTheSession(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	sem := abandonSemantics(No, No)
 	dg := abandonDiagnostics()
@@ -311,6 +323,7 @@ func TestGiveUpTheFileEndsAFileAndNotTheSession(t *testing.T) {
 // the files after it are not read. That is measured in every shell that reads
 // more than one, and it is the rule this must not quietly repair.
 func TestGiveUpTheFileLeavesAnExitAlone(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, r := runAndGiveUp(t, dir, "echo RC-BEFORE\nexit 3\necho RC-AFTER\n",
 		abandonSemantics(No, No), abandonDiagnostics())
@@ -330,6 +343,7 @@ func TestGiveUpTheFileLeavesAnExitAlone(t *testing.T) {
 // boundary as well — the same `${NOPE?msg}` at the top of a startup file lets
 // the program run in one shell and ends the shell in the other.
 func TestGiveUpTheFileHonoursTheErrorOperatorAxis(t *testing.T) {
+	t.Parallel()
 	const file = "echo RC-BEFORE\necho X${NOPE?msg}\n"
 	dir := t.TempDir()
 	if _, r := runAndGiveUp(t, dir, file, abandonSemantics(No, No), abandonDiagnostics()); r.Exited() {
@@ -369,6 +383,7 @@ func runAndGiveUpTheLine(t *testing.T, dir, text string, sem Semantics, dg Diagn
 // pseudo-terminal in bash 5.3, zsh 5.9.2, ksh93u+ and dash, all four of which
 // print the diagnostic and draw the next prompt (#1124).
 func TestGiveUpTheLineEndsALineAndNotTheSession(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, r := runAndGiveUpTheLine(t, dir, "set -u\necho X${NOPE}\necho LINE-AFTER\n",
 		abandonSemantics(No, No), abandonDiagnostics())
@@ -385,6 +400,7 @@ func TestGiveUpTheLineEndsALineAndNotTheSession(t *testing.T) {
 // every shell, and so does errexit firing. This is the half that keeps the
 // catch from making a shell nobody can leave.
 func TestGiveUpTheLineLeavesAnExitAlone(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, r := runAndGiveUpTheLine(t, dir, "echo LINE-BEFORE\nexit 3\n",
 		abandonSemantics(No, No), abandonDiagnostics())
@@ -410,6 +426,7 @@ func TestGiveUpTheLineLeavesAnExitAlone(t *testing.T) {
 // TestGiveUpTheFileHonoursTheErrorOperatorAxis asserts that it makes all of
 // it.
 func TestGiveUpTheLineDoesNotAskTheErrorOperatorAxis(t *testing.T) {
+	t.Parallel()
 	const line = "echo LINE-BEFORE\necho X${NOPE?msg}\n"
 	dir := t.TempDir()
 	for _, paramErrorExits := range []Answer{No, Yes, Unspecified} {
@@ -431,6 +448,7 @@ func TestGiveUpTheLineDoesNotAskTheErrorOperatorAxis(t *testing.T) {
 // next one must still end the session. A catch that cleared the control flow
 // and left the kind behind would read that exit as one more error.
 func TestACaughtLineDoesNotMakeALaterExitSurvivable(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	sem, dg := abandonSemantics(No, No), abandonDiagnostics()
 	f, err := syntax.Parse("set -u\necho X${NOPE}\n", syntax.Core())
@@ -469,6 +487,7 @@ func TestACaughtLineDoesNotMakeALaterExitSurvivable(t *testing.T) {
 // text already has. The override is the file's; evaluated text keeps the status
 // the error carried, so setting the field must change one and not the other.
 func TestTheSameBoundaryIsAtEvalAndCarriesADifferentStatus(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "p.sh", sourcedFatal)
 	dg := abandonDiagnostics()
@@ -498,6 +517,7 @@ func TestTheSameBoundaryIsAtEvalAndCarriesADifferentStatus(t *testing.T) {
 // Run under both answers to the axis, because a boundary that consumed every
 // unwind alike would pass under one of them by accident.
 func TestAGivenUpStatementDoesNotEndBorrowedText(t *testing.T) {
+	t.Parallel()
 	for _, endsTheTextOnly := range []Answer{Yes, No} {
 		dir := t.TempDir()
 		sem := abandonSemantics(endsTheTextOnly, No)
@@ -528,6 +548,7 @@ func TestAGivenUpStatementDoesNotEndBorrowedText(t *testing.T) {
 // bash 5.3 and bash 3.2 both print NEXT-LINE and never SAME-LINE, from inside
 // a sourced file and from inside an eval.
 func TestAGivenUpStatementTakesTheRestOfItsLineInsideBorrowedText(t *testing.T) {
+	t.Parallel()
 	sem := abandonSemantics(Yes, No)
 	sem.ReadonlyReassignmentFatal = No
 	dg := abandonDiagnostics()
@@ -556,6 +577,7 @@ func TestAGivenUpStatementTakesTheRestOfItsLineInsideBorrowedText(t *testing.T) 
 // and read the exit as one more error, which is the one way this change could
 // have turned `exit` into something survivable.
 func TestACaughtErrorDoesNotMakeALaterExitSurvivable(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "a.sh", sourcedFatal)
 	write(t, dir, "b.sh", "echo IN2\nexit 7\necho NOT-REACHED\n")
@@ -587,6 +609,7 @@ func TestACaughtErrorDoesNotMakeALaterExitSurvivable(t *testing.T) {
 // Run through FireChain rather than through a front end, because Interactive
 // is the whole of the difference and this is where it is read.
 func TestAHookChainCatchesAnErrorOnlyAtAPrompt(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name        string
 		interactive bool

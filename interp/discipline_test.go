@@ -18,6 +18,7 @@ import (
 // probe that only shows the quiet answer cannot tell "the hooks are off" from
 // "the hooks do not work".
 func TestDisciplineHooksAreOffUntilADialectAsksForThem(t *testing.T) {
+	t.Parallel()
 	off := func(r *Runner) {
 		sem := CoreSemantics()
 		sem.PunctuatedFunctionNameIsRefused = No
@@ -47,6 +48,7 @@ func TestDisciplineHooksAreOffUntilADialectAsksForThem(t *testing.T) {
 // agreed with ksh93 before any of this, and the one a wider acceptance would
 // have broken.
 func TestOnlyTheFourEventSuffixesEscapeTheRefusal(t *testing.T) {
+	t.Parallel()
 	on := func(r *Runner) {
 		sem := CoreSemantics()
 		sem.PunctuatedFunctionNameIsRefused = Yes

@@ -45,6 +45,7 @@ func keptBackslash(t *testing.T, src string, keeps Answer) string {
 // Measured 2026-09-28 — see Semantics.RegexKeepsAWrittenBackslash for the
 // four columns and the binaries.
 func TestAWrittenBackslashEitherReachesTheEngineOrDoesNot(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, kept, dropped string }{
 		// The control: with no backslash on it a `.` is a `.` under both
 		// readings, so the operator reaches an engine either way.
@@ -137,6 +138,7 @@ func TestAWrittenBackslashEitherReachesTheEngineOrDoesNot(t *testing.T) {
 // v1.37.0, whose engine has the class and whose quote removal eats the
 // backslash all the same.
 func TestTheDigitClassAxisIsStillItsOwnQuestion(t *testing.T) {
+	t.Parallel()
 	run := func(src string, wide, narrow Answer) string {
 		t.Helper()
 		out, _ := runGrammar(t, src+"\n", func(d *syntax.Dialect) {

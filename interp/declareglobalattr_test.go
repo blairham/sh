@@ -26,6 +26,7 @@ const globalLetters = "aAgiprx"
 // globally. The subscript is a key either way, which is the only thing that
 // tells an associative name from an indexed one.
 func TestGlobalLetterKeepsTheAssociativeAttribute(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"the subscript is a key at the top level",
@@ -81,6 +82,7 @@ func TestGlobalLetterKeepsTheAssociativeAttribute(t *testing.T) {
 // `${m[@]}` — as one element under the index the subscript evaluated to — so
 // nothing short of the field count and the fields catches the difference.
 func TestGlobalAssociativeArrayIsOneFieldPerElement(t *testing.T) {
+	t.Parallel()
 	src := `typeset -gA m; m[b]="x y"; m[a]=1; set -- "${m[@]}"; printf "%d" "$#"; printf "[%s]" "$@"`
 	out, errs, st := declRun(t, src, withDeclareLetters(globalLetters), Diagnostics{})
 	if st != 0 || errs != "" {
@@ -95,6 +97,7 @@ func TestGlobalAssociativeArrayIsOneFieldPerElement(t *testing.T) {
 // change: without it a declaration inside a function is local and the
 // caller's name is untouched when it returns, attribute included.
 func TestGlobalLetterDoesNotShadowTheAttribute(t *testing.T) {
+	t.Parallel()
 	local := func(s *Semantics) {
 		s.DeclareOptions = globalLetters
 		s.TypesetLocalNeedsKeywordFunction = No
@@ -115,6 +118,7 @@ func TestGlobalLetterDoesNotShadowTheAttribute(t *testing.T) {
 // `typeset -gA a b c` is, so it has to answer the same axis the local path
 // answers rather than doing nothing at all.
 func TestGlobalValuelessDeclarationBringsTheNameIntoBeing(t *testing.T) {
+	t.Parallel()
 	empty := func(s *Semantics) {
 		s.DeclareOptions = globalLetters
 		s.DeclaredNameWithoutValueIsEmpty = Yes
@@ -149,6 +153,7 @@ func TestGlobalValuelessDeclarationBringsTheNameIntoBeing(t *testing.T) {
 // nothing about it. The local path records that; `-g` has to record it too, or
 // an exported name would arrive at every child carrying an empty value.
 func TestGlobalValuelessExportIsNotHandedToAChild(t *testing.T) {
+	t.Parallel()
 	empty := func(s *Semantics) {
 		s.DeclareOptions = globalLetters
 		s.DeclaredNameWithoutValueIsEmpty = Yes
@@ -165,6 +170,7 @@ func TestGlobalValuelessExportIsNotHandedToAChild(t *testing.T) {
 // so there is no fresh cell to fill in — a name that already holds something
 // keeps it, which is what every shell spelling the letter does.
 func TestGlobalValuelessDeclarationKeepsAnExistingValue(t *testing.T) {
+	t.Parallel()
 	empty := func(s *Semantics) {
 		s.DeclareOptions = globalLetters
 		s.DeclaredNameWithoutValueIsEmpty = Yes
@@ -191,6 +197,7 @@ func TestGlobalValuelessDeclarationKeepsAnExistingValue(t *testing.T) {
 // already applied before the split, so a later edit cannot lose one of them
 // the way `-A` was lost.
 func TestGlobalLetterStillCarriesTheOtherAttributes(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"integer", `typeset -gi n; n=5+2; printf "[%s]" "$n"`, "[7]"},
 		{"export", `typeset -gx e=1; printf "[%s]" "$e"`, "[1]"},

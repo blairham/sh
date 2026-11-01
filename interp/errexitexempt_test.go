@@ -27,6 +27,7 @@ var exemptLastCommand = []struct{ name, body string }{
 }
 
 func TestSetEDoesNotJudgeACompoundWhoseLastCommandWasExempt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range exemptLastCommand {
 		out, status := run(t, "set -e; "+tc.body+"; echo survived", withSem(errSem()))
 		if out != "survived\n" || status != 0 {
@@ -68,6 +69,7 @@ func TestACompoundThatFailedBeforeItsBodyIsStillJudged(t *testing.T) {
 }
 
 func TestAFailureInsideACompoundStillStopsTheScript(t *testing.T) {
+	t.Parallel()
 	// The judged half, so that a fix that stopped judging compounds by
 	// stopping the body from being judged would be seen.
 	for _, body := range []string{

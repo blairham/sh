@@ -51,6 +51,7 @@ func wordNamingSemantics() Semantics {
 }
 
 func TestBadSubstitutionNamesWhatTheDialectAsksFor(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		names BadSubstitutionSubject
@@ -95,6 +96,7 @@ func TestBadSubstitutionNamesWhatTheDialectAsksFor(t *testing.T) {
 // walk recorded no word at all, so every one of these named the expansion
 // alone whatever the dialect asked for (#3355).
 func TestARedirectionTargetIsAWordLikeAnyOther(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		names BadSubstitutionSubject
@@ -121,6 +123,7 @@ func TestARedirectionTargetIsAWordLikeAnyOther(t *testing.T) {
 }
 
 func TestACommandIsAbandonedAtItsFirstBadWord(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, first string }{
 		// A letter the family does not have, which is a failed expansion
 		// and stops the script where it stands.
@@ -143,6 +146,7 @@ func TestACommandIsAbandonedAtItsFirstBadWord(t *testing.T) {
 }
 
 func TestAWordIsAbandonedAtItsFirstBadExpansion(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{}
 	_, errs, _ := badWordRun(t, `x=a; echo "${x@QQ}${x@ZZ}"`, dg, wordNamingSemantics(), false)
 	if n := strings.Count(errs, "bad substitution"); n != 1 {
@@ -151,6 +155,7 @@ func TestAWordIsAbandonedAtItsFirstBadExpansion(t *testing.T) {
 }
 
 func TestUnsetNamesAreAbandonedAtTheFirstToo(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	f, err := syntax.Parse(`set -u; printf "[%s]" "$a" "$b"`, d)
 	if err != nil {
@@ -173,6 +178,7 @@ func TestUnsetNamesAreAbandonedAtTheFirstToo(t *testing.T) {
 }
 
 func TestTheTransformLetterIsCheckedOnlyWhenTheAxisSaysThereIsAValue(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name    string
 		axis    Answer
@@ -221,6 +227,7 @@ func TestTheTransformLetterIsCheckedOnlyWhenTheAxisSaysThereIsAValue(t *testing.
 // where a failed expansion is fatal, which is what the mode produces, and the
 // dialect names 127 for the route.
 func TestABadTransformLetterCarriesTheExpansionFailureStatus(t *testing.T) {
+	t.Parallel()
 	sem := wordNamingSemantics()
 	dg := Diagnostics{ExpansionFailureStatusFromCommandString: 127}
 
@@ -248,6 +255,7 @@ func TestABadTransformLetterCarriesTheExpansionFailureStatus(t *testing.T) {
 // A subscript is read before the operator is, so a node the grammar refused
 // still carries one. Answering it as an array skipped the refusal entirely.
 func TestASubscriptDoesNotRescueAnUnreadableOperator(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`a=(one two); printf "[%s]" "${a[@]@Q}"`,
 		`a=(one two); printf "[%s]" "${a[0]@Q}"`,

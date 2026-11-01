@@ -47,6 +47,7 @@ func runBlamedRange(t *testing.T, src string, set func(*Runner)) string {
 // the range read from is expanded first and its value carries no quoting of
 // the script's, so that row is blamed as `&&`.
 func TestASubstringRangeIsBlamedAsTheScriptWroteIt(t *testing.T) {
+	t.Parallel()
 	set := func(r *Runner) {
 		sem := rangeSem()
 		diag := rangeDiags()
@@ -71,6 +72,7 @@ func TestASubstringRangeIsBlamedAsTheScriptWroteIt(t *testing.T) {
 // length at all, which is unanimous: `${x:&&:&&}` is one line in bash 5.3 and
 // one in ksh93u+, and we wrote the offset's and then the length's.
 func TestARefusedOffsetEvaluatesNoLength(t *testing.T) {
+	t.Parallel()
 	set := func(r *Runner) {
 		sem := rangeSem()
 		diag := rangeDiags()
@@ -92,6 +94,7 @@ func TestARefusedOffsetEvaluatesNoLength(t *testing.T) {
 // after the parameter's own as a separator: it belongs to the offset's
 // expression, so `${v::2}` is the expression `:2` and a refusal.
 func TestASubstringOffsetCanTakeALeadingColon(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		takes   bool
@@ -137,6 +140,7 @@ func TestASubstringOffsetCanTakeALeadingColon(t *testing.T) {
 // one column reads the rest as an expression and complains about the
 // arithmetic, and one refuses the substitution outright.
 func TestASubstringRangeWithAThirdColonIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		bad  Answer

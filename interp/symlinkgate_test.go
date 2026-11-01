@@ -74,6 +74,7 @@ func hidesSecrets(denied *[]Action) func(*Runner) {
 // /etc, because the decision was made about the name and the name was not the
 // object. The open now says which object it got.
 func TestALinkedReadIsRefused(t *testing.T) {
+	t.Parallel()
 	_, link := linkFarm(t)
 	out, st := run(t, "cat <"+link, hidesSecrets(nil))
 	if strings.Contains(out, "classified") {
@@ -95,6 +96,7 @@ func TestALinkedReadIsRefused(t *testing.T) {
 // destroyed — the write is stopped and the damage is done. Both halves are
 // asserted, and the second is the one worth having.
 func TestALinkedWriteIsRefusedBeforeAnythingIsDestroyed(t *testing.T) {
+	t.Parallel()
 	secret, link := linkFarm(t)
 	out, st := run(t, "echo clobbered >"+link, hidesSecrets(nil))
 	if !strings.Contains(out, "refused") || st == 0 {
@@ -112,6 +114,7 @@ func TestALinkedWriteIsRefusedBeforeAnythingIsDestroyed(t *testing.T) {
 // TestALinkedAppendIsRefused, because `>>` is a write the policy speaks about
 // in the same breath and reaches the same open.
 func TestALinkedAppendIsRefused(t *testing.T) {
+	t.Parallel()
 	secret, link := linkFarm(t)
 	out, _ := run(t, "echo more >>"+link, hidesSecrets(nil))
 	if !strings.Contains(out, "refused") {
@@ -130,6 +133,7 @@ func TestALinkedAppendIsRefused(t *testing.T) {
 // it, which makes it the open with the most to lose and the one a redirect
 // test would not cover: it reads through a different call.
 func TestASourcedLinkIsRefused(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "secret"), 0o755); err != nil {
 		t.Fatal(err)
@@ -173,6 +177,7 @@ func TestASourcedLinkIsRefused(t *testing.T) {
 // reason the file read is, and refuses the same way a missing directory
 // answers: with nothing, and quietly.
 func TestAGlobDoesNotEnumerateAHiddenDirectoryThroughALink(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "secret"), 0o755); err != nil {
 		t.Fatal(err)
@@ -200,6 +205,7 @@ func TestAGlobDoesNotEnumerateAHiddenDirectoryThroughALink(t *testing.T) {
 // diagnostic names what the script wrote, and the audit record — the
 // operator's side, which has to be actionable — names what was reached.
 func TestARefusalNamesTheLinkAndNotWhereItWent(t *testing.T) {
+	t.Parallel()
 	_, link := linkFarm(t)
 	var denied []Action
 	var events []Event
@@ -239,6 +245,7 @@ func TestARefusalNamesTheLinkAndNotWhereItWent(t *testing.T) {
 // TestALinkToAnAllowedFileStillOpens. A check that refuses everything is not
 // a check, and this is the half that would catch one.
 func TestALinkToAnAllowedFileStillOpens(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	target := filepath.Join(dir, "ordinary")
 	if err := os.WriteFile(target, []byte("visible\n"), 0o600); err != nil {
@@ -260,6 +267,7 @@ func TestALinkToAnAllowedFileStillOpens(t *testing.T) {
 // ordinary path now truncates somewhere it did not before. `>` over a longer
 // file is where a mistake there would show, and nowhere else.
 func TestAnOrdinaryWriteUnderAGateStillTruncates(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	target := filepath.Join(dir, "log")
 	if err := os.WriteFile(target, []byte("a much longer previous line\n"), 0o600); err != nil {
@@ -282,6 +290,7 @@ func TestAnOrdinaryWriteUnderAGateStillTruncates(t *testing.T) {
 // half has to know the difference or `> /dev/null` stops working, which is
 // about the most common thing a script does.
 func TestWritingToADeviceUnderAGate(t *testing.T) {
+	t.Parallel()
 	if _, st := run(t, "echo into-the-void >/dev/null", hidesSecrets(nil)); st != 0 {
 		t.Errorf("`> /dev/null` failed under a gate, status %d", st)
 	}
@@ -331,6 +340,7 @@ func TestAHardLinkIsNotCovered(t *testing.T) {
 // there, and a shell without one must open files by exactly the calls it did
 // before — including through a link, which is an ordinary thing scripts do.
 func TestAnUngatedRunIsUnaffected(t *testing.T) {
+	t.Parallel()
 	secret, link := linkFarm(t)
 	out, st := run(t, "cat <"+link, nil)
 	if out != "classified\n" || st != 0 {

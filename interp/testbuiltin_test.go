@@ -28,6 +28,7 @@ func testStatus(t *testing.T, dir, src string) int {
 // TestArgumentCountDecidesTheMeaning is the rule a grammar alone would not
 // predict, and the reason `test` surprises people.
 func TestArgumentCountDecidesTheMeaning(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		src  string
@@ -63,6 +64,7 @@ func TestArgumentCountDecidesTheMeaning(t *testing.T) {
 // TestEqualsComparesStringsAndNeverPatterns is the sharpest difference from
 // `[[ ]]`, where the same right operand is a pattern and the answer flips.
 func TestEqualsComparesStringsAndNeverPatterns(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if got := testStatus(t, dir, `test abc = "a*"`); got != 1 {
 		t.Errorf("test abc = a* gave %d, want 1: `=` compares text", got)
@@ -80,6 +82,7 @@ func TestEqualsComparesStringsAndNeverPatterns(t *testing.T) {
 // TestNumericOperatorsCompareNumbers — the word-spelled operators are numeric
 // and `=` is textual, which is the trap `[[ ]]` has too.
 func TestNumericOperatorsCompareNumbers(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		src  string
@@ -101,6 +104,7 @@ func TestNumericOperatorsCompareNumbers(t *testing.T) {
 }
 
 func TestFileOperators(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "full"), []byte("x\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -140,6 +144,7 @@ func TestFileOperators(t *testing.T) {
 // TestAndBindsTighterThanOr is the precedence, and the grammar only takes over
 // past four arguments.
 func TestAndBindsTighterThanOr(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		src  string
@@ -163,6 +168,7 @@ func TestAndBindsTighterThanOr(t *testing.T) {
 // unquoted empty expansion is not an empty argument — it is no argument, so
 // the count changes and with it the meaning.
 func TestTheQuotingTrap(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if got := testStatus(t, dir, `u=; test -n $u`); got != 0 {
 		t.Errorf("unquoted: %d, want 0 — `-n` is left as a lone non-empty string", got)
@@ -175,6 +181,7 @@ func TestTheQuotingTrap(t *testing.T) {
 // TestBracketWantsItsBracket — `[` is a command and `]` is an argument, so
 // nothing but the builtin checks for it.
 func TestBracketWantsItsBracket(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if got := testStatus(t, dir, `[ x ]`); got != 0 {
 		t.Errorf("[ x ] = %d, want 0", got)
@@ -193,6 +200,7 @@ func TestBracketWantsItsBracket(t *testing.T) {
 // lose. A script that branches on `$?` can tell "this is not an expression"
 // from "the expression is false".
 func TestMalformedIsTwoAndFalseIsOne(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if got := testStatus(t, dir, `test a = b`); got != 1 {
 		t.Errorf("a false expression = %d, want 1", got)
@@ -211,6 +219,7 @@ func TestMalformedIsTwoAndFalseIsOne(t *testing.T) {
 // TestTheDialectWordsAMalformedExpression covers the four wordings, which are
 // the only part of `test` the panel disagrees about.
 func TestTheDialectWordsAMalformedExpression(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, _ := lookRun(t, dir, dir, `test -Q x`)
 	if !strings.Contains(out, "-Q") {
@@ -231,6 +240,7 @@ func TestTheDialectWordsAMalformedExpression(t *testing.T) {
 // question where the argument count has already said the letter is an
 // operator rather than the connective.
 func TestTheUnaryFileExistsLetter(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "f"), nil, 0o600); err != nil {
 		t.Fatal(err)
@@ -280,6 +290,7 @@ func TestTheUnaryFileExistsLetter(t *testing.T) {
 // expression. A name the shell has never heard of is false rather than an
 // error, which is measured in both shells that have the operator.
 func TestTheShellOptionOperator(t *testing.T) {
+	t.Parallel()
 	set := func(a Answer) func(*Runner) {
 		return func(r *Runner) {
 			s := *r.Semantics
@@ -358,6 +369,7 @@ func TestTheModifiedSinceReadOperator(t *testing.T) {
 // TestTheStringOrderOperators is the enum, and the third answer is why it is
 // one: a shell can have `>` and refuse `<`.
 func TestTheStringOrderOperators(t *testing.T) {
+	t.Parallel()
 	set := func(p TestStringOrderPolicy) func(*Runner) {
 		return func(r *Runner) {
 			s := *r.Semantics
@@ -396,6 +408,7 @@ func TestTheStringOrderOperators(t *testing.T) {
 // parses, and the count is reported instead of the one token that was wrong —
 // which is the #1290 shape, and which says nothing a reader can act on.
 func TestAMissingOrderOperatorIsNamedPastThreeWords(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `test -n x -a a "<" b`, func(r *Runner) {
 		s := *r.Semantics
 		s.TestStringOrder = TestStringOrderNeither
@@ -428,6 +441,7 @@ func TestAMissingOrderOperatorIsNamedPastThreeWords(t *testing.T) {
 // `-a` is a word zsh knows, so it is a string with a word left over, where a
 // letter nothing has is an operator it has never heard of.
 func TestAConnectiveWhereAUnaryBelongs(t *testing.T) {
+	t.Parallel()
 	leftover := func(r *Runner) {
 		s := *r.Semantics
 		s.TestHasTheFileExistsLetter = No

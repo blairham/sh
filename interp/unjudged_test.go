@@ -137,6 +137,7 @@ func TestTheTimedSuspensionEndsWithTheClause(t *testing.T) {
 // *simple* command is a failure there as it is everywhere, which is the
 // control that says the axis is about the compound and not about redirection.
 func TestWhetherACompoundsRedirectionFailureIsJudged(t *testing.T) {
+	t.Parallel()
 	bad := t.TempDir() + "/nodir/f"
 	for _, c := range []struct {
 		name     string

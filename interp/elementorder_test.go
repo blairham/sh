@@ -31,6 +31,7 @@ func elementOrderSem(first Answer) Semantics {
 // subscript's words first, traced or not, and all three evaluate `i++` after
 // the value has read `i` (#6604).
 func TestTheElementWriteOrderIsTheAxis(t *testing.T) {
+	t.Parallel()
 	sub := `$(echo SUB >&2; echo 1)`
 	val := `$(echo VAL >&2)`
 	for _, c := range []struct {
@@ -126,6 +127,7 @@ func unorderedSem() Semantics {
 // With the order unanswered, a write whose two words could only ever come out
 // the same asks nothing, and one whose order shows is the question.
 func TestAnOrdinaryElementWriteAsksNothing(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"a=(0 0 0); i=1 x=v; a[$i]=$x; echo \"${a[*]}\"",
 		"a=(0 0 0); i=1; a[i+1]=$(echo v); echo \"${a[*]}\"",
@@ -156,6 +158,7 @@ func TestAnOrdinaryElementWriteAsksNothing(t *testing.T) {
 // stepped twice (#6605). A key that was never stored reads empty, which is
 // what says the write reached a table and not an indexed array.
 func TestATableKeyIsExpandedOnceOnAWrite(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{"typeset -A m\nm[$(echo SUB >&2; echo k)]=v\necho \"${m[k]}/${m[j]}\"\n", "SUB\nv/\n"},
 		{"typeset -A m\nm[$(echo SUB >&2; echo k)]+=v\necho \"${m[k]}/${m[j]}\"\n", "SUB\nv/\n"},

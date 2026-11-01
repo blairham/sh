@@ -32,6 +32,7 @@ func arithSlice(a Answer) func(*Runner) {
 }
 
 func TestAWholeArraySubscriptInAnExpressionAnswersByAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, slice string }{
 		{"a table under `*`", `typeset -A m; m[k]=9; echo $(( m[*] ))`, "9"},
 		{"a table under `@`", `typeset -A m; m[k]=9; echo $(( m[@] ))`, "9"},
@@ -59,6 +60,7 @@ func TestAWholeArraySubscriptInAnExpressionAnswersByAxis(t *testing.T) {
 // — there is no field splitting inside an expression for the two to part
 // over, which is what keeps this off the unquoted-`@` axis.
 func TestTheArithmeticSliceJoinsOnIFS(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`a=(3 4); IFS=; echo $(( a[*] ))`, "34"},
 		{`a=(3 4); IFS=; echo $(( a[@] ))`, "34"},
@@ -74,6 +76,7 @@ func TestTheArithmeticSliceJoinsOnIFS(t *testing.T) {
 // which is the answer and not a defect in it: the joined text is read as an
 // expression, and `3 4 5` is not one.
 func TestASliceOfSeveralElementsFailsAsAnExpression(t *testing.T) {
+	t.Parallel()
 	out, status := runGrammar(t, `a=(3 4 5); echo $(( a[*] ))`, subscripting, arithSlice(Yes))
 	if status == 0 || strings.TrimSpace(out) == "3" {
 		t.Errorf("a=(3 4 5); $(( a[*] )) = %q (status %d), want the expression to fail", out, status)
@@ -84,6 +87,7 @@ func TestASliceOfSeveralElementsFailsAsAnExpression(t *testing.T) {
 // what the other answer makes of the same text: a table consulted first would
 // answer the key and the two readings would collapse into one.
 func TestTheSliceIsAskedBeforeTheKey(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; m[k]=9; m[*]=4; echo $(( m[*] ))`
 	out, _ := runGrammar(t, src, subscripting, arithSlice(No))
 	if got := strings.TrimSpace(out); got != "4" {
@@ -115,6 +119,7 @@ func arithBadWholeArray(a Answer) func(*Runner) {
 // The two agree about the value once the message is past, which is why the
 // report and the survival are one axis and not a wording (#1978).
 func TestAWholeArraySubscriptMayBeReportedAndAnsweredZero(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an array", `a=(3 4 5); echo $(( a[*] ))`, "0"},
 		{"the star as an operand", `a=(3); echo $(( a[*] + 1 ))`, "1"},
@@ -146,6 +151,7 @@ func TestAWholeArraySubscriptMayBeReportedAndAnsweredZero(t *testing.T) {
 
 // The subject is the name and the subscript as written.
 func TestAReportedWholeArraySubscriptNamesBoth(t *testing.T) {
+	t.Parallel()
 	out, _ := runGrammar(t, `a=(3); echo $(( a[@] ))`, subscripting, arithBadWholeArray(Yes))
 	if !strings.Contains(out, "a[@]: bad array subscript") {
 		t.Errorf("= %q, want `a[@]` named", out)
@@ -155,6 +161,7 @@ func TestAReportedWholeArraySubscriptNamesBoth(t *testing.T) {
 // An **association** never reaches the question: the brackets are the key `*`,
 // nothing is stored under it, and the answer is a silent zero in both columns.
 func TestAWholeArraySubscriptOnATableAsksNothing(t *testing.T) {
+	t.Parallel()
 	for _, a := range []Answer{Yes, No, Unspecified} {
 		const src = `typeset -A m; m[k]=9; echo $(( m[*] ))`
 		out, status := runGrammar(t, src, subscripting, arithBadWholeArray(a))
@@ -169,6 +176,7 @@ func TestAWholeArraySubscriptOnATableAsksNothing(t *testing.T) {
 // when they hold the one character and nothing else — and trimming answered a
 // different question, and answered it wrongly for the slice column too.
 func TestABlankWholeArraySubscriptIsNotTheSpelling(t *testing.T) {
+	t.Parallel()
 	for _, setup := range []func(*Runner){arithSlice(Yes), arithBadWholeArray(Yes)} {
 		const src = `a=(3 4); echo $(( a[ * ] ))`
 		out, status := runGrammar(t, src, subscripting, setup)
@@ -182,6 +190,7 @@ func TestABlankWholeArraySubscriptIsNotTheSpelling(t *testing.T) {
 // `(( a[*] = 5 ))` ends at 0 with every element as it was, and `(( a[*]++ ))`
 // writes the sentence twice — once for the read and once for the store.
 func TestAWholeArraySubscriptIsReportedOnTheWriteToo(t *testing.T) {
+	t.Parallel()
 	src := `a=(3 4); (( a[*] = 5 )); echo "st=$?"; printf "[%s]" "${a[@]}"`
 	out, _ := runGrammar(t, src, subscripting, arithBadWholeArray(Yes))
 	if !strings.Contains(out, "st=0") || !strings.Contains(out, "[3][4]") {

@@ -90,6 +90,7 @@ const subArray = `a=(alpha beta gamma beta delta); `
 // bug returns a plausible element at status 0, so a row that asserted only
 // the status would pass while the shell handed a script the wrong directory.
 func TestASubscriptFlagGroupSelectsTheElementItNames(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"r is the first match", `${a[(r)*a]}`, "alpha"},
 		{"R is the last match", `${a[(R)*a]}`, "delta"},
@@ -142,6 +143,7 @@ func TestASubscriptFlagGroupSelectsTheElementItNames(t *testing.T) {
 // is measured and has a test of its own below: `@` and `*` stop naming the
 // whole array as soon as anything opens a group.
 func TestASubscriptFlagGroupThatSelectsNothingChangesNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an empty group", `${a[()2]}`, "beta"},
 		{"a bare e", `${a[(e)2]}`, "beta"},
@@ -163,6 +165,7 @@ func TestASubscriptFlagGroupThatSelectsNothingChangesNothing(t *testing.T) {
 // The operand is the subscript's text with its substitutions performed and
 // nothing else touched, which is one rule with three consequences.
 func TestASubscriptSearchOperandIsTheTextAsWritten(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a substituted value's metacharacters are live",
@@ -221,6 +224,7 @@ func TestASubscriptSearchOperandIsTheTextAsWritten(t *testing.T) {
 // which is the row a search over the empty case would otherwise get right by
 // accident.
 func TestASubscriptSearchOverNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an unset name is not searched", `printf "[%s]" "${nope[(i)x]}"`, "[]"},
 		{"nor for an element", `printf "[%s]" "${nope[(r)x]}"`, "[]"},
@@ -242,6 +246,7 @@ func TestASubscriptSearchOverNothing(t *testing.T) {
 
 // The positional parameters are searched like any other list.
 func TestASubscriptSearchReachesThePositionalParameters(t *testing.T) {
+	t.Parallel()
 	grammar := func(d *syntax.Dialect) {
 		subGrammar(d)
 		// `@` is not a name, so a subscript on it is a grammar question of
@@ -274,6 +279,7 @@ func TestASubscriptSearchReachesThePositionalParameters(t *testing.T) {
 // assumed from one — see orderedSearchLetter, and the pairs below, each of
 // which asserts the two spellings answer the same thing.
 func TestTheKeyFlagsAreTheValueSearchOnAnOrderedTarget(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the same match", `a=(x y z x); printf "[%s]" "${a[(k)x]}" "${a[(r)x]}"`, "[x][x]"},
 		{"the same direction", `a=(x y z x); printf "[%s]" "${a[(K)*]}" "${a[(R)*]}"`, "[x][x]"},
@@ -296,6 +302,7 @@ func TestTheKeyFlagsAreTheValueSearchOnAnOrderedTarget(t *testing.T) {
 // change carries: without it the parenthesis ends the word and the file does
 // not parse.
 func TestASubscriptSearchWithoutBraces(t *testing.T) {
+	t.Parallel()
 	out, status := runSub(t, subArray+`printf "[%s]" "$a[(r)*a]" "$a[(i)be*]" "$a[(re)be*]"`)
 	if want := "[alpha][2][]"; out != want {
 		t.Errorf("= %q, want %q", out, want)
@@ -312,6 +319,7 @@ func TestASubscriptSearchWithoutBraces(t *testing.T) {
 // name until `(w)` was carried (#5152); every letter the grammar reads is
 // carried now.
 func TestTheWordLettersLeaveAnArrayAlone(t *testing.T) {
+	t.Parallel()
 	out, status := runSub(
 		t,
 		subArray+`printf "[%s]" "${a[(w)beta]}" "${a[(p)beta]}" "${a[(s:,:)beta]}" "${a[(rw)beta]}" "${a[(w)2]}"`,
@@ -330,6 +338,7 @@ func TestTheWordLettersLeaveAnArrayAlone(t *testing.T) {
 // Without this row a matcher that answered *both* searches with a prefix
 // match passes everything else in this file.
 func TestAnArraySearchMatchesTheWholeElement(t *testing.T) {
+	t.Parallel()
 	out, status := runSub(t, subArray+`printf "[%s]" "${a[(r)be]}" "${a[(i)be]}" "${a[(I)be]}" "${a[(r)alph]}"`)
 	if want := "[][6][0][]"; out != want {
 		t.Errorf("= %q, want %q", out, want)
@@ -348,6 +357,7 @@ func TestAnArraySearchMatchesTheWholeElement(t *testing.T) {
 // row that checked only for the absence of a refusal would pass for an
 // implementation that had stopped refusing and not started answering.
 func TestASubscriptSearchOverAScalarIsACharacterPosition(t *testing.T) {
+	t.Parallel()
 	const s = `s=hello; `
 	for _, tc := range []struct{ name, src, want string }{
 		{"the first position", `printf "[%s]" "${s[(i)l]}"`, "[3]"},
@@ -390,6 +400,7 @@ func TestASubscriptSearchOverAScalarIsACharacterPosition(t *testing.T) {
 // An empty string is the one answer the rule above does not predict, and a
 // name holding nothing at all is a third answer again.
 func TestASubscriptSearchOverAnEmptyScalar(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// One past the last character would be 1 here, and it is not.
 		{"neither end", `e=; printf "[%s]" "${e[(i)x]}" "${e[(I)x]}"`, "[0][0]"},
@@ -474,6 +485,7 @@ func TestASubscriptSearchOverATargetThisDoesNotCarryIsRefused(t *testing.T) {
 // The shape zi.zsh writes six times, end to end: the answer decides whether a
 // directory is prepended to a path that already holds it.
 func TestTheShapeAPluginManagerAsksThisWith(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"already on the path, so nothing is added",
@@ -510,6 +522,7 @@ func TestTheShapeAPluginManagerAsksThisWith(t *testing.T) {
 // silent in the worst way — the whole array where the shell gives an error is
 // a value a script will happily use.
 func TestAFlagGroupTakesTheWholeArraySpellingsAway(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`${a[()@]}`, `${a[()*]}`, `${a[(e)@]}`, `${a[(r)@]}`} {
 		out, _ := runSub(t, subArray+`printf "[%s]" "`+src+`"`)
 		if strings.Contains(out, "alpha beta") || strings.Contains(out, "[alpha][beta]") {
@@ -540,6 +553,7 @@ const subAssoc = `typeset -A m=(gamma one alpha two beta one); `
 // — so the rows that have several assert the *set* through a sort of their
 // own where the shell's hash order would otherwise be pinned here.
 func TestASubscriptSearchOverAnAssociationSelectsKeys(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"i is the first matching key", `${m[(i)alpha]}`, "alpha"},
 		{"and it is a key and not an index", `${m[(i)*a]}`, "alpha"},
@@ -568,6 +582,7 @@ func TestASubscriptSearchOverAnAssociationSelectsKeys(t *testing.T) {
 // says `(e)` is read on this path at all — one row alone passes for an
 // implementation that ignores it.
 func TestAnExactSearchOverAnAssociation(t *testing.T) {
+	t.Parallel()
 	const m = `typeset -A m=(aa 1 'a*' 2); `
 	for _, tc := range []struct{ name, src, want string }{
 		{"exact finds the key spelled with the star", `${m[(Ie)a*]}`, "a*"},
@@ -590,6 +605,7 @@ func TestAnExactSearchOverAnAssociation(t *testing.T) {
 // Asserted because ignoring them is the kind of thing that looks like an
 // oversight and would be "fixed" into a divergence.
 func TestNthAndBeginAreIgnoredOverAnAssociation(t *testing.T) {
+	t.Parallel()
 	const m = `typeset -A m=(aa 1 ab 2 ac 3); `
 	for _, tc := range []struct{ name, src, want string }{
 		{"nth is ignored", `${m[(in:3:)a*]}`, "aa"},
@@ -610,6 +626,7 @@ func TestNthAndBeginAreIgnoredOverAnAssociation(t *testing.T) {
 // width, a quoted expansion that was one field per match, and a flag group
 // handed one word made of all of them.
 func TestAnAssociationSearchIsAList(t *testing.T) {
+	t.Parallel()
 	const m = `typeset -A m=('a b' 1 'c d' 2); `
 	for _, tc := range []struct{ name, src, want string }{
 		{"the length is the match count", `printf "[%s]" "${#m[(I)*]}"`, "[2]"},
@@ -635,6 +652,7 @@ func TestAnAssociationSearchIsAList(t *testing.T) {
 // a script reading `${m[(I)pat]-default}` would take the default for a table
 // that simply has no such hook.
 func TestAnAssociationSearchWithNoMatchIsSet(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an association search answers even with no match", `typeset -A m=(a 1); printf "[%s]" "${m[(I)zz]-none}"`, "[]"},
 		{"a plain missing key does not", `typeset -A m=(a 1); printf "[%s]" "${m[zz]-none}"`, "[none]"},
@@ -652,6 +670,7 @@ func TestAnAssociationSearchWithNoMatchIsSet(t *testing.T) {
 // Which half of each matched pair comes back is the *expansion's* flag group,
 // not the search's, and the answer is the same whichever letter searched.
 func TestTheKeyAndValueFlagsOverAnAssociationSearch(t *testing.T) {
+	t.Parallel()
 	const m = `typeset -A m; m[a]=1; m[b]=2; `
 	for _, tc := range []struct{ name, src, want string }{
 		{"k over a key search is the keys", `${(k)m[(I)*]}`, "a b"},
@@ -739,6 +758,7 @@ func TestTheAssociationSearchAPluginManagerAsksWith(t *testing.T) {
 // are silent when they slip: a width answered as a count is `1` for a
 // five-character value, which is a number a script will happily use.
 func TestWhatIsNotAnAssociationSearch(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"an empty group over an association is still a key lookup",
@@ -765,6 +785,7 @@ func TestWhatIsNotAnAssociationSearch(t *testing.T) {
 // `(a 1)` are all `1`, and `(wr)1` is the search alone. `(w)` was refused by
 // name here until it was carried (#5152).
 func TestTheWordLettersLeaveAnAssociationAlone(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m=(a 1); printf "[%s]" "${m[(w)a]}" "${m[(p)a]}" "${m[(s:,:)a]}" "${m[(wr)1]}"`
 	out, status := runAssoc(t, src)
 	if want := "[1][1][1][1]"; out != want || status != 0 {
@@ -779,6 +800,7 @@ func TestTheWordLettersLeaveAnAssociationAlone(t *testing.T) {
 // Measured on zsh 5.9.2, 2026-09-12. The pattern row is the discriminator: a
 // search reading would answer it with the value under `aa`, and it does not.
 func TestTheKeyFlagOverAnAssociationIsALookup(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the key exactly", `typeset -A m=(aa 1 bb 2); printf "[%s]" "${m[(k)aa]}"`, "[1]"},
 		{
@@ -828,6 +850,7 @@ func TestTheKeyFlagOverAnAssociationIsALookup(t *testing.T) {
 // and `${(v)m[b]}` are both the value, so `v` beside `k` puts the pair's
 // other half back rather than adding to it.
 func TestTheKeyAndValueLettersReachASubscriptedAssociation(t *testing.T) {
+	t.Parallel()
 	const m = `typeset -A m=(a 1 b 2); `
 	for _, tc := range []struct{ name, src, want string }{
 		{"kv over the whole table", `printf "[%s]" ${(kv)m[@]}`, "[a][1][b][2]"},
@@ -866,6 +889,7 @@ func TestTheKeyAndValueLettersReachASubscriptedAssociation(t *testing.T) {
 // reading is the element, which is a plausible word at status 0: a script
 // asking `${(k)x[2]}` for a position was handed `q`.
 func TestTheKeyLetterOnAnOrdinaryArrayIsTheIndex(t *testing.T) {
+	t.Parallel()
 	const x = `x=(p q r); `
 	for _, tc := range []struct{ name, src, want string }{
 		{"a numeral is itself", `${(k)x[2]}`, "2"},
@@ -898,6 +922,7 @@ func TestTheKeyLetterOnAnOrdinaryArrayIsTheIndex(t *testing.T) {
 // The shapes the index reading does not reach, each measured and each one a
 // reading that would be wrong if it did.
 func TestTheKeyLetterOnAnOrdinaryArrayLeavesTheOtherShapes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the whole-array subscript is the elements", `x=(p q r); printf "[%s]" ${(k)x[@]}`, "[p][q][r]"},
 		{"and so is the joining spelling", `x=(p q r); printf "[%s]" ${(k)x[*]}`, "[p][q][r]"},
@@ -954,6 +979,7 @@ func TestTheKeyLetterOnAnOrdinaryArrayLeavesTheOtherShapes(t *testing.T) {
 // expansion — the same `invalid subscript` an index-answering flag group at
 // the front of a pair earns.
 func TestTheKeyLetterOverARangeIsRefused(t *testing.T) {
+	t.Parallel()
 	out, status := runGrammar(t, `x=(p q r); printf "[%s]" "${(k)x[1,2]}"`, func(d *syntax.Dialect) {
 		subGrammar(d)
 		d.ParamExpansionFlags = true

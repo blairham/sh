@@ -21,6 +21,7 @@ import (
 // of the four. That it is an *answer* rather than the rule is #204: zsh eats
 // it, and this test named the dash as a settled fact until then.
 func TestBuiltinOptionsKeepsALoneDash(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	sem.LoneDashIsAnOption = No
 	r := newTestRunner(t, &Runner{Semantics: &sem})
@@ -69,6 +70,7 @@ func TestBuiltinOptionsKeepsALoneDash(t *testing.T) {
 // anything follows the letter and the next word when the bundle ends there,
 // which is what makes `-d :` and `-d:` the same option.
 func TestBuiltinOptionsTakesArguments(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	sem.LoneDashIsAnOption = No
 	r := newTestRunner(t, &Runner{Semantics: &sem})
@@ -118,6 +120,7 @@ func TestBuiltinOptionsTakesArguments(t *testing.T) {
 // bundle ends the argument list has nothing to take, and every shell refuses
 // rather than inventing an empty one.
 func TestBuiltinOptionsRefusesAMissingArgument(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	sem.LoneDashIsAnOption = No
 	var buf strings.Builder

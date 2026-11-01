@@ -17,6 +17,7 @@ import (
 // fan-out never learned of it — so `echo x >&1 >b` reached the file and not
 // the terminal, at status 0 with nothing said (#1261).
 func TestADuplicationJoinsTheFanOut(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		answer  Answer
@@ -52,6 +53,7 @@ func TestADuplicationJoinsTheFanOut(t *testing.T) {
 // A shell that merely dropped the duplication would answer once here, and so
 // would one that contributed the stream the command started with.
 func TestADuplicationCopiesTheFanOutSoFar(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -80,6 +82,7 @@ func TestADuplicationCopiesTheFanOutSoFar(t *testing.T) {
 // rather than a named stream, so what joins the set is a file the command
 // itself opened.
 func TestATableDescriptorJoinsTheFanOut(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -111,6 +114,7 @@ func TestATableDescriptorJoinsTheFanOut(t *testing.T) {
 // the ones named before it. Unanimous in the panel, so both answers to the
 // axis have to agree here — a fan-out that only ever grew wrote to `b` too.
 func TestACloseEmptiesTheFanOut(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Yes, No} {
 		dir := t.TempDir()
 		sem := CoreSemantics()
@@ -132,6 +136,7 @@ func TestACloseEmptiesTheFanOut(t *testing.T) {
 // One duplication of a stream nothing else redirects decides nothing, so the
 // axis is not asked — the same rule that keeps a lone `>` out of it.
 func TestALoneDuplicationAsksNoAxis(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	out, _ := run(t, "echo x >&1", func(r *Runner) { r.Semantics, r.Dir = &sem, t.TempDir() })
 	if strings.Contains(out, "no dialect was chosen") {
@@ -150,6 +155,7 @@ func TestALoneDuplicationAsksNoAxis(t *testing.T) {
 // question nobody can act on is a stub with a diagnostic — and because
 // nothing else in the tree reads this string.
 func TestTheFanOutAxisIsNamedForTargetsNotFiles(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	out, _ := run(t, "echo x >&1 >b", func(r *Runner) { r.Semantics, r.Dir = &sem, t.TempDir() })
 	const want = "a command redirecting one stream to several targets: " +
@@ -167,6 +173,7 @@ func TestTheFanOutAxisIsNamedForTargetsNotFiles(t *testing.T) {
 // Measured 2026-09-12: `exec 3>a 3>b; echo hi >&3` fills both files in zsh
 // 5.9.2 and only `b` in dash, bash 5.3, bash 3.2 and ksh93.
 func TestANumberedDescriptorJoinsItsOwnFanOut(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -203,6 +210,7 @@ func TestANumberedDescriptorJoinsItsOwnFanOut(t *testing.T) {
 // answers: two sources arrive one after the other rather than the last one
 // replacing the first.
 func TestANumberedDescriptorReadsFromEverySource(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -238,6 +246,7 @@ func TestANumberedDescriptorReadsFromEverySource(t *testing.T) {
 // descriptor that reads *and* writes cannot join a set on one side without
 // modeling half the pair. The second open wins, as it does everywhere.
 func TestAReadWriteDescriptorIsNotJoined(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Yes, No} {
 		dir := t.TempDir()
 		sem := CoreSemantics()
@@ -265,6 +274,7 @@ func TestAReadWriteDescriptorIsNotJoined(t *testing.T) {
 // Both answers to the axis, because the row is about the child and not about
 // the fan: it must read `B` either way.
 func TestAChildNamingAFannedDescriptorGetsTheLastFile(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Yes, No} {
 		dir := t.TempDir()
 		sem := CoreSemantics()

@@ -20,6 +20,7 @@ import (
 // reading would pass just as well against a `readonly` that had grown a
 // thirteenth branch of its own.
 func TestReadonlyWordDecidesWhetherTheLettersAreADeclarations(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src        string
 		asDeclaration    func(out string) bool
@@ -131,6 +132,7 @@ func TestReadonlyWordDecidesWhetherTheLettersAreADeclarations(t *testing.T) {
 // filtered listing asks whether a letter was written under a minus rather
 // than which attribute is being filtered on.
 func TestReadonlyWordAsADeclarationWritesTheLetterForTheListing(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `v=1; readonly v; w=2; readonly`, func(r *Runner) {
 		s := permissive()
 		s.ReadonlyWord = ReadonlyWordIsTheDeclaration

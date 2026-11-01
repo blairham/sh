@@ -73,6 +73,7 @@ func writeCategory(t *testing.T, root, dir string, content []byte) {
 // bash 5.3.15 write `1,0000` for `printf '%.4f' 1`, and this shell wrote
 // `1.0000` until the compiled layout was read (#4172).
 func TestTheRadixIsReadFromACompiledCategory(t *testing.T) {
+	t.Parallel()
 	const magic = 0x20031114
 	for _, c := range []struct {
 		name    string

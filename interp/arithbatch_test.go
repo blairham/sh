@@ -25,6 +25,7 @@ func arithRun(t *testing.T, src string, set func(*Semantics), dg Diagnostics) (s
 }
 
 func TestBasesRunToSixtyFourWhereAdmitted(t *testing.T) {
+	t.Parallel()
 	out, st := arithRun(t, `echo $((36#z)) $((64#z)) $((64#Z)) $((64#_))`, func(s *Semantics) {
 		s.ArithBaseAbove36 = Yes
 	}, Diagnostics{})
@@ -44,6 +45,7 @@ func TestBasesRunToSixtyFourWhereAdmitted(t *testing.T) {
 // clamp from a value carried in a double. Each row below fails under the other
 // answer.
 func TestArithmeticCarriedInADoubleWhereAsked(t *testing.T) {
+	t.Parallel()
 	carried := func(s *Semantics) { s.ArithValuesAreCarriedInAFloat = Yes }
 	word := func(s *Semantics) { s.ArithValuesAreCarriedInAFloat = No }
 	for _, tc := range []struct {
@@ -91,6 +93,7 @@ func TestArithmeticCarriedInADoubleWhereAsked(t *testing.T) {
 }
 
 func TestAnEmptyExpressionIsAnAxis(t *testing.T) {
+	t.Parallel()
 	out, st := arithRun(t, `echo $(( ))`, func(s *Semantics) {
 		s.EmptyArithExpressionIsAnError = No
 	}, Diagnostics{})
@@ -106,6 +109,7 @@ func TestAnEmptyExpressionIsAnAxis(t *testing.T) {
 }
 
 func TestTheErrorNamesTheConsumedPrefix(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		ArithError:               `%[1]s: %[2]s (error token is "%[3]s")`,
 		DigitTooGreatForBase:     "value too great for base",

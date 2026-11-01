@@ -10,6 +10,7 @@ import (
 
 // `let` is `(( ))` with the expression as a word.
 func TestLetEvaluates(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`let "x = 2 + 3"; echo $x`, "5"},
 		{`let x=1+1; echo $x`, "2"},
@@ -29,6 +30,7 @@ func TestLetEvaluates(t *testing.T) {
 // The status is the surprising part: an expression coming out zero is a
 // *failure*, because a shell reports false for it.
 func TestLetReportsZeroAsFalse(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src  string
 		want int
@@ -55,6 +57,7 @@ func TestLetReportsZeroAsFalse(t *testing.T) {
 
 // With nothing to evaluate it complains rather than succeeding quietly.
 func TestLetWithNoExpression(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `let`, nil)
 	if st == 0 {
 		t.Errorf("status 0 (said %q), want a failure", out)

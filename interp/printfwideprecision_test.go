@@ -23,6 +23,7 @@ import (
 // The rows where `fmt` and C disagree are skipped and pinned separately
 // below, because there the answer to agree with is not `fmt`'s.
 func TestTheWidePrecisionRenderersAgreeWithFmt(t *testing.T) {
+	t.Parallel()
 	flagsets := []string{"", "-", "0", "-0", "+", " ", "#", "#0", "+-", "# "}
 	widths := []string{"", "1", "8", "20"}
 	precs := []string{"0", "1", "3", "5", "12"}
@@ -109,6 +110,7 @@ func TestTheWidePrecisionRenderersAgreeWithFmt(t *testing.T) {
 // (#3024); this table is here so that fixing it has a statement of what the
 // answer is, and so the skip above is a measurement rather than a shrug.
 func TestAValueOfNoughtPartsFmtFromC(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		spec string
 		verb byte
@@ -141,6 +143,7 @@ func TestAValueOfNoughtPartsFmtFromC(t *testing.T) {
 // printfSpecParts tells a precision the spec does not write from one it
 // writes as nought, which is C's own distinction and the thing a `-1` is for.
 func TestPrintfSpecPartsReadsAnAbsentPrecisionApart(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		spec, flags string
 		width, prec int

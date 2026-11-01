@@ -52,6 +52,7 @@ func severalWords(fans Answer) func(*Runner) {
 }
 
 func TestATargetThatCameToSeveralWordsIsSeveralRedirections(t *testing.T) {
+	t.Parallel()
 	const src = `printf 'a\n' > f; printf 'b\n' > g; v=(f g); printf "[%s]" "$(cat <$v)"`
 	for _, tc := range []struct {
 		name string
@@ -79,6 +80,7 @@ func TestATargetThatCameToSeveralWordsIsSeveralRedirections(t *testing.T) {
 // The writing half, which is the one that loses output where the reading half
 // only reads less.
 func TestATargetThatCameToSeveralWordsWritesToEachOfThem(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	sem := permissive()
 	sem.RedirectTargetIsAnOrdinaryWord = No
@@ -106,6 +108,7 @@ func TestATargetThatCameToSeveralWordsWritesToEachOfThem(t *testing.T) {
 // words and not about arrays — and it is also the row that says a target is
 // matched at all under this reading: a single match opens the file it named.
 func TestAPatternTargetIsMatchedAndMayComeToSeveralWords(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 	}{
@@ -125,6 +128,7 @@ func TestAPatternTargetIsMatchedAndMayComeToSeveralWords(t *testing.T) {
 // control the joined reading used to be right about, and a change that
 // reached for the *fields* view instead of the words view would break it.
 func TestAScalarHoldingASpaceIsStillOneName(t *testing.T) {
+	t.Parallel()
 	for _, fans := range []Answer{Yes, No} {
 		out, _ := run(t, `e="f g"; cat <$e`, severalWords(fans))
 		if !strings.Contains(out, "f g") {
@@ -137,6 +141,7 @@ func TestAScalarHoldingASpaceIsStillOneName(t *testing.T) {
 // Runner that has not answered it still runs an ordinary redirection under
 // the unsplit reading.
 func TestTheFanIsNotAskedAboutAnOrdinaryTarget(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.RedirectTargetIsAnOrdinaryWord = No
 	// The column this models matches a pattern written into the target
@@ -162,6 +167,7 @@ func TestTheFanIsNotAskedAboutAnOrdinaryTarget(t *testing.T) {
 // names *that* word rather than the whole target. Measured: with `f` there
 // and `nosuch` not, either order reports `nosuch` and status 1.
 func TestAWordOfTheFanThatWillNotOpenEndsIt(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`printf 'a\n' > f; v=(nosuch f); cat <$v; printf "st=%s" "$?"`,
 		`printf 'a\n' > f; v=(f nosuch); cat <$v; printf "st=%s" "$?"`,

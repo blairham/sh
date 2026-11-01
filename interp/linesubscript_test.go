@@ -28,6 +28,7 @@ func withRanges(sem *Semantics) { sem.SubscriptCommaIsARange = Yes }
 // nothing outside the value, and it is why every row past the last line is
 // here rather than left to the single one that would have implied them.
 func TestALineSubscriptNamesALineOfAString(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`printf "[%s]" "${v[(f)1]}"`, `[a]`},
 		{`printf "[%s]" "${v[(f)2]}"`, `[b]`},
@@ -58,6 +59,7 @@ func TestALineSubscriptNamesALineOfAString(t *testing.T) {
 // every newline would put an empty line at the front of the second value and
 // two at the end of the fifth.
 func TestWhichLinesAStringHasForALineSubscript(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ set, src, want string }{
 		{"v='\na\nb'", `printf "[%s]" "${v[(f)1]}" "${v[(f)2]}"`, `[a][b]`},
 		{"v='\n\na\nb'", `printf "[%s]" "${v[(f)1]}" "${v[(f)2]}"`, `[a][b]`},
@@ -82,6 +84,7 @@ func TestWhichLinesAStringHasForALineSubscript(t *testing.T) {
 // a pair is where its line begins and the second end is an ordinary character
 // index unless it carries a group of its own.
 func TestALineSubscriptInARangeNamesACharacterPosition(t *testing.T) {
+	t.Parallel()
 	const v = "v='aaa\nbbb\nccc'\n"
 	for _, tc := range []struct{ src, want string }{
 		{`printf "[%s]" "${v[(f)1,2]}"`, `[aa]`},
@@ -108,6 +111,7 @@ func TestALineSubscriptInARangeNamesACharacterPosition(t *testing.T) {
 // where the line before it ended. The one place that line's two positions
 // differ, and measured rather than derived.
 func TestARangeEndingAtATrailingEmptyLine(t *testing.T) {
+	t.Parallel()
 	const v = "v='aa\nbb\n'\n"
 	for _, tc := range []struct{ src, want string }{
 		{`printf "[%s]" "${v[1,(f)2]}"`, "[aa\nbb]"},
@@ -125,6 +129,7 @@ func TestARangeEndingAtATrailingEmptyLine(t *testing.T) {
 // A search beside `(f)` walks the lines as a search over an array walks its
 // elements, and substitutes the character position rather than the number.
 func TestASearchOverTheLinesOfAString(t *testing.T) {
+	t.Parallel()
 	const v = "v='aa\nbb\ncc'\n"
 	for _, tc := range []struct{ src, want string }{
 		{`printf "[%s]" "${v[(fr)bb]}"`, `[bb]`},
@@ -162,6 +167,7 @@ func TestASearchOverTheLinesOfAString(t *testing.T) {
 // would have been guessed wrong: only a walk that ran and matched nothing
 // answers with no position.
 func TestALineSearchThatNeverRan(t *testing.T) {
+	t.Parallel()
 	const v = "v='aa\nbb\ncc\ndd'\n"
 	for _, tc := range []struct{ src, want string }{
 		{`printf "[%s]" "${v[(fib:9:)bb]}"`, `[5]`},
@@ -183,6 +189,7 @@ func TestALineSearchThatNeverRan(t *testing.T) {
 // not this construct: an array counts its elements and answers nothing
 // outside them, where a string's clamp would have answered the last line.
 func TestALineSubscriptOverAListIsTheOrdinaryReading(t *testing.T) {
+	t.Parallel()
 	const a = "a=(p q r)\n"
 	for _, tc := range []struct{ src, want string }{
 		{`printf "[%s]" "${a[(f)2]}"`, `[q]`},
@@ -206,6 +213,7 @@ func TestALineSubscriptOverAListIsTheOrdinaryReading(t *testing.T) {
 // A table has no lines either, so the letter says nothing and the key reading
 // is left to answer.
 func TestALineSubscriptOverATableIsTheKeyReading(t *testing.T) {
+	t.Parallel()
 	const m = "typeset -A m\nm=(k1 v1 k2 v2)\n"
 	for _, tc := range []struct{ src, want string }{
 		{`printf "[%s]" "${m[(f)k1]}"`, `[v1]`},
@@ -229,6 +237,7 @@ func TestALineSubscriptOverATableIsTheKeyReading(t *testing.T) {
 // a one-character line cannot tell the two apart. See
 // interp/linesubscript.go, which holds the measurements.
 func TestWritingThroughALineSubscriptReplacesTheLine(t *testing.T) {
+	t.Parallel()
 	const v = "v='aa\nbb\ncc'\n"
 	for _, tc := range []struct{ src, want string }{
 		{`v[(f)2]=ZZ`, "[aa\nZZ\ncc]"},
@@ -262,6 +271,7 @@ printf "[%s]" "$v"`)
 // duplicated value, and neither is a rule to copy. See
 // Runner.lineTargetSpan.
 func TestALineSearchThatMissedStillRefusesTheWrite(t *testing.T) {
+	t.Parallel()
 	const v = "v='aa\nbb\ncc'\n"
 	for _, src := range []string{`v[(fr)zz]=QQ`, `v[(fi)zz]=QQ`} {
 		out, st := runSub(t, v+src+`
@@ -278,6 +288,7 @@ printf "[%s]" "$v"`)
 // And a list is not a string, so the same spelling over one is the ordinary
 // write it always was.
 func TestWritingThroughALineSubscriptOverAListIsOrdinary(t *testing.T) {
+	t.Parallel()
 	out, st := runSub(t, "a=(p q r)\na[(f)2]=ZZ\n"+`printf "[%s]" "${a[@]}"`)
 	if out != `[p][ZZ][r]` || st != 0 {
 		t.Errorf("a[(f)2]=ZZ = %q (status %d), want [p][ZZ][r] at 0", out, st)

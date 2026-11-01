@@ -73,6 +73,7 @@ func childStdinRun(t *testing.T, src string, in, child io.Reader, set func(*Sema
 // than of a shell that hands children nothing. It is also the fact the field
 // exists because of — a child that reads nothing still causes a Read.
 func TestAChildInheritsTheShellsInputWhenNobodySaysOtherwise(t *testing.T) {
+	t.Parallel()
 	in := &tally{}
 	out, errs, st := childStdinRun(t, `/bin/echo hi`, in, nil, nil)
 	if out != "hi\n" || errs != "" || st != 0 {
@@ -88,6 +89,7 @@ func TestAChildInheritsTheShellsInputWhenNobodySaysOtherwise(t *testing.T) {
 // The shell reads a person and the child reads nothing, from one command
 // each, in one run — which is the arrangement an ACP session is.
 func TestAChildKeepsTheCallersStreamWhileTheShellReadsItsOwn(t *testing.T) {
+	t.Parallel()
 	in := &tally{rest: "a line\n"}
 	out, errs, st := childStdinRun(t,
 		`/bin/echo first; read -r line; echo "got=[$line]"`, in, noInput{}, nil)
@@ -196,6 +198,7 @@ func (noInput) Read([]byte) (int, error) { return 0, io.EOF }
 // asked for. See Runner.noteExecReplacedStdin, and Runner.shellsOwnInput,
 // which is the other question kept apart from ownInput.
 func TestAnExecRedirectionReachesAChildUnchanged(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	name := filepath.Join(dir, "execed")
 	if err := os.WriteFile(name, []byte("FROMFILE\n"), 0o600); err != nil {

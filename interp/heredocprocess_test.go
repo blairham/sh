@@ -20,6 +20,7 @@ import (
 // why the confinement is HeredocExpandsInTheCommandsProcess and not a core
 // rule. The full thirteen-row table is at the top of heredocprocess.go.
 func TestAHereDocumentsSideEffectStaysWithTheProgramItFed(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"an increment", "n=1\ncat <<END\n$(( n++ ))\nEND\nprintf 'after=%s' \"$n\"",
@@ -68,6 +69,7 @@ func TestAHereDocumentsSideEffectStaysWithTheProgramItFed(t *testing.T) {
 // to land in. The pair is what says the rule is about the fork rather than
 // about here-documents.
 func TestAHereDocumentFedToThisShellLeavesItsSideEffectBehind(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a builtin", "n=1\nread q <<END\n$(( n++ ))\nEND\nprintf 'after=%s' \"$n\""},
 		{"the null builtin", "n=1\n: <<END\n$(( n++ ))\nEND\nprintf 'after=%s' \"$n\""},
@@ -93,6 +95,7 @@ func TestAHereDocumentFedToThisShellLeavesItsSideEffectBehind(t *testing.T) {
 // Its own test because the naive reading — argv[0] is a builtin, so the shell
 // runs it — gets this one wrong, and gets it wrong silently.
 func TestCommandIsUnwrappedWhenDecidingWhoseProcessAHereDocumentIsFor(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a program", "n=1\ncommand cat <<END\n$(( n++ ))\nEND\nprintf 'after=%s' \"$n\"", "1\nafter=1"},
 		{"a program with -p", "n=1\ncommand -p cat <<END\n$(( n++ ))\nEND\nprintf 'after=%s' \"$n\"", "1\nafter=1"},
@@ -114,6 +117,7 @@ func TestCommandIsUnwrappedWhenDecidingWhoseProcessAHereDocumentIsFor(t *testing
 // there — and answering No is what says so rather than the answer being
 // hard-coded to the majority.
 func TestTheEscapingAnswerIsAvailable(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.HeredocExpandsInTheCommandsProcess = No
 	out, _ := run(t, "n=1\ncat <<END\n$(( n++ ))\nEND\nprintf 'after=%s' \"$n\"", withSem(sem))
@@ -128,6 +132,7 @@ func TestTheEscapingAnswerIsAvailable(t *testing.T) {
 // A body with no side effect asks nothing, so a dialect that has not answered
 // can still run one. The axis is asked at the disagreement and nowhere else.
 func TestAQuietHereDocumentAsksNothing(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.HeredocExpandsInTheCommandsProcess = Unspecified
 	out, st := run(t, "v=hi\ncat <<END\n[$v]\nEND", withSem(sem))
@@ -161,6 +166,7 @@ func TestAQuietHereDocumentAsksNothing(t *testing.T) {
 // interactive prompt already stand on, and the axis those split over is not
 // asked at this one: there is nothing for it to disagree about.
 func TestAFailedHereDocumentBodyCostsTheCommand(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"an unset name", "set -u\ncat <<END\n[$NOPE_H]\nEND\nprintf 'st=%s alive' \"$?\""},
 		{"a bad substitution", "q=x\ncat <<END\n[${q@@@bad}]\nEND\nprintf 'st=%s alive' \"$?\""},
@@ -197,6 +203,7 @@ func TestAFailedHereDocumentBodyCostsTheCommand(t *testing.T) {
 // and that is what this shell does. The guard has to be about whose process
 // the body is for, or it would have made every here-document survivable.
 func TestAFailedHereDocumentBodyForThisShellIsStillFatal(t *testing.T) {
+	t.Parallel()
 	out, _ := runHeredoc(t, "set -u\nread q <<END\n[$NOPE_H]\nEND\nprintf 'alive'")
 	if strings.Contains(out, "alive") {
 		t.Errorf("out = %q, want the script to have stopped", out)
@@ -226,6 +233,7 @@ func runHeredoc(t *testing.T, src string) (string, int) {
 // pin is that the nesting works at all, in a shape where getting it wrong
 // would be silent.
 func TestWhoseProcessAHereDocumentIsForIsPerRedirectionList(t *testing.T) {
+	t.Parallel()
 	out, _ := runHeredoc(
 		t,
 		"n=1\nm=1\ncat <<A <<B\n$(( n++ ))$(read z <<C\n$(( m++ ))\nC\n)\nA\n$(( n++ ))\nB\nprintf 'n=%s m=%s' \"$n\" \"$m\"",
@@ -250,6 +258,7 @@ func TestWhoseProcessAHereDocumentIsForIsPerRedirectionList(t *testing.T) {
 // failure, and a test that only looked for "division by zero" would pass for
 // either shell.
 func TestAHereDocumentBodyIsAbandonedAtItsFirstFailedExpansion(t *testing.T) {
+	t.Parallel()
 	// Under **both** answers to whose failure a body's is, because stopping
 	// at the first one is not what that axis decides — see
 	// interp/heredocbodyfailure.go. Where the failure is the redirection's

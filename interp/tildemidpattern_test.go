@@ -40,6 +40,7 @@ func tildeMid(t *testing.T, src string, setup func(*Runner)) string {
 // the condition, a `case` arm, and pathname expansion. Nothing here names a
 // shell — the construct is a grammar flag and the letter is that construct's.
 func TestATildeGroupInTheMiddleOfAPattern(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The two controls, and they are what make the rest readable: the
 		// first says the probe can see a pattern *not* fold and the second
@@ -114,6 +115,7 @@ func TestATildeGroupInTheMiddleOfAPattern(t *testing.T) {
 // written with, found missing, and passed back through as text — so the
 // matcher never saw it. See holdsTildeFoldGroup.
 func TestATildeGroupInTheMiddleOfAGlob(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, n := range []string{"za", "zb", "zab"} {
 		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {

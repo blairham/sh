@@ -30,6 +30,7 @@ import (
 // value that every other such runner shares, so a write through the pointer
 // would reach all of them.
 func TestNothingReadsAnAdjustedAxisOffLang(t *testing.T) {
+	t.Parallel()
 	names, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
@@ -156,11 +157,13 @@ func isLangCall(e ast.Expr) bool {
 // The guard's own cases, so that a clean run means the checker looked rather
 // than that it could not fire.
 func TestTheLangGuardCatchesAnAdjustedRead(t *testing.T) {
+	t.Parallel()
 	requireLangMisuses(t, 1, `package interp
 func f(r *Runner) bool { return r.lang().ArithPrecedence == 0 }`)
 }
 
 func TestTheLangGuardCatchesAWriteThrough(t *testing.T) {
+	t.Parallel()
 	requireLangMisuses(t, 1, `package interp
 func f(r *Runner) { r.lang().TildeGroup = true }`)
 }
@@ -168,17 +171,20 @@ func f(r *Runner) { r.lang().TildeGroup = true }`)
 // The shape that got through the first version of this guard and broke a
 // multibyte file's reading.
 func TestTheLangGuardCatchesAMethodCall(t *testing.T) {
+	t.Parallel()
 	requireLangMisuses(t, 1, `package interp
 func f(r *Runner) Dialect { return r.lang().On(0) }`)
 }
 
 // And the value taken loose, which is the same mistake without the method.
 func TestTheLangGuardCatchesTheValueTakenLoose(t *testing.T) {
+	t.Parallel()
 	requireLangMisuses(t, 1, `package interp
 func f(r *Runner) Dialect { return *r.lang() }`)
 }
 
 func TestTheLangGuardAllowsAnOrdinaryRead(t *testing.T) {
+	t.Parallel()
 	requireLangMisuses(t, 0, `package interp
 func f(r *Runner) bool { return r.lang().TildeGroup }`)
 }

@@ -59,6 +59,7 @@ func withBareRecord(records Answer) func(*Semantics) {
 // loop, the one a subscripted operand takes, always carries a value and so
 // never asks. `readonly` names an attribute by being itself.
 func TestABareDeclarationIsListedAndStillUnset(t *testing.T) {
+	t.Parallel()
 	for _, decl := range []string{"typeset xyz", "local xyz"} {
 		t.Run(decl, func(t *testing.T) {
 			src := "f() { " + decl + `; typeset -p xyz; echo "st=$?"; echo "[${xyz-unset}]"; }
@@ -75,6 +76,7 @@ f`
 // The other answer, and the reason it is a switch: the same three words leave
 // nothing behind, so the listing has no row to write and says so.
 func TestABareDeclarationMayLeaveNoRecord(t *testing.T) {
+	t.Parallel()
 	for _, decl := range []string{"typeset xyz", "local xyz"} {
 		t.Run(decl, func(t *testing.T) {
 			src := "f() { " + decl + `; typeset -p xyz; echo "st=$?"; }
@@ -92,6 +94,7 @@ f`
 // must not reach an operand that names one. This is the row that keeps the
 // question off the common path: `typeset -i` lists whatever the answer is.
 func TestAnAttributedDeclarationListsWhicheverWayTheRecordIsAnswered(t *testing.T) {
+	t.Parallel()
 	for _, records := range []Answer{Yes, No} {
 		src := `f() { typeset -i att; typeset -p att; }
 f`
@@ -109,6 +112,7 @@ f`
 // attributes the scope already saves passes every row above and leaves the
 // name listable at the top level for the rest of the script.
 func TestABareDeclarationInACallDoesNotOutliveIt(t *testing.T) {
+	t.Parallel()
 	src := `f() { typeset lo; typeset -p lo; }
 f
 typeset -p lo; echo "after=$?"`
@@ -124,6 +128,7 @@ typeset -p lo; echo "after=$?"`
 // directions, because a record that merely survived the removal would pass
 // the second line and fail the first.
 func TestUnsetTakesTheRecordAndADeclarationAfterItBringsItBack(t *testing.T) {
+	t.Parallel()
 	src := `typeset gone; unset gone; typeset -p gone; echo "gone=$?"
 typeset back; unset back; typeset back; typeset -p back; echo "back=$?"`
 	out, _, _ := declRun(t, src, withBareRecord(Yes), Diagnostics{})
@@ -137,6 +142,7 @@ typeset back; unset back; typeset back; typeset -p back; echo "back=$?"`
 // back. A reading that answered from the record first would write the bare
 // name here and lose the assignment the script had made.
 func TestAnAssignmentAfterABareDeclarationRestoresTheValueToTheRow(t *testing.T) {
+	t.Parallel()
 	src := `typeset v; v=written; typeset -p v`
 	out, errs, st := declRun(t, src, withBareRecord(Yes), Diagnostics{})
 	const want = "declare -- v=\"written\"\n"
@@ -150,6 +156,7 @@ func TestAnAssignmentAfterABareDeclarationRestoresTheValueToTheRow(t *testing.T)
 // is not available here, so the row is counted by naming it against a name
 // the same listing must not invent.
 func TestTheBareListingWalksTheRecordToo(t *testing.T) {
+	t.Parallel()
 	src := `typeset walked
 typeset -p | while read -r line; do case $line in *walked*) echo "row=$line";; esac; done`
 	out, errs, st := declRun(t, src, withBareRecord(Yes), Diagnostics{})
@@ -167,6 +174,7 @@ typeset -p | while read -r line; do case $line in *walked*) echo "row=$line";; e
 // a name nobody had asked about, from an `export -p` in a function that had
 // declared a local.
 func TestTheBareListingWalkSkipsTheRecordTheDialectDoesNotKeep(t *testing.T) {
+	t.Parallel()
 	src := `typeset skipped
 typeset -p | while read -r line; do case $line in *skipped*) echo "row=$line";; esac; done
 echo "end=$?"`
@@ -212,6 +220,7 @@ echo "end=$?"`
 // still carries its own record, which is what says the record is not simply
 // being made for everything now.
 func TestALetterTakenAwayOrNamingOnlyTheScopeLeavesTheBareRecord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the export letter taken off",
@@ -297,6 +306,7 @@ func TestALetterTakenAwayOrNamingOnlyTheScopeLeavesTheBareRecord(t *testing.T) {
 // they are what keep this from being "a redirect never creates anything" —
 // which is the reading that would undo the rule above (#4163).
 func TestTheGlobalLetterDoesNotCreateAReferencesTarget(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the global letter leaves the target alone",
@@ -344,6 +354,7 @@ func TestTheGlobalLetterDoesNotCreateAReferencesTarget(t *testing.T) {
 // behind one ask, the `no` row of either half comes out as a row, because the
 // other half's `yes` answered for it.
 func TestTheTwoValuelessRecordsAreAskedSeparately(t *testing.T) {
+	t.Parallel()
 	const declared = `f() { typeset xyz; typeset -p xyz; echo "st=$?"; }
 f`
 	const unsetLocal = `xyz=G

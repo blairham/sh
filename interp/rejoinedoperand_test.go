@@ -20,6 +20,7 @@ import (
 // last field rather than standing alone. See interp/rejoinedoperand.go for
 // the panel this was measured against.
 func TestARejoinedArrayOperandIsTheFieldsOfItsExpansions(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 	}{

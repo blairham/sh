@@ -20,6 +20,7 @@ import (
 // escape that is only ever taken cannot be told from one that is always
 // taken: the declining rows are what say the axis is read at all.
 func TestPrintfFormatEscapeAxes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		answer  func(*Semantics)
@@ -87,6 +88,7 @@ func TestPrintfFormatEscapeAxes(t *testing.T) {
 // The fourth is nothing in the panel and is asserted all the same, because a
 // pair of fields that could not express it would be one field.
 func TestPrintfFormatEscAndCapitalEscAreTwoQuestions(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		esc, capes Answer
@@ -115,6 +117,7 @@ func TestPrintfFormatEscAndCapitalEscAreTwoQuestions(t *testing.T) {
 // other, so a reader that fell back on the other site's axis would show here
 // and nowhere else.
 func TestTheFormatAndTheBArgumentAskTheirOwnEscapeAxes(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfEscEscape = Yes
 	sem.PrintfCapitalEscEscape = Yes
@@ -133,6 +136,7 @@ func TestTheFormatAndTheBArgumentAskTheirOwnEscapeAxes(t *testing.T) {
 // site's pair follows, and the reason a script that writes no escape sequences is not
 // refused by a shell with no dialect.
 func TestPrintfFormatEscapeAxesAreAskedOnlyWhenTheEscapeIsThere(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	// `\0101` is `\010` and then a `1` — three octal digits after the
 	// leading zero — which is `a \b 1 Z` in all seven columns.
@@ -147,6 +151,7 @@ func TestPrintfFormatEscapeAxesAreAskedOnlyWhenTheEscapeIsThere(t *testing.T) {
 // across the panel and is written the same way whatever the two new axes say,
 // so they are asserted with both answers.
 func TestTheEscapeAxesDoNotReachTheRestOfTheFormatsEscapes(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Yes, No} {
 		sem := printfSem()
 		sem.PrintfEscEscape = answer

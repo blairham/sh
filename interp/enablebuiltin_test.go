@@ -17,6 +17,7 @@ import (
 // `enable` names a shell's own commands, and turning one off is real: the
 // word stops resolving to a builtin and is looked up like any other.
 func TestEnableTurnsABuiltinOffAndOnAgain(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want, gone string
 	}{
@@ -41,6 +42,7 @@ func TestEnableTurnsABuiltinOffAndOnAgain(t *testing.T) {
 // A name that is not a builtin is a failure, whether it was being turned on
 // or off.
 func TestEnableReportsANameThatIsNotABuiltin(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"enable nosuchthing\n", "enable -n nosuchthing\n"} {
 		out := enableRun(t, src+"echo \"st=$?\"\n", nil)
 		if !strings.Contains(out, "st=1") {
@@ -54,6 +56,7 @@ func TestEnableReportsANameThatIsNotABuiltin(t *testing.T) {
 // listing that differed between two runs of the same shell would be the one
 // thing a listing must not do.
 func TestEnableListsTheNamesInOrder(t *testing.T) {
+	t.Parallel()
 	out := enableRun(t, "enable\n", nil)
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	if len(lines) < 10 {
@@ -93,6 +96,7 @@ func TestEnableListsTheNamesInOrder(t *testing.T) {
 // dialect replaces builtins — `source` is `.` under another name, `declare`
 // is `typeset` — and forgetting that would quietly restore something else.
 func TestEnableRestoresTheRegisteredBuiltinAndNotTheCores(t *testing.T) {
+	t.Parallel()
 	setup := func(r *Runner) {
 		r.Register("cd", func(rr *Runner, _ context.Context, _ []string) int {
 			_, _ = fmt.Fprintln(rr.Out(), "the replacement ran")
@@ -158,6 +162,7 @@ func TestEnableDashSListsTheSpecialBuiltins(t *testing.T) {
 // same shell: with two builtins switched off and only one of them special,
 // `enable -n -s` prints that one and nothing else.
 func TestEnableDashNDashSIsTheIntersection(t *testing.T) {
+	t.Parallel()
 	out := enableRun(t, "enable -n exit cd\nenable -n -s\n", nil)
 	if got, want := strings.TrimSpace(out), "enable -n exit"; got != want {
 		t.Errorf("listed %q, want %q", got, want)
@@ -170,6 +175,7 @@ func TestEnableDashNDashSIsTheIntersection(t *testing.T) {
 // spelling and not the other would answer two ways about one builtin
 // depending on which name a script used.
 func TestSourceIsSpecialWithItsOtherSpelling(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{".", "source"} {
 		if !IsSpecialBuiltin(name) {
 			t.Errorf("%q is not marked special", name)

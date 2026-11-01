@@ -22,6 +22,7 @@ import (
 //
 // Unanimous across the panel, so it is the core's behavior and not an axis.
 func TestACommandIsReportedAtItsOwnLine(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		src  string

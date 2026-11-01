@@ -53,6 +53,7 @@ const rangeSubTable = `typeset -A a; a[']']=5; a['$(echo 9)']=3; ` +
 	`k=']'; kk='$(echo 9)'; s=abcdefghij; `
 
 func TestASubstringRangeReadsASubscriptAsArithmeticNotAsAJoinedWord(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		src  string
@@ -95,6 +96,7 @@ func TestASubstringRangeReadsASubscriptAsArithmeticNotAsAJoinedWord(t *testing.T
 // rule: a dialect that hands a subscript's expanded text back to the bracket
 // scanner reads the value's `]` as the closing bracket and finds no element.
 func TestASubstringRangeRereadsAnExpandedSubscriptByAxis(t *testing.T) {
+	t.Parallel()
 	const src = rangeSubTable + `printf '[%s]' "${s:0:a[$k]}"`
 	out, _ := runGrammar(t, src, rangeSubGrammar, rangeSubAxis(Yes))
 	if out == "[abcde]" {

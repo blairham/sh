@@ -61,6 +61,7 @@ const showReply = `printf 'n=%s' "${#reply[@]}"; for e in "${reply[@]}"; do prin
 // <<<'hello world'` leaves `typeset -a reply=( hello world )` and `typeset -p
 // REPLY` saying no such variable.
 func TestTheArrayLetterWithNoNameFillsTheDialectsOwnArray(t *testing.T) {
+	t.Parallel()
 	src := `printf 'hello world\n' | { read -A; ` + showReply + `; }`
 	out, _ := readArrayDefault(t, src, interp.ReadArrayDefaultIsTheArrayReply)
 	if want := "n=2[hello][world] REPLY=[]\n"; out != want {
@@ -76,6 +77,7 @@ func TestTheArrayLetterWithNoNameFillsTheDialectsOwnArray(t *testing.T) {
 // a pre-set `reply` untouched. `reply` is zsh's parameter and not one ksh93
 // has ever heard of.
 func TestTheArrayLetterWithNoNameCanBeAPlainRead(t *testing.T) {
+	t.Parallel()
 	src := `printf 'hello world\n' | { read -A; ` + showReply + `; }`
 	out, _ := readArrayDefault(t, src, interp.ReadArrayDefaultIsAPlainRead)
 	if want := "n=0 REPLY=[hello world]\n"; out != want {
@@ -91,6 +93,7 @@ func TestTheArrayLetterWithNoNameCanBeAPlainRead(t *testing.T) {
 // empty, and the reading that fills `REPLY` leaves `reply` with no elements,
 // with both names pre-set to data neither read could have produced.
 func TestTheTwoArrayDefaultsDoNotOverwriteEachOther(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		style interp.ReadArrayDefaultStyle
@@ -118,6 +121,7 @@ printf 'p q\n' | { read -A; ` + showReply + `; }`
 // elements are gone and the count is the empty one — visibly different from
 // the "left alone" both rows above would show if the fill never happened.
 func TestAFailingArrayReadWithNoNameStillClearsTheDefault(t *testing.T) {
+	t.Parallel()
 	src := `reply=(keptone kepttwo)
 printf '' | { read -A; printf 'st=%s ' "$?"; ` + showReply + `; }`
 	out, _ := readArrayDefault(t, src, interp.ReadArrayDefaultIsTheArrayReply)
@@ -133,6 +137,7 @@ printf '' | { read -A; printf 'st=%s ' "$?"; ` + showReply + `; }`
 // the two nouns this rule could be keyed on — here the array-ness is fixed
 // and present, and moving the axis moves nothing.
 func TestAWrittenArrayNameIsNotTheDefault(t *testing.T) {
+	t.Parallel()
 	for _, style := range []interp.ReadArrayDefaultStyle{
 		interp.ReadArrayDefaultUnspecified,
 		interp.ReadArrayDefaultIsTheArrayReply,
@@ -158,6 +163,7 @@ printf 'p q\n' | { read -A r; printf 'st=%s n=%s' "$?" "${#r[@]}"; for e in "${r
 // REPLY <<<'a b'` each leave the named parameter an array of the line's words
 // and the other one alone.
 func TestTheTwoSpellingsAreBothFillableByName(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"reply by name",
@@ -184,6 +190,7 @@ func TestTheTwoSpellingsAreBothFillableByName(t *testing.T) {
 // same dialect whose `-A` fills `reply`. One is `REPLY` and the other is
 // `reply`, and the shell is case-sensitive about which.
 func TestABareReadStillFillsTheScalarUnderTheArrayDefault(t *testing.T) {
+	t.Parallel()
 	src := `reply=(keptone kepttwo)
 printf 'plain line\n' | { read; ` + showReply + `; }`
 	out, _ := readArrayDefault(t, src, interp.ReadArrayDefaultIsTheArrayReply)
@@ -195,6 +202,7 @@ printf 'plain line\n' | { read; ` + showReply + `; }`
 // No dialect chosen means no answer, and the substrate says so rather than
 // picking one of the two.
 func TestAnUnansweredArrayDefaultIsRefused(t *testing.T) {
+	t.Parallel()
 	out, st := readArrayDefault(t, `read -A`, interp.ReadArrayDefaultUnspecified)
 	if st != 2 {
 		t.Errorf("status = %d, want the refusal's 2", st)
@@ -216,6 +224,7 @@ func TestAnUnansweredArrayDefaultIsRefused(t *testing.T) {
 // an argument count — a complaint about the line the script wrote, over a
 // question the substrate has already said it cannot answer.
 func TestAnUnansweredArrayDefaultDoesNotFallIntoTheBareRead(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `read -A`, func(d *syntax.Dialect) {
 		d.ArraySubscript = true
 		d.ArrayLiteral = true

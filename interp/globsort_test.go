@@ -166,6 +166,7 @@ func TestTheSortParameterCanAskForTheDirectorysOwnOrder(t *testing.T) {
 // walk that sorted each level and reversed the answer would give the name
 // order backwards instead.
 func TestTheDirectorysOwnOrderReachesEveryLevel(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, d := range []string{"d1", "d2"} {
 		if err := os.Mkdir(filepath.Join(dir, d), 0o755); err != nil {

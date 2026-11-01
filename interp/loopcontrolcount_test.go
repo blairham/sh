@@ -39,6 +39,7 @@ func runWithDiagnostics(t *testing.T, diag Diagnostics, src string) (out, errOut
 // any unreadable count, a separate one for a number that is not positive, and
 // a sentence that quotes the number rather than the word.
 func TestACountLoopControlWillNotRead(t *testing.T) {
+	t.Parallel()
 	oneSentence := Diagnostics{
 		LoopControlCount: "%[1]s: unreadable count: %[2]s",
 	}
@@ -160,6 +161,7 @@ func TestACountLoopControlWillNotRead(t *testing.T) {
 // The control the rule above needs: a count the shell *can* read is still
 // taken, and a `break` with none still leaves one loop.
 func TestACountLoopControlDoesRead(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"no count at all", `for i in 1 2; do break; done; echo after`, "after\n"},
 		{"a count of one", `for i in 1 2; do break 1; done; echo after`, "after\n"},

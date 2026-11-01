@@ -13,6 +13,7 @@ import (
 // lines. Yes hands the counted text to the first name whole and leaves the
 // rest; No splits it as an uncounted read would.
 func TestReadCountFillsTheFirstNameWhole(t *testing.T) {
+	t.Parallel()
 	const src = `y=keep; read -n 3 x y <<< 'p q rs'; echo "[$x] [$y]"; read -n 4 z <<< '  pq'; echo "[$z]"`
 	for _, c := range []struct {
 		a    Answer

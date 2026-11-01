@@ -27,6 +27,7 @@ func badPatternSem() Semantics {
 // unannotated stop, so an `eval` around a bad pattern abandoned the whole
 // script and everything after the first one was lost (#3398).
 func TestARefusedPatternIsAnErrorTheBorrowedTextBoundaryCatches(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		stopped         bool
@@ -82,6 +83,7 @@ func TestARefusedPatternIsAnErrorTheBorrowedTextBoundaryCatches(t *testing.T) {
 // one round borrowed text still loses the script. Without this row the catch
 // above could be a rule rather than an axis being read.
 func TestARefusedPatternEndsTheScriptWhereBorrowedTextIsNoBoundary(t *testing.T) {
+	t.Parallel()
 	sem := badPatternSem()
 	sem.FatalErrorEndsBorrowedTextOnly = No
 	out, st := run(t, `eval 'case "[a" in ([) echo one;; esac'; echo after`, withSem(sem))
@@ -100,6 +102,7 @@ func TestARefusedPatternEndsTheScriptWhereBorrowedTextIsNoBoundary(t *testing.T)
 // does not decide: measured 2026-09-18, `[[ '[a' == [ ]]` ends real zsh at 2
 // where the `case` spelling of the same pattern ends it at 1.
 func TestARefusedPatternInAConditionCarriesTheConditionsStatus(t *testing.T) {
+	t.Parallel()
 	sem := badPatternSem()
 	out, st := run(t, `[[ '[a' == [ ]]; echo after`, withSem(sem))
 	if !strings.Contains(out, "bad pattern: [") {

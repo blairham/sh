@@ -29,6 +29,7 @@ func headerRun(t *testing.T, src string, dg Diagnostics) (string, string, int) {
 // was declared. The pair in one listing is what makes it visible — either row
 // alone reads as a fixed spelling.
 func TestAFunctionListingCanKeepTheDeclarationsKeyword(t *testing.T) {
+	t.Parallel()
 	const src = "f(){ :; }\nfunction g { :; }\ntypeset -f\n"
 	out, errs, st := headerRun(t, src, Diagnostics{
 		FunctionListingHeader:        "%[1]s()%[2]s",
@@ -45,6 +46,7 @@ func TestAFunctionListingCanKeepTheDeclarationsKeyword(t *testing.T) {
 // of the four dialects, and is what keeps this from being a question every
 // dialect has to answer.
 func TestOneHeaderServesBothSpellingsByDefault(t *testing.T) {
+	t.Parallel()
 	const src = "f(){ :; }\nfunction g { :; }\ntypeset -f\n"
 	out, errs, st := headerRun(t, src, Diagnostics{FunctionListingHeader: "%[1]s()%[2]s"})
 	if want := "f(){ \n  :\n}\ng(){ \n  :\n}\n"; out != want || st != 0 || errs != "" {
@@ -55,6 +57,7 @@ func TestOneHeaderServesBothSpellingsByDefault(t *testing.T) {
 // The names-only listing makes the same distinction with punctuation instead
 // of a word, and falls back the same way.
 func TestANamesOnlyListingCanSpellTheDeclarationToo(t *testing.T) {
+	t.Parallel()
 	const src = "f(){ :; }\nfunction g { :; }\ntypeset +f\n"
 	out, _, st := headerRun(t, src, Diagnostics{
 		FunctionNameListing:        "%[1]s()",

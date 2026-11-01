@@ -45,6 +45,7 @@ func comparisonRun(t *testing.T, src string, set func(*Semantics)) (string, int)
 // changes nothing — and the cases that separate them are a name, an operator
 // and an empty word.
 func TestComparisonOperandsCanBeArithmetic(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, yes, no string
 	}{
@@ -99,6 +100,7 @@ func TestComparisonOperandsCanBeArithmetic(t *testing.T) {
 // says "integer expected" at 2. The name the builtin was called by opens
 // either sentence.
 func TestComparisonArithmeticRefusalIsTheBuiltins(t *testing.T) {
+	t.Parallel()
 	src := `[ 1x1 -eq 0 ]; echo "st=$?"; test 1x1 -eq 0; echo "st=$?"`
 	out, _ := comparisonRun(t, src, func(s *Semantics) {
 		s.TestBuiltinComparisonOperandsAreArithmetic = Yes
@@ -125,6 +127,7 @@ func TestComparisonArithmeticRefusalIsTheBuiltins(t *testing.T) {
 // The reading a division by zero gets is the arithmetic's, not the builtin's:
 // the sentence is the one `$(( ))` writes for it, behind the builtin's name.
 func TestComparisonArithmeticCarriesTheMathComplaint(t *testing.T) {
+	t.Parallel()
 	out, st := comparisonRun(t, `[ 3/0 -eq 0 ]; echo "st=$?"`, func(s *Semantics) {
 		s.TestBuiltinComparisonOperandsAreArithmetic = Yes
 	})
@@ -140,6 +143,7 @@ func TestComparisonArithmeticCarriesTheMathComplaint(t *testing.T) {
 // Both sit behind ArithStoredValueReadsALeadingZeroAsDecimal: where nothing
 // rewrites a leading zero the two sites cannot differ.
 func TestConditionOperandZerosReachPastARadixPrefix(t *testing.T) {
+	t.Parallel()
 	const src = `x10=7
 echo "stored=$(( 0x10 ))"
 [[ 0x10 -eq 7 ]] && echo cond=name || echo cond=hex
@@ -167,6 +171,7 @@ echo "stored=$(( 0x10 ))"
 // sites: however many zeros, in front of a name as much as in front of a
 // digit, and two zeros in front of an `x` are not a prefix.
 func TestLeadingZerosComeOffAValueAndAnOperand(t *testing.T) {
+	t.Parallel()
 	const src = `abc=5; b101=9; x10=7
 name=0abc; binary=0b101; padded=0010; twice=00x10
 echo "name=$(( name )) binary=$(( binary )) padded=$(( padded )) twice=$(( twice ))"

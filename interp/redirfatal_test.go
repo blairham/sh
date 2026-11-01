@@ -30,6 +30,7 @@ func runRedirFatal(t *testing.T, src string, fatal, statusIsOne Answer) (out str
 // stopped and a shell that carried on can report the same number, and the
 // first version of this could not tell them apart.
 func TestAFailedRedirectionOnASpecialBuiltinEndsTheScriptWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	const src = "exec 3>/nope/x\necho after\n"
 
 	out, st := runRedirFatal(t, src, Yes, Yes)
@@ -54,6 +55,7 @@ func TestAFailedRedirectionOnASpecialBuiltinEndsTheScriptWhereTheAxisSaysSo(t *t
 // panel stop at 1 and one at 2, and that split is FatalErrorStatusIsOne's
 // everywhere else too.
 func TestTheStoppedShellTakesTheVectorsFatalStatus(t *testing.T) {
+	t.Parallel()
 	if _, st := runRedirFatal(t, "exec 3>/nope/x\necho after\n", Yes, Yes); st != 1 {
 		t.Errorf("status = %d, want 1", st)
 	}
@@ -66,6 +68,7 @@ func TestTheStoppedShellTakesTheVectorsFatalStatus(t *testing.T) {
 // the panel on four of them, and they answer together: where one stops they
 // all stop.
 func TestEverySpecialBuiltinCarriesTheRule(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src string }{
 		{"exec", "exec 3>/nope/x"},
 		{"colon", ": 3>/nope/x"},
@@ -89,6 +92,7 @@ func TestEverySpecialBuiltinCarriesTheRule(t *testing.T) {
 // which is what every shell in the panel does — so a rule written as "a
 // failed redirection is fatal" would be wrong in three places at once.
 func TestOnlyASpecialBuiltinsRedirectionEndsTheScript(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src string }{
 		{"regular builtin", "true 3>/nope/x"},
 		{"external command", "/bin/echo x 3>/nope/x"},
@@ -107,6 +111,7 @@ func TestOnlyASpecialBuiltinsRedirectionEndsTheScript(t *testing.T) {
 // what "ends the shell" has to mean in a runner whose subshells are clones
 // rather than processes.
 func TestInASubshellItEndsTheSubshellAlone(t *testing.T) {
+	t.Parallel()
 	out, st := runRedirFatal(t, "( exec 3>/nope/x; echo inner )\necho after\n", Yes, Yes)
 	if strings.Contains(out, "inner") {
 		t.Errorf("got %q, want the subshell to have stopped", out)
@@ -121,6 +126,7 @@ func TestInASubshellItEndsTheSubshellAlone(t *testing.T) {
 
 // Inside a function it ends the shell, because a function is not a boundary.
 func TestInAFunctionItEndsTheShell(t *testing.T) {
+	t.Parallel()
 	out, _ := runRedirFatal(t, "f() { exec 3>/nope/x; echo inner; }\nf\necho after\n", Yes, Yes)
 	if strings.Contains(out, "inner") || strings.Contains(out, "after") {
 		t.Errorf("got %q, want nothing after the redirection to have run", out)
@@ -131,6 +137,7 @@ func TestInAFunctionItEndsTheShell(t *testing.T) {
 // axis does and is the reason a Runner that has chosen no dialect is not
 // quietly given one shell's reading of this.
 func TestWithNoAnswerTheAxisIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	out, _ := runRedirFatal(t, "exec 3>/nope/x\necho after\n", Unspecified, Yes)
 	if !strings.Contains(out, "a failed redirection on a special builtin") {
 		t.Errorf("got %q, want the axis named in the refusal", out)
@@ -146,6 +153,7 @@ func TestWithNoAnswerTheAxisIsRefusedByName(t *testing.T) {
 // the opposite of the standard's, which is the difference that matters for a
 // dialect POSIX already agrees with.
 func TestPosixModeMovesAnAxis(t *testing.T) {
+	t.Parallel()
 	withPosix := func(fatal Answer) func(*Runner) {
 		return func(r *Runner) {
 			s := permissive()
@@ -186,6 +194,7 @@ func TestPosixModeMovesAnAxis(t *testing.T) {
 // The mode is this runner's own. A subshell that enters it leaves the parent
 // where it was, which is the copy-on-write the vector is swapped with.
 func TestPosixModeEnteredInASubshellStaysThere(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, "( set -o posix; exec 3>/nope/x; echo inner )\nexec 4>/nope/y\necho after\n", func(r *Runner) {
 		s := permissive()
 		s.RedirectErrorOnSpecialBuiltinFatal = No

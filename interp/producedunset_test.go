@@ -41,6 +41,7 @@ func counting(name string, tune func(*Semantics)) func(*Runner) {
 }
 
 func TestAssignmentRestoresAnUnsetProducedParameterIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		a    Answer
@@ -70,6 +71,7 @@ func TestAssignmentRestoresAnUnsetProducedParameterIsAnAxis(t *testing.T) {
 // test that only exercised the unset case could not tell a fix from a shell
 // that had stopped producing altogether.
 func TestAnAssignmentToAStandingProducedParameterIsStillAMessage(t *testing.T) {
+	t.Parallel()
 	for _, a := range []Answer{Yes, No, Unspecified} {
 		out, _ := run(t, `X=9; a=$X; b=$X; echo "[$a] [$b]"`, counting("X", func(s *Semantics) {
 			s.AssignmentRestoresAnUnsetProducedParameter = a
@@ -84,6 +86,7 @@ func TestAnAssignmentToAStandingProducedParameterIsStillAMessage(t *testing.T) {
 // An `unset` with no assignment after it is the same in both readings: the
 // name is gone and reads as nothing.
 func TestUnsetAloneLeavesTheNameEmptyUnderEitherAnswer(t *testing.T) {
+	t.Parallel()
 	for _, a := range []Answer{Yes, No} {
 		out, _ := run(t, `unset X; echo "[$X]" "${X-unset}"`, counting("X", func(s *Semantics) {
 			s.AssignmentRestoresAnUnsetProducedParameter = a
@@ -98,6 +101,7 @@ func TestUnsetAloneLeavesTheNameEmptyUnderEitherAnswer(t *testing.T) {
 // too, which is what says the producer is gone rather than merely outvoted:
 // it lists back, it is there for `-v`, and a second assignment lands on it.
 func TestAnEndedProducerLeavesAnOrdinaryName(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `unset X; X=9; X=10; echo "[$X]" "${X+set}"`, counting("X", func(s *Semantics) {
 		s.AssignmentRestoresAnUnsetProducedParameter = No
 	}))
@@ -111,6 +115,7 @@ func TestAnEndedProducerLeavesAnOrdinaryName(t *testing.T) {
 // — it is the closure both runners see — so what this reads is which runner
 // the *record* reached, not how many times anything was called.
 func TestEndingAProducedParameterInASubshellDoesNotEndTheParents(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `(unset X; X=9; echo "in [$X]"); echo "out [${X#made}]"`, counting("X", func(s *Semantics) {
 		s.AssignmentRestoresAnUnsetProducedParameter = No
 	}))

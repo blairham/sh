@@ -26,6 +26,7 @@ func selectingWithFlags(d *syntax.Dialect) {
 // substitutes the matched part — and `:#`, and nothing else. Every row below
 // is a measurement on zsh 5.9.2, the only panel shell with the construct.
 func TestTheMatchingFlagSubstitutesWhatThePatternTook(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The trims. The operator still chooses shortest or longest; the
 		// flag only chooses which side of the split is substituted.
@@ -99,6 +100,7 @@ func TestTheMatchingFlagSubstitutesWhatThePatternTook(t *testing.T) {
 // letter taken out of that guarantee — so the guarantee is asserted, whole
 // rendered line and all, rather than assumed.
 func TestTheUnbuiltFlagsAreStillRefusedByName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"t", `v=x; printf "[%s]" "${(t)v}"`, "sh: ${(t)v}: the (t) expansion flag is not implemented\n"},
 		// `m` was on this list whole and is now half-built: it is carried for
@@ -138,6 +140,7 @@ func TestTheUnbuiltFlagsAreStillRefusedByName(t *testing.T) {
 // It is the letter easiest to lose, because `a` beside it *is* built and the
 // two differ only in case: one orders a list by its index.
 func TestTheArrayFlagIsRefusedOnlyForTheAssignment(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an association assignment names the doubled letter", `printf "[%s]" "${(AA)x=k v}"`, "sh: ${(AA)x=k v}: the (AA) expansion flag is not implemented for an assignment\n"},
 		{"and the colon form of it too", `printf "[%s]" "${(AA)x:=k v}"`, "sh: ${(AA)x:=k v}: the (AA) expansion flag is not implemented for an assignment\n"},
@@ -181,6 +184,7 @@ func TestTheArrayFlagIsRefusedOnlyForTheAssignment(t *testing.T) {
 // And the one that was refused is not refused any more, said as a whole
 // rendered line so that a message merely reworded would still fail.
 func TestTheMatchingFlagIsNoLongerRefused(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `a=(f1 f22 f333); printf "[%s]" "${(M@)a:#f2*}"`, selectingWithFlags, nil)
 	if out != "[f22]" || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, "[f22]")

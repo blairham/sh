@@ -95,6 +95,7 @@ func TestBorrowedTextUsesTheShellsAliases(t *testing.T) {
 // one: a text parsed through first has been parsed before its first line
 // runs, so line 1 cannot change how line 2 reads.
 func TestADefinitionInsideBorrowedTextFollowsTheReader(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src string
 		byLine    Answer
@@ -127,6 +128,7 @@ func TestADefinitionInsideBorrowedTextFollowsTheReader(t *testing.T) {
 // the obvious thing to reach for the next time a substitution needs to see
 // something its own first line did, and the panel says it must not.
 func TestASubstitutionIsAlwaysReadThrough(t *testing.T) {
+	t.Parallel()
 	for _, byLine := range []Answer{Yes, No} {
 		dir := t.TempDir()
 		src := "v=$(alias inner='echo INNER'\ninner)\necho \"v=[$v]\""
@@ -143,6 +145,7 @@ func TestASubstitutionIsAlwaysReadThrough(t *testing.T) {
 // `eval`. This is what the three hooks carry, and a nested parser handed the
 // *tables* instead would expand past a switch that was off.
 func TestBorrowedTextHonorsTheExpansionSwitch(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "inc.sh", "t OFF\n")
 	for _, c := range []struct {

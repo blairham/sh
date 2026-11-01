@@ -63,6 +63,7 @@ func runNestedSubscript(t *testing.T, src string, set ...func(*Semantics)) (stri
 
 // The elements of a result that is a list, counted from the base.
 func TestASubscriptOnANestedResultCountsItsElements(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an element by its subscript", `a=(x y z); printf "[%s]" "${${a[@]}[2]}"`, "[y]"},
 		{"the first", `a=(x y z); printf "[%s]" "${${a[@]}[1]}"`, "[x]"},
@@ -95,6 +96,7 @@ func TestASubscriptOnANestedResultCountsItsElements(t *testing.T) {
 // question `${s[2]}` asks of a name — and it is asked of the axis rather than
 // assumed, because two dialects read a subscripted string two ways.
 func TestASubscriptOnANestedStringNamesACharacter(t *testing.T) {
+	t.Parallel()
 	const src = `v=abc; printf "[%s]" "${${v}[2]}"`
 	if out, st := runNestedSubscript(t, src); out != "[b]" || st != 0 {
 		t.Errorf("as characters: got %q (status %d), want [b] at 0", out, st)
@@ -119,6 +121,7 @@ func TestASubscriptOnANestedStringNamesACharacter(t *testing.T) {
 // element and a string are both one field, and the subscript reads them
 // differently.
 func TestOneFieldIsNotEnoughToSayWhichReadingApplies(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// A one-element list has no second element, where the string `abc`
 		// has a second character.
@@ -175,6 +178,7 @@ func TestOneFieldIsNotEnoughToSayWhichReadingApplies(t *testing.T) {
 // A search subscript over the result: the letters select by *searching*, and
 // the answer is an index or an element exactly as it is on a name.
 func TestASearchSubscriptOverANestedResult(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the index of the last match", `a=(x y z); printf "[%s]" "${${a[@]}[(I)y]}"`, "[2]"},
 		{"the index of the first", `a=(y y); printf "[%s]" "${${a[@]}[(i)y]}"`, "[1]"},
@@ -208,6 +212,7 @@ func TestASearchSubscriptOverANestedResult(t *testing.T) {
 // still leave `(( … == 0 ))` a bad math expression with an empty operand,
 // which is the shape the caller actually breaks in.
 func TestNoMatchIsZeroToTheArithmeticThatReadsIt(t *testing.T) {
+	t.Parallel()
 	const src = `a=(x y z); h=a
 if (( ${${(P)h}[(I)nosuch]} == 0 )); then echo absent; else echo present; fi
 if (( ${${(P)h}[(I)y]} == 0 )); then echo absent; else echo present; fi`
@@ -228,6 +233,7 @@ if (( ${${a[@]}[(I)nosuch]} == 0 )); then echo absent; fi`)
 // than the fields that parameter would expand to. Three things follow, and
 // none of them follows from the fields.
 func TestASubscriptThroughAParameterReferenceReadsTheParameter(t *testing.T) {
+	t.Parallel()
 	// One element of a list of one, which a character reading would have
 	// answered `y` for.
 	if out, st := runNestedSubscript(t, `a=(xyz); h=a; printf "[%s]" "${${(P)h}[2]}"`); out != "[]" || st != 0 {
@@ -262,6 +268,7 @@ func TestASubscriptThroughAParameterReferenceReadsTheParameter(t *testing.T) {
 // and applied the letters afterwards answers `hello` and `h` respectively,
 // both of them plausible.
 func TestTheOtherLettersBesideAReferenceTransformTheName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the uppercased name is the parameter", `ARR=(x y); arr=(hello); h=arr; printf "[%s]" "${${(UP)h}[1]}"`, "[x]"},
 		{"and its other elements", `ARR=(x y); arr=(hello); h=arr; printf "[%s]" "${${(UP)h}[2]}"`, "[y]"},
@@ -290,6 +297,7 @@ func TestTheOtherLettersBesideAReferenceTransformTheName(t *testing.T) {
 // The reference reaches an association's key, which is the sharpest half:
 // an association's *fields* are its values, and a key is no position in them.
 func TestAParameterReferenceSubscriptReadsAKey(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `h=m; printf "[%s][%s]" "${${(P)h}[k]}" "${${(P)h}[nosuch]-none}"`,
 		nestedSubscriptGrammar, func(r *Runner) {
 			r.StoreAssoc("m", AssocArray{"k": Scalar("v")})
@@ -313,6 +321,7 @@ func TestAParameterReferenceSubscriptReadsAKey(t *testing.T) {
 // set, and only the reference route can show one, the fields of an unquoted
 // expansion having dropped it.
 func TestASubscriptThatNamedNothingIsUnset(t *testing.T) {
+	t.Parallel()
 	out, st := runNestedSubscript(t,
 		`a=(x y z); printf "[%s][%s]" "${${a[@]}[2]-none}" "${${a[@]}[9]-none}"`)
 	if out != "[y][none]" || st != 0 {
@@ -329,6 +338,7 @@ func TestASubscriptThatNamedNothingIsUnset(t *testing.T) {
 // `"$*"`. The join is on IFS rather than on a hard space, which is the half a
 // test can tell apart from a plausible one.
 func TestQuotingReachesTheInnerExpansion(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a bare name joins in quotes", `a=(p q r); printf "[%s]" "${${a}[2]}"`, "[ ]"},
 		{"and joins on IFS", `IFS=-; a=(p q r); printf "[%s]" "${${a}[2]}"`, "[-]"},
@@ -369,6 +379,7 @@ bb"; printf "[%s]" "${${(f)v}[2]}"`, "[bb]"},
 // plausible value at status 0 — the failure the refusal that used to stand
 // here existed to prevent.
 func TestASubscriptOnANestedSubstitution(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a list of three, the second", `printf "[%s]" ${$(echo a b c)[2]}`, "[b]"},
 		{"a list of one has no second", `printf "[%s]" ${$(echo abc)[2]}`, "[]"},
@@ -403,6 +414,7 @@ func TestASubscriptOnANestedSubstitution(t *testing.T) {
 // `${#$(true)[@]}` and `${#$(true)}` are both 0, where one empty field would
 // have answered 1 to both.
 func TestAnEmptyNestedSubstitutionIsAnEmptyList(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"no element to count", `printf "[%s]" ${#$(true)[@]}`, "[0]"},
 		{"and none to measure", `printf "[%s]" ${#$(true)}`, "[0]"},
@@ -429,6 +441,7 @@ func TestAnEmptyNestedSubstitutionIsAnEmptyList(t *testing.T) {
 // assertions are on the elements because a list of one and a list of three
 // differ in a count as well, and a count alone passes against either.
 func TestASubscriptOnANestedListNamesEveryElementItSelects(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"quoted, one field each", `a=(x y z); printf "[%s]" "${${a[@]}[@]}"`, "[x][y][z]"},
 		{"and the space inside one survives", `a=("p q" z); printf "[%s]" "${${a[@]}[@]}"`, "[p q][z]"},
@@ -468,6 +481,7 @@ func TestASubscriptOnANestedListNamesEveryElementItSelects(t *testing.T) {
 // the same guard `expandAtList` keeps for the same reason, one construct
 // over: a `Bad` node is not a shape.
 func TestAnUnreadableInnerIsNotAReference(t *testing.T) {
+	t.Parallel()
 	out, st := runNestedSubscript(t, `a=(x y); h=a; printf "[%s]" "${${(P)h@Q}[1]}"`)
 	if !strings.Contains(out, "bad substitution") {
 		t.Errorf("got %q, want the unreadable inner reported", out)
@@ -498,6 +512,7 @@ func TestAnUnreadableInnerIsNotAReference(t *testing.T) {
 // The nesting is what makes it worth a row of its own: a subscript on an
 // expansion's result reaches the same split as one on a name.
 func TestACommaInASearchOperandSeparatesThePair(t *testing.T) {
+	t.Parallel()
 	out, st := runNestedSubscript(t, `a=("1,2" x y); printf "[%s]" "${#${a[@]}[(r)1,2]}"`)
 	if want := "[0]"; out != want || st != 0 {
 		t.Errorf("gave %q at %d, want %q at 0 — an empty span, not the element holding the comma", out, st, want)
@@ -508,6 +523,7 @@ func TestACommaInASearchOperandSeparatesThePair(t *testing.T) {
 // letter does not reach: measured on zsh 5.9.2, `${${(P)h}[(w)y]}` is empty,
 // `y` being 0 to the arithmetic (#5152).
 func TestAWordFlagThroughAReferenceReadsTheArray(t *testing.T) {
+	t.Parallel()
 	out, st := runNestedSubscript(t, `a=(x y); h=a; printf "[%s]" "${${(P)h}[(w)y]}" "${${(P)h}[(w)2]}"`)
 	if want := "[][y]"; out != want || st != 0 {
 		t.Errorf("got %q at %d, want %q at 0", out, st, want)
@@ -518,6 +534,7 @@ func TestAWordFlagThroughAReferenceReadsTheArray(t *testing.T) {
 // all: the brackets are part of the operand and the expansion is refused
 // rather than read one dialect's way.
 func TestANestedSubscriptNeedsTheSubscriptGrammar(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `a=(x y z); printf "[%s]" "${${a[@]}[2]}"`, func(d *syntax.Dialect) {
 		nestedSubscriptGrammar(d)
 		d.ArraySubscript = false
@@ -538,6 +555,7 @@ func TestANestedSubscriptNeedsTheSubscriptGrammar(t *testing.T) {
 // The count is the assertion. `b` came back whether the command ran once or
 // twice, which is why the issue could stand with the value correct.
 func TestASubscriptOnAConditionalNestingStillRunsTheInnerOnce(t *testing.T) {
+	t.Parallel()
 	out, st := runNestedSubscript(t,
 		`printf "[%s]" "${${$(printf x >>marks; echo abc):-d}[2]}"; printf "n=%s" "$(cat marks)"`)
 	if want := "[b]n=x"; out != want || st != 0 {

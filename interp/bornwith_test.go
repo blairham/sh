@@ -43,6 +43,7 @@ func envRun(t *testing.T, env []string, src string) (string, int) {
 // would let `PATHX` answer for `PATH`, which is the way a scan that does not
 // split can be wrong and a scan that splits cannot.
 func TestALongerNameDoesNotAnswerForAShorterOne(t *testing.T) {
+	t.Parallel()
 	env := []string{"PATHX=wrong", "PATH=right", "XPATH=alsowrong"}
 	if out, st := envRun(t, env, `echo "$PATH"`); st != 0 || out != "right\n" {
 		t.Errorf("$PATH = %q, status %d, want %q", out, st, "right\n")
@@ -57,6 +58,7 @@ func TestALongerNameDoesNotAnswerForAShorterOne(t *testing.T) {
 // An entry with no `=` is not a variable, and must not be read as a name
 // holding nothing. It cannot match, whatever the name is.
 func TestAnEntryWithNoEqualsIsNotAVariable(t *testing.T) {
+	t.Parallel()
 	env := []string{"JUSTANAME", "REAL=here"}
 	if out, st := envRun(t, env, `echo "[${JUSTANAME-unset}][$REAL]"`); st != 0 || out != "[unset][here]\n" {
 		t.Errorf("out = %q, status %d, want %q", out, st, "[unset][here]\n")
@@ -66,6 +68,7 @@ func TestAnEntryWithNoEqualsIsNotAVariable(t *testing.T) {
 // The first entry wins where a name appears twice, which is the answer the
 // split walk gave and is what a shell handed a duplicated name reads.
 func TestTheFirstOfTwoEntriesForOneNameWins(t *testing.T) {
+	t.Parallel()
 	if out, st := envRun(t, []string{"DUP=first", "DUP=second"}, `echo "$DUP"`); st != 0 || out != "first\n" {
 		t.Errorf("$DUP = %q, status %d, want %q", out, st, "first\n")
 	}
@@ -74,6 +77,7 @@ func TestTheFirstOfTwoEntriesForOneNameWins(t *testing.T) {
 // `unset` takes the name away, and the question is asked about the name once
 // rather than about every entry. A value it is holding must not come back.
 func TestUnsetHidesAnInheritedNameAndItsExport(t *testing.T) {
+	t.Parallel()
 	env := []string{"GONE=value"}
 	if out, st := envRun(t, env, `unset GONE; echo "[${GONE-unset}]"`); st != 0 || out != "[unset]\n" {
 		t.Errorf("out = %q, status %d, want %q", out, st, "[unset]\n")

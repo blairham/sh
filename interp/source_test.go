@@ -218,6 +218,7 @@ func write(t *testing.T, dir, name, body string) string {
 // this reported the latter for all of them. The wording is the substrate's
 // here; what each dialect does with the same number is measured in dialect/.
 func TestBorrowedTextReportsItsOwnLine(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "late.sh", "echo one\necho two\nif\n")
 
@@ -240,6 +241,7 @@ func TestBorrowedTextReportsItsOwnLine(t *testing.T) {
 // field rather than the same sentence printed with an empty hole in it. A
 // dialect that leaves it empty keeps the one wording it already had.
 func TestEndOfInputWithNothingOpenHasItsOwnWording(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	both := Diagnostics{
 		Location: LocationColonLine, Unterminated: "unfinished %[1]s",
@@ -270,6 +272,7 @@ func TestEndOfInputWithNothingOpenHasItsOwnWording(t *testing.T) {
 // the reason there are two fields rather than one: `eval` and a sourced file
 // are two questions, and a dialect may answer them differently.
 func TestBorrowedTextIsNamedWhereTheDialectNamesIt(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	// The name in the diagnostic is the operand as the shell constructed it —
 	// `./p.sh` as written here — never the absolute path it resolved to.
@@ -357,6 +360,7 @@ func TestEvalRunsInTheCallingShell(t *testing.T) {
 // TestEvalWithNothingToRunReportsSuccess is a case that reads like it should
 // leave the status alone and does not: an eval with no text clears a failure.
 func TestEvalWithNothingToRunReportsSuccess(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`false; eval; echo st=$?`,
 		`false; eval ""; echo st=$?`,
@@ -373,6 +377,7 @@ func TestEvalWithNothingToRunReportsSuccess(t *testing.T) {
 // backwards. eval is not a scope: `return` inside it returns from the function
 // around it and `break` breaks the loop around it.
 func TestEvalIsTransparentToControlFlow(t *testing.T) {
+	t.Parallel()
 	out, st := sourceRun(t, t.TempDir(),
 		`f() { eval return 3; echo NOT-REACHED; }; f; echo st=$?`,
 		permissive(), Diagnostics{})
@@ -394,6 +399,7 @@ func TestEvalIsTransparentToControlFlow(t *testing.T) {
 // TestDotIsAScopeForReturnAndEvalIsNot is the difference between the two, and
 // it is the only one in how they treat control flow.
 func TestDotIsAScopeForReturnAndEvalIsNot(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "r.sh", "echo one\nreturn 5\necho NOT-REACHED\n")
 
@@ -408,6 +414,7 @@ func TestDotIsAScopeForReturnAndEvalIsNot(t *testing.T) {
 }
 
 func TestDotRunsInTheCallingShell(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "v.sh", "x=7\n")
 	out, st := sourceRun(t, dir, `. `+filepath.Join(dir, "v.sh")+`; echo $x`,
@@ -421,6 +428,7 @@ func TestDotRunsInTheCallingShell(t *testing.T) {
 // eval, and worth its own case because "the status of the last command" reads
 // like it should preserve one when there is no last command.
 func TestSourcingAnEmptyFileClearsTheStatus(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "empty.sh", "")
 	out, _ := sourceRun(t, dir, `false; . `+filepath.Join(dir, "empty.sh")+`; echo st=$?`,
@@ -434,6 +442,7 @@ func TestSourcingAnEmptyFileClearsTheStatus(t *testing.T) {
 // people: a `.` operand with no slash is a PATH lookup, and PATH wins over a
 // file of the same name next to you.
 func TestDotSearchesPathBeforeTheCurrentDirectory(t *testing.T) {
+	t.Parallel()
 	pathDir, cwd := t.TempDir(), t.TempDir()
 	write(t, pathDir, "amb.sh", "echo from-path\n")
 	write(t, cwd, "amb.sh", "echo from-cwd\n")
@@ -461,6 +470,7 @@ func TestDotSearchesPathBeforeTheCurrentDirectory(t *testing.T) {
 // TestDotFallsBackToTheCurrentDirectoryOnlyWhenAsked pins the axis in both
 // directions, which is what makes it an axis rather than a behavior.
 func TestDotFallsBackToTheCurrentDirectoryOnlyWhenAsked(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		fall  Answer
@@ -500,6 +510,7 @@ func TestDotFallsBackToTheCurrentDirectoryOnlyWhenAsked(t *testing.T) {
 // TestDotPassesArgumentsOnlyWhenAsked covers the axis and the restore. The
 // caller's parameters come back either way, which is unanimous in the panel.
 func TestDotPassesArgumentsOnlyWhenAsked(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		pass Answer
@@ -526,6 +537,7 @@ func TestDotPassesArgumentsOnlyWhenAsked(t *testing.T) {
 // axis. POSIX makes a special builtin's failure fatal; most shells stopped
 // doing it, so the substrate cannot pick one.
 func TestUnparseableTextIsFatalOnlyWhenTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		fatal Answer
@@ -549,6 +561,7 @@ func TestUnparseableTextIsFatalOnlyWhenTheDialectSaysSo(t *testing.T) {
 // one dialect answers "a syntax error" differently depending on where it read
 // the text. Zero means "the same as the ordinary one".
 func TestASourcedFileCanCarryItsOwnSyntaxStatus(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	p := write(t, dir, "bad.sh", "if\n")
 	sem := permissive()
@@ -574,6 +587,7 @@ func TestASourcedFileCanCarryItsOwnSyntaxStatus(t *testing.T) {
 }
 
 func TestDotReportsAFileItCannotRead(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	sem := permissive()
 
@@ -596,6 +610,7 @@ func TestDotReportsAFileItCannotRead(t *testing.T) {
 // harness noticed: removing the capitalization broke no unit test at all,
 // which is what this is for.
 func TestTheReasonIsCapitalizedLikeStrerror(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, _ := sourceRun(t, dir, `. `+filepath.Join(dir, "absent.sh"), permissive(),
 		Diagnostics{DotCannotOpen: "%[2]s"})
@@ -611,6 +626,7 @@ func TestTheReasonIsCapitalizedLikeStrerror(t *testing.T) {
 // TestDotDistinguishesNotFoundFromCannotOpen exists because one dialect uses
 // two different messages for what the others call one failure.
 func TestDotDistinguishesNotFoundFromCannotOpen(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	dg := Diagnostics{
 		DotCannotOpen: "CANNOT-OPEN %[1]s",
@@ -642,6 +658,7 @@ func TestDotDistinguishesNotFoundFromCannotOpen(t *testing.T) {
 // vector a specification rather than a set of defaults: an unanswered axis is
 // refused, not guessed.
 func TestTheSubstrateRefusesWhenNoDialectAnswered(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	p := write(t, dir, "a.sh", "echo got=$1\n")
 
@@ -679,6 +696,7 @@ func TestTheSubstrateRefusesWhenNoDialectAnswered(t *testing.T) {
 // the dialects. One shell in the panel does not have it, so the core offering
 // it would give that dialect no way to say no.
 func TestSourceIsNotASubstrateBuiltin(t *testing.T) {
+	t.Parallel()
 	if _, ok := newTestRunner(t, &Runner{}).Builtin("source"); ok {
 		t.Error("`source` should come from a dialect's Apply, not the core")
 	}
@@ -691,6 +709,7 @@ func TestSourceIsNotASubstrateBuiltin(t *testing.T) {
 // dialects use to register `source`. A synonym has to be the same function, or
 // the two names drift.
 func TestBuiltinLookupIsWhatMakesASynonymTheSameFunction(t *testing.T) {
+	t.Parallel()
 	r := newTestRunner(t, &Runner{})
 	dot, ok := r.Builtin(".")
 	if !ok {
@@ -746,6 +765,7 @@ func TestBuiltinLookupIsWhatMakesASynonymTheSameFunction(t *testing.T) {
 // conformance harness passes, which carries PATH, HOME, LC_ALL and TERM and
 // nothing else.
 func TestPWDIsSetBeforeTheFirstCommand(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	f, err := syntax.Parse(`echo "[$PWD]"`, syntax.Core())
 	if err != nil {
@@ -769,6 +789,7 @@ func TestPWDIsSetBeforeTheFirstCommand(t *testing.T) {
 // TestPWDAlreadySetIsLeftAlone is the other half: the startup value must not
 // clobber one the caller or a `cd` already chose.
 func TestPWDAlreadySetIsLeftAlone(t *testing.T) {
+	t.Parallel()
 	f, err := syntax.Parse(`echo "[$PWD]"`, syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -791,6 +812,7 @@ func TestPWDAlreadySetIsLeftAlone(t *testing.T) {
 // TestEvalAndDotAreSpecialBuiltins closes the gap this change was for: the
 // table said they were special long before either existed.
 func TestEvalAndDotAreSpecialBuiltins(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"eval", "."} {
 		if !IsSpecialBuiltin(name) {
 			t.Errorf("%s should be a special builtin", name)
@@ -806,6 +828,7 @@ func TestEvalAndDotAreSpecialBuiltins(t *testing.T) {
 // search off. Neither half existed until #3058: `-p` was taken as the name
 // of the file, so the complaint named `-p`.
 func TestDotSearchPathOptionAndSwitch(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	elsewhere := t.TempDir()
 	if err := os.WriteFile(filepath.Join(elsewhere, "f.sh"), []byte("echo sourced\n"), 0o600); err != nil {
@@ -911,6 +934,7 @@ func TestDotSearchPathOptionAndSwitch(t *testing.T) {
 // what says the axis is about a replacement of the *sourced file's own* list
 // and not about the `set` word appearing anywhere under a `.`.
 func TestDotSetCancelsTheRestoreOnlyWhenAsked(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name          string
 		body          string
@@ -984,6 +1008,7 @@ func TestDotSetCancelsTheRestoreOnlyWhenAsked(t *testing.T) {
 // unanswered is the sharpest probe there is: a shell that asks anyway writes
 // the refusal and leaves 2 behind, and one that does not runs the script.
 func TestDotSetIsNotAskedWithoutAPassedList(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		pass Answer

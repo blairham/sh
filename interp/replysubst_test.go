@@ -18,6 +18,7 @@ import (
 // pipe form's flag folded in: two helpers would have been two places for a fix
 // to land.
 func TestAReplySubstitutionIsValuedFromReply(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"the value is what the body left in REPLY", "echo \"[${| REPLY=hi;}]\"\n", "[hi]\n"},
 		{
@@ -70,6 +71,7 @@ func TestAReplySubstitutionIsValuedFromReply(t *testing.T) {
 // REPLY that was unset before is unset after rather than empty. Three rows,
 // because a save that kept only the value would pass the first two.
 func TestAReplySubstitutionLocalizesReply(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"the body starts with none of the script's",
@@ -105,6 +107,7 @@ func TestAReplySubstitutionLocalizesReply(t *testing.T) {
 // and it is the only one that can: every other row here writes REPLY from the
 // script, where deleting and hiding are the same thing.
 func TestAReplySubstitutionHidesAnInheritedReply(t *testing.T) {
+	t.Parallel()
 	got := braceRun(t, "echo \"[${| true;}]\"\necho \"after=[$REPLY]\"\n", "REPLY=inherited")
 	if want := "[]\nafter=[inherited]\n"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -118,6 +121,7 @@ func TestAReplySubstitutionHidesAnInheritedReply(t *testing.T) {
 // the status is the echo's — which is the same control the blank form's test
 // carries.
 func TestAReplySubstitutionCarriesItsStatus(t *testing.T) {
+	t.Parallel()
 	if got := braceRun(t, "y=${| false;}\necho \"st=$?\"\n"); !strings.Contains(got, "st=1") {
 		t.Errorf("got %q, want st=1", got)
 	}
@@ -130,6 +134,7 @@ func TestAReplySubstitutionCarriesItsStatus(t *testing.T) {
 // blank form: whatever the body prints goes where the shell's output was going,
 // and what follows the substitution is written as well.
 func TestAReplySubstitutionNeverTakesTheWriter(t *testing.T) {
+	t.Parallel()
 	got := braceRun(t, "y=${| echo loose; REPLY=v;}\necho \"after=[$y]\"\n")
 	if !strings.Contains(got, "loose") {
 		t.Errorf("got %q, want the body's output written rather than captured", got)

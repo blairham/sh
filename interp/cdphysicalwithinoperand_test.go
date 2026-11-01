@@ -46,6 +46,7 @@ func cdWithinRun(t *testing.T, a CdDotDotCancellationPolicy, root, src string) (
 const cdRefused = "\x00refused"
 
 func TestWhereAPhysicalDotDotReachesPastTheOperandIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src           string
 		within, everyDotDot string
@@ -148,6 +149,7 @@ func TestWhereAPhysicalDotDotReachesPastTheOperandIsAnAxis(t *testing.T) {
 // blamed as written, because there the cancellation never got as far as
 // rebuilding anything.
 func TestACanceledPhysicalCdBlamesThePathItBuilt(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"the canceled path", "cd sub/fake && cd -P ../real", "sub/real"},
 		{"and a component of the operand's own", "cd -P nosuch/..", "nosuch/.."},
@@ -172,6 +174,7 @@ func TestACanceledPhysicalCdBlamesThePathItBuilt(t *testing.T) {
 // different contents — so the row is read from what is *in* the directory
 // rather than from its name.
 func TestACanceledPhysicalCdLooksTheBuiltNameUp(t *testing.T) {
+	t.Parallel()
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

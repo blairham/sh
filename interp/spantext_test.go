@@ -12,6 +12,7 @@ import (
 // stands in for: the same text and length after every write, whatever mix of
 // strings and bytes arrives, including a byte that is not ASCII (#6353).
 func TestSpanTextJoinsAsABuilderDoes(t *testing.T) {
+	t.Parallel()
 	type write struct {
 		s    string
 		b    byte

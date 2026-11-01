@@ -44,6 +44,7 @@ func widthPairRun(t *testing.T, src string, p WidthJustificationPrecedencePolicy
 // says the name carries no width attribute at all. Which is also the half a
 // listing-only fix would leave wrong.
 func TestAPairOfWidthLettersIsSettledThreeWays(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		policy     WidthJustificationPrecedencePolicy
 		lr, rl, zr string
@@ -80,6 +81,7 @@ func TestAPairOfWidthLettersIsSettledThreeWays(t *testing.T) {
 // The value follows the listing, which is the half a listing-only fix would
 // leave wrong: a name that carries no width attribute is not padded.
 func TestAConflictedPairLeavesTheValueUnpadded(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct{ src, want string }{
 		{`typeset -L5 -R5 v=7; printf "[%s]\n" "$v"`, "[7]\n"},
 		{`typeset -Z5 -R5 v=7; printf "[%s]\n" "$v"`, "[7]\n"},
@@ -107,6 +109,7 @@ func TestAConflictedPairLeavesTheValueUnpadded(t *testing.T) {
 // number reaching a letter that does not end its word — only one letter is
 // read and there is no pair to conflict.
 func TestWhatTheConflictAnswerReaches(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct{ name, src, want string }{
 		{"a third letter", `typeset -L5 -R5 -L5 v=7; typeset -p v`, `declare -- v="7"` + "\n"},
 		{"the integer letter stands", `typeset -i -L5 -R5 v=7; typeset -p v`, `declare -i v="7"` + "\n"},
@@ -135,6 +138,7 @@ func TestWhatTheConflictAnswerReaches(t *testing.T) {
 // rows this axis was first measured on could not make, since every one of
 // them is this spelling.
 func TestADiscardedSecondLetterIsNotAConflict(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct{ src, want string }{
 		{`typeset -LR 5 v=7; typeset -p v`, `declare -- v="7    "` + "\n"},
 		{`typeset -RL 5 v=7; typeset -p v`, `declare -- v="    7"` + "\n"},

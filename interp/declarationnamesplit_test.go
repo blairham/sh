@@ -70,6 +70,7 @@ func (r *Runner) declarationNameSplitByBytes(w *syntax.Word) (span, off int, app
 // spans at every byte, plus words with a quoted or substituted span in front,
 // inside and after the subscript.
 func TestDeclarationNameSplitAgreesWithTheByteWalk(t *testing.T) {
+	t.Parallel()
 	r := newTestRunner(t, &Runner{})
 	texts := []string{
 		"a=1", "abc=", "abc+=x", "a[1]=v", "a[k=1]=v", "a[1]+=v", "a]b=1", "x+y=v",

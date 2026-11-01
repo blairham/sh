@@ -37,6 +37,7 @@ func withDash(r *Runner) {
 // keyed on *how the dash arrives* all agreed with the discard for a reason
 // that had nothing to do with the discard being right (#5018).
 func TestALoneDashPutsADashOnArgv0(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the control, which is what makes the rest readable",
@@ -92,6 +93,7 @@ func TestALoneDashPutsADashOnArgv0(t *testing.T) {
 // and not four: each letter reads perfectly well on its own, and the same
 // letter behind a *different* modifier still reads (#5028).
 func TestALoneDashStopsTheOptionScanBehindIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		refused         bool
@@ -154,6 +156,7 @@ func TestALoneDashStopsTheOptionScanBehindIt(t *testing.T) {
 // with the table and without it — because "the word is read off the front" and
 // "the word is an ordinary command name" are the two answers the panel has.
 func TestALoneDashIsAModifierAndNotAName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, with, without string }{
 		{
 			"the word is read off the front and the rest runs",
@@ -218,6 +221,7 @@ func TestALoneDashIsAModifierAndNotAName(t *testing.T) {
 // is where this was first written too narrowly: `noglob` is taken and
 // `builtin` stays, and both leave nothing to run.
 func TestAModifierWithNothingToRunIsNotTheSameStateAsNoWordAtAll(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		refused   bool

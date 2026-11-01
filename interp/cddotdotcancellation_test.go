@@ -63,6 +63,7 @@ func cdDotDot(t *testing.T, root string, p CdDotDotCancellationPolicy, src strin
 // component being looked at rather than about a `..` being refused: an
 // ordinary `a/../b` where `a` is there is 0 under both readings.
 func TestADotDotIsCanceledUnseenOrNot(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src            string
 		unseen, looked int
@@ -96,6 +97,7 @@ func TestADotDotIsCanceledUnseenOrNot(t *testing.T) {
 // so one construct got the looking answer and the canceling answer out of one
 // Semantics (#4627).
 func TestAnAbsoluteOperandReadsTheAxisToo(t *testing.T) {
+	t.Parallel()
 	root := canceledTree(t)
 	// Written out rather than joined: filepath.Join cleans, so the `..` this
 	// row is about would be gone before the shell ever saw it — which is the
@@ -114,6 +116,7 @@ func TestAnAbsoluteOperandReadsTheAxisToo(t *testing.T) {
 // the question is whether the component is a **directory** rather than whether
 // the name is taken.
 func TestTheReasonNamesWhatTheComponentIs(t *testing.T) {
+	t.Parallel()
 	root := canceledTree(t)
 	for _, tc := range []struct{ src, want string }{
 		{"cd afile/../b", "not a directory"},
@@ -135,6 +138,7 @@ func TestTheReasonNamesWhatTheComponentIs(t *testing.T) {
 // `../nosuch/..` read its second `..` as reaching into base too and moved;
 // ksh93u+ refuses it, measured 2026-10-05, as it refuses `nosuch/..`.
 func TestAComponentPutBackAfterReachingIntoTheDirectoryIsLookedAt(t *testing.T) {
+	t.Parallel()
 	root := canceledTree(t)
 	from := filepath.Join(root, "b")
 	for _, src := range []string{"cd ../nosuch/..", "cd ../b/../nosuch/.."} {
@@ -152,6 +156,7 @@ func TestAComponentPutBackAfterReachingIntoTheDirectoryIsLookedAt(t *testing.T) 
 // behind a symbolic link to a directory cancels — which is what keeps #4590's
 // whole grid unmoved under the looking reading.
 func TestALinkedComponentIsADirectory(t *testing.T) {
+	t.Parallel()
 	root := canceledTree(t)
 	st, dir, errs := cdDotDot(t, root, CdDotDotLooksAtEveryCanceledComponent, "cd sub/fake/..")
 	if st != 0 || dir != filepath.Join(root, "sub") {
@@ -168,6 +173,7 @@ func TestALinkedComponentIsADirectory(t *testing.T) {
 // `..` was canceled against a component nobody had looked at and the shell
 // arrived where it already was.
 func TestAPhysicalResolutionThatFailedKeepsItsDotDot(t *testing.T) {
+	t.Parallel()
 	root := canceledTree(t)
 	for _, p := range []CdDotDotCancellationPolicy{
 		CdDotDotCanceledUnseen,

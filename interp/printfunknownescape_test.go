@@ -15,6 +15,7 @@ import (
 // backslash that is always written and one that is always dropped look alike
 // from a single row.
 func TestAnUndefinedEscapeInAFormat(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		answer  Answer

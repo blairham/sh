@@ -17,6 +17,7 @@ import "testing"
 // Measured on zsh 5.9.2, 2026-09-12, from a script file so the quoting around
 // the expansion is not what is being tested.
 func TestAModifierReadsTheTextAsWritten(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The two rows the issue was filed on, and they are each other's
 		// control: the pattern the quotes are part of matches the value that

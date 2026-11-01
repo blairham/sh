@@ -42,6 +42,7 @@ const countElems = `printf 'n=%s' "${#r[@]}"; for e in "${r[@]}"; do printf '[%s
 // the dialect says it does — the question the splitter's own tail does not
 // ask, because on an expansion the same shell absorbs it.
 func TestReadIntoAnArrayAsksAboutAClosingWhitespaceRun(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, absorbed, opens string }{
 		{
 			"one trailing space",
@@ -104,6 +105,7 @@ func TestReadIntoAnArrayAsksAboutAClosingWhitespaceRun(t *testing.T) {
 
 // A line that splits into no fields at all leaves one empty element or none.
 func TestReadIntoAnArrayAsksAboutALineWithNoFields(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, none, one string }{
 		{
 			"an empty line",
@@ -138,6 +140,7 @@ func TestReadIntoAnArrayAsksAboutALineWithNoFields(t *testing.T) {
 // is the only shape that can show it: the shell that opens a field on the
 // closing run has one by then and must not be asked for a second.
 func TestTheClosingRunIsAskedBeforeTheEmptyLine(t *testing.T) {
+	t.Parallel()
 	src := `printf '   \n' | { read -r -A r; ` + countElems + `; }`
 	if out, st := readEdges(t, src, interp.Yes, interp.Yes); out != "n=1[]" || st != 0 {
 		t.Errorf("both answered yes: got %q status %d, want %q at 0", out, st, "n=1[]")
@@ -161,6 +164,7 @@ func TestTheClosingRunIsAskedBeforeTheEmptyLine(t *testing.T) {
 // answers give `[a]` here, so only the *unanswered* run says whether the
 // question was put at all.
 func TestNeitherReadEdgeQuestionReachesAListOfNames(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"one name, a closing whitespace run",
@@ -190,6 +194,7 @@ func TestNeitherReadEdgeQuestionReachesAListOfNames(t *testing.T) {
 // An IFS set to nothing splits nothing, so neither question is reached
 // however the line ends.
 func TestAnEmptyIFSReachesNeitherReadEdgeQuestion(t *testing.T) {
+	t.Parallel()
 	src := `IFS=; printf 'a b \n' | { read -r -A r; ` + countElems + `; }`
 	out, st := readEdges(t, src, interp.Unspecified, interp.Unspecified)
 	if want := "n=1[a b ]"; out != want || st != 0 {
@@ -206,6 +211,7 @@ func TestAnEmptyIFSReachesNeitherReadEdgeQuestion(t *testing.T) {
 // on the colon, so the neighboring question is put, and it ends in a space,
 // so this one would be.
 func TestAnUnansweredNeighborStopsTheClosingRunQuestion(t *testing.T) {
+	t.Parallel()
 	src := `IFS=": "; printf 'a: \n' | { read -r -A r; ` + countElems + `; }`
 	out, st := runGrammar(t, src, func(d *syntax.Dialect) {
 		d.ArraySubscript = true

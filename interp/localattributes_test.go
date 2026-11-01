@@ -30,6 +30,7 @@ func withAttributeLetters(s *Semantics) {
 // The reported shape, in its smallest form: a numeric letter on a local, and
 // the caller's plain name still plain afterwards.
 func TestANumericLocalDoesNotTypeTheCallersName(t *testing.T) {
+	t.Parallel()
 	src := `v=plain
 f() { typeset -i v; v=1+1; echo "in=[$v]"; }
 f
@@ -48,6 +49,7 @@ echo "after=[$v]"`
 // attribute out. Both ends again, and the letter typing the local is what
 // says the declaration still works.
 func TestALocalsAttributesAreTheLocalsToo(t *testing.T) {
+	t.Parallel()
 	src := `w=plain
 f() { local -i w; w=1+1; echo "in=[$w]"; }
 f
@@ -64,6 +66,7 @@ echo "after=[$w]"`
 // of the attributes the outer name carried, so a value written into it is
 // stored as it was written.
 func TestAFreshLocalInheritsNoneOfTheOuterAttributes(t *testing.T) {
+	t.Parallel()
 	src := `typeset -i n=5
 f() { typeset n; n=3+4; echo "in=[$n]"; }
 f
@@ -80,6 +83,7 @@ echo "after=[$n]"`
 // the local the same way, and the letter reaching the caller's array is read
 // two assignments later. Its own declaration loop again, so its own row.
 func TestAnElementDeclarationsAttributesAreTheLocalsToo(t *testing.T) {
+	t.Parallel()
 	src := `a=(x y)
 f() { typeset -i a[0]=3+4; echo "in=[${a[0]}]"; }
 f
@@ -107,6 +111,7 @@ echo "later=[${a[0]}]"`
 // through arithmetic — and the pair that says the *value* was safe too: a
 // leaked `-l` folded what the caller was holding on the way back out.
 func TestTheCaseLettersDoNotOutliveTheDeclaration(t *testing.T) {
+	t.Parallel()
 	src := `up=ABC
 f() { typeset -l up; up=MIXED; echo "in=[$up]"; }
 f
@@ -125,6 +130,7 @@ echo "later=[$up]"`
 // the name it shadows renders in, and the caller renders in its own again
 // afterwards.
 func TestTheIntegerBaseDoesNotOutliveTheDeclaration(t *testing.T) {
+	t.Parallel()
 	src := `typeset -i16 h=255
 f() { typeset -i h; h=255; echo "in=[$h]"; }
 f
@@ -147,6 +153,7 @@ echo "after=[$h]"`
 // The unique letter, whose leak is the quietest of the family: nothing is
 // reported and an array simply loses an element some lines later.
 func TestTheUniqueLetterDoesNotOutliveTheDeclaration(t *testing.T) {
+	t.Parallel()
 	src := `f() { typeset -U u; }
 f
 u=(a b a)
@@ -169,6 +176,7 @@ echo "after n=${#u[@]} [${u[*]}]"`
 // a script reads; the diagnostic is the second half of it, since a leak that
 // merely truncated would print nothing.
 func TestANumericLetterFromAnEarlierCallDoesNotTypeALaterLocalArray(t *testing.T) {
+	t.Parallel()
 	src := `first() { typeset -i list; }
 first
 second() { typeset -a list; list=( /some/dir/file.zsh ); echo "in=[${list[*]}]"; }
@@ -185,6 +193,7 @@ second`
 // the caller then meets for the first time. This is the half recSavedReadonly's
 // `false` entry exists for, asked of the rest of the letters.
 func TestAnAttributeOnANameTheCallerNeverHadGoesAwayWithTheCall(t *testing.T) {
+	t.Parallel()
 	src := `f() { typeset -i fresh=1; }
 f
 fresh=3+4
@@ -199,6 +208,7 @@ echo "after=[$fresh]"`
 // The control that keeps the clearing where it belongs: `-g` takes no scope,
 // so its attributes are the global's and outlive the call by design.
 func TestAGlobalDeclarationsAttributeIsNotClearedByTheCall(t *testing.T) {
+	t.Parallel()
 	src := `f() { typeset -gi g; }
 f
 g=3+4
@@ -214,6 +224,7 @@ echo "after=[$g]"`
 // outside a function has no scope to put anything back, so its own letters
 // stand and a second declaration of the same name does not wipe them.
 func TestATopLevelDeclarationKeepsItsAttributes(t *testing.T) {
+	t.Parallel()
 	src := `typeset -i t=1
 typeset t
 t=3+4

@@ -31,6 +31,7 @@ import (
 //
 // Every one of these lines came out the other way before the fix.
 func TestADotDotReachesTheKernelAsWritten(t *testing.T) {
+	t.Parallel()
 	root := dotDotTree(t)
 	write := func(name, body string, mode os.FileMode) {
 		t.Helper()

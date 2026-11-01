@@ -68,6 +68,7 @@ func readonlyWording() Diagnostics {
 // no-op that then met the refusal the *next* line was going to meet anyway
 // (#1168).
 func TestTheReadonlyAttributeComesOff(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -r s=1
 typeset +r s
 echo "d=$?"
@@ -91,6 +92,7 @@ echo "st=$? s=[$s]"`, removingReadonly, readonlyWording())
 // what the shell that grants it does: `typeset -r x=1; typeset +r x=5` leaves
 // 5 there rather than refusing its own value.
 func TestTheRemovalPrecedesTheDeclarationsOwnValue(t *testing.T) {
+	t.Parallel()
 	out, errs, _ := declRun(t, `typeset -r s=1
 typeset +r s=5
 echo "d=$? s=[$s]"`, removingReadonly, readonlyWording())
@@ -103,6 +105,7 @@ echo "d=$? s=[$s]"`, removingReadonly, readonlyWording())
 // The other answer: the refusal is the ordinary readonly refusal through a
 // declaration, so it names the builtin, reports 1 and the next line runs.
 func TestTheRemovalIsRefusedAndTheScriptRunsOn(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -r s=1
 typeset +r s
 echo "d=$?"
@@ -119,6 +122,7 @@ echo end`, refusingRemoval, readonlyWording())
 // measured rather than assumed: ksh93 ends the script over `typeset +r` on a
 // frozen name exactly as it ends one over `export x=2`.
 func TestTheRemovalRefusalTakesTheDeclarationFatality(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -r s=1
 typeset +r s
 echo end`, func(s *Semantics) {
@@ -138,6 +142,7 @@ echo end`, func(s *Semantics) {
 // apart: `typeset +r x` is its builtin location with the builtin named and
 // `typeset +r x=5` is the plain line form, through the identical word.
 func TestARemovalWithAValueIsRefusedAsAnAssignment(t *testing.T) {
+	t.Parallel()
 	d := Diagnostics{
 		ReadonlyVariable:              "%s: is read only",
 		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: is read only",
@@ -160,6 +165,7 @@ echo end`, refusingRemoval, d)
 // The valueless form through the same word, where the removal table does name
 // the builtin. One word, two shapes, two sentences.
 func TestTheRemovalRefusalNamesTheBuiltinFromItsOwnTable(t *testing.T) {
+	t.Parallel()
 	d := Diagnostics{
 		ReadonlyVariable:                     "%s: is read only",
 		ReadonlyVariableInDeclaration:        "%[2]s: %[1]s: is read only",
@@ -177,6 +183,7 @@ typeset +r s`, refusingRemoval, d)
 // A nil removal table falls back to the assignment one, which is what every
 // dialect but ksh93 wants: bash names the builtin for both shapes.
 func TestTheRemovalRefusalFallsBackToTheAssignmentTable(t *testing.T) {
+	t.Parallel()
 	_, errs, _ := declRun(t, `typeset -r s=1
 typeset +r s`, refusingRemoval, readonlyWording())
 	if errs != "testsh: typeset: s: readonly variable\n" {
@@ -190,6 +197,7 @@ typeset +r s`, refusingRemoval, readonlyWording())
 // writable. If it reached the axis, the strict core would refuse a line all
 // three shells that spell it report 0 for.
 func TestARemovalOnAFreeNameAsksNothing(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `a=1
 typeset +r a
 echo "d=$?"
@@ -208,6 +216,7 @@ echo "st=$? a=[$a]"`, func(s *Semantics) {
 // And where the dialect has not answered, the plus form on a frozen name is
 // refused by name rather than taken one way in silence.
 func TestTheRemovalAxisIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	_, errs, _ := declRun(t, `typeset -r s=1
 typeset +r s`, func(s *Semantics) {
 		refusingRemoval(s)
@@ -224,6 +233,7 @@ typeset +r s`, func(s *Semantics) {
 // spell both letters; reading the word's sign made it a request to unfreeze,
 // and so a refusal where the shells say nothing.
 func TestTheReadonlyLetterCarriesItsOwnSign(t *testing.T) {
+	t.Parallel()
 	out, _, _ := declRun(t, `n=1
 typeset -r +x n
 n=2
@@ -271,6 +281,7 @@ echo "st=$?"`, func(s *Semantics) {
 // the name straight back — so only the refusing answer shows it, as a
 // diagnostic and a status the panel does not produce.
 func TestAPlusWordBesideTheReadonlyLetterRemovesNothing(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		set  func(*Semantics)
@@ -312,6 +323,7 @@ echo "st=$? x=[$x]"`, func(s *Semantics) {
 // through `typeset`, and the substrate still has to agree with itself about a
 // combination it can be handed.
 func TestAFatalShadowRefusalKeepsItsOwnStatus(t *testing.T) {
+	t.Parallel()
 	for _, word := range []string{"local", "typeset"} {
 		t.Run(word, func(t *testing.T) {
 			out, errs, st := declRun(t, `typeset -r x=1
@@ -343,6 +355,7 @@ echo never`, func(s *Semantics) {
 // declaration itself added was never recorded, so a `local -r` froze the
 // caller's name for the rest of the script (#1168, found beside it).
 func TestAFreezeADeclarationAddsEndsWithTheCall(t *testing.T) {
+	t.Parallel()
 	for _, word := range []string{"local", "typeset"} {
 		t.Run(word, func(t *testing.T) {
 			out, errs, st := declRun(t, `f() { `+word+` -r y=1; echo "in=[$y]"; }
@@ -363,6 +376,7 @@ echo "st=$? y=[$y]"`, refusingRemoval, readonlyWording())
 // half that must not break while the other is fixed: a function that thawed a
 // readonly for good would be a hole in the whole point of the attribute.
 func TestADisplacedFreezeStillComesBack(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -r x=1
 f() { local x=2; echo "in=[$x]"; }
 f

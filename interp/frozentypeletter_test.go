@@ -53,6 +53,7 @@ func frozenTypeLetterRun(t *testing.T, src string, a Answer) (string, string, in
 // The headline, on each letter in the set: under Yes the operand is refused
 // and the name keeps the attributes it had, under No the letter lands.
 func TestATypeLetterOverAFrozenNameWithNoValueIsAnAxis(t *testing.T) {
+	t.Parallel()
 	// The listing is asserted only where this vector writes the letter back
 	// for a name with no value; the other two rows are about the refusal,
 	// and a listing row they cannot reach would be a test of the listing.
@@ -86,6 +87,7 @@ func TestATypeLetterOverAFrozenNameWithNoValueIsAnAxis(t *testing.T) {
 // whichever way the axis is answered. A refusal keyed on the letter alone
 // passes every row above and fails this one.
 func TestTheSameTypeLetterOverAFrozenNameHoldingAValueIsTaken(t *testing.T) {
+	t.Parallel()
 	const src = `q=1; readonly q; typeset -gi q; echo st=$?; typeset -p q`
 	for _, a := range []Answer{Yes, No} {
 		out, errs, _ := frozenTypeLetterRun(t, src, a)
@@ -102,6 +104,7 @@ func TestTheSameTypeLetterOverAFrozenNameHoldingAValueIsTaken(t *testing.T) {
 // than nothing, and the axis does not reach it — the row that says "holds
 // nothing" means unset.
 func TestAnEmptyValueIsNotNoValueForTheTypeLetterRefusal(t *testing.T) {
+	t.Parallel()
 	const src = `q=; readonly q; typeset -gi q; echo st=$?`
 	out, errs, _ := frozenTypeLetterRun(t, src, Yes)
 	if !strings.Contains(out, "st=0") || errs != "" {
@@ -114,6 +117,7 @@ func TestAnEmptyValueIsNotNoValueForTheTypeLetterRefusal(t *testing.T) {
 // are in *that* one and are taken here under both answers, and so are the
 // permissions.
 func TestTheLettersOutsideTheTypeSetAreTakenOverAValuelessFrozenName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, decl string }{
 		{"upper", "typeset -gu q"},
 		{"lower", "typeset -gl q"},
@@ -139,6 +143,7 @@ func TestTheLettersOutsideTheTypeSetAreTakenOverAValuelessFrozenName(t *testing.
 // attribute over a frozen name never reaches the narrow question and the pair
 // cannot be set to contradict each other.
 func TestTheWideAttributeRefusalOutranksTheTypeLetterOne(t *testing.T) {
+	t.Parallel()
 	out, errs, _ := declRun(t, `q=1; readonly q; typeset -gi q; echo st=$?`,
 		func(s *Semantics) {
 			s.DeclareOptions = "aAFgiprxul"
@@ -167,6 +172,7 @@ func TestTheWideAttributeRefusalOutranksTheTypeLetterOne(t *testing.T) {
 // compound literal reaches the declaration loop as a bare name and a guard
 // reading only `name=value` would call it valueless.
 func TestAnArrayLiteralOperandIsOutsideTheTypeLetterRefusal(t *testing.T) {
+	t.Parallel()
 	out, errs, _ := frozenTypeLetterRun(t,
 		`readonly q; typeset -gia q=(1 2); echo st=$?`, Yes)
 	if strings.Contains(errs, "q: readonly variable") && strings.Contains(out, "st=1") {
@@ -218,6 +224,7 @@ func frozenKeyedRun(t *testing.T, src string, a Answer) (string, string, int) {
 }
 
 func TestAKeyedLetterOverAFrozenNameHoldingAValueIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `q=1; readonly q; typeset -gA q; echo st=$?`
 	out, errs, _ := frozenKeyedRun(t, src, No)
 	if !strings.Contains(out, "st=0") || errs != "" {
@@ -232,6 +239,7 @@ func TestAKeyedLetterOverAFrozenNameHoldingAValueIsAnAxis(t *testing.T) {
 // The indexed array letter is outside the set, and an empty value is still a
 // value. Both under either answer.
 func TestTheIndexedArrayLetterIsOutsideTheKeyedRefusal(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"indexed over a value", `q=1; readonly q; typeset -ga q; echo st=$?`},
 		{"indexed over an empty value", `q=; readonly q; typeset -ga q; echo st=$?`},
@@ -253,6 +261,7 @@ func TestTheIndexedArrayLetterIsOutsideTheKeyedRefusal(t *testing.T) {
 // what makes it the complement of the axis above rather than a widening of
 // it.
 func TestAKeyedLetterOverAValuelessFrozenNameIsOutsideTheRefusal(t *testing.T) {
+	t.Parallel()
 	const src = `readonly q; typeset -gA q; echo st=$?`
 	for _, a := range []Answer{Yes, No} {
 		out, errs, _ := frozenKeyedRun(t, src, a)

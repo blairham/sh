@@ -50,6 +50,7 @@ func chain(n int) string {
 }
 
 func TestAChainOfNamesIsBoundedByADepthOrByACycle(t *testing.T) {
+	t.Parallel()
 	t.Run("a short chain is its number under both readings", func(t *testing.T) {
 		// The control. A chain the frame count does not reach is a value
 		// either way, so a row further down that differs is about the bound
@@ -95,6 +96,7 @@ func TestAChainOfNamesIsBoundedByADepthOrByACycle(t *testing.T) {
 // A loop is refused under both readings, which is what says the cycle reading
 // is a different bound rather than no bound at all.
 func TestALoopIsRefusedUnderBothBounds(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a name that points at itself", `x=x; echo "v=$(( x ))"`},
 		{"two names that point at each other", `a=b; b=a; echo "v=$(( a+1 ))"`},
@@ -118,6 +120,7 @@ func TestALoopIsRefusedUnderBothBounds(t *testing.T) {
 // reading that evaluates a short-circuited operand — so the two axes compose
 // rather than one hiding the other.
 func TestALoopBehindAShortCircuitIsStillBounded(t *testing.T) {
+	t.Parallel()
 	for _, p := range []ArithRecursionBoundPolicy{ArithRecursionBoundedByDepth, ArithRecursionBoundedByACycle} {
 		out, st := run(t, `x=x; echo "v=$(( 0 && x ))"`, withSem(evaluating(p)))
 		if st == 0 || strings.Contains(out, "v=") {
@@ -139,6 +142,7 @@ func TestALoopBehindAShortCircuitIsStillBounded(t *testing.T) {
 // carries no name at all, so a reading that handed the name to the format
 // would put one there the moment a dialect wrote `%[1]s`.
 func TestTheCycleBoundNamesNothing(t *testing.T) {
+	t.Parallel()
 	const src = `a=b; b=a; echo "v=$(( a ))"`
 	worded := func(p ArithRecursionBoundPolicy) func(*Runner) {
 		return func(r *Runner) {
@@ -163,6 +167,7 @@ func TestTheCycleBoundNamesNothing(t *testing.T) {
 // frame, so a reading that carried on past an unanswered axis would write the
 // same complaint as many times as the chain is deep.
 func TestAnUnansweredRecursionBoundIsRefusedOnce(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `x=x; echo "v=$(( x ))"`, withSem(boundSem(ArithRecursionBoundUnspecified)))
 	if st == 0 {
 		t.Errorf("= %q status %d, want a failing status", out, st)
@@ -178,6 +183,7 @@ func TestAnUnansweredRecursionBoundIsRefusedOnce(t *testing.T) {
 // variable are two independent lookups — which a set that only ever grew
 // would report as a loop, silently turning `$(( v+v ))` into a fatal error.
 func TestTwoOperandsNamingOneVariableAreNotALoop(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `y=5; v=y; echo "v=$(( v+v ))"`, withSem(boundSem(ArithRecursionBoundedByACycle)))
 	if out != "v=10\n" || st != 0 {
 		t.Errorf("= %q status %d, want \"v=10\\n\" and 0", out, st)

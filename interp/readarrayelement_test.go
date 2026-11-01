@@ -41,6 +41,7 @@ const showElementB = `printf '%s:' "${#b[@]}"; for e in "${b[@]}"; do printf '[%
 // array, so the lines that name no element run under a vector that does not
 // answer it — and say nothing about it (#6869).
 func TestAReadArrayNamingNoElementAsksNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a plain name",
@@ -80,6 +81,7 @@ func TestAReadArrayNamingNoElementAsksNothing(t *testing.T) {
 // printed first, so a refusal cannot hide behind the status of the line after
 // it.
 func TestReadArrayIntoAnElementAsksWhereTheWordsGo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, refill, splice string }{
 		{
 			"a middle element",

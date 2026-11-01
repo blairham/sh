@@ -35,6 +35,7 @@ func positionSem(p GetoptsFunctionPositionPolicy) Semantics {
 // The failure is silent — the options are simply not seen the second time —
 // which is what makes it worth an axis rather than a note.
 func TestAnOptionParsingFunctionCalledTwice(t *testing.T) {
+	t.Parallel()
 	const src = `g() { while getopts "ab" o "$@" >/dev/null 2>&1; do printf "%s " "$o"; done; ` +
 		`printf "end=%s " "$OPTIND"; }` + "\n" + `OPTIND=1` + "\n" + `g -a -b` + "\n" + `g -a -b` + "\n" + `echo`
 	for _, tc := range []struct {
@@ -65,6 +66,7 @@ func TestAnOptionParsingFunctionCalledTwice(t *testing.T) {
 // parameter rather than about the builtin: the call reads the name on the way
 // in and writes it, and the caller reads it afterwards.
 func TestWhetherOptindItselfIsTheCallsOwn(t *testing.T) {
+	t.Parallel()
 	const src = `g() { printf "entry=%s " "$OPTIND"; OPTIND=7; }` + "\n" +
 		`OPTIND=3` + "\n" + `g` + "\n" + `printf "after=%s\n" "$OPTIND"`
 	for _, tc := range []struct {
@@ -96,6 +98,7 @@ func TestWhetherOptindItselfIsTheCallsOwn(t *testing.T) {
 // read one word, the callee left OPTIND at 3, and the two local answers hand
 // the caller its own word 2 back where the shared one reads word 3.
 func TestTheCallerComesBackToItsOwnWord(t *testing.T) {
+	t.Parallel()
 	const src = `set -- -a -b -c` + "\n" +
 		`getopts abc o; printf "top1=%s,%s " "$o" "$OPTIND"` + "\n" +
 		`g() { getopts abc q "$@" 2>/dev/null; getopts abc q "$@" 2>/dev/null; }` + "\n" +
@@ -125,6 +128,7 @@ func TestTheCallerComesBackToItsOwnWord(t *testing.T) {
 // A dialect that has not answered is told so rather than guessed at, and told
 // so where a call can be distinguished by it.
 func TestAnUnansweredFunctionPositionIsReported(t *testing.T) {
+	t.Parallel()
 	sem := positionSem(GetoptsFunctionPositionUnspecified)
 	const src = `set -- -a -b` + "\n" + `getopts ab o` + "\n" + `g() { :; }` + "\n" + `g`
 	out, _ := run(t, src, func(r *Runner) { r.Semantics = &sem })
@@ -147,6 +151,7 @@ func TestAnUnansweredFunctionPositionIsReported(t *testing.T) {
 // own axis, because the columns line up differently from the bad-option row:
 // reading one answer for both put one column on the wrong side of each.
 func TestOptargAfterAnOptionThatTakesNoneIsItsOwnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `OPTARG=PRESET; OPTIND=1; getopts "ab:" o -a; ` +
 		`echo "o=[$o] optarg=[${OPTARG-UNSET}] set=[${OPTARG+yes}]"`
 	for _, tc := range []struct {
@@ -174,6 +179,7 @@ func TestOptargAfterAnOptionThatTakesNoneIsItsOwnAxis(t *testing.T) {
 // a dialect can empty for one and unset for the other. That pairing is the one
 // two columns actually have, and it is what a single axis could not express.
 func TestTheTwoOptargRowsAreIndependent(t *testing.T) {
+	t.Parallel()
 	sem := getoptsSem()
 	sem.GetoptsClearsOptarg = No
 	sem.GetoptsEmptiesOptargForAnArgumentlessOption = Yes
@@ -193,6 +199,7 @@ func TestTheTwoOptargRowsAreIndependent(t *testing.T) {
 // forms in every row: a row with only the keyword form in it passes under
 // GetoptsFunctionPositionIsLocal too, which scopes both (#3321).
 func TestAKeywordFunctionsCursorIsItsOwnAndAPosixOnesIsShared(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, def, want string }{
 		{"the keyword form", `function g { printf "entry=%s " "$OPTIND"; OPTIND=7; }`, "entry=1 after=3\n"},
 		{"the POSIX form", `g() { printf "entry=%s " "$OPTIND"; OPTIND=7; }`, "entry=3 after=7\n"},

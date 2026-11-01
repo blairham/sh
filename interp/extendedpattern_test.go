@@ -24,6 +24,7 @@ import (
 // one the same pattern gets with it on. A matcher that read them
 // unconditionally would break every pattern holding a `#`.
 func TestTheOperatorsAreOrdinaryTextWithTheOptionOff(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, off, on string }{
 		{`[[ 'a#' == a# ]] && echo hit || echo miss`, "hit", "miss"},
 		{`[[ aaa == a# ]] && echo hit || echo miss`, "miss", "hit"},
@@ -76,6 +77,7 @@ func runExtendedOperators(t *testing.T, src string, on bool, more func(*Runner))
 }
 
 func TestTheCaseFlagsFoldOnlyLiterals(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// `(#i)`: a literal folds, and so does an escaped one.
 		{`[[ ABC == (#i)abc ]] && echo hit || echo miss`, "hit"},
@@ -106,6 +108,7 @@ func TestTheCaseFlagsFoldOnlyLiterals(t *testing.T) {
 
 // A flag reaches to the end of the group it stands in and no further.
 func TestAFlagsReachEndsWithItsGroup(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`[[ ABCd == ((#i)abc)d ]] && echo hit || echo miss`, "hit"},
 		{`[[ ABCD == ((#i)abc)d ]] && echo hit || echo miss`, "miss"},
@@ -119,6 +122,7 @@ func TestAFlagsReachEndsWithItsGroup(t *testing.T) {
 }
 
 func TestAClosureRepeatsOneItem(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// Zero or more, and the item is the one character in front of it.
 		{`[[ abbb == ab# ]] && echo hit || echo miss`, "hit"},
@@ -160,6 +164,7 @@ func TestAClosureRepeatsOneItem(t *testing.T) {
 }
 
 func TestTheNegationTurnsTheRestOfItsBranch(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`[[ abc == ^x* ]] && echo hit || echo miss`, "hit"},
 		{`[[ xa == ^x* ]] && echo hit || echo miss`, "miss"},
@@ -182,6 +187,7 @@ func TestTheNegationTurnsTheRestOfItsBranch(t *testing.T) {
 }
 
 func TestTheExclusionTakesEverySideAgainstTheWholeSubject(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`[[ acd == a*~*b* ]] && echo hit || echo miss`, "hit"},
 		{`[[ abd == a*~*b* ]] && echo hit || echo miss`, "miss"},
@@ -212,6 +218,7 @@ func TestTheExclusionTakesEverySideAgainstTheWholeSubject(t *testing.T) {
 // Every surface that matches a pattern, because a flag honored in one place
 // and dropped in another is the same silent bug wearing a different hat.
 func TestTheOperatorsReachEverySurface(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, name := range []string{"ABC", "abd", "aaa", "b1"} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {
@@ -250,6 +257,7 @@ func TestTheOperatorsReachEverySurface(t *testing.T) {
 //
 // docs/spec/grammar/patterns.md, "Where a match is standing".
 func TestTheAnchorsAskWhereTheMatchIsStanding(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The trivial reading, which is also a control: an anchor at the
 		// edge it names holds.
@@ -293,6 +301,7 @@ func TestTheAnchorsAskWhereTheMatchIsStanding(t *testing.T) {
 // unimplemented ones, so they take the surface's bad-pattern status and not
 // the refusal's.
 func TestAnAnchorStandsAloneInItsGroup(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`[[ AB == (#is)ab ]]`,
 		`[[ AB == (#si)ab ]]`,
@@ -324,6 +333,7 @@ func TestAnAnchorStandsAloneInItsGroup(t *testing.T) {
 // at a time, and each of those is at the start of the subject and reaches its
 // end only when it is the whole of it.
 func TestAnAnchorNamesTheSubjectAndNotThePiece(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`v=abcd; echo "[${v#(#s)ab}]"`, "[cd]"},
 		{`v=abcd; echo "[${v#ab(#e)}]"`, "[abcd]"},
@@ -355,6 +365,7 @@ func TestAnAnchorNamesTheSubjectAndNotThePiece(t *testing.T) {
 //
 // docs/spec/grammar/patterns.md, "Reporting where a match landed".
 func TestTheReportingFlagsFillTheirParameters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The shape and the convention: the arrays run in group order, and
 		// the bounds are one-based with the end being the index of the
@@ -410,6 +421,7 @@ func runReportingFlags(t *testing.T, src string) (string, int) {
 // publish that always ran would *empty* the parameters a script had filled
 // itself, which is a wrong answer in the opposite direction.
 func TestAMatchThatAsksForNothingWritesNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`match=(zz); [[ abc == (#b)abc ]]; echo "[${match[1]}]"`, "[zz]"},
 		{`match=(zz); [[ abc == (#b)(x)zz ]]; echo "[${match[1]}]"`, "[zz]"},
@@ -430,6 +442,7 @@ func TestAMatchThatAsksForNothingWritesNothing(t *testing.T) {
 // rows: a written arm beats a longer one, and within an arm the group takes
 // as much as it can and still leave the rest a match.
 func TestWhichSplitAGroupReports(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`[[ abc == (#b)(a|ab)* ]]; echo "[${match[1]}]"`, "[a]"},
 		{`[[ abc == (#b)(ab|a)* ]]; echo "[${match[1]}]"`, "[ab]"},
@@ -450,6 +463,7 @@ func TestWhichSplitAGroupReports(t *testing.T) {
 // replacement text is expanded once per match rather than once per
 // expansion. A `with` joined before the scan cannot say either of these.
 func TestAReplacementIsExpandedPerMatch(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`v=abcd; echo "[${v//(#b)(b)(c)/<${match[1]}-${match[2]}>}]"`, "[a<b-c>d]"},
 		{`v=abcb; echo "[${v//(#b)(b)/<${match[1]}${mbegin[1]}>}]"`, "[a<b2>c<b4>]"},
@@ -471,6 +485,7 @@ func TestAReplacementIsExpandedPerMatch(t *testing.T) {
 // number from the byte offset the matcher works in the moment a subject
 // holds anything above ASCII.
 func TestReportedPositionsAreCharacters(t *testing.T) {
+	t.Parallel()
 	src := `v=aébc; echo "[${v//(#m)?/<$MATCH:$MBEGIN:$MEND>}]"`
 	out, _ := runExtendedOperators(t, src, true, func(r *Runner) {
 		r.Semantics.ArrayBaseIsZero = No
@@ -487,6 +502,7 @@ func TestReportedPositionsAreCharacters(t *testing.T) {
 // name and stops, because `(#b)` also fills `$match` and a dropped one would
 // leave a script reading an empty value rather than seeing a refusal.
 func TestAnUnimplementedFlagIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, name string }{
 		{`[[ abd == (#a1)abc ]]`, "(#a)"},
 		{`[[ abc == (#u)abc ]]`, "(#u)"},
@@ -526,6 +542,7 @@ func TestAnUnimplementedFlagIsRefusedByName(t *testing.T) {
 // A letter no shell has is the shell's own complaint rather than ours, and
 // the status it exits with belongs to the surface the pattern stood in.
 func TestALetterNoShellHasIsABadPattern(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src    string
 		status int
@@ -552,6 +569,7 @@ func TestALetterNoShellHasIsABadPattern(t *testing.T) {
 // begins is a comment — so this asks the axis for a live expansion rather
 // than writing the pattern down.
 func TestAClosureAtTheFrontOfAPatternIsABadPattern(t *testing.T) {
+	t.Parallel()
 	live := func(r *Runner) {
 		s := *r.Semantics
 		s.GlobExpansionResults = Yes
@@ -576,6 +594,7 @@ func TestAClosureAtTheFrontOfAPatternIsABadPattern(t *testing.T) {
 // A metacharacter that arrived from a value is not one. The same answer the
 // dialect already gives for `*`, asked of the three new characters.
 func TestTheOperatorsAreNotReadInTheResultOfAnExpansion(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`p="a#b"; [[ ab == $p ]] && echo hit || echo miss`, "miss"},
 		{`p="a#b"; [[ 'a#b' == $p ]] && echo hit || echo miss`, "hit"},

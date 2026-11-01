@@ -18,6 +18,7 @@ import (
 // variable is half the answer, and a refusal that set it anyway would pass a
 // test that only looked at stderr.
 func TestLocalAtTheTopLevelIsRefusedOrTakenAsAGlobal(t *testing.T) {
+	t.Parallel()
 	refuse := func(s *Semantics) {
 		s.LocalOutsideAFunctionIsAnError = Yes
 		s.LocalOutsideAFunctionIsFatal = No
@@ -51,6 +52,7 @@ func TestLocalAtTheTopLevelIsRefusedOrTakenAsAGlobal(t *testing.T) {
 // question from the first: both dialects that refuse say the same kind of
 // thing and only one of them stops.
 func TestTheRefusalCanEndTheScript(t *testing.T) {
+	t.Parallel()
 	fatal := func(s *Semantics) {
 		s.LocalOutsideAFunctionIsAnError = Yes
 		s.LocalOutsideAFunctionIsFatal = Yes
@@ -71,6 +73,7 @@ func TestTheRefusalCanEndTheScript(t *testing.T) {
 // a local with a scope to live in is the same in every dialect, including
 // the one that would otherwise refuse the word outright.
 func TestInsideAFunctionTheAxisIsNotAsked(t *testing.T) {
+	t.Parallel()
 	fatal := func(s *Semantics) {
 		s.LocalOutsideAFunctionIsAnError = Yes
 		s.LocalOutsideAFunctionIsFatal = Yes
@@ -90,6 +93,7 @@ func TestInsideAFunctionTheAxisIsNotAsked(t *testing.T) {
 // assignment, and a dialect that declares the name *empty* never reaches the
 // question at all.
 func TestAValuelessLocalHidingTheOuterValueIsAnAxis(t *testing.T) {
+	t.Parallel()
 	src := `v=out
 f() { local v; echo "[${v-UNSET}]"; }
 f

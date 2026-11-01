@@ -33,6 +33,7 @@ func withOptionRecord(r *Runner) {
 // would be told something untrue — which is the one failure mode this variable
 // has that plain absence does not.
 func TestTheOptionRecordIsProducedAndNotStored(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `echo "[$`+optionRecord+`]"
 set -x
 echo "[$`+optionRecord+`]" 2>/dev/null
@@ -66,6 +67,7 @@ echo "[$`+optionRecord+`]"
 // for membership rather than comparing the whole string: what comes back out
 // is never what went in.
 func TestTheOptionRecordIsSortedAndNamedInFull(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `set -u
 set -f
 echo "$`+optionRecord+`"
@@ -97,6 +99,7 @@ echo "$`+optionRecord+`"
 // for the record to have something in it, which is the half a value merely
 // echoed back from the environment would not have.
 func TestTheOptionRecordCarriesTheShellsOwnDefaults(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `echo "[$`+optionRecord+`]"`, withOptionRecord)
 	if !strings.Contains(out, "braceexpand") {
 		t.Errorf("record = %q, want an option this shell has on by default", out)
@@ -107,6 +110,7 @@ func TestTheOptionRecordCarriesTheShellsOwnDefaults(t *testing.T) {
 // cannot make it lie, and the refusal is the dialect's ordinary readonly one
 // rather than a sentence of its own.
 func TestTheOptionRecordRefusesAssignment(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, optionRecord+`=whatever
 echo "after [$`+optionRecord+`]"
 `, withOptionRecord)
@@ -122,6 +126,7 @@ echo "after [$`+optionRecord+`]"
 // for them the variable does not exist and the environment entry is an
 // ordinary string.
 func TestWithNoNameThereIsNoRecord(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `echo "[${`+optionRecord+`-unset}]"`, withExtras)
 	if !strings.Contains(out, "[unset]") {
 		t.Errorf("out = %q, want no such variable where the dialect named none", out)
@@ -140,6 +145,7 @@ echo "[$`+optionRecord+`]"
 // the reason the variable matters at all: what a shell is launched with
 // changes what it does.
 func TestTheEnvironmentSeedsTheOptions(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `case $- in *u*) echo has-u ;; *) echo no-u ;; esac
 case ":$`+optionRecord+`:" in *:nounset:*) echo in-record ;; *) echo not-in-record ;; esac
 `, func(r *Runner) {
@@ -159,6 +165,7 @@ case ":$`+optionRecord+`:" in *:nounset:*) echo in-record ;; *) echo not-in-reco
 // does nothing at all without a name, which is what the other three shells do
 // with it.
 func TestSeedingIsSkippedWhereTheDialectNamedNothing(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `case $- in *u*) echo has-u ;; *) echo no-u ;; esac`, func(r *Runner) {
 		withExtras(r)
 		r.Env = append(r.Env, optionRecord+"=nounset")
@@ -173,6 +180,7 @@ func TestSeedingIsSkippedWhereTheDialectNamedNothing(t *testing.T) {
 // complaint names line 0 and the good names in the same value still take
 // effect, so one bad entry does not cost the others.
 func TestAnUnknownNameInTheEnvironmentIsRefusedAndTheRestApplied(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `case $- in *u*) echo has-u ;; *) echo no-u ;; esac`, func(r *Runner) {
 		withOptionRecord(r)
 		r.Env = append(r.Env, optionRecord+"=nosuchoption:nounset")
@@ -198,6 +206,7 @@ func TestAnUnknownNameInTheEnvironmentIsRefusedAndTheRestApplied(t *testing.T) {
 // read — but the question being asked is what the shell was *launched* with,
 // and a second call must not re-apply an option a script has since turned off.
 func TestTheEnvironmentIsReadOnceAndOnlyFromWhatWasInherited(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `set +u
 case $- in *u*) echo still-u ;; *) echo turned-off ;; esac
 `, func(r *Runner) {
@@ -217,6 +226,7 @@ case $- in *u*) echo still-u ;; *) echo turned-off ;; esac
 // that then turned it off would still have been turning it on in everything it
 // started.
 func TestAChildIsHandedTheRecomputedRecord(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `set +u
 printenv `+optionRecord+`
 `, func(r *Runner) {
@@ -244,6 +254,7 @@ printenv `+optionRecord+`
 // Exporting it is the documented way to make an option stick across a child,
 // since assigning to the record is refused (#4188).
 func TestAScriptCanExportTheRecordItself(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `set -u
 export `+optionRecord+`
 printenv `+optionRecord+`

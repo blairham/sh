@@ -21,6 +21,7 @@ import (
 // argument back through the grammar — a hook told `echo  a   b` would be told
 // `echo a b`, or worse, would run the substitutions in what somebody typed.
 func TestAFunctionCanBeCalledWithArgumentsFromOutside(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	if !r.DefineFunctionFromText("h", `printf '[%s]' "$#" "$1" "$2"`) {
@@ -49,6 +50,7 @@ func TestAFunctionCanBeCalledWithArgumentsFromOutside(t *testing.T) {
 // builtin and the file on the path printed nothing, the undefined name said
 // nothing, and the two real functions ran — one of them twice.
 func TestOnlyAFunctionIsCallableByName(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"nosuchfn_zz", "echo", "true"} {
 		t.Run(name, func(t *testing.T) {
 			var out, errs strings.Builder
@@ -71,6 +73,7 @@ func TestOnlyAFunctionIsCallableByName(t *testing.T) {
 // The status is the function's, left where a call in a script leaves it. A
 // caller that must not disturb `$?` is the one that saves it.
 func TestACalledFunctionLeavesItsStatusBehind(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	if !r.DefineFunctionFromText("h", `return 3`) {
@@ -90,6 +93,7 @@ func TestACalledFunctionLeavesItsStatusBehind(t *testing.T) {
 // The call leaves the shell open. A `return` unwinds the function and nothing
 // else, exactly as it does inside a script.
 func TestACalledFunctionsReturnDoesNotEndTheShell(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	if !r.DefineFunctionFromText("h", `echo in; return 1; echo unreachable`) {
@@ -113,6 +117,7 @@ func TestACalledFunctionsReturnDoesNotEndTheShell(t *testing.T) {
 // able to do — measured, a zsh `precmd` calling `exit` ends the session and
 // draws no further prompt.
 func TestACalledFunctionCanExitTheShell(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	if !r.DefineFunctionFromText("h", `exit 3`) {
@@ -132,6 +137,7 @@ func TestACalledFunctionCanExitTheShell(t *testing.T) {
 
 // Whether a name is a function, asked without calling it.
 func TestAFunctionCanBeSeenWithoutCallingIt(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	if !r.DefineFunctionFromText("h", `echo ran`) {

@@ -74,6 +74,7 @@ func runBracketGroup(t *testing.T, subject, pattern string) (string, int) {
 }
 
 func TestABracketExpressionInsideAGroupIsOneMember(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, subject, pattern string
 		want                   bool
@@ -170,6 +171,7 @@ func TestABracketExpressionInsideAGroupIsOneMember(t *testing.T) {
 // 5.9.2, and `@([(])` matches `(` in bash 5.3.20, bash 3.2.57 with `extglob`
 // and ksh93u+. Unanimous again.
 func TestAParenthesisInsideABracketIsAMember(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, subject, pattern string
 		want                   bool

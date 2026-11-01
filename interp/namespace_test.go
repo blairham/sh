@@ -38,6 +38,7 @@ func runNamespace(t *testing.T, src string) (string, int) {
 // scope — a scope that *hid* the outer name would fail the first, and a scope
 // that was discarded at the closing brace would fail the third.
 func TestANamespaceBodyReadsThroughAndWritesIn(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`x=OUTER; namespace ns { echo "[${x-unset}]"; }`, "[OUTER]\n"},
 		{`x=OUTER; namespace ns { x=IN; }; echo "[$x]"`, "[OUTER]\n"},
@@ -64,6 +65,7 @@ func TestANamespaceBodyReadsThroughAndWritesIn(t *testing.T) {
 // The fall-through is live and reaches from outside too, which is what says
 // the region is one rule and not a copy made at the opening brace.
 func TestANamespaceReadsThroughToThePlainName(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`gv=GLOBAL; namespace ns { y=1; }; echo "[${.ns.gv-unset}]"`, "[GLOBAL]\n"},
 		{`gv=GLOBAL; namespace ns { y=1; }; echo "[${.ns.zzz-unset}]"`, "[unset]\n"},
@@ -86,6 +88,7 @@ func TestANamespaceReadsThroughToThePlainName(t *testing.T) {
 // region saved and restored around a call would answer the first wrong, and
 // one attached to the call site would answer the second wrong.
 func TestANamespaceRegionIsLexical(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{
 			`x=OUTER; g(){ echo "[${x-unset}]"; x=FROMG; }; namespace ns { g; }; echo "[$x]"`,
@@ -110,6 +113,7 @@ func TestANamespaceRegionIsLexical(t *testing.T) {
 // Namespaces are flat however the blocks nest, because the region is replaced
 // rather than appended to.
 func TestNamespacesAreFlat(t *testing.T) {
+	t.Parallel()
 	const src = `namespace a { namespace b { x=1; }; }; echo "[${.a.b.x-unset}][${.b.x-unset}]"`
 	if out, st := runNamespace(t, src); out != "[unset][1]\n" || st != 0 {
 		t.Errorf("got %q at %d, want %q at 0", out, st, "[unset][1]\n")
@@ -120,6 +124,7 @@ func TestNamespacesAreFlat(t *testing.T) {
 // declaration commands, a loop's variable, an array, and an export — which is
 // the row that says a namespace is not a way to reach the environment.
 func TestANamespaceHoldsEveryKindOfName(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`namespace ns { typeset t=1; }; echo "[${.ns.t-unset}]"`, "[1]\n"},
 		{`namespace ns { a=(p q); }; echo "[${.ns.a[1]-unset}]"`, "[q]\n"},
@@ -136,6 +141,7 @@ func TestANamespaceHoldsEveryKindOfName(t *testing.T) {
 // the members being ordinary names and the set of namespaces being a table a
 // clone owns.
 func TestANamespaceMadeInASubshellDoesNotLeak(t *testing.T) {
+	t.Parallel()
 	const src = `( namespace ns { x=1; } ); echo "[${.ns.x-unset}]"`
 	if out, st := runNamespace(t, src); out != "[unset]\n" || st != 0 {
 		t.Errorf("got %q at %d, want %q at 0", out, st, "[unset]\n")
@@ -146,6 +152,7 @@ func TestANamespaceMadeInASubshellDoesNotLeak(t *testing.T) {
 // is read, and which sentence is used is decided by the word. See
 // Diagnostics.NamespaceNameNotAVariable for the rows.
 func TestANamespaceNameIsJudgedWhenTheClauseRuns(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`namespace .ns { x=1; }; echo after`, ".ns: is not an identifier\n"},
 		{`namespace a.b { x=1; }; echo after`, "a.b: is not an identifier\n"},
@@ -174,6 +181,7 @@ func TestANamespaceNameIsJudgedWhenTheClauseRuns(t *testing.T) {
 // parameters a shell has of its own is not this construct's question and
 // differs by dialect.
 func TestANamespaceListsWhatItReadsThroughTo(t *testing.T) {
+	t.Parallel()
 	out, st := runNamespace(t, `gv=G; namespace ns { x=1; }; echo "[${!.ns.@}]"`)
 	if st != 0 {
 		t.Fatalf("status %d, want 0: %q", st, out)

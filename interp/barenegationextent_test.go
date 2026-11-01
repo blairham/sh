@@ -26,6 +26,7 @@ import (
 // than a new rule. Measured 2026-09-19 against the three columns that take a
 // bare `!`: `eval "!"` is status 1 and the script goes on in all three.
 func TestABareNegationInTextTheRunnerReads(t *testing.T) {
+	t.Parallel()
 	bare := func(d *syntax.Dialect) {
 		d.BareNegationReach = syntax.BareNegationAtEitherPlace
 		d.RepeatedNegationToggles = true

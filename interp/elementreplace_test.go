@@ -25,6 +25,7 @@ func wholeElementReplacing(d *syntax.Dialect) {
 // One test over the routes because they are three ways into one operator and
 // the way to get this wrong is to implement it on one of them.
 func TestWholeElementReplacementReplacesMatchingElements(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"through a flag group",
@@ -97,6 +98,7 @@ func TestWholeElementReplacementReplacesMatchingElements(t *testing.T) {
 // right in a demo and it is what three real startup files spend most of their
 // calls on, so it is asserted on its own and with the status.
 func TestWholeElementReplacementLeavesUnmatchedValuesAlone(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a scalar full of slashes is not an arithmetic offset",
@@ -143,6 +145,7 @@ func TestWholeElementReplacementLeavesUnmatchedValuesAlone(t *testing.T) {
 // nothing to fill it: `[]` comes out both from an empty list and from a list
 // holding one empty string, and those are different answers here.
 func TestWholeElementReplacementDropsWhatItEmpties(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"an empty replacement removes the elements it matched",
@@ -200,6 +203,7 @@ func TestWholeElementReplacementDropsWhatItEmpties(t *testing.T) {
 // Quoting decides what the operator is even looking at, and the rule is the
 // element filters' own: quotes join first and `[*]` joins last.
 func TestWholeElementReplacementFollowsTheJoiningRule(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a quoted [@] is one field per element",
@@ -234,6 +238,7 @@ func TestWholeElementReplacementFollowsTheJoiningRule(t *testing.T) {
 // The operator does not write to the parameter — it substitutes and leaves the
 // array as it found it.
 func TestWholeElementReplacementLeavesTheParameterAlone(t *testing.T) {
+	t.Parallel()
 	const src = `a=(foo bar); printf "[%s]" "${(@)a:/foo/Z}"; printf "|"; printf "[%s]" "${(@)a}"`
 	out, status := runGrammar(t, src, wholeElementReplacing, nil)
 	if want := "[Z][bar]|[foo][bar]"; out != want {
@@ -247,6 +252,7 @@ func TestWholeElementReplacementLeavesTheParameterAlone(t *testing.T) {
 // The pattern operand is expanded once for the whole list, as every other
 // operator inside `${ }` is: a command substitution in it runs a single time.
 func TestWholeElementReplacementExpandsThePatternOnce(t *testing.T) {
+	t.Parallel()
 	const src = `a=(foo bar baz); printf "[%s]" "${(@)a:/$(printf ran >&2; printf 'ba*')/Z}"`
 	out, status := runGrammar(t, src, wholeElementReplacing, nil)
 	if want := "ran[foo][Z][Z]"; out != want {
@@ -265,6 +271,7 @@ func TestWholeElementReplacementExpandsThePatternOnce(t *testing.T) {
 // visible rather than a saving: a counter in the replacement counts only under
 // a reporting pattern.
 func TestWholeElementReplacementReadsTheReplacementPerReportingMatch(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		extended  bool

@@ -75,6 +75,7 @@ func integerRun(t *testing.T, src string, set func(*Semantics), dg Diagnostics) 
 // is an expression. A registration that merely aliased `typeset` would answer
 // the second line `5+2`.
 func TestIntegerDeclaresTheAttributeWithoutTheLetter(t *testing.T) {
+	t.Parallel()
 	out, errs, st := integerRun(t, `integer n=3
 echo "decl=[$n]"
 n=5+2
@@ -91,6 +92,7 @@ echo "onTheLine=[$m]"`, nil, Diagnostics{})
 // second name has to reach the same reading: `abc` is an expression made of
 // an unset name, so the value is zero and nothing is said.
 func TestIntegerTakesTextAsAnExpression(t *testing.T) {
+	t.Parallel()
 	out, errs, st := integerRun(t, `integer q=abc
 echo "q=[$q]"`, nil, Diagnostics{})
 	want := "q=[0]\n"
@@ -103,6 +105,7 @@ echo "q=[$q]"`, nil, Diagnostics{})
 // declaration: `-r` freezes after assigning its own value, and `-x` reaches
 // the environment.
 func TestIntegerCarriesTheDeclarationsOtherLetters(t *testing.T) {
+	t.Parallel()
 	out, errs, st := integerRun(t, `integer -r r=5
 echo "r=[$r]"
 integer -x e=2
@@ -117,6 +120,7 @@ export -p`, nil, Diagnostics{})
 // Where a plus word takes attributes off, `+i` reaches the attribute the name
 // itself asked for and a later assignment is text again.
 func TestAPlusFormThatRemovesReachesTheNamesOwnAttribute(t *testing.T) {
+	t.Parallel()
 	out, errs, st := integerRun(t, `integer n=5
 integer +i n
 n=3+4
@@ -131,6 +135,7 @@ echo "n=[$n]"`, nil, Diagnostics{})
 // the axis, read from both sides. A shell that took the removal anyway
 // answers `3+4` here.
 func TestAPlusFormThatRemovesNothingLeavesTheAttribute(t *testing.T) {
+	t.Parallel()
 	out, errs, st := integerRun(t, `integer n=5
 integer +i n
 n=3+4
@@ -148,6 +153,7 @@ echo "n=[$n]"`, func(s *Semantics) {
 // nothing is removed, `integer +x` leaves the export standing too. This is
 // the row that makes it one field rather than one per letter.
 func TestAPlusFormThatRemovesNothingLeavesTheExport(t *testing.T) {
+	t.Parallel()
 	out, errs, st := integerRun(t, `integer -x e=2
 integer +x e
 export -p`, func(s *Semantics) {
@@ -163,6 +169,7 @@ export -p`, func(s *Semantics) {
 // attribute alone, because `i` was not the letter written. The name asked for
 // that one and only its own spelling may cancel it.
 func TestAPlusFormOnAnotherLetterKeepsTheIntegerAttribute(t *testing.T) {
+	t.Parallel()
 	out, errs, st := integerRun(t, `integer -x e=2
 integer +x e
 e=5+2
@@ -177,6 +184,7 @@ export -p`, nil, Diagnostics{})
 
 // The unanswered axis refuses rather than picking a shell.
 func TestAPlusFormOnIntegerRefusesWithoutTheAxis(t *testing.T) {
+	t.Parallel()
 	_, errs, st := integerRun(t, `integer n=5
 integer +i n`, func(s *Semantics) {
 		s.IntegerPlusFormTakesAttributesOff = Unspecified
@@ -192,6 +200,7 @@ integer +i n`, func(s *Semantics) {
 // which is the answer for `-a` and `-A`, letters the declaration takes and
 // this second name does not.
 func TestALetterOutsideTheIntegerSetIsUnknown(t *testing.T) {
+	t.Parallel()
 	_, errs, st := integerRun(t, `integer -A m`, nil, Diagnostics{
 		BuiltinBadOption:       "%[1]s: bad option: %[2]s",
 		BuiltinBadOptionStatus: 1,
@@ -205,6 +214,7 @@ func TestALetterOutsideTheIntegerSetIsUnknown(t *testing.T) {
 // A letter the dialect's `integer` really has and this shell does not is
 // named as missing rather than as unknown, and under the builtin's own name.
 func TestALetterTheDialectsIntegerHasIsCalledMissing(t *testing.T) {
+	t.Parallel()
 	_, errs, st := integerRun(t, `integer -Z m`, nil, Diagnostics{
 		UnimplementedOptionLetters: map[string]string{"integer": "LRZht"},
 	})
@@ -217,6 +227,7 @@ func TestALetterTheDialectsIntegerHasIsCalledMissing(t *testing.T) {
 // The refusal can name another builtin, which is what one of the two shells
 // with the word does: its `integer` is `typeset` and says so.
 func TestTheIntegerRefusalCanNameTheDeclaration(t *testing.T) {
+	t.Parallel()
 	_, errs, st := integerRun(t, `integer -Z m`, nil, Diagnostics{
 		UnimplementedOptionLetters: map[string]string{"integer": "Z"},
 		BuiltinComplaintName:       map[string]string{"integer": "typeset"},
@@ -231,6 +242,7 @@ func TestTheIntegerRefusalCanNameTheDeclaration(t *testing.T) {
 // A bad letter ends the script where the dialect counts the declaration among
 // its special builtins, the same way a bad `typeset` option does.
 func TestABadIntegerLetterEndsTheScriptWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	out, _, st := integerRun(t, `integer -q m
 echo after`, func(s *Semantics) {
 		s.TypesetBadOptionFatal = Yes
@@ -245,6 +257,7 @@ echo after`, func(s *Semantics) {
 // the bare-declaration listing: falling through to that would answer with the
 // whole variable table, which is a *wrong* answer rather than a missing one.
 func TestIntegerWithNoNamesRefusesByName(t *testing.T) {
+	t.Parallel()
 	out, errs, st := integerRun(t, `v=1
 integer
 echo after`, nil, Diagnostics{})
@@ -260,6 +273,7 @@ echo after`, nil, Diagnostics{})
 // The same for letters with no names, which is the other spelling of a
 // filtered listing.
 func TestIntegerWithLettersAndNoNamesRefusesByName(t *testing.T) {
+	t.Parallel()
 	_, errs, st := integerRun(t, `integer -r`, nil, Diagnostics{})
 	want := "testsh: integer: a listing is not implemented yet\n"
 	if errs != want || st != 2 {
@@ -272,6 +286,7 @@ func TestIntegerWithLettersAndNoNamesRefusesByName(t *testing.T) {
 // before the letter loop reaches the `1` and calls it an unknown option — a
 // true statement about a letter the script never wrote.
 func TestAnOutputBaseIsReadInBothSpellings(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`integer -i 16 b=255`, `typeset -i16 b=255`} {
 		out, errs, st := integerRun(t, src+"\necho \"b=[$b]\"", func(s *Semantics) {
 			s.IntegerBaseDigits = "0123456789abcdefghijklmnopqrstuvwxyz"
@@ -296,6 +311,7 @@ func TestAnOutputBaseIsReadInBothSpellings(t *testing.T) {
 // renders plain as it always did — the last row, and the one that keeps the
 // fallback from reaching a dialect without the feature.
 func TestTheOutputBaseAlphabetSaysTheCaseAndTheRange(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ digits, want string }{
 		{"0123456789abcdefghijklmnopqrstuvwxyz", "b=[36#2s]\n"},
 		{"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ", "b=[36#2S]\n"},
@@ -315,6 +331,7 @@ func TestTheOutputBaseAlphabetSaysTheCaseAndTheRange(t *testing.T) {
 // for it, and the name is left with nothing. With none it is taken in
 // silence, which is the other shell — see IntegerBadBase.
 func TestABaseOutsideTheAlphabetIsRefusedWhereThereIsAWording(t *testing.T) {
+	t.Parallel()
 	out, errs, st := integerRun(t, "typeset -i64 b=100\necho \"b=[$b]\"",
 		func(s *Semantics) { s.IntegerBaseDigits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ" },
 		Diagnostics{IntegerBadBase: "%[1]s: invalid base: %[2]s"})
@@ -327,6 +344,7 @@ func TestABaseOutsideTheAlphabetIsRefusedWhereThereIsAWording(t *testing.T) {
 // questions cannot be one: joining them made the dialect that refuses a bad
 // base refuse base ten as well.
 func TestBaseTenIsTakenAndRendersPlain(t *testing.T) {
+	t.Parallel()
 	out, errs, st := integerRun(t, "typeset -i10 b=255\necho \"b=[$b]\"",
 		func(s *Semantics) { s.IntegerBaseDigits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ" },
 		Diagnostics{IntegerBadBase: "invalid base: %[2]s"})
@@ -338,6 +356,7 @@ func TestBaseTenIsTakenAndRendersPlain(t *testing.T) {
 // A negative value under a base is two answers: the bit pattern, or a sign in
 // front of the magnitude.
 func TestANegativeValueUnderAnOutputBase(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		twos Answer
 		want string
@@ -359,6 +378,7 @@ func TestANegativeValueUnderAnOutputBase(t *testing.T) {
 // The base learned from the value assigned, which one dialect does and the
 // other does not, and which sticks to the name once learned.
 func TestTheOutputBaseLearnedFromTheValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		learns Answer
 		want   string
@@ -400,6 +420,7 @@ typeset -i e; e=$((0x10)); echo "5[$e]"`,
 // re-renders what the name is already holding, and the plus form takes the
 // base off with the attribute while leaving the text that is there alone.
 func TestTheOutputBaseBelongsToTheName(t *testing.T) {
+	t.Parallel()
 	out, errs, st := integerRun(t, `typeset -i b=5
 typeset -i16 b
 echo "1[$b]"
@@ -423,6 +444,7 @@ echo "4[$b]"`, func(s *Semantics) {
 // The rendered text is what is *stored*, not a way of printing what is: it is
 // what a length counts, what a copy copies, and what arithmetic parses back.
 func TestABasedValueIsTheValue(t *testing.T) {
+	t.Parallel()
 	out, errs, st := integerRun(t, `typeset -i16 h=255
 echo "len=${#h} copy=$(echo "$h") arith=$(( h + 1 )) strip=${h#16}"`,
 		func(s *Semantics) {
@@ -439,6 +461,7 @@ echo "len=${#h} copy=$(echo "$h") arith=$(( h + 1 )) strip=${h#16}"`,
 // is an operand. The axis is asked only when a base is written, so an
 // ordinary `-i` never meets it.
 func TestNoBaseIsRefusedWhereTheLetterTakesNone(t *testing.T) {
+	t.Parallel()
 	out, errs, st := integerRun(t, `typeset -i n=5
 n=1+2
 echo "n=[$n]"`, func(s *Semantics) {
@@ -454,6 +477,7 @@ echo "n=[$n]"`, func(s *Semantics) {
 // A base written where the axis is unanswered refuses as an unanswered axis
 // rather than guessing that the letter takes none.
 func TestABaseWithoutTheAxisRefuses(t *testing.T) {
+	t.Parallel()
 	_, errs, st := integerRun(t, `typeset -i 16 b=255`, func(s *Semantics) {
 		s.IntegerAttributeTakesABase = Unspecified
 	}, Diagnostics{})
@@ -469,6 +493,7 @@ func TestABaseWithoutTheAxisRefuses(t *testing.T) {
 // about *it*. A word that split would have assigned `1` and left `2` as a
 // second operand, which is silent and wrong.
 func TestIntegerIsADeclaringWord(t *testing.T) {
+	t.Parallel()
 	_, errs, st := integerRun(t, `IFS=:
 v='1:2'
 integer n=$v`, nil, Diagnostics{})
@@ -482,6 +507,7 @@ integer n=$v`, nil, Diagnostics{})
 // things at once: what a written ten records, and what a *bare* letter does to
 // a base the name already has.
 func TestWhetherBaseTenIsNoBaseAtAll(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		ten  Answer
 		want string
@@ -521,6 +547,7 @@ typeset -p d`, func(s *Semantics) {
 // letter clears the base" could be implemented as "any second declaration
 // clears it" and every row above would still pass.
 func TestAnotherLetterLeavesTheOutputBaseAlone(t *testing.T) {
+	t.Parallel()
 	for _, ten := range []Answer{Yes, No} {
 		out, errs, st := integerRun(t, `typeset -i16 c=255
 typeset -x c
@@ -541,6 +568,7 @@ echo "1[$c]"`, func(s *Semantics) {
 // asked only where it decides something — which is why the ordinary `typeset
 // -i n` above it says nothing at all.
 func TestBaseTenAsNoBaseUnansweredRefusesByName(t *testing.T) {
+	t.Parallel()
 	out, errs, _ := integerRun(t, `typeset -i n=5
 echo "plain=[$n]"
 typeset -i16 h=255
@@ -593,6 +621,7 @@ func TestAnUnansweredOutputBaseAxisConsumesNothing(t *testing.T) {
 // from `-0x10` the same as from `0x10`, and the sign then renders the way a
 // negative under a base renders anywhere. Measured in the shell that learns.
 func TestASignedLiteralStillTeachesTheBase(t *testing.T) {
+	t.Parallel()
 	out, errs, st := integerRun(t, `typeset -i b; b=-0x10; echo "1[$b]"
 typeset -i c; c=-8#7; echo "2[$c]"
 typeset -i d; d=+0x10; echo "3[$d]"`, func(s *Semantics) {
@@ -611,6 +640,7 @@ typeset -i d; d=+0x10; echo "3[$d]"`, func(s *Semantics) {
 // keeps it even though nothing is written in it. Only the listing tells the
 // two readings apart — the value is a plain `5` either way.
 func TestALearnedBaseOfTenIsStillRecorded(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		ten  Answer
 		want string
@@ -637,6 +667,7 @@ func TestALearnedBaseOfTenIsStillRecorded(t *testing.T) {
 // a negative one keeps its sign through that: the number does not change,
 // only the characters it is written in.
 func TestANegativeValueSurvivesARerender(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		twos Answer
 		want string
@@ -659,6 +690,7 @@ func TestANegativeValueSurvivesARerender(t *testing.T) {
 // An unanswered sign axis refuses by name and renders the number plainly
 // rather than picking one shell's spelling of a negative.
 func TestAnUnansweredNegativeSignAxisRefusesByName(t *testing.T) {
+	t.Parallel()
 	out, errs, _ := integerRun(t, "typeset -i16 h=-255\necho \"1[$h]\"",
 		func(s *Semantics) {
 			s.IntegerBaseDigits = "0123456789abcdefghijklmnopqrstuvwxyz"
@@ -699,6 +731,7 @@ func TestAnUnansweredNegativeSignAxisRefusesByName(t *testing.T) {
 // one column where both halves are Yes; the arithmetic agreed throughout and
 // only the rendering of the name was short (#3520).
 func TestABareLeadingZeroTeachesTheBaseWhereItIsOctal(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		octal Answer
@@ -761,6 +794,7 @@ func TestABareLeadingZeroTeachesTheBaseWhereItIsOctal(t *testing.T) {
 // leading zero counted only as the whole of what was written, and the probe
 // said otherwise.
 func TestAnArithmeticAssignmentLearnsTheLeadingZerosBase(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		octal Answer

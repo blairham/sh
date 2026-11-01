@@ -87,6 +87,7 @@ func TestACommandRunBesideTheShellWritesToTheDescriptorItWasGiven(t *testing.T) 
 // already under one would leave a handle nothing could reach — which is worse
 // than a refusal the caller can word for itself.
 func TestStartingASecondCommandUnderOneNameIsRefused(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r, _ := concurrentSeamRunner(t, &out, &errs)
 	runSeam(t, r, "beside one 'echo first'\nbeside one 'echo second'\necho st=$?\n")

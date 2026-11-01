@@ -19,6 +19,7 @@ import (
 // one interactive session, from a plugin counting the widgets it had rebound
 // (#1875).
 func TestAnAssociativeKeyNeedNotBeAnExpression(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an absent key reads as zero", `typeset -A m; echo "$(( m[.k] ))"`, "0"},
 		{"a key that is stored reads back", `typeset -A m; m[.k]=5; echo "$(( m[.k] ))"`, "5"},
@@ -51,6 +52,7 @@ func TestAnAssociativeKeyNeedNotBeAnExpression(t *testing.T) {
 // itself and left the element alone — a wrong answer with no diagnostic, in
 // the one place a diagnostic is what a script would rely on.
 func TestAWriteThroughAKeyDoesNotLandOnTheName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a plain assignment", `typeset -A m; (( m[.k] = 3 )); echo "name=[${m}] key=[${m[.k]}]"`},
 		{"an increment", `typeset -A m; m[.k]=2; (( m[.k]++ )); echo "name=[${m}] key=[${m[.k]}]"`},
@@ -71,6 +73,7 @@ func TestAWriteThroughAKeyDoesNotLandOnTheName(t *testing.T) {
 // answered. Both shells with the attribute refuse it there too, and leave
 // every element as it was.
 func TestASubscriptThatIsNoExpressionIsStillRefusedOnAnIndexedName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"reading an element", `a=(1 2 3); echo "$(( a[.k] ))"`},
 		{"reading through a scalar", `s=5; echo "$(( s[.k] ))"`},
@@ -92,6 +95,7 @@ func TestASubscriptThatIsNoExpressionIsStillRefusedOnAnIndexedName(t *testing.T)
 // A refused write leaves the array alone. The refusal has to come *before*
 // the store, not after it, and only the elements can say which.
 func TestARefusedKeyWriteChangesNothing(t *testing.T) {
+	t.Parallel()
 	src := `a=(1 2 3); (( a[.k] = 9 )); echo "[${a[0]}${a[1]}${a[2]}]"`
 	out, _ := run(t, src, nil)
 	if !strings.Contains(out, "[123]") {
@@ -106,6 +110,7 @@ func TestARefusedKeyWriteChangesNothing(t *testing.T) {
 // folding them would make a refusal disappear for every name that happens not
 // to exist yet.
 func TestAKeySubscriptOnAnUnsetNameFollowsTheAxis(t *testing.T) {
+	t.Parallel()
 	skip := func(a Answer) func(*Runner) {
 		return func(r *Runner) {
 			s := *r.Semantics

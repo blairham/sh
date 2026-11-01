@@ -12,6 +12,7 @@ import "testing"
 // grammar's, while what a re-read `$name` comes to is this package's own
 // question and the same one it answers everywhere else.
 func TestTheReevalFlagReadsTheValueAgain(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a parameter reference in the value becomes an expansion",
@@ -69,6 +70,7 @@ func TestTheReevalFlagReadsTheValueAgain(t *testing.T) {
 // one does not, and each would be a plausible answer from a reader that read
 // the text as an ordinary word instead.
 func TestTheReevalFlagIsNotAWholeWordExpansion(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a leading tilde is a tilde",
@@ -127,6 +129,7 @@ func TestTheReevalFlagIsNotAWholeWordExpansion(t *testing.T) {
 // The re-reading runs last of the value transformations, which is what the
 // three rows below pin from three different sides.
 func TestTheReevalFlagRunsAfterTheOtherFlags(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			// The sharpest of the three: the case conversion turned `$d`
@@ -162,6 +165,7 @@ func TestTheReevalFlagRunsAfterTheOtherFlags(t *testing.T) {
 // What the re-reading produces is fields, and how many survive is the ordinary
 // question about an expansion's result rather than a rule of this flag's.
 func TestTheReevalFlagProducesFields(t *testing.T) {
+	t.Parallel()
 	const count = `f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; `
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -299,6 +303,7 @@ func TestTheReevalFlagProducesFields(t *testing.T) {
 // Whole strings, so the two wordings have to stay apart: a row asserting only
 // that something was refused would pass for either.
 func TestAFailureInTheReevaluatedTextStopsTheCommand(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an expansion left unterminated", `v='${'; printf "[%s]" "${(e)v}"; echo after`, "sh: unterminated parameter expansion\n"},
 		{"an expansion this dialect cannot read", `v='${}'; printf "[%s]" "${(e)v}"; echo after`, "sh: ${}: bad substitution\n"},
@@ -331,6 +336,7 @@ func TestAFailureInTheReevaluatedTextStopsTheCommand(t *testing.T) {
 // The second row is the one a per-name guard would pass: neither value names
 // itself, and the pair only closes a cycle through the other.
 func TestASelfNamingReevalIsBoundedRatherThanFollowed(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a value naming its own expansion", `v='${(e)v}'; printf "[%s]" "${(e)v}"; echo after`, "sh: ${(e)v}: nested too deeply\n"},
 		{"and a pair naming each other", `a='${(e)b}'; b='${(e)a}'; printf "[%s]" "${(e)a}"; echo after`, "sh: ${(e)a}: nested too deeply\n"},
@@ -352,6 +358,7 @@ func TestASelfNamingReevalIsBoundedRatherThanFollowed(t *testing.T) {
 // by it. The row exists because a bound set at one would pass the two tests
 // above and break this.
 func TestReevalNestingThatMeansSomethingIsUntouched(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t,
 		`x=deep; l1='$x'; l2='${(e)l1}'; printf "[%s]" "${(e)l2}"`, escapingFlags, nil)
 	if out != "[deep]" || st != 0 {

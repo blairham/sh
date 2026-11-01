@@ -29,6 +29,7 @@ func prefixSeesRun(t *testing.T, src string, order PrefixRedirectionOrder) strin
 }
 
 func TestAPrefixSeesTheOnesInFrontOfIt(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"a function",
@@ -73,6 +74,7 @@ func TestAPrefixSeesTheOnesInFrontOfIt(t *testing.T) {
 // before the prefix is applied, so `K=v3 A=${K#v} echo "[$A]"` is `[]` in
 // every column of the panel.
 func TestTheCommandsOwnWordsDoNotSeeThePrefix(t *testing.T) {
+	t.Parallel()
 	const src = `K=v3 A=${K#v} printf "[%s]" "$A"`
 	for _, order := range []PrefixRedirectionOrder{
 		PrefixExpandedBeforeRedirectionsAlways,
@@ -92,6 +94,7 @@ func TestTheCommandsOwnWordsDoNotSeeThePrefix(t *testing.T) {
 // routes expand as they store. Measured on bash 5.3.20, dash 0.5.12, zsh
 // 5.9.2 and ksh93u+: all four print `fn:[1]` traced and untraced alike.
 func TestTracingDoesNotChangeWhatAPrefixSees(t *testing.T) {
+	t.Parallel()
 	const src = "f(){ printf \"[%s]\" \"$A\"; }\nset -x\nK=v1 A=${K#v} f"
 	for _, order := range []PrefixRedirectionOrder{
 		PrefixExpandedBeforeRedirectionsAlways,
@@ -109,6 +112,7 @@ func TestTracingDoesNotChangeWhatAPrefixSees(t *testing.T) {
 // which is the route that makes no store of its own and so is the one a hold
 // left standing would be visible in.
 func TestTheHoldDoesNotOutliveTheCommand(t *testing.T) {
+	t.Parallel()
 	const src = `A=start
 K=v5 A=${K#v} /usr/bin/env >/dev/null
 printf "[%s]" "$A"`

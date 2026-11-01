@@ -17,6 +17,7 @@ import (
 // through a different one: a second copy beside the first is how a fix
 // applied to one spelling and not its twin gets written here.
 func TestAWordBehindANumericOperandIsOneTooMany(t *testing.T) {
+	t.Parallel()
 	base := func(p ExtraNumericOperandPolicy) Semantics {
 		s := CoreSemantics()
 		s.ExtraNumericOperand = p
@@ -147,6 +148,7 @@ func TestAWordBehindANumericOperandIsOneTooMany(t *testing.T) {
 // count that overran, and `shift -2 3` is the same rather than the negative
 // count's own sentence.
 func TestOneTooManyWinsOverACountOutOfRange(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"past the end", "set -- a b c\nshift 5 2\necho \"A=$? n=$#\"\n"},
 		{"below zero", "set -- a b c\nshift -2 3\necho \"A=$? n=$#\"\n"},
@@ -175,6 +177,7 @@ func TestOneTooManyWinsOverACountOutOfRange(t *testing.T) {
 // one of those and this is never asked — the two readings would otherwise
 // both claim the same word. See Semantics.ShiftNamesAreArrays.
 func TestNamedArrayOperandsAreNotOneTooMany(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	sem.ExtraNumericOperand = ExtraNumericOperandRefused
 	sem.ShiftNamesAreArrays, sem.ShiftPastEndFatal = Yes, No
@@ -192,6 +195,7 @@ func TestNamedArrayOperandsAreNotOneTooMany(t *testing.T) {
 // The wording has a fallback, so a dialect that answers the axis and writes no
 // sentence still says something rather than refusing in silence.
 func TestOneTooManyHasASentenceWithoutADialectWording(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	sem.ExtraNumericOperand = ExtraNumericOperandGivesUpTheStatement
 	sem.ShiftNamesAreArrays, sem.ShiftCountIsArithmetic = No, No

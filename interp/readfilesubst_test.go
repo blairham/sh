@@ -21,6 +21,7 @@ import (
 // compared whole, is the only shape that separates "read the file" from
 // "read nothing quietly".
 func TestASubstitutionOfALoneInputRedirectionIsTheFile(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the contents", `printf 'hello\n' > f; printf "[%s]" "$(<f)"`, "[hello]"},
 		{"more than one line", `printf 'a\nb\n' > f; printf "[%s]" "$(<f)"`, "[a\nb]"},
@@ -61,6 +62,7 @@ func TestASubstitutionOfALoneInputRedirectionIsTheFile(t *testing.T) {
 // by running one would come back empty here and report a command it could not
 // find. The file still reads.
 func TestALoneInputRedirectionSubstitutionRunsNoCommand(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `printf 'hello\n' > f; PATH=; printf "[%s]" "$(<f)"`, nil)
 	if st != 0 {
 		t.Errorf("status %d, want 0", st)
@@ -74,6 +76,7 @@ func TestALoneInputRedirectionSubstitutionRunsNoCommand(t *testing.T) {
 // dialect's for a redirection that failed. The result is empty either way, so
 // the status and the diagnostic are the whole of what a script can see.
 func TestALoneInputRedirectionSubstitutionReportsAFileItCannotOpen(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `v=$(<nosuch); printf "st=%s v=[%s]" "$?" "$v"`, nil)
 	if st != 0 {
 		t.Errorf("status %d, want 0 — the script carries on", st)
@@ -88,6 +91,7 @@ func TestALoneInputRedirectionSubstitutionReportsAFileItCannotOpen(t *testing.T)
 
 // A read that works reports success whatever the status before it was.
 func TestALoneInputRedirectionSubstitutionReportsSuccess(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `printf 'hello\n' > f; false; v=$(<f); printf "st=%s v=[%s]" "$?" "$v"`, nil)
 	if st != 0 || out != "st=0 v=[hello]" {
 		t.Errorf("got %q status %d, want %q", out, st, "st=0 v=[hello]")
@@ -98,6 +102,7 @@ func TestALoneInputRedirectionSubstitutionReportsSuccess(t *testing.T) {
 // command name: the file opens, nothing runs, and the substitution is empty —
 // which is what the shells that have the form do with every one of them.
 func TestOnlyALoneInputRedirectionIsTheFile(t *testing.T) {
+	t.Parallel()
 	const setup = `printf 'hello\n' > f; printf 'second\n' > g; `
 	for _, tc := range []struct{ name, src, want string }{
 		// A command word takes the redirection as its input instead.
@@ -140,6 +145,7 @@ func TestOnlyALoneInputRedirectionIsTheFile(t *testing.T) {
 // difference between them. Without the "off" half nothing would notice a
 // grammar flag that was never consulted.
 func TestTheFileReadSubstitutionIsAGrammarFlag(t *testing.T) {
+	t.Parallel()
 	const src = `printf 'hello\n' > f; printf "[%s]" "$(<f)"`
 	on, st := runGrammar(t, src, func(d *syntax.Dialect) { d.ReadFileSubstitution = true }, nil)
 	if st != 0 || on != "[hello]" {

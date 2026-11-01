@@ -16,6 +16,7 @@ import (
 // kept between changes, so a change that did not count itself would leave
 // the old number standing; each row is that mutant's death.
 func TestEveryAliasChangeMovesTheTablesFingerprint(t *testing.T) {
+	t.Parallel()
 	r := newTestRunner(t, &Runner{})
 	r.aliasExpansion = true
 	ask := parseAsker{r: r}

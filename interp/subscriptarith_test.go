@@ -18,6 +18,7 @@ import (
 // script writes with an expression, reads back with the same expression, and
 // finds nothing.
 func TestASubscriptIsAnExpressionWhereverItIsWritten(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		// Reading one.
 		{`a=(x y z); echo "[${a[1+1]}]"`, "[z]"},
@@ -53,6 +54,7 @@ func TestASubscriptIsAnExpressionWhereverItIsWritten(t *testing.T) {
 // not being a numeral and then deleting a whole variable that was never there
 // — so the array came back untouched with status 0.
 func TestUnsettingAnElementByExpression(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(x y z); unset "a[1+1]"; echo "keys=${!a[@]}"`, "keys=0 1"},
 		{`a=(x y z); i=1; unset "a[i+1]"; echo "keys=${!a[@]}"`, "keys=0 1"},
@@ -78,6 +80,7 @@ func TestUnsettingAnElementByExpression(t *testing.T) {
 // taking the numeral alone gave an offset of 0 — a real substring of the right
 // length, which is why nothing noticed.
 func TestASubstringOffsetIsAnExpression(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`x=abcdef; echo "[${x:1+1:2}]"`, "[cd]"},
 		{`x=abcdef; i=1; echo "[${x:i+1:2}]"`, "[cd]"},
@@ -97,6 +100,7 @@ func TestASubstringOffsetIsAnExpression(t *testing.T) {
 // A subscript written where the same expression was stored finds what was
 // stored, which is the whole point of one reading rather than four.
 func TestWritingAndReadingAgreeOnASubscript(t *testing.T) {
+	t.Parallel()
 	const src = `a[1+1]=v; echo "[${a[1+1]}][${a[2]}]"`
 	out, _ := runArray(t, src)
 	if got := strings.TrimSpace(out); got != "[v][v]" {

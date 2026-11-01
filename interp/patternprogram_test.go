@@ -619,6 +619,7 @@ func TestTheThemeSubstitutionRunsAsAProgram(t *testing.T) {
 // ones it hands back to the walk a node in: an interpret node is exact and
 // buys nothing.
 func TestTheProgramReadsThePatternsItIsFor(t *testing.T) {
+	t.Parallel()
 	for _, p := range []string{benchPattern, "*.go", "(a|ab)c", "[^}]##", "x#(*)", "<1-3>#", "a*~*b*", "^a", "(#i)ab", "(#s)a(#e)"} {
 		o := readingFor(programReadings()[0].o, p, new(bool), new(int))
 		o.where.ready, o.where.pattern = true, p
@@ -663,6 +664,7 @@ func countInterpretNodes(p *patternProgram) int {
 // the executor takes from the match running, and a field in neither would be
 // one a program could be reused across without anyone deciding it may be.
 func TestTheReadingNamesEveryOption(t *testing.T) {
+	t.Parallel()
 	state := map[string]bool{
 		"pieceBase": true, "pieceEnd": true, "period": true,
 		"bad": true, "where": true, "askBracketAfterSub": true,

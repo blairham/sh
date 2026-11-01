@@ -26,6 +26,7 @@ import (
 // pattern is `#a` and is not in the value — so the rows that matter are the
 // ones over a value that *holds* the anchor character.
 func TestWhetherTheGlobalSpellingTakesAnAnchor(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, anchored, plain string }{
 		{
 			// The discriminating pair, at the start.
@@ -93,6 +94,7 @@ func TestWhetherTheGlobalSpellingTakesAnAnchor(t *testing.T) {
 // this answers, so asking there would put a question to a dialect about a
 // spelling no column disagrees over.
 func TestTheSingleSpellingAsksNoGlobalAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"anchored at the front", `w='x#ay%bz'; printf "[%s]" "${w/#a/Q}"`, "[x#ay%bz]"},
 		{"anchored at the end", `w='x#ay%bz'; printf "[%s]" "${w/%b/Q}"`, "[x#ay%bz]"},
@@ -114,6 +116,7 @@ func TestTheSingleSpellingAsksNoGlobalAxis(t *testing.T) {
 // whichever way this one points, so BusyBox ash leaves it unanswered on
 // purpose.
 func TestAColumnWithNoAnchorsAsksNoGlobalAxis(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.ReplacementAnchors = No
 	sem.GlobalReplacementAnchors = Unspecified
@@ -128,6 +131,7 @@ func TestAColumnWithNoAnchorsAsksNoGlobalAxis(t *testing.T) {
 // a fourth one — measured, zsh answers `${v//#/X}` exactly as it answers
 // `${v/#/X}`, so nothing here splits the two spellings.
 func TestAnEmptyPatternBehindAGlobalAnchor(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, fires, declines string }{
 		{"at the front", `v=abc; printf "[%s]" "${v//#/X}"`, "[Xabc]", "[abc]"},
 		{"at the end", `v=abc; printf "[%s]" "${v//%/X}"`, "[abcX]", "[abc]"},

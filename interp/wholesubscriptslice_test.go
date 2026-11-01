@@ -51,6 +51,7 @@ func sliceOnAScalarRun(t *testing.T, src string, answer Answer) (string, int) {
 // Both answers are asserted, which is what makes this an axis rather than a
 // fix: the rows are the same script under the two readings.
 func TestAWholeSubscriptOnAScalarSlicesTheValueOrAListOfOne(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src              string
 		characters, list string
@@ -100,6 +101,7 @@ func TestAWholeSubscriptOnAScalarSlicesTheValueOrAListOfOne(t *testing.T) {
 // that moved with the axis would mean the decline had been written on the
 // subscript rather than on the slice.
 func TestAWholeSubscriptOnAScalarIsTheValueUnderEitherReading(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Yes, No} {
 		out, st := sliceOnAScalarRun(t, `h="a b"; set -- "${h[@]}"; echo "$# [$1]"`, answer)
 		if strings.TrimSpace(out) != "1 [a b]" || st != 0 {
@@ -113,6 +115,7 @@ func TestAWholeSubscriptOnAScalarIsTheValueUnderEitherReading(t *testing.T) {
 // for `${#h[@]}` and still slice the value's characters, which is what four of
 // the five shells with the construct do.
 func TestTheLengthAndTheSliceOfAWholeSubscriptOnAScalarAreSeparateQuestions(t *testing.T) {
+	t.Parallel()
 	run := func(measures, slices Answer) (string, int) {
 		return runGrammar(t, `h="a b"; echo "${#h[@]} ${h[@]:0:1}"`, func(d *syntax.Dialect) {
 			d.ArraySubscript = true

@@ -19,6 +19,7 @@ import "testing"
 // a shell that only scanned past the quotes to find the delimiter would give
 // the text back, and all six give the substitution's result.
 func TestASingleQuoteInAQuotedOperandIsAnOrdinaryCharacter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a parameter between the quotes", `v=VAL; printf "[%s]" "${u:-'$v'}"`, `['VAL']`},
 		{"and a command substitution", `printf "[%s]" "${u:-'$(echo hi)'}"`, `['hi']`},

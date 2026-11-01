@@ -38,6 +38,7 @@ func condArithFails(abandons Answer) func(*Runner) {
 }
 
 func TestAFailedOperandExpansionLeavesTheConditionFalse(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		want string
@@ -82,6 +83,7 @@ func TestAFailedOperandExpansionLeavesTheConditionFalse(t *testing.T) {
 // in the first stops the second from running at all — which is observable,
 // because an operand may hold a command.
 func TestAFailedLeftOperandStopsTheRightOneRunning(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `[[ $((1/0)) -eq $(printf "[RIGHT]"; echo 1) ]]`+"\n"+`printf "[st=%d]" "$?"`,
 		condArithFails(Yes))
 	if strings.Contains(out, "[RIGHT]") {
@@ -95,6 +97,7 @@ func TestAFailedLeftOperandStopsTheRightOneRunning(t *testing.T) {
 // And what the failure ends past the condition is the axis's, not this
 // construct's: the column that ends the shell ends it here too.
 func TestAFailedOperandEndsWhatTheDialectEnds(t *testing.T) {
+	t.Parallel()
 	src := `printf "[a]"; [[ $((1/0)) -eq 0 ]]; printf "[b]"` + "\n" + `printf "[c]"`
 	out, _ := run(t, src, condArithFails(Yes))
 	if !strings.Contains(out, "[a]") || !strings.HasSuffix(out, "[c]") {

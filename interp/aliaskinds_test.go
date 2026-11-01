@@ -35,6 +35,7 @@ func kindsRun(t *testing.T, src string) (string, int) {
 // lists the global alone, and `-s` the suffix alone** — sorted, and never
 // mixed. That is the whole of "two namespaces" as a listing.
 func TestTheThreeListingsAreThreeSets(t *testing.T) {
+	t.Parallel()
 	out, st := kindsRun(t, `alias -g G='b b'; alias r=y; alias -s t=z
 echo "--plain--"; alias
 echo "--g--"; alias -g
@@ -49,6 +50,7 @@ echo "--s--"; alias -s`)
 // share a table — and a suffix alias of the same name does not, because it
 // does not.
 func TestAGlobalAliasReplacesARegularOne(t *testing.T) {
+	t.Parallel()
 	out, st := kindsRun(t, `alias dup=REGULAR; alias -g dup=GLOBAL; alias -s dup=SUFFIX
 echo "--plain--"; alias
 echo "--s--"; alias -s`)
@@ -63,6 +65,7 @@ echo "--s--"; alias -s`)
 // alias reports success and says nothing, because the table holds the name
 // and the letter is a filter on what gets written.
 func TestANamedOperandIsFoundByTheTable(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 		status          int
@@ -87,6 +90,7 @@ func TestANamedOperandIsFoundByTheTable(t *testing.T) {
 // the strongest statement that they are two. A plain `unalias` cannot reach a
 // suffix alias at all.
 func TestUnaliasTakesOneNamespaceAtATime(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"-a leaves the suffix aliases",
@@ -127,6 +131,7 @@ func TestUnaliasTakesOneNamespaceAtATime(t *testing.T) {
 // **Both letters at once is refused**, because one call cannot be about two
 // namespaces — and nothing is defined by the call that was refused.
 func TestBothKindsAtOnceIsRefused(t *testing.T) {
+	t.Parallel()
 	out, st := kindsRun(t, `alias -g -s q=v; echo "st=$?"; alias; alias -s`)
 	want := "testsh: alias: illegal combination of options\nst=1\n"
 	if out != want || st != 0 {
@@ -138,6 +143,7 @@ func TestBothKindsAtOnceIsRefused(t *testing.T) {
 // rule: the letters leave the accepted set with the axis, so the refusal is
 // whatever that dialect says about an option nobody has.
 func TestWithoutTheAxesTheLettersAreNotThere(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{BuiltinBadOption: "%[1]s: bad option: %[2]s"}
 	for _, src := range []string{`alias -g G=x`, `alias -s t=z`, `unalias -s t`} {
 		out, _ := aliasRun(t, nil, dg, src)
@@ -152,6 +158,7 @@ func TestWithoutTheAxesTheLettersAreNotThere(t *testing.T) {
 // that answered from the wrong table would expand the wrong words everywhere
 // at once.
 func TestTheThreeHooksAnswerForTheirOwnKind(t *testing.T) {
+	t.Parallel()
 	r := newTestRunner(t, &Runner{})
 	r.SetAlias("r", "y")
 	r.SetGlobalAlias("G", "x")
@@ -189,6 +196,7 @@ func TestTheThreeHooksAnswerForTheirOwnKind(t *testing.T) {
 // parent's afterwards, and that is a *parse* difference rather than a value
 // one.
 func TestTheSuffixTableIsClonedForASubshell(t *testing.T) {
+	t.Parallel()
 	out, _ := kindsRun(t, `alias -s t=z
 (alias -s u=w)
 alias -s`)

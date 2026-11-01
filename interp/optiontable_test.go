@@ -107,6 +107,7 @@ func notFatal() *Semantics {
 // order are one measurement a dialect makes and this package has no way to
 // re-derive either.
 func TestTheDialectsOwnNamesAreWhatSetOLists(t *testing.T) {
+	t.Parallel()
 	out, st := optionTableRunner(t, "set -o\n", Diagnostics{}, nil)
 	want := "noalpha        off\n" +
 		"beta           on\n" +
@@ -129,6 +130,7 @@ func TestTheDialectsOwnNamesAreWhatSetOLists(t *testing.T) {
 // listing is a capture surface, and one holding the wrong vocabulary at
 // status 0 is the silent kind of wrong answer.
 func TestTheSubstratesOwnNamesAreGoneFromTheListing(t *testing.T) {
+	t.Parallel()
 	out, _ := optionTableRunner(t, "set +o\n", Diagnostics{}, nil)
 	for _, name := range []string{"allexport", "errexit", "noclobber", "xtrace", "nounset"} {
 		if strings.Contains(out, name) {
@@ -140,6 +142,7 @@ func TestTheSubstratesOwnNamesAreGoneFromTheListing(t *testing.T) {
 // TestSetOMovesTheDialectsOwnName: and the listing shows it afterwards, which
 // is what makes the two halves one namespace rather than two.
 func TestSetOMovesTheDialectsOwnName(t *testing.T) {
+	t.Parallel()
 	out, st := optionTableRunner(t, "set -o gamma\necho \"st=$?\"\nset +o\n", Diagnostics{}, nil)
 	want := "st=0\nset +o noalpha\nset -o beta\nset -o gamma\nset +o nodelta\nset +o epsilon\n"
 	if out != want || st != 0 {
@@ -156,6 +159,7 @@ func TestSetOMovesTheDialectsOwnName(t *testing.T) {
 // TestANameTheDialectDoesNotHaveIsAnInvalidName: known false is the "typo"
 // answer, worded and scored by the dialect exactly as it is without a table.
 func TestANameTheDialectDoesNotHaveIsAnInvalidName(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{SetInvalidOptionName: "set: no such option: %[1]s", SetInvalidOptionNameStatus: 1}
 	out, st := optionTableRunner(t, "set -o zzznosuch\necho \"st=$?\"\n", dg, notFatal())
 	if want := "sh: set: no such option: zzznosuch\nst=1\n"; out != want {
@@ -171,6 +175,7 @@ func TestANameTheDialectDoesNotHaveIsAnInvalidName(t *testing.T) {
 // the two must not be one sentence, because a script can act on the
 // difference.
 func TestANameTheDialectWillNotMoveIsADifferentAnswer(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		SetInvalidOptionName:       "set: no such option: %[1]s",
 		SetImmovableOptionName:     "set: can't change option: %[1]s",
@@ -192,6 +197,7 @@ func TestANameTheDialectWillNotMoveIsADifferentAnswer(t *testing.T) {
 // TestAnImmovableNameEndsTheScriptWhereTheDialectSaysSo: the refusal is the
 // dialect's on every axis a refused `set -o` already has, fatality included.
 func TestAnImmovableNameEndsTheScriptWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{SetImmovableOptionName: "set: can't change option: %[1]s", SetInvalidOptionNameStatus: 1}
 	fatal := PosixSemantics()
 	// The *name*'s axis, because an immovable name is a name. The letter's
@@ -239,6 +245,7 @@ func TestTheDialectsTableDoesNotSwallowTheSubstratesOwnSeam(t *testing.T) {
 // TestAShellWithNoTableIsUnchanged: three of the four presets install none,
 // and every one of the cases above has to be a no-op for them.
 func TestAShellWithNoTableIsUnchanged(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, "set +o\n", withExtras)
 	if !strings.Contains(out, "set +o allexport\n") || !strings.Contains(out, "set +o errexit\n") {
 		t.Errorf("stdout = %q, want the substrate's own names listed", out)

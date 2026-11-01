@@ -127,6 +127,7 @@ func withDeclareLetters(letters string) func(*Semantics) {
 // one, sorted, when nothing narrows it — and a name that is no function is a
 // silent 1 that stands however many others printed.
 func TestDeclareFSaysTheFunctionsBack(t *testing.T) {
+	t.Parallel()
 	src := "zz() { echo two; }\naa() { echo one; }\ntypeset -f"
 	out, errs, st := declRun(t, src, withDeclareLetters("aAfFgiprx"), Diagnostics{})
 	if st != 0 || errs != "" {
@@ -156,6 +157,7 @@ func TestDeclareFSaysTheFunctionsBack(t *testing.T) {
 // TestDeclareFHonorsTheHeaderWording: the join between the name and the body
 // is the dialect's — see Diagnostics.FunctionListingHeader.
 func TestDeclareFHonorsTheHeaderWording(t *testing.T) {
+	t.Parallel()
 	out, _, _ := declRun(t, "f() { echo hi; }\ntypeset -f f",
 		withDeclareLetters("f"), Diagnostics{FunctionListingHeader: "%[1]s () %[2]s"})
 	if !strings.HasPrefix(out, "f () { ") {
@@ -172,6 +174,7 @@ func TestDeclareFHonorsTheHeaderWording(t *testing.T) {
 // two shapes, `declare -f name` for the full listing and the bare name once
 // operands narrow it — and never a body.
 func TestDeclareCapitalFNamesThem(t *testing.T) {
+	t.Parallel()
 	out, _, st := declRun(t, "f() { echo hi; }\ng() { :; }\ntypeset -F",
 		withDeclareLetters("aAfFgiprx"), Diagnostics{})
 	if st != 0 {
@@ -195,6 +198,7 @@ func TestDeclareCapitalFNamesThem(t *testing.T) {
 // whether it does so *past a local of the same name* is the axis, with one
 // engine writing the global and the other assigning the local it can see.
 func TestDeclareGlobalReachesPastALocal(t *testing.T) {
+	t.Parallel()
 	src := "x=out\nf() { local x=in; typeset -g x=new; echo in=$x; }\nf\necho out=$x"
 	out, errs, _ := declRun(t, src, func(s *Semantics) {
 		s.DeclareOptions = "aAgiprx"
@@ -232,6 +236,7 @@ func TestDeclareGlobalReachesPastALocal(t *testing.T) {
 // TestCaseAttributesFoldAssignments: `-l` and `-u` are properties of the
 // name, folding the declaring assignment and every later one.
 func TestCaseAttributesFoldAssignments(t *testing.T) {
+	t.Parallel()
 	src := "typeset -l v=ABC\necho $v\nv=DEF\necho $v\ntypeset -u w=abc\necho $w\ntypeset -p v"
 	out, _, _ := declRun(t, src, withDeclareLetters("aAilpurx"), Diagnostics{})
 	for _, want := range []string{"abc\n", "def\n", "ABC\n", "declare -l v=\"def\"\n"} {
@@ -246,6 +251,7 @@ func TestCaseAttributesFoldAssignments(t *testing.T) {
 // not — and the refusal ends the script only where TypesetBadOptionFatal
 // says so.
 func TestDeclareLettersAreTheDialects(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, "typeset -f x\necho after",
 		func(s *Semantics) { s.DeclareOptions = "aAiprx"; s.TypesetBadOptionFatal = No },
 		Diagnostics{UnimplementedOptionLetters: map[string]string{"typeset": "f"}})
@@ -281,6 +287,7 @@ func TestDeclareLettersAreTheDialects(t *testing.T) {
 // substrate gives it a meaning of its own — the function listing — and the
 // field has to take that meaning away rather than merely add silence to it.
 func TestADeclareLetterWithoutEffectIsTakenInSilence(t *testing.T) {
+	t.Parallel()
 	silent := func(s *Semantics) {
 		s.DeclareOptions = "aAfFgiprx"
 		s.DeclareOptionsWithoutEffect = "F"
@@ -311,6 +318,7 @@ func TestADeclareLetterWithoutEffectIsTakenInSilence(t *testing.T) {
 // not turn its command into the bare word, whose listing is a different
 // command entirely — see BareDeclarationListing.
 func TestADeclareLetterWithoutEffectIsStillADeclaration(t *testing.T) {
+	t.Parallel()
 	silent := func(s *Semantics) {
 		s.DeclareOptions = "aAfFgiprx"
 		s.DeclareOptionsWithoutEffect = "F"
@@ -339,6 +347,7 @@ func TestADeclareLetterWithoutEffectIsStillADeclaration(t *testing.T) {
 // this engine does not is still refused in the dialect's words — the loud
 // counterpart, which stays the answer wherever refusing is the smaller lie.
 func TestADeclareLetterOutsideTheSilentSetStillRefuses(t *testing.T) {
+	t.Parallel()
 	_, errs, st := declRun(t, "typeset -E v", func(s *Semantics) {
 		s.DeclareOptions = "aAfFgiprx" // the dialect has `E` and this does not
 		s.DeclareOptionsWithoutEffect = "F"
@@ -356,6 +365,7 @@ func TestADeclareLetterOutsideTheSilentSetStillRefuses(t *testing.T) {
 // disagree about whether a letter exists. DeclareOptions decides that; this
 // one only decides what a letter it already names means.
 func TestASilentLetterTheDialectDoesNotHaveGrantsNothing(t *testing.T) {
+	t.Parallel()
 	_, errs, st := declRun(t, "typeset -F v", func(s *Semantics) {
 		s.DeclareOptions = "aAiprx" // no F
 		s.DeclareOptionsWithoutEffect = "F"

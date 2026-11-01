@@ -188,6 +188,7 @@ func TestTheTerminalIsRememberedOnceItHasBeenSeen(t *testing.T) {
 // terminal, when there is one, wins over it: the same line under a 100-column
 // pseudo-terminal is 100.
 func TestWithNoTerminalTheWindowSizeIsNoughtOrWhatWasInherited(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, env, want string }{
 		{"nothing inherited", "", "[0][0]\n"},
 		{"inherited", "COLUMNS=55", "[55][0]\n"},
@@ -238,6 +239,7 @@ func TestTheScreenSizeIsTheTerminalAndNotWhatAScriptAssigned(t *testing.T) {
 // The second row is the control on the first: a reader that answered 80 by 24
 // unconditionally passes the first and fails this one.
 func TestTheScreenSizeWithNoTerminal(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, env  string
 		rows, cols int
@@ -271,6 +273,7 @@ func TestTheScreenSizeWithNoTerminal(t *testing.T) {
 // A shell that was never given the capability has neither name, which is what
 // keeps this off the five panel columns that do not have the parameters.
 func TestWithoutTheCapabilityNeitherNameExists(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `echo "[${COLUMNS-UNSET}][${LINES-UNSET}]"`, nil)
 	if want := "[UNSET][UNSET]\n"; out != want {
 		t.Errorf("got %q, want %q — only the dialect that asks for these has them", out, want)

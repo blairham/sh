@@ -20,6 +20,7 @@ import (
 // The write side: yes puts back what the target's expansion wrote, no leaves
 // it.
 func TestASubshellsTargetExpandingInTheSubshellConfinesTheWrite(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		answer Answer
 		want   string
@@ -42,6 +43,7 @@ func TestASubshellsTargetExpandingInTheSubshellConfinesTheWrite(t *testing.T) {
 // expansion that happened inside the parentheses costs the parentheses, and
 // one that happened here costs the shell.
 func TestASubshellsTargetExpandingInTheSubshellDecidesWhatAFailureCosts(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		answer    Answer
 		wantAlive bool
@@ -72,6 +74,7 @@ func TestASubshellsTargetExpandingInTheSubshellDecidesWhatAFailureCosts(t *testi
 // redirection's own line deliberately — one on a line of its own cannot tell
 // a failure that gave up the line from one that gave up the command.
 func TestASubshellsFailedTargetReachesNoFurtherThanTheParentheses(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.RedirectTargetOnASubshellExpandsInTheSubshell = Yes
 	t.Run("the rest of the line runs", func(t *testing.T) {
@@ -94,6 +97,7 @@ func TestASubshellsFailedTargetReachesNoFurtherThanTheParentheses(t *testing.T) 
 // redirection. A single field cannot produce this table, which is the whole
 // reason there are two.
 func TestTheSubshellsTargetAndACommandsAreSeparateAxes(t *testing.T) {
+	t.Parallel()
 	const src = "unset u\n%s > \"${u:=made}\"\nprintf 'u=%%s' \"${u-UNSET}\""
 	for _, tc := range []struct {
 		name            string
@@ -122,6 +126,7 @@ func TestTheSubshellsTargetAndACommandsAreSeparateAxes(t *testing.T) {
 // throughout and the group keeps its write, because this shell runs a group
 // itself and there is nowhere else for the write to have gone.
 func TestTheSubshellAxisLeavesAGroupAlone(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.RedirectTargetOnASubshellExpandsInTheSubshell = Yes
 	for _, tc := range []struct{ name, cmd string }{
@@ -141,6 +146,7 @@ func TestTheSubshellAxisLeavesAGroupAlone(t *testing.T) {
 // The parentheses reach wherever they are written, which is what a rule keyed
 // on the *statement* rather than on the construct would lose.
 func TestTheSubshellAxisReachesANestedAndACalledSubshell(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.RedirectTargetOnASubshellExpandsInTheSubshell = Yes
 	for _, tc := range []struct{ name, src string }{
@@ -162,6 +168,7 @@ func TestTheSubshellAxisReachesANestedAndACalledSubshell(t *testing.T) {
 // A subshell aimed at a plain name asks nothing, so an unanswered dialect can
 // still run one — the rule every axis in this seam is asked by.
 func TestAQuietSubshellTargetAsksNothing(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.RedirectTargetOnASubshellExpandsInTheSubshell = Unspecified
 	out, st := run(t, `v=f; ( echo hi ) > "$v"; cat f`, withSem(sem))
@@ -172,6 +179,7 @@ func TestAQuietSubshellTargetAsksNothing(t *testing.T) {
 
 // And one that writes refuses rather than guessing.
 func TestAnUnansweredSubshellTargetThatWritesIsRefused(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	sem.RedirectTargetOnASubshellExpandsInTheSubshell = Unspecified
 	out, _ := run(t, "unset u\n( printf CAME-HERE ) > \"${u:=made}\"", withSem(sem))

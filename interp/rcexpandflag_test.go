@@ -56,6 +56,7 @@ func runRcExpand(t *testing.T, src string) (string, int) {
 //
 // Every row is a measurement on zsh 5.9.2, 2026-09-08.
 func TestTheRcExpandFlagDistributesTheWord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"without the flag the text is laid into the elements",
@@ -141,6 +142,7 @@ func TestTheRcExpandFlagDistributesTheWord(t *testing.T) {
 // The order is measured: the open fields are the outer loop and the later
 // expansion varies fastest.
 func TestTheRcExpandFlagCrossesTwoExpansions(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`a=(1 2); b=(A B); f x${^a}-${^b}y`, `4:[x1-Ay][x1-By][x2-Ay][x2-By]`},
 		{`a=(1 2); f ${^a}z${^a}`, `4:[1z1][1z2][2z1][2z2]`},
@@ -173,6 +175,7 @@ func TestTheRcExpandFlagCrossesTwoExpansions(t *testing.T) {
 // wrong, which is why this test exists rather than the rule being carried
 // across from `${~spec}`.
 func TestTheRcExpandFlagSpreadsWhateverFieldsItWasGiven(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`a=(1 2); f "x${^a}y"`, `1:[x1 2y]`},
 		{`a=(1 2); f x"${^a}"y`, `1:[x1 2y]`},
@@ -203,6 +206,7 @@ func TestTheRcExpandFlagSpreadsWhateverFieldsItWasGiven(t *testing.T) {
 // The count is parity and not a toggle, which is what `${^^name}` exists to
 // say — the same arithmetic the tilde and split flags keep.
 func TestTheRcExpandFlagDoubledTurnsItOff(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`a=(1 2); f x${^a}y`, `2:[x1y][x2y]`},
 		{`a=(1 2); f x${^^a}y`, `2:[x1][2y]`},
@@ -221,6 +225,7 @@ func TestTheRcExpandFlagDoubledTurnsItOff(t *testing.T) {
 // flag group. A join leaves one value and the distribution then has one thing
 // to distribute; a split leaves several and it has several.
 func TestTheRcExpandFlagRunsOnWhatTheSpanCameTo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`a=(1 2); f x${(U)^a}y`, `2:[x1y][x2y]`},
 		{`a=(c a b); f x${(o)^a}y`, `3:[xay][xby][xcy]`},
@@ -248,6 +253,7 @@ func TestTheRcExpandFlagRunsOnWhatTheSpanCameTo(t *testing.T) {
 // word to produce more than once: an assignment's value and a `case` subject
 // are the elements joined, exactly as they are without the flag.
 func TestTheRcExpandFlagNeedsAWordToDistribute(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`a=(1 2); v=x${^a}y; f "$v"`, `1:[x1 2y]`},
 		{`a=(1 2); case x${^a}y in "x1 2y") printf joined;; x1y) printf first;; esac`, `joined`},

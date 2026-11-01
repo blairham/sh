@@ -51,6 +51,7 @@ func widthAcrossRun(t *testing.T, src string, z DeclareZeroFillLetterPolicy) (st
 // declaration simply replaces the first, which is what the right-hand column
 // of every row says.
 func TestASecondWidthLetterJoinsOrReplaces(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		zero                   DeclareZeroFillLetterPolicy
 		lThenZ, zThenL, narrow string
@@ -81,6 +82,7 @@ func TestASecondWidthLetterJoinsOrReplaces(t *testing.T) {
 // leaves the rest standing — and the value comes back through whatever is
 // left, which is the half a listing-only fix would get wrong.
 func TestAPlusFormTakesOffTheLetterItNames(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct{ name, src, want string }{
 		{
 			"the fill goes and the justification stays",
@@ -131,6 +133,7 @@ func TestAPlusFormTakesOffTheLetterItNames(t *testing.T) {
 // declaration writing the letter the name already carries replaces rather
 // than accumulating, which is what keeps this about the *pair*.
 func TestWhatTheJoiningAnswerDoesNotReach(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct{ name, src, want string }{
 		{"a right justification replaces a left", `typeset -L5 v=7; typeset -R3 v; printf "[%s]\n" "$v"`, "[  7]\n"},
 		{"and replaces a fill", `typeset -Z5 v=7; typeset -R3 v; printf "[%s]\n" "$v"`, "[  7]\n"},

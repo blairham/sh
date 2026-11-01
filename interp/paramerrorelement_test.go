@@ -48,6 +48,7 @@ func runErrorOperator(t *testing.T, bare Answer, namesArray bool, src string) (s
 // script's `${cfg[port]?port is required}` reported `cfg` and told its reader
 // the wrong thing was missing (#3241).
 func TestTheErrorOperatorNamesTheElementItsSubscriptReached(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an index past the end", `a=(x y z); echo "[${a[9]?m}]"`, "a[9]: m"},
 		{"a name holding nothing at all", `echo "[${nope[1]?m}]"`, "nope[1]: m"},
@@ -71,6 +72,7 @@ func TestTheErrorOperatorNamesTheElementItsSubscriptReached(t *testing.T) {
 // The other answer to the subject: one column writes the array back and drops
 // the brackets, for the colon form that is the only one it reaches.
 func TestTheErrorOperatorCanNameTheArrayInstead(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an index past the end", `a=(x y z); echo "[${a[9]:?m}]"`, "a: m"},
 		{"a name holding nothing at all", `echo "[${nope[1]:?m}]"`, "nope: m"},
@@ -98,6 +100,7 @@ func TestTheErrorOperatorCanNameTheArrayInstead(t *testing.T) {
 // operator off": the subscript that *does* name the bare element refuses, and
 // so does the spelling with no subscript at all.
 func TestTheErrorOperatorCanReachOnlyTheBareElement(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		refused         bool
@@ -129,6 +132,7 @@ func TestTheErrorOperatorCanReachOnlyTheBareElement(t *testing.T) {
 // missing element in every column, including the one that answers this axis
 // yes.
 func TestTheOtherConditionalsStillSeeTheMissingElement(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the default operator", `a=(x y z); echo "[${a[9]-D}]"`, "[D]\n"},
 		{"the alternate operator", `a=(x y z); echo "[${a[9]+S}]"`, "[]\n"},
@@ -166,6 +170,7 @@ func runNounsetSubscript(t *testing.T, length, wholeArray Answer, src string) (s
 // 0, and the second of those is refused in every column that has arrays
 // (#2980).
 func TestTheLengthOfAMissingElementIsAskedOfNounset(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		refused         bool
@@ -217,6 +222,7 @@ func TestTheLengthOfAMissingElementIsAskedOfNounset(t *testing.T) {
 // control: a name that is there and holds no elements is quiet whichever way
 // the axis is answered (#2980).
 func TestAWholeArraySubscriptOnAnAbsentNameIsAskedOfNounset(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		refused         bool
@@ -264,6 +270,7 @@ func TestAWholeArraySubscriptOnAnAbsentNameIsAskedOfNounset(t *testing.T) {
 // — one column writes a sigil at all — so the two wordings this already has
 // are what the spelling chooses between (#3466).
 func TestABracedPositionalIsNamedWithoutItsSigil(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a bare positional", `set -u; echo "[$7]"`, "$7: unbound variable"},
 		{"the braced spelling", `set -u; echo "[${7}]"`, "7: unbound variable"},
@@ -307,6 +314,7 @@ func TestABracedPositionalIsNamedWithoutItsSigil(t *testing.T) {
 // name is still refused, and the same subscript without the `!` is refused
 // too — so this is the indirection's split and not the subscript's (#3242).
 func TestTheNameYieldingIndirectionRefusesOnlyAnAbsentName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		refused         bool

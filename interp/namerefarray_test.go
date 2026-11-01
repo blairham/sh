@@ -40,6 +40,7 @@ func namerefArraySemantics(shape NamerefArrayRefusal) Semantics {
 }
 
 func TestWhereTheArrayRefusalSitsAmongTheOtherTwo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		last      string
@@ -81,6 +82,7 @@ func TestWhereTheArrayRefusalSitsAmongTheOtherTwo(t *testing.T) {
 // reading, which is the whole of the difference between refusing this line
 // and running it.
 func TestWhatCountsAsAnArrayUnderTheTwoReadings(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -a r; v=VEE; typeset -n r=v; echo "st=$? [${r-GONE}]"`
 
 	sem := namerefArraySemantics(NamerefArrayCheckedLastOnTheAttribute)
@@ -126,6 +128,7 @@ func TestWhatCountsAsAnArrayUnderTheTwoReadings(t *testing.T) {
 // attribute alone, so the answer is the same under either shape — and the
 // unanswered field is never reached by it.
 func TestTheValuelessFormRefusesTheAttributeUnderEitherShape(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -a r; typeset -n r; echo "st=$?"`
 	for _, shape := range []NamerefArrayRefusal{
 		NamerefArrayRefusalUnspecified,
@@ -144,6 +147,7 @@ func TestTheValuelessFormRefusesTheAttributeUnderEitherShape(t *testing.T) {
 // lands on an array reaches it: a reference over a scalar, or over a name
 // that holds nothing at all, never asks.
 func TestAnUnansweredArrayRefusalShapeIsRefused(t *testing.T) {
+	t.Parallel()
 	sem := namerefArraySemantics(NamerefArrayRefusalUnspecified)
 	for _, src := range []string{
 		`v=VEE; typeset -n r=v; echo "[$r]"`,
@@ -165,6 +169,7 @@ func TestAnUnansweredArrayRefusalShapeIsRefused(t *testing.T) {
 // its elements, and still reads its first one — and `unset -n` finds no
 // reference to take off.
 func TestARefusedArrayDeclarationDisturbsNothing(t *testing.T) {
+	t.Parallel()
 	sem := namerefArraySemantics(NamerefArrayCheckedLastOnTheAttribute)
 	const src = `r=(a b c); v=VEE; typeset -n r=v; unset -n r; echo "[${r-GONE}] n=${#r[@]} one=${r[1]}"`
 	out, _ := run(t, src, func(r *Runner) { r.Semantics = &sem })
@@ -177,6 +182,7 @@ func TestARefusedArrayDeclarationDisturbsNothing(t *testing.T) {
 // with the value rather than surviving under the reference: ksh93's own
 // listing writes no `-a` afterwards, and `unset -n` opens an empty cell.
 func TestATakenDeclarationDiscardsTheBareAttribute(t *testing.T) {
+	t.Parallel()
 	sem := namerefArraySemantics(NamerefArrayCheckedFirstOnTheContents)
 	const src = `typeset -a r; v=VEE; typeset -n r=v; unset -n r; echo "[${r-GONE}] n=${#r[@]}"`
 	out, _ := run(t, src, func(r *Runner) { r.Semantics = &sem })

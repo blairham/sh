@@ -19,6 +19,7 @@ import (
 // `$#` of 2 and every argument after the gap moved up one, so the script kept
 // running with everything off by one.
 func TestAQuotedGapIsOneField(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(x); a[5]=y; set -- "${a[0]}" "${a[1]}" "${a[5]}"; echo "n=$#"`, "n=3"},
 		// Where the empty field lands, which a count alone cannot say.
@@ -46,6 +47,7 @@ func TestAQuotedGapIsOneField(t *testing.T) {
 // The other side, and the reason the rule is about quoting rather than about
 // arrays: unquoted, an empty expansion is no field at all.
 func TestAnUnquotedGapIsNoField(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(x); a[5]=y; set -- ${a[0]} ${a[1]} ${a[5]}; echo "n=$#"`, "n=2"},
 		{`set -- ${b[3]}; echo "n=$#"`, "n=0"},
@@ -60,6 +62,7 @@ func TestAnUnquotedGapIsNoField(t *testing.T) {
 // different question, and the only one of the group a dialect answers. Asking
 // that axis about a single subscript is what made a gap disappear.
 func TestAQuotedAtOnAnAbsentNameIsTheAxisAlone(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		one  Answer
@@ -118,6 +121,7 @@ func TestAQuotedAtOnAnAbsentNameIsTheAxisAlone(t *testing.T) {
 // `disable` or an `alias -g` fills them, so the dialect that answers yes
 // would hand every read of one a field it has not got.
 func TestAProducedArrayWithNothingToProduceIsNoField(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Yes, No} {
 		out, _ := runGrammar(t, `set -- "${produced[@]}"; echo "n=$#"`, nil, func(r *Runner) {
 			sem := *r.Semantics

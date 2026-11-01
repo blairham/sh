@@ -24,6 +24,7 @@ import (
 // TestDollarSingleAxesAreAskedOnlyWhereTheyDecide with the rest of the
 // refusals.
 func TestDollarSingleDecodesItsEscapes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`printf '%s' $'a\tb'`, "a\tb"},
 		{`printf '%s' $'x\ny'`, "x\ny"},
@@ -45,6 +46,7 @@ func TestDollarSingleDecodesItsEscapes(t *testing.T) {
 // `+=` appends, and appends to the *end* of an array rather than to its first
 // element — the same spelling doing two different things.
 func TestAppendAssignment(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a scalar", `x=a; x+=b; echo "$x"`, "ab\n"},
 		{"an unset scalar", `x+=first; echo "[$x]"`, "[first]\n"},
@@ -63,6 +65,7 @@ func TestAppendAssignment(t *testing.T) {
 
 // `[*]` joins and `[@]` does not, and the subscript is not a pattern.
 func TestArraySubscriptStarJoins(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"star joins", `a=(one two); echo "[${a[*]}]"`, "[one two]\n"},
 		{"at does not", `a=(one two); echo "[${a[@]}]"`, "[one two]\n"},
@@ -86,6 +89,7 @@ func TestArraySubscriptStarJoins(t *testing.T) {
 // A C-style `for` iterates on a condition, and an *omitted* condition is
 // true — `for ((;;))` is the endless loop, not one that never runs.
 func TestCStyleFor(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"counting up", `for ((i=0;i<3;i++)); do printf "%s" "$i"; done`, "012"},
 		{"counting down", `for ((i=3;i>0;i--)); do printf "%s" "$i"; done`, "321"},
@@ -118,6 +122,7 @@ func TestCStyleFor(t *testing.T) {
 // loop rather than a group in the way, and the whole thing is still one
 // command that a function body or a pipeline can hold.
 func TestAForLoopWithABraceBody(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"counting up", `for ((i=0;i<3;i=i+1)) { printf "%s" "$i"; }`, "012"},
 		{"break leaves it", `for ((i=0;i<9;i=i+1)) { [ "$i" -eq 2 ] && break; printf "%s" "$i"; }`, "01"},
@@ -142,6 +147,7 @@ func TestAForLoopWithABraceBody(t *testing.T) {
 // A subscript that is *not* a plain literal still expands, which is the half
 // the fix had to keep: only `@` and `*` are read as written.
 func TestComputedSubscriptStillExpands(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	sem.ArrayBaseIsZero = Yes
 	out, _ := run(t, `a=(x y z); i=1; echo "[${a[$i]}]"`, func(r *Runner) { r.Semantics = &sem })

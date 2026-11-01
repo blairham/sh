@@ -14,6 +14,7 @@ import (
 // bare read, and fc — each named by axis or diagnostic value.
 
 func TestSetOListsInTheDialectsColumns(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `set -e; set -o`, func(r *Runner) {
 		dg := Diagnostics{OptionListingHeader: "Current option settings", OptionListingWidth: 16}
 		r.Diagnostics = &dg
@@ -83,6 +84,7 @@ func TestKillListingShapes(t *testing.T) {
 // testcomparison_test.go; what is kept here is the answer the axis it replaced
 // was written for.
 func TestIntegerRefusalCanBeSilent(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `[ a -eq 1 ]`, func(r *Runner) {
 		sem := CoreSemantics()
 		sem.TestBuiltinComparisonOperandsAreArithmetic = Yes
@@ -94,6 +96,7 @@ func TestIntegerRefusalCanBeSilent(t *testing.T) {
 }
 
 func TestABareReadCanRequireAName(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `read`, func(r *Runner) {
 		sem := CoreSemantics()
 		sem.ReadRequiresAVariableName = Yes
@@ -107,6 +110,7 @@ func TestABareReadCanRequireAName(t *testing.T) {
 }
 
 func TestFcAnswersFromItsEmptyHistory(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `fc -l`, nil)
 	if st != 0 || out != "" {
 		t.Errorf("out=%q st=%d, want silence at 0", out, st)

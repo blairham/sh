@@ -36,6 +36,7 @@ func runOverflow(t *testing.T, src string, keepPoint bool, zero Answer) (string,
 }
 
 func TestAFloatNumeralTooLargeForADouble(t *testing.T) {
+	t.Parallel()
 	t.Run("the saturating reading keeps the infinity the reader produced", func(t *testing.T) {
 		// The value and the out-of-range report arrive together, and taking
 		// the report alone is what refused the numeral.
@@ -130,6 +131,7 @@ func TestAFloatNumeralTooLargeForADouble(t *testing.T) {
 // denormal, `$(( -0.0 ))` is `-0`, and `printf '[%f][%f]' 1e400 -1e400` is
 // `[-0.000000][0.000000]` in silence.
 func TestAFloatNumeralOutOfRangeIsLostEverywhereTheReaderIs(t *testing.T) {
+	t.Parallel()
 	carried := func(zero Answer) func(*Runner) {
 		return func(r *Runner) {
 			s := testSemantics()

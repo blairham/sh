@@ -18,6 +18,7 @@ import (
 // one that read the name and got it wrong. Together they say the name was
 // looked up and its value is what was compared.
 func TestAComparisonOperandIsAnExpression(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -68,6 +69,7 @@ func TestAComparisonOperandIsNotExpandedTwice(t *testing.T) {
 // the rest of the input, and nothing else: the complaint is written and the
 // status is 1 under either answer.
 func TestAnUnreadableComparisonOperandStopsTheInputOnlyWhenItIsFatal(t *testing.T) {
+	t.Parallel()
 	const src = `echo one; [[ 1+ -eq 0 ]]; echo two st=$?`
 
 	sem := PosixSemantics()

@@ -20,6 +20,7 @@ import (
 // knob reads them and puts the vector's own back.
 
 func TestPosixModeTakesTheDotNoOperandAxisFromTheVector(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name              string
 		own, inMode, want Answer
@@ -63,6 +64,7 @@ func TestPosixModeTakesTheDotNoOperandAxisFromTheVector(t *testing.T) {
 // fatal, and the other way round. Two columns in the panel separate them, so a
 // shell that moved both together would be wrong about one of them in each.
 func TestTheDotAxisAndTheSpecialBuiltinOptionAxisMoveApart(t *testing.T) {
+	t.Parallel()
 	s := permissive()
 	s.DotWithNoOperandIsFatal = No
 	s.DotWithNoOperandIsFatalInPosixMode = Yes
@@ -85,6 +87,7 @@ func TestTheDotAxisAndTheSpecialBuiltinOptionAxisMoveApart(t *testing.T) {
 // mode and the same vector, so what ends the script is this builtin's failure
 // and not the mode being fatal about everything.
 func TestABareDotIsFatalInPosixModeOnlyWhereTheVectorSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		src    string

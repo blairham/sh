@@ -76,6 +76,7 @@ var negationOperandRows = []struct {
 }
 
 func TestANegationBeforeAnOperatorIsReadAsTheStringItIsSpelledWith(t *testing.T) {
+	t.Parallel()
 	for _, tc := range negationOperandRows {
 		t.Run(tc.src, func(t *testing.T) {
 			out, st := run(t, tc.src, negationIsAnOperand(Yes))
@@ -89,6 +90,7 @@ func TestANegationBeforeAnOperatorIsReadAsTheStringItIsSpelledWith(t *testing.T)
 // The other answer over the same rows, which is the mutation: the eleven that
 // are not controls move and the twelve controls do not.
 func TestANegationBeforeAnOperatorNegatesWhereNothingSaysOtherwise(t *testing.T) {
+	t.Parallel()
 	moved := 0
 	for _, tc := range negationOperandRows {
 		out, st := run(t, tc.src, negationIsAnOperand(No))
@@ -118,6 +120,7 @@ func TestANegationBeforeAnOperatorNegatesWhereNothingSaysOtherwise(t *testing.T)
 // across the panel, so asking there would report an unanswered axis over a
 // question nobody disagrees about.
 func TestTheNegationOperandAxisIsAskedOnlyWhereTheColumnsPart(t *testing.T) {
+	t.Parallel()
 	for _, tc := range negationOperandRows {
 		out, _ := run(t, tc.src, negationIsAnOperand(Unspecified))
 		refused := containsRefusal(out)

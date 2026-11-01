@@ -27,6 +27,7 @@ import (
 // and the reason — so the assertion is about the *extent* and not about which
 // shell writes which sentence.
 func TestASubscriptFailureIsBlamedOnTheSubscript(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want, why string }{
 		{
 			"a name nothing declared",
@@ -64,6 +65,7 @@ func TestASubscriptFailureIsBlamedOnTheSubscript(t *testing.T) {
 // The control the rule above needs: an expression that is not a subscript is
 // still blamed as a whole, so nothing here narrows a complaint that was right.
 func TestAnExpressionOutsideBracketsIsStillBlamedWhole(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The blanks are kept, which is what says the text is the
 		// expression as written and not a trimmed copy of it — the
@@ -115,6 +117,7 @@ func runForArithBlame(t *testing.T, src string) string {
 // never reach this, which is why the substrate's own wording — the one that
 // does name the operator — has to stay reachable.
 func TestAnIncrementOnSomethingThatCannotBeAssignedTo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, wording, want string }{
 		{"the dialect's own sentence", `echo $(( 1++ ))`, "requires a place", "requires a place"},
 		{"the decrement too", `echo $(( 1-- ))`, "requires a place", "requires a place"},
@@ -133,6 +136,7 @@ func TestAnIncrementOnSomethingThatCannotBeAssignedTo(t *testing.T) {
 
 // The control: an operand that *is* a place still increments in silence.
 func TestAnIncrementOnAPlaceIsStillTaken(t *testing.T) {
+	t.Parallel()
 	out := runForIncrementBlame(t, "requires a place", `v=1; echo $(( v++ )); echo "[$v]"`)
 	if want := "1\n[2]\n"; out != want {
 		t.Errorf("got %q, want %q", out, want)

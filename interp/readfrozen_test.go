@@ -34,6 +34,7 @@ func frozenReadRun(t *testing.T, src string, set func(*Semantics)) (string, int)
 }
 
 func TestAFrozenReadNameReportsAndLetsTheLineRun(t *testing.T) {
+	t.Parallel()
 	const src = `a=A; readonly a; printf 'x\n' | { read a; echo "st=$?"; printf '[%s]\n' "$a"; }; echo tail`
 	out, st := frozenReadRun(t, src, nil)
 	if st != 0 {
@@ -82,6 +83,7 @@ func TestAFrozenReadNameStopsTheBuiltinWhereTheDialectSaysSo(t *testing.T) {
 // The status, which is a second measurement and not a restatement of the
 // stop: the three columns that stop do not agree about it.
 func TestAFrozenReadNameStatusCountsWhatWasLeft(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		last      Answer
@@ -119,6 +121,7 @@ func TestAFrozenReadNameStatusCountsWhatWasLeft(t *testing.T) {
 // The fatal column, which is asked before either axis above and so reaches
 // neither.
 func TestAFrozenReadNameEndsTheScriptWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	out, st := frozenReadRun(t,
 		`a=A; readonly a; read a <<'EOT'
 x
@@ -135,6 +138,7 @@ echo reached`,
 
 // The wording, and the one column that calls it a warning.
 func TestAFrozenReadNameCanBeWordedAsAWarning(t *testing.T) {
+	t.Parallel()
 	const src = `a=A; readonly a; printf 'x\n' | { read a; echo "st=$?"; }`
 	out, _ := run(t, src, func(r *Runner) {
 		sem := permissive()
@@ -173,6 +177,7 @@ func TestAFrozenReadNameCanBeWordedAsAWarning(t *testing.T) {
 // A subscripted operand is refused by its array's freeze and named by it,
 // which is the name the store would have landed on.
 func TestAFrozenArrayRefusesASubscriptedReadOperand(t *testing.T) {
+	t.Parallel()
 	out, _ := frozenReadRun(t,
 		`a=1; readonly a; printf 'v\n' | { read 'a[0]'; echo "st=$?"; }; echo tail`,
 		nil)
@@ -193,6 +198,7 @@ func TestAFrozenArrayRefusesASubscriptedReadOperand(t *testing.T) {
 
 // An axis nothing answered refuses rather than taking a side.
 func TestAFrozenReadNameWithNoAnswerRefuses(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `a=A; readonly a; printf 'x\n' | { read a; echo "st=$?"; }`, func(r *Runner) {
 		sem := permissive()
 		sem.ReadonlyRefusalInABuiltinIsFatal = No

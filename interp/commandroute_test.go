@@ -38,6 +38,7 @@ func runCommandRoute(t *testing.T, src string, reaches Answer) (string, int) {
 // A write in the target of a redirection on `command <builtin>` comes back
 // where the word reaches the builtin and is lost where it names a program.
 func TestWhoseProcessACommandPrefixedRedirectionIsFor(t *testing.T) {
+	t.Parallel()
 	const src = "unset u\ncommand : > \"${u:=made}\"\nprintf 'u=%s' \"${u-unset}\"\n"
 	if out, _ := runCommandRoute(t, src, Yes); !strings.HasSuffix(out, "u=made") {
 		t.Errorf("reaching the builtin: out = %q, want the write kept", out)
@@ -50,6 +51,7 @@ func TestWhoseProcessACommandPrefixedRedirectionIsFor(t *testing.T) {
 // And the here-document body beside it, which is the same question at the
 // other half of the redirection.
 func TestWhoseProcessACommandPrefixedHeredocBodyIsFor(t *testing.T) {
+	t.Parallel()
 	const src = "unset u\ncommand : <<END\n[${u:=made}]\nEND\nprintf 'u=%s' \"${u-unset}\"\n"
 	if out, _ := runCommandRoute(t, src, Yes); !strings.HasSuffix(out, "u=made") {
 		t.Errorf("reaching the builtin: out = %q, want the write kept", out)
@@ -67,6 +69,7 @@ func TestWhoseProcessACommandPrefixedHeredocBodyIsFor(t *testing.T) {
 // utility is for, so "an external command" is not a category this word
 // creates and cannot be the noun.
 func TestAFunctionBehindTheWordTakesTheSameRouteEitherWay(t *testing.T) {
+	t.Parallel()
 	const src = "f() { :; }\nunset u\ncommand f > \"${u:=made}\" 2>/dev/null\nprintf 'u=%s' \"${u-unset}\"\n"
 	for _, a := range []Answer{Yes, No} {
 		if out, _ := runCommandRoute(t, src, a); !strings.HasSuffix(out, "u=unset") {
@@ -80,6 +83,7 @@ func TestAFunctionBehindTheWordTakesTheSameRouteEitherWay(t *testing.T) {
 // `command`. The pair is what makes the two rows above evidence rather than
 // two readings of one fact.
 func TestTheReportingLettersStayInThisShellEitherWay(t *testing.T) {
+	t.Parallel()
 	for _, letter := range []string{"-v", "-V"} {
 		src := "unset u\ncommand " + letter + " : > \"${u:=made}\"\nprintf 'u=%s' \"${u-unset}\"\n"
 		for _, a := range []Answer{Yes, No} {
@@ -94,6 +98,7 @@ func TestTheReportingLettersStayInThisShellEitherWay(t *testing.T) {
 // under both answers, so anything that moved above moved because of the
 // `command` in front of it.
 func TestABareBuiltinIsThisShellsEitherWay(t *testing.T) {
+	t.Parallel()
 	const src = "unset u\n: > \"${u:=made}\"\nprintf 'u=%s' \"${u-unset}\"\n"
 	for _, a := range []Answer{Yes, No} {
 		if out, _ := runCommandRoute(t, src, a); !strings.HasSuffix(out, "u=made") {
@@ -109,6 +114,7 @@ func TestABareBuiltinIsThisShellsEitherWay(t *testing.T) {
 // a program, which is the reference's answer and the reach half of this whole
 // question.
 func TestACommandPrefixedTargetThatExpandsStillOpens(t *testing.T) {
+	t.Parallel()
 	for _, a := range []Answer{Yes, No} {
 		out, st := runCommandRoute(t, "command /bin/echo RAN < /dev/null\nprintf 'st=%d' \"$?\"\n", a)
 		if out != "RAN\nst=0" || st != 0 {
@@ -120,6 +126,7 @@ func TestACommandPrefixedTargetThatExpandsStillOpens(t *testing.T) {
 // And the reach itself, which is the fact the route follows: where the word
 // names a program, a builtin behind it is `not found` at 127 and never runs.
 func TestACommandPrefixedBuiltinIsNotFoundWhereTheWordNamesAProgram(t *testing.T) {
+	t.Parallel()
 	out, _ := runCommandRoute(t, "command : 2>/dev/null\nprintf 'st=%d' \"$?\"\n", No)
 	if out != "st=127" {
 		t.Errorf("out = %q, want st=127", out)
@@ -134,6 +141,7 @@ func TestACommandPrefixedBuiltinIsNotFoundWhereTheWordNamesAProgram(t *testing.T
 // unanswered axis at the route would report it for every such command, and
 // again where the command runs.
 func TestACommandPrefixWithNoRedirectionIsQuiet(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, "command : ; printf 'st=%d' \"$?\"\n", nil, func(r *Runner) {
 		r.Semantics.CommandReachesABuiltin = Yes
 	})

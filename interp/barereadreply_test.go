@@ -27,6 +27,7 @@ func bareRead(t *testing.T, src string, whole interp.Answer) (string, int) {
 // whether that name is an operand like any other — so trimmed the way an
 // operand's value is — or the record as it came.
 func TestABareReadAsksWhatItsDefaultNameHolds(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, trimmed, whole string }{
 		{
 			"whitespace at both ends",
@@ -74,6 +75,7 @@ func TestABareReadAsksWhatItsDefaultNameHolds(t *testing.T) {
 // only where the trim would take something off, so `while read; do` under an
 // unanswered vector runs without a word.
 func TestABareReadOnAnOrdinaryRecordAsksNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"nothing to trim",

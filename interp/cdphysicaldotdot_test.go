@@ -51,6 +51,7 @@ func dotDotTree(t *testing.T) string {
 }
 
 func TestPhysicalCdTakesADotDotOffWhereThePathIs(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			// The row that was wrong. A lexical clean makes this `sub`;
@@ -151,6 +152,7 @@ func TestPhysicalCdTakesADotDotOffWhereThePathIs(t *testing.T) {
 // it at all, and a symbolic-link cycle, both of which the walk gives up on
 // and both of which the kernel then explains in the dialect's own words.
 func TestAPhysicalCdThatCannotResolveIsTheOrdinaryFailure(t *testing.T) {
+	t.Parallel()
 	root := dotDotTree(t)
 	if err := os.Symlink("loop", filepath.Join(root, "loop")); err != nil {
 		t.Fatal(err)
@@ -187,6 +189,7 @@ func TestAPhysicalCdThatCannotResolveIsTheOrdinaryFailure(t *testing.T) {
 // nothing. A switch hoisted to the top of the builtin would make every `cd`
 // in every test print "the shells disagree here".
 func TestAnOrdinaryCdAsksNothing(t *testing.T) {
+	t.Parallel()
 	root := dotDotTree(t)
 	for _, src := range []string{
 		"cd real && pwd",

@@ -44,6 +44,7 @@ func runFloat(t *testing.T, src string, digits int, keepPoint bool, refuse Answe
 // An expression is integer until a float enters it, which is what keeps `3/2`
 // answering 1 in a shell that has floats.
 func TestAFloatIsWhatMakesAnExpressionFloat(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`echo $((3/2))`, "1"},
 		{`echo $((3.0/2))`, "1.5"},
@@ -81,6 +82,7 @@ func TestAFloatIsWhatMakesAnExpressionFloat(t *testing.T) {
 
 // The assignment leaves the float behind and not its truncation.
 func TestAFloatAssignmentOutlivesTheExpression(t *testing.T) {
+	t.Parallel()
 	if got, want := runFloat(t, `i=0; echo $((i+=1.5)); echo "[$i]"`, 17, false, No), "1.5\n[1.5]"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -89,6 +91,7 @@ func TestAFloatAssignmentOutlivesTheExpression(t *testing.T) {
 // How many digits a float shows, and whether a whole one keeps its point, are
 // both the dialect's — the same arithmetic reads differently.
 func TestFloatFormattingIsTheDialects(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name      string
 		digits    int
@@ -116,6 +119,7 @@ func TestFloatFormattingIsTheDialects(t *testing.T) {
 
 // What an operator defined on integers does with a float.
 func TestArithIntegerOperatorRefusesFloatIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		a    Answer
@@ -158,6 +162,7 @@ func TestArithIntegerOperatorRefusesFloatIsAnAxis(t *testing.T) {
 // Without the grammar there are no floats at all, and the same text is a bad
 // operand rather than a number. One question, asked where each half needs it.
 func TestWithoutTheGrammarThereAreNoFloats(t *testing.T) {
+	t.Parallel()
 	// The flag gates the *expression*, read where the interpreter reads it:
 	// no shell in the panel refuses a file for an expression it cannot read
 	// (#865), and bash reports `1.5` when the command runs.
@@ -193,6 +198,7 @@ func TestWithoutTheGrammarThereAreNoFloats(t *testing.T) {
 // could ever pass one — the lengths, statuses and process ids it also serves
 // are never below zero.
 func TestANegativeResultIsWritten(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`echo $((2-7))`, "-5"},
 		{`echo $((0-5))`, "-5"},

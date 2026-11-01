@@ -31,6 +31,7 @@ import (
 // special builtin is fatal where the shell is in that mode — the fatality the
 // refusal machinery already carries, not a second question here.
 func TestHowMuchOfADashWordEvalReads(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name    string
 		reading EvalOptionReading
@@ -84,6 +85,7 @@ func TestHowMuchOfADashWordEvalReads(t *testing.T) {
 // the text, and the text runs it as a command. Measured — a reading that ate
 // it would have made `eval - -- echo hi` run `echo hi`, and no column does.
 func TestALoneDashIsNotEvalsMarker(t *testing.T) {
+	t.Parallel()
 	for _, reading := range []EvalOptionReading{
 		EvalReadsOptions, EvalTakesTheEndMarkerOnly, EvalReadsNoOptions,
 	} {
@@ -100,6 +102,7 @@ func TestALoneDashIsNotEvalsMarker(t *testing.T) {
 // `eval` reports. Measured on bash 5.3.20, bash 3.2.57, zsh 5.9.2 and ksh93u+
 // — every column that reads the marker at all.
 func TestEvalWithNothingLeftAfterTheMarker(t *testing.T) {
+	t.Parallel()
 	for _, reading := range []EvalOptionReading{EvalReadsOptions, EvalTakesTheEndMarkerOnly} {
 		t.Run(reading.String(), func(t *testing.T) {
 			out, st := evalOptRun(t, "false\neval --\n", reading)
@@ -114,6 +117,7 @@ func TestEvalWithNothingLeftAfterTheMarker(t *testing.T) {
 // answer runs every `eval` that is not the disagreement, and refuses only the
 // shape the panel splits over.
 func TestAnUnansweredPresetOnlyRefusesADashWord(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name    string
 		src     string

@@ -30,6 +30,7 @@ import (
 // it: every dialect matches its own reference on all six shapes once no arm
 // runs.
 func TestAFailedExpansionInACaseRunsNoArm(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a bad substitution in the subject", `p="a*"; case ${p@@@x} in a*) printf hit;; *) printf miss;; esac`},
 		{"a bad substitution in a pattern", `p="a*"; case abc in ${p@@@x}) printf hit;; *) printf miss;; esac`},
@@ -69,6 +70,7 @@ func TestAFailedExpansionInACaseRunsNoArm(t *testing.T) {
 // the arms still run. The guard above is a refusal, and a refusal that fires
 // on the ordinary path would be the more expensive mistake.
 func TestACaseWhoseSubjectExpandsStillChoosesItsArm(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the matching arm runs", `p=abc; case $p in a*) printf hit;; *) printf miss;; esac`, "hit"},
 		{"a later arm runs", `p=zzz; case $p in a*) printf hit;; *) printf miss;; esac`, "miss"},
@@ -94,6 +96,7 @@ func TestACaseWhoseSubjectExpandsStillChoosesItsArm(t *testing.T) {
 // again, and its result was consumed as a bare bool. Without this a
 // `;;&` chain walked straight past a pattern the shell had just diagnosed.
 func TestAFailedPatternStopsTheRematchingLoop(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		// The arithmetic shape is the one that has to be here. A `set -u`
 		// failure raises a fatal error of its own, so control flow stops the
@@ -136,6 +139,7 @@ func TestAFailedPatternStopsTheRematchingLoop(t *testing.T) {
 // `[` as a pattern is the axis: it is the name of the test builtin and the
 // core has no answer for an unterminated bracket.
 func TestAnUnansweredPatternStopsTheRematchingLoop(t *testing.T) {
+	t.Parallel()
 	out, st := runExtendedSem(t, `case x in x) printf one;;& [) printf two;;& *) printf three;; esac`, CoreSemantics())
 	if !strings.HasPrefix(out, "one") {
 		t.Errorf("out = %q, want the first arm to have run", out)

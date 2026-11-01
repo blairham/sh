@@ -16,6 +16,7 @@ import (
 // of their own. A test naming only tab, newline and escape would pass for
 // an implementation that wrote `\v`, `\f` and `\r`.
 func TestTheVisibleFlagSpellsEveryControlCharacterAsZshDoes(t *testing.T) {
+	t.Parallel()
 	for c := 1; c <= 31; c++ {
 		want := fmt.Sprintf("a^%cb", c^0x40)
 		switch c {
@@ -38,6 +39,7 @@ func TestTheVisibleFlagSpellsEveryControlCharacterAsZshDoes(t *testing.T) {
 // touched — every byte this rewrites is below \x80 and every byte of one of
 // those is above it.
 func TestTheVisibleFlagLeavesTextAlone(t *testing.T) {
+	t.Parallel()
 	for _, s := range []string{"", "abc", `a\b`, `a\\b`, "héllo", "日本語", "a%F{red}b"} {
 		if got := visibleText(s); got != s {
 			t.Errorf("visibleText(%q) = %q, want it unchanged", s, got)

@@ -26,6 +26,7 @@ func aliasSeparator(yes Answer) func(*Semantics) {
 
 // TestASeparatorEndsTheAliasLookup is the dialect whose separator does.
 func TestASeparatorEndsTheAliasLookup(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"a name the table has not got is not reported",
@@ -78,6 +79,7 @@ func TestASeparatorEndsTheAliasLookup(t *testing.T) {
 // other four columns give, where `--` ends the options and the operand behind
 // it is looked up exactly as one written without it.
 func TestASeparatorOnlyEndsTheOptions(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"a name the table has not got is reported",
@@ -128,6 +130,7 @@ func TestASeparatorOnlyEndsTheOptions(t *testing.T) {
 // reading of an operand as a *question*, leaving the naming behind it —
 // which is what the separator rows already said.
 func TestAnOptionLetterEndsTheAliasLookupToo(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"the prefixed listing of a name it has",

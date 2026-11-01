@@ -44,6 +44,7 @@ func declarationRefusalStatus(t *testing.T, src string, keeps Answer) int {
 }
 
 func TestAPatternRefusedBehindADeclarationsAssignmentCanLeaveTheStatus(t *testing.T) {
+	t.Parallel()
 	const src = "false; export y=1 nomatch*zz\n"
 	if st := declarationRefusalStatus(t, src, Yes); st != 1 {
 		t.Errorf("%q with the axis on = %d, want the 1 `false` left", src, st)
@@ -56,6 +57,7 @@ func TestAPatternRefusedBehindADeclarationsAssignmentCanLeaveTheStatus(t *testin
 // With the pattern in front of the assignment it is not behind one, and the
 // fatal status is set on either side of the axis.
 func TestAPatternRefusedAheadOfADeclarationsAssignmentSetsTheStatus(t *testing.T) {
+	t.Parallel()
 	const src = "false; export nomatch*zz y=1\n"
 	for _, keeps := range []Answer{Yes, No} {
 		if st := declarationRefusalStatus(t, src, keeps); st != 2 {

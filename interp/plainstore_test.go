@@ -157,6 +157,7 @@ func TestAPlainDeclarationStoreAnswersAsTheFullRoadDoes(t *testing.T) {
 // answered by the shortcut, and the states it must leave to the full road are
 // left to it.
 func TestThePlainScalarStoreIsReached(t *testing.T) {
+	t.Parallel()
 	sem := plainParamVectors()["first element"]
 	var out strings.Builder
 	r := plainParamRunner(t, sem, &out)

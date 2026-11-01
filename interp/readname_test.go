@@ -64,6 +64,7 @@ func readRun(t *testing.T, tweak func(*Semantics), dg Diagnostics, src string) (
 // far the set of names reaches and whether the line is read first are the
 // dialect's.
 func TestAReadOperandThatIsNotANameIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, operand := range []string{"1x", "a-b", "a b", "a.b", "-x", "-u", ""} {
 		src := `printf 'text\n' | { read -- "` + operand + `"; echo "st=$?"; }`
 		out, _ := readRun(t, nil, Diagnostics{}, src)
@@ -79,6 +80,7 @@ func TestAReadOperandThatIsNotANameIsRefused(t *testing.T) {
 // Nothing is assigned to the word that was refused, and nothing is read into
 // the name a caller would go on to use.
 func TestARefusedReadNameIsNotAssignedTo(t *testing.T) {
+	t.Parallel()
 	out, _ := readRun(t, nil, Diagnostics{},
 		`v=keep; printf 'text\n' | { read -- "-u"; echo "st=$? v=[$v] u=[${u-unset}]"; }`)
 	if !strings.Contains(out, "v=[keep]") || !strings.Contains(out, "u=[unset]") {
@@ -93,6 +95,7 @@ func TestARefusedReadNameIsNotAssignedTo(t *testing.T) {
 // panel writes. Each row here is one dialect's sentence as its binary printed
 // it, with the shell's own name normalized to the runner's.
 func TestTheReadRefusalIsTheDialectsWholeSentence(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		dg   Diagnostics
@@ -148,6 +151,7 @@ func TestTheReadRefusalIsTheDialectsWholeSentence(t *testing.T) {
 // dash reports it at 2 where the rest report 1, which is the number that tells
 // this apart from the end of input.
 func TestTheReadRefusalCarriesTheDialectsStatus(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{BuiltinBadNameStatus: 2}
 	if _, st := readRun(t, nil, dg, `read 1bad`); st != 2 {
 		t.Errorf("status = %d, want 2", st)
@@ -160,6 +164,7 @@ func TestTheReadRefusalCarriesTheDialectsStatus(t *testing.T) {
 // What may stand where `read` wants a name is a set of its own: zsh fills
 // `$1` from `read 1` and refuses `export 1`.
 func TestWhatMayStandWhereReadWantsAName(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name    string
 		takes   NameOperands
@@ -185,6 +190,7 @@ func TestWhatMayStandWhereReadWantsAName(t *testing.T) {
 // zsh alone stops the script here, and it is a question about `read` rather
 // than about special builtins — `read` is not one in any shell.
 func TestAReadRefusalEndsTheScriptWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		fatal Answer
 		stops bool
@@ -201,6 +207,7 @@ func TestAReadRefusalEndsTheScriptWhereTheDialectSaysSo(t *testing.T) {
 // only through the input: a refusal that comes first leaves the line for the
 // next reader.
 func TestWhenAReadJudgesItsFirstOperand(t *testing.T) {
+	t.Parallel()
 	src := `printf 'AAA\nBBB\n' | { read 1bad; read next; echo "[$next]"; }`
 	for _, c := range []struct {
 		first Answer
@@ -233,6 +240,7 @@ func TestWhenAReadJudgesItsFirstOperand(t *testing.T) {
 // as they were, and the count the splitter works to is the one the script
 // wrote rather than the truncated one.
 func TestTheNamesInFrontOfABadReadNameAreStillFilled(t *testing.T) {
+	t.Parallel()
 	out, _ := readRun(t, nil, Diagnostics{},
 		`c=keep; printf 'X Y Z\n' | { read a 1bad c; echo "a=[$a] c=[$c]"; }`)
 	// a=[X] and not a=[X Y Z]: the last name takes the remainder of the line
@@ -247,6 +255,7 @@ func TestTheNamesInFrontOfABadReadNameAreStillFilled(t *testing.T) {
 // refused leaves it untouched, and an operand behind a good array name is
 // refused only after the array is filled.
 func TestAReadArrayNameIsJudgedAsAName(t *testing.T) {
+	t.Parallel()
 	out, _ := readRun(t, func(s *Semantics) { s.ReadOptions = "ra:" }, Diagnostics{},
 		`arr=keep; printf 'X Y\n' | { read -a 1bad; echo "st=$? arr=[$arr]"; }`)
 	if !strings.Contains(out, "st=1") || !strings.Contains(out, "arr=[keep]") {
@@ -258,6 +267,7 @@ func TestAReadArrayNameIsJudgedAsAName(t *testing.T) {
 // first operand at a `?` and take the rest as a prompt. A name check that did
 // not know the form would refuse the idiom in both of them.
 func TestReadsFirstOperandMayCarryAPrompt(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		style ReadPromptOperand
@@ -324,6 +334,7 @@ func TestReadsFirstOperandMayCarryAPrompt(t *testing.T) {
 // none of them, which is what keeps an unanswered axis from being reported
 // where a script could not act on it.
 func TestAnUnansweredReadNameAxisIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 		names           NameOperands
@@ -374,6 +385,7 @@ func TestAnUnansweredReadNameAxisIsRefusedByName(t *testing.T) {
 // answer three of the six wrongly — what this shell then does with it is a
 // separate question and this leaves it exactly where it was.
 func TestAReadOperandWithASubscriptIsNotJudgedAsAName(t *testing.T) {
+	t.Parallel()
 	out, st := readRun(t, func(s *Semantics) { s.ReadNameOperands = PlainNamesOnly }, Diagnostics{},
 		`printf 'text\n' | { read "a[0]"; echo "st=$?"; }`)
 	if !strings.Contains(out, "st=0") || st != 0 {
@@ -403,6 +415,7 @@ func TestAReadOperandWithASubscriptIsNotJudgedAsAName(t *testing.T) {
 // `read good 1bad 2bad` is the row that does. Measured — every column that
 // reports names `1bad`, and no column names `2bad`.
 func TestOnlyTheFirstBadReadNameIsReported(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`printf 'X Y\n' | { read 1bad 2bad; echo "st=$?"; }`,
 		`printf 'X Y Z\n' | { read good 1bad 2bad; echo "st=$? good=[$good]"; }`,
@@ -418,6 +431,7 @@ func TestOnlyTheFirstBadReadNameIsReported(t *testing.T) {
 // ksh93 stops. The filling stops at the bad name either way — only the
 // complaint is withheld.
 func TestAReadCountDecidesWhoIsJudgedAfterTheFirstName(t *testing.T) {
+	t.Parallel()
 	src := `printf 'XYZW\n' | { b=keep; read -n 3 a 1bad b; echo "st=$? a=[$a] b=[$b]"; }`
 	for _, c := range []struct {
 		judges Answer
@@ -462,6 +476,7 @@ func TestAReadCountDecidesWhoIsJudgedAfterTheFirstName(t *testing.T) {
 // is about to parse, since standard error and standard output are usually the
 // same file.
 func TestTheReadPromptOperandIsNotWrittenToAPipe(t *testing.T) {
+	t.Parallel()
 	out, _ := readRun(t, func(s *Semantics) { s.ReadPromptOperand = ReadPromptAloneNamesTheDefault },
 		Diagnostics{}, `printf 'text\n' | { read "v?PROMPT-42 "; echo "st=$? v=[$v]"; }`)
 	if strings.Contains(out, "PROMPT-42") {
@@ -478,6 +493,7 @@ func TestTheReadPromptOperandIsNotWrittenToAPipe(t *testing.T) {
 // the two answers of the count axis agreeing about the *list* while they
 // disagree about the complaint.
 func TestAnExactCountStopsFillingAtABadReadName(t *testing.T) {
+	t.Parallel()
 	for _, judges := range []Answer{Yes, No} {
 		out, _ := readRun(t, func(s *Semantics) {
 			s.ReadCountJudgesTheNamesAfterTheFirst = judges
@@ -501,6 +517,7 @@ func TestAnExactCountStopsFillingAtABadReadName(t *testing.T) {
 // its name from among the operands and judges the rest, clearing the ones it
 // filled and stopping at the bad one.
 func TestWhetherAReadArrayIsFilledBehindABadNameRidesTheLetter(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, letters, src, want string }{
 		{
 			"the option's argument names it",
@@ -577,6 +594,7 @@ func TestWhetherAReadArrayIsFilledBehindABadNameRidesTheLetter(t *testing.T) {
 // `{name}` redirection, which writes nothing at all when the position is not
 // there.
 func TestAPositionalOutputOperandFillsThePositionalList(t *testing.T) {
+	t.Parallel()
 	positional := func(s *Semantics) {
 		s.ReadNameOperands = NamesAndPositionals
 		s.PrintfAssignsWithV = Yes
@@ -661,6 +679,7 @@ func TestThePositionalStoreIsGatedOnTheNameSet(t *testing.T) {
 // silence — which was a parameter literally named `0` that no expansion in
 // that dialect reads back.
 func TestAZeroOutputOperandNamesTheFramesDollarZero(t *testing.T) {
+	t.Parallel()
 	positional := func(s *Semantics) {
 		s.ReadNameOperands = NamesAndPositionals
 		s.PrintfAssignsWithV = Yes
@@ -728,6 +747,7 @@ func TestAZeroOutputOperandNamesTheFramesDollarZero(t *testing.T) {
 // TestEveryReadNameJudgedFirst: where ReadJudgesEveryNameBeforeReading says
 // so, a bad name past the first fills nothing and leaves the line.
 func TestEveryReadNameJudgedFirst(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		every Answer
 		want  string

@@ -19,6 +19,7 @@ import (
 // apart — which is why the corpus row that records who *takes* the letter
 // deliberately does not print it (#932).
 func TestUnsetReferenceLetterOnANameThatIsNotOne(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
 		answer Answer
@@ -75,6 +76,7 @@ func TestUnsetReferenceLetterOnANameThatIsNotOne(t *testing.T) {
 // `unset` makes without it: the status comes back and the diagnostic is
 // written, rather than the letter turning the whole call into a no-op.
 func TestUnsetReferenceLetterStillRefusesAReadonly(t *testing.T) {
+	t.Parallel()
 	out, errs := &strings.Builder{}, &strings.Builder{}
 	sem := PosixSemantics()
 	sem.UnsetOptions = "vfn"
@@ -96,6 +98,7 @@ func TestUnsetReferenceLetterStillRefusesAReadonly(t *testing.T) {
 // An unanswered axis refuses rather than guessing, which is what every axis
 // does and what makes leaving one unset a statement rather than an oversight.
 func TestUnsetReferenceLetterUnanswered(t *testing.T) {
+	t.Parallel()
 	out, errs := &strings.Builder{}, &strings.Builder{}
 	sem := PosixSemantics()
 	sem.UnsetOptions = "vfn"

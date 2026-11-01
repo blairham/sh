@@ -19,6 +19,7 @@ import (
 
 // The unevaluable subscript at both builtins.
 func TestARefusedStoreLeavesTheBuiltinsOwnNumber(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"printf", `( printf -v 'a[1/0]' X )`, "next=0"},
 		{"read", `( { read 'a[1/0]'; } <<EOF` + "\nY\nEOF\n)", "next=1"},
@@ -38,6 +39,7 @@ func TestARefusedStoreLeavesTheBuiltinsOwnNumber(t *testing.T) {
 // And the **empty** subscript answers the same way, which is what makes this
 // one field about the builtin rather than one per refusal.
 func TestARefusedEmptySubscriptLeavesTheBuiltinsOwnNumber(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"printf", `( printf -v 'a[]' X )`, "next=0"},
 		{"read", `( { read 'a[]'; } <<EOF` + "\nY\nEOF\n)", "next=1"},
@@ -54,6 +56,7 @@ func TestARefusedEmptySubscriptLeavesTheBuiltinsOwnNumber(t *testing.T) {
 // Answered No, `printf -v` leaves what `read` leaves — so the field moves one
 // builtin and is not a rule about the store.
 func TestARefusedPrintfStoreLeavesOneWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	out, _ := storeRefusalRun(t, No,
 		"a=(1 2 3)\n"+`( printf -v 'a[1/0]' X )`+"\n"+`echo "next=$?"`)
 	if !strings.Contains(out, "next=1") {
@@ -65,6 +68,7 @@ func TestARefusedPrintfStoreLeavesOneWhereTheDialectSaysSo(t *testing.T) {
 // is the same function the declaration's store reads — so `printf -v` does not
 // get a second copy of that rule.
 func TestARefusedPrintfStoresZeroIsRaisedBackLikeAnyOther(t *testing.T) {
+	t.Parallel()
 	out, _ := storeRefusalRun(t, Yes,
 		"a=(1 2 3)\n"+`( printf -v 'a[1/0]' X && echo yes )`+"\n"+`echo "next=$?"`)
 	if !strings.Contains(out, "next=1") {

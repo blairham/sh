@@ -51,6 +51,7 @@ import (
 // word holds a quote. That is Semantics.TildeColonEndsAnOrdinaryWordsPrefix and
 // tildecolonword_test.go, answered in #4251; it is not this one.
 func TestAColonClosesATildePrefixInAnAssignmentsValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a colon straight after the tilde", `foo=~:~; echo "$foo"`, "/h:/h"},
 		{"a colon then ordinary text", `foo=~:x; echo "$foo"`, "/h:x"},
@@ -95,6 +96,7 @@ func TestAColonClosesATildePrefixInAnAssignmentsValue(t *testing.T) {
 // at a slash first is past this and expands however the rest of the word is
 // spelled (#4156).
 func TestAQuoteOrAnExpansionInsideATildePrefixStopsIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a backslash straight after the tilde", `echo ~\chet/bar`, "~chet/bar"},
 		{"a backslash inside the name", `echo ~ch\et/bar`, "~chet/bar"},
@@ -135,6 +137,7 @@ func TestAQuoteOrAnExpansionInsideATildePrefixStopsIt(t *testing.T) {
 // Semantics.AnAssignmentShapedArgumentIsATildeContextOutsidePosixMode, whose
 // yes answer lives beside the dialect that takes it (#4213).
 func TestAnArgumentShapedLikeAnAssignmentKeepsItsTilde(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an argument", `echo make -k FOO=~/mumble`, "make -k FOO=~/mumble"},
 		{"after a colon in one", `echo foo=~:~`, "foo=~:~"},

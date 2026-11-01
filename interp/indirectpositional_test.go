@@ -53,6 +53,7 @@ func runIndirectSource(t *testing.T, src string) (string, int) {
 // two Diagnostics fields rather than a shell: what it holds is that the
 // undeclared wording is not the one a digit reaches.
 func TestAnUnsetPositionalIsNotAnUndeclaredName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		status          int

@@ -44,6 +44,7 @@ func resolveRunner(t *testing.T) (*Runner, string) {
 }
 
 func TestResolveNameAnswersTheKindAndThePath(t *testing.T) {
+	t.Parallel()
 	r, tool := resolveRunner(t)
 	for _, c := range []struct {
 		name string
@@ -66,6 +67,7 @@ func TestResolveNameAnswersTheKindAndThePath(t *testing.T) {
 // The order is the resolution's own, so a name that is several things answers
 // with the one the shell would actually run.
 func TestResolveNameFollowsTheResolutionOrder(t *testing.T) {
+	t.Parallel()
 	r, _ := resolveRunner(t)
 	f, err := syntax.Parse("echo() { :; }\n", syntax.Core())
 	if err != nil {
@@ -97,6 +99,7 @@ func TestResolveNameDoesNotHandOutAReservedBuiltinsFile(t *testing.T) {
 }
 
 func TestNameKindNamesItself(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		kind NameKind
 		want string
@@ -116,6 +119,7 @@ func TestNameKindNamesItself(t *testing.T) {
 // FunctionText is the definition written back, for a builtin that shows a
 // body rather than naming one.
 func TestFunctionTextIsTheDefinition(t *testing.T) {
+	t.Parallel()
 	r, _ := resolveRunner(t)
 	body, ok := r.FunctionText("f")
 	if !ok {
@@ -132,6 +136,7 @@ func TestFunctionTextIsTheDefinition(t *testing.T) {
 // LookPathAll is every hit rather than the first, which is what a listing
 // that shows them all needs.
 func TestLookPathAllListsEveryHit(t *testing.T) {
+	t.Parallel()
 	first, second := t.TempDir(), t.TempDir()
 	for _, dir := range []string{first, second} {
 		if err := testenv.WriteExecutable(filepath.Join(dir, "tool431"), []byte("#!/bin/sh\n"), 0o700); err != nil {

@@ -14,6 +14,7 @@ import (
 )
 
 func TestParameterTrimming(t *testing.T) {
+	t.Parallel()
 	// Doubling the operator selects the longer match; there is no greediness
 	// syntax in the pattern, so the search order is the whole implementation.
 	tests := []struct{ src, want string }{
@@ -35,6 +36,7 @@ func TestParameterTrimming(t *testing.T) {
 }
 
 func TestParameterReplacementAndSubstring(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ src, want string }{
 		{`x=a-b-c; printf "%s" "${x/-/+}"`, "a+b-c"},
 		{`x=a-b-c; printf "%s" "${x//-/+}"`, "a+b+c"},
@@ -78,6 +80,7 @@ func runIn(t *testing.T, dir, src string) string {
 }
 
 func TestPathnameExpansion(t *testing.T) {
+	t.Parallel()
 	dir := globDir(t)
 	tests := []struct{ name, src, want string }{
 		// The restrictions live in the caller, not the matcher: a leading
@@ -110,6 +113,7 @@ func TestPathnameExpansion(t *testing.T) {
 // its fields through the one that does. `x=*` was right all along, which is
 // what kept this hidden: only a *substituted* word reached the matcher.
 func TestASubstitutedWordInsideAnUnmatchedPositionIsNotMatched(t *testing.T) {
+	t.Parallel()
 	dir := globDir(t)
 	for _, tc := range []struct{ src, want string }{
 		{`unset u; p=${u:-*}; printf "[%s]" "$p"`, `[*]`},
@@ -161,6 +165,7 @@ func TestASubstitutedWordInsideAnUnmatchedPositionIsNotMatched(t *testing.T) {
 // and zsh's answer to that is fatal: `bad pattern` at the line, under
 // `LANG=C` and not under `LANG=en_US.UTF-8` (#1500).
 func TestASubstitutedWordKeepsItsQuotingAndIsMatchedWithTheWordAroundIt(t *testing.T) {
+	t.Parallel()
 	dir := globDir(t)
 	// BareBraceNestsInExpansion for the two braced rows, and only for them:
 	// without it the expansion closes at the first `}` and the operand is
@@ -215,6 +220,7 @@ func TestASubstitutedWordKeepsItsQuotingAndIsMatchedWithTheWordAroundIt(t *testi
 // needs a grammar the core does not carry, and because the byte rather than
 // the bracket is what a reader of #1500 will come looking for.
 func TestAnEscapeSequenceInASubstitutedWordIsText(t *testing.T) {
+	t.Parallel()
 	dir := globDir(t)
 	dollarSingle := func(d *syntax.Dialect) { d.DollarSingleQuote = true }
 	for _, tc := range []struct{ name, src, want string }{
@@ -249,6 +255,7 @@ func TestAnEscapeSequenceInASubstitutedWordIsText(t *testing.T) {
 // back as a pattern and zsh does not. That axis is asked elsewhere; this test
 // reads the parameter through quotes so it does not depend on it.
 func TestAnAssigningOperatorStoresTheWordUnmatched(t *testing.T) {
+	t.Parallel()
 	dir := globDir(t)
 	for _, tc := range []struct{ name, src, want string }{
 		{"`:=` stores the text", `unset u; : ${u:=a.[a-c]}; printf "[%s]" "$u"`, `[a.[a-c]]`},
@@ -281,6 +288,7 @@ func TestAnAssigningOperatorStoresTheWordUnmatched(t *testing.T) {
 }
 
 func TestQuotingDecidesWhetherAFieldIsAPattern(t *testing.T) {
+	t.Parallel()
 	// The per-span quoting from tokenization reaching the last stage of the
 	// pipeline. A field has to remember which metacharacters were quoted.
 	dir := globDir(t)
@@ -311,6 +319,7 @@ func TestQuotingDecidesWhetherAFieldIsAPattern(t *testing.T) {
 // join answers `sub/f`. So every row here asserts the whole string rather
 // than a count: a count is satisfied by the wrong paths.
 func TestADotComponentIsJoinedNotMatched(t *testing.T) {
+	t.Parallel()
 	dir := globDir(t)
 	for _, tc := range []struct{ name, src, want string }{
 		// A leading `./`, which is the everyday spelling.
@@ -353,6 +362,7 @@ func TestADotComponentIsJoinedNotMatched(t *testing.T) {
 // period still does not see `.hidden`, and one that writes the period still
 // does — measured that way in all six columns.
 func TestADotComponentDoesNotLiftTheLeadingPeriodRule(t *testing.T) {
+	t.Parallel()
 	dir := globDir(t)
 	for _, tc := range []struct{ name, src, want string }{
 		{"a dot component does not reveal a hidden name", `printf "[%s]" ./*`, `[./a.b][./sub][./vis]`},
@@ -372,6 +382,7 @@ func TestADotComponentDoesNotLiftTheLeadingPeriodRule(t *testing.T) {
 // render: an absolute pattern strips no prefix, so the spelling survives for
 // a different reason and the two need separate evidence.
 func TestAnAbsolutePatternKeepsItsDotComponent(t *testing.T) {
+	t.Parallel()
 	dir := globDir(t)
 	for _, tc := range []struct{ name, pattern, want string }{
 		{"a dot component", `/./su*`, `[<dir>/./sub]`},
@@ -398,6 +409,7 @@ func TestAnAbsolutePatternKeepsItsDotComponent(t *testing.T) {
 // six, not `[/./bin]`. Pinned in a temporary directory rather than at `/`,
 // because what is under the real root is not a fact about this shell.
 func TestABaseWrittenWithATrailingSeparator(t *testing.T) {
+	t.Parallel()
 	dir := globDir(t)
 	for _, tc := range []struct{ name, src, want string }{
 		{"a plain pattern", `printf "[%s]" v*`, `[vis]`},
@@ -423,6 +435,7 @@ func TestABaseWrittenWithATrailingSeparator(t *testing.T) {
 // neighbor. Mutating only appendDescendants back to a cleaning join survived
 // every other test here, which is why this one exists.
 func TestADotComponentSurvivesAStarStarDescent(t *testing.T) {
+	t.Parallel()
 	dir := treeDir(t)
 	for _, tc := range []struct{ name, src, want string }{
 		{"a leading dot", `echo ./**/f`, "./d/e/f ./d/f ./f"},

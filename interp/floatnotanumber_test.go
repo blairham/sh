@@ -19,6 +19,7 @@ import (
 // formatted zero came back. The `1.0/3` rows are the control that says this
 // is not "the float store is wrong": an ordinary float is unaffected.
 func TestAFloatNameHoldsAnInfinityAndANaN(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{ArithInfinity: "Inf", ArithNotANumber: "NaN", ArithFloatDigits: 17}
 	for _, tc := range []struct{ name, src, want string }{
 		{"a NaN", `typeset -F 9 f; (( f = 0.0/0.0 )); echo "$f"`, "NaN"},
@@ -70,6 +71,7 @@ func TestAFloatNameHoldsAnInfinityAndANaN(t *testing.T) {
 // and it is one table for the expression and for the store — a second copy is
 // how the two come to disagree.
 func TestTheNameOfAnInfinityIsTheDialectsAndIsShared(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{ArithInfinity: "infinity", ArithNotANumber: "not-a-number", ArithFloatDigits: 17}
 	for _, tc := range []struct{ name, src, want string }{
 		{"in an expression", `echo "$(( 1.0/0.0 ))"`, "infinity"},
@@ -93,6 +95,7 @@ func TestTheNameOfAnInfinityIsTheDialectsAndIsShared(t *testing.T) {
 // A listing writes those two names in lowercase, where `$name` writes them as
 // the dialect spells them, and writes every other value exactly as it stands.
 func TestAListingLowercasesAnInfinityAndANaN(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{ArithInfinity: "Inf", ArithNotANumber: "NaN", ArithFloatDigits: 17}
 	for _, tc := range []struct{ name, src, want string }{
 		{"an infinity", `typeset -F 3 g; (( g = 1.0/0.0 )); typeset -p g`, `declare -- g="inf"`},

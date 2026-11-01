@@ -35,6 +35,7 @@ func localGlobalLetter(reaches Answer) func(*Semantics) {
 // and the axis decides the same thing under it that it decides under the
 // declaration word.
 func TestTheGlobalLetterOnTheLocalWordTakesNoLocal(t *testing.T) {
+	t.Parallel()
 	const src = "x=out\nf() { local x=in; local -g x=new; echo in=$x; }\nf\necho out=$x"
 
 	out, errs, st := declRun(t, src, localGlobalLetter(Yes), Diagnostics{})
@@ -59,6 +60,7 @@ func TestTheGlobalLetterOnTheLocalWordTakesNoLocal(t *testing.T) {
 // to be written over: with nothing standing on the name the axis is not asked
 // at all, and what the letter declares has to outlive the call.
 func TestTheGlobalLetterOnTheLocalWordSurvivesTheReturn(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, "f() { local -g g1=set; }\nf\necho g=$g1",
 		localGlobalLetter(Yes), Diagnostics{})
 	if errs != "" || st != 0 {
@@ -82,6 +84,7 @@ func TestTheGlobalLetterOnTheLocalWordSurvivesTheReturn(t *testing.T) {
 // operand's own store and not only the scalar one. The route the declaration
 // word needed interp/globaloperand.go for, asked under this word.
 func TestTheGlobalLetterOnTheLocalWordReachesTheLiteralOperand(t *testing.T) {
+	t.Parallel()
 	const src = "q=(9 9)\nf() { local q=(5); local -ga q=(1 2); echo in=${q[*]}; }\nf\necho out=${q[*]}"
 	out, errs, st := declRun(t, src, localGlobalLetter(Yes), Diagnostics{})
 	if errs != "" || st != 0 {
@@ -96,6 +99,7 @@ func TestTheGlobalLetterOnTheLocalWordReachesTheLiteralOperand(t *testing.T) {
 // one that says LocalOptions is what decides: a dialect whose `local` has no
 // such letter must refuse the option rather than silently declare a global.
 func TestAWordWithoutTheGlobalLetterRefusesIt(t *testing.T) {
+	t.Parallel()
 	const src = "x=out\nf() { local -g x=new; }\nf\necho st=$?\necho out=$x"
 	out, errs, _ := declRun(t, src, func(s *Semantics) {
 		globalLetter(Yes)(s)
@@ -116,6 +120,7 @@ func TestAWordWithoutTheGlobalLetterRefusesIt(t *testing.T) {
 // delegation reached ahead of it would make `local -g x=1` legal at the top
 // level.
 func TestTheGlobalLetterIsStillLocalsOwnWordOutsideAFunction(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, "local -g x=new\necho out=[${x-U}]", func(s *Semantics) {
 		localGlobalLetter(Yes)(s)
 		s.LocalOutsideAFunctionIsAnError = Yes

@@ -91,6 +91,7 @@ func TestAFunctionNamedAfterASpecialBuiltinIsRefusedWhereTheDialectSaysSo(t *tes
 // the script never reaches is never refused — which is what says the check is
 // at the definition and not at the parse.
 func TestTheSpecialBuiltinNameIsCheckedWhereTheDefinitionRuns(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, "printf 'a'\nexport() { :; }\nprintf 'b'",
 		refusingSpecialFunctionNames(Yes))
 	if !strings.HasPrefix(out, "a") {

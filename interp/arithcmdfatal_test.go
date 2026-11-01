@@ -20,6 +20,7 @@ import (
 // same pair ArithCommandErrorStatusIsTwo is asserted over: `(( 1+ ))` never
 // reaches the evaluator and `(( 1/0 ))` does.
 func TestAnArithmeticCommandStopsTheInputOnlyWhenItIsFatal(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`echo one; (( 1+ )); echo two`,
 		`echo one; (( 1/0 )); echo two`,
@@ -54,6 +55,7 @@ func TestAnArithmeticCommandStopsTheInputOnlyWhenItIsFatal(t *testing.T) {
 // It is the *expression* and not what the status is read for: the construct
 // standing as a condition is fatal on the same terms.
 func TestAnArithmeticConditionIsFatalOnTheSameTerms(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`echo one; (( 1+ )) && echo yes; echo two`,
 		`echo one; if (( 1+ )); then echo yes; fi; echo two`,
@@ -75,6 +77,7 @@ func TestAnArithmeticConditionIsFatalOnTheSameTerms(t *testing.T) {
 // Marked only as a request to stop, the give-up cost the whole script — the
 // same error one level down as the one interp/source.go is named for.
 func TestAFatalArithmeticFailureEndsTheBorrowedTextAlone(t *testing.T) {
+	t.Parallel()
 	for _, line := range []string{`(( 1+ ))`, `[[ 1+ -eq 0 ]]`} {
 		dir := t.TempDir()
 		script := filepath.Join(dir, "s.sh")
@@ -103,6 +106,7 @@ func TestAFatalArithmeticFailureEndsTheBorrowedTextAlone(t *testing.T) {
 // An unanswered axis is refused by name, and only a failing expression reaches
 // it: one that evaluates cleanly never asks.
 func TestAnUnansweredArithmeticCommandFatalityIsRefused(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	sem.ArithCommandErrorIsFatal = Unspecified
 	if out, _ := run(t, `(( 2 )); echo "ok=$?"`, func(r *Runner) { r.Semantics = &sem }); out != "ok=0\n" {

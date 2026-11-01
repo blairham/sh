@@ -17,6 +17,7 @@ import "testing"
 // Measured on zsh 5.9.2, 2026-09-25, the one grammar in the panel with the
 // construct. #4452.
 func TestTheNewlineJoinFlagJoinsOnNewlines(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The two shapes the issue names. The positional one is the shape a
 		// script actually walks into and goes through a different base than
@@ -77,6 +78,7 @@ const newlineFixture = "nl='\n'; "
 // order it could pick is wrong in one of these four rows. Measured on zsh
 // 5.9.2, 2026-09-25.
 func TestTheLastJoinLetterWrittenNamesTheSeparator(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a j behind an F takes the newline away", `a=(x y z); printf "[%s]" "${(Fj:-:)a}"`, "[x-y-z]"},
 		{"an F behind a j puts it back", `a=(x y z); printf "[%s]" "${(j:-:F)a}"`, "[x\ny\nz]"},
@@ -101,6 +103,7 @@ func TestTheLastJoinLetterWrittenNamesTheSeparator(t *testing.T) {
 // which letter was written last. Measured on zsh 5.9.2, 2026-09-25, with
 // `a=(abc de f)`: six characters of word and two separators.
 func TestTheCharacterCountReadsTheNewlineJoinSeparator(t *testing.T) {
+	t.Parallel()
 	const a = `a=(abc de f); `
 	for _, tc := range []struct{ name, src, want string }{
 		{"no join letter counts a space", a + `printf "[%s]" "${(c)#a}"`, "[8]"},

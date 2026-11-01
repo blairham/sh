@@ -37,6 +37,7 @@ func readArrayRun(t *testing.T, src string) (string, int) {
 // never written and nothing said so. Measured 2026-09-17 on bash 5.3.20:
 // bash refuses the name and writes nothing, at 1, with no `A` afterwards.
 func TestTheArrayLetterTakesAPlainNameWhereAnOperandTakesASubscript(t *testing.T) {
+	t.Parallel()
 	out, _ := readArrayRun(t, `read -a 'A[0]' <<< "x y"; echo "st=$?"
 echo "[${A[*]-GONE}]"`)
 	if !strings.Contains(out, "`A[0]': not a valid identifier") {
@@ -73,6 +74,7 @@ echo "[${A[*]}]"`)
 // for `mapfile`, `readarray` and `unset`; `read` was the writer left out, and
 // it is the one the suite reaches.
 func TestTheArrayLetterJudgesTheNameAReferencePointsAt(t *testing.T) {
+	t.Parallel()
 	out, _ := readArrayRun(t, `typeset -n e=XXX[0]
 read -a e <<< "A B C"; echo "st=$?"
 echo "[${XXX[*]-GONE}]"`)

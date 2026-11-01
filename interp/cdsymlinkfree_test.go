@@ -37,6 +37,7 @@ func cdSymlinkFreeRunner(t *testing.T, dir string, out, errs *strings.Builder) *
 
 // What the letter refuses, and what it does not.
 func TestCdSymlinkFreeRefusesALinkedOperand(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name    string
 		cmd     string
@@ -110,6 +111,7 @@ func TestCdSymlinkFreeRefusesALinkedOperand(t *testing.T) {
 // to be anywhere reached through a link": having moved *into* the link, a
 // further `cd -s sub` moves.
 func TestCdSymlinkFreeLooksAtTheOperandAndNotThePlace(t *testing.T) {
+	t.Parallel()
 	dir, _ := cdTree(t)
 	out, errs := &strings.Builder{}, &strings.Builder{}
 	r := cdSymlinkFreeRunner(t, dir, out, errs)
@@ -130,6 +132,7 @@ func TestCdSymlinkFreeLooksAtTheOperandAndNotThePlace(t *testing.T) {
 // the ordinary missing-directory failure is what reports. Measured: `cd -s
 // nosuch` is `no such file or directory` and not `not a directory`.
 func TestCdSymlinkFreeLeavesAMissingPathToTheOrdinaryFailure(t *testing.T) {
+	t.Parallel()
 	dir, _ := cdTree(t)
 	out, errs := &strings.Builder{}, &strings.Builder{}
 	r := cdSymlinkFreeRunner(t, dir, out, errs)
@@ -153,6 +156,7 @@ func TestCdSymlinkFreeLeavesAMissingPathToTheOrdinaryFailure(t *testing.T) {
 // letter existed. Both answers of that question are checked, because the
 // letter must not have quietly become an option for everybody.
 func TestCdSymlinkFreeIsNotAnOptionWithoutTheAxis(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name    string
 		refuses Answer

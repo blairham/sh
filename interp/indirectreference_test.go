@@ -42,6 +42,7 @@ func runIndirectRef(t *testing.T, src string) (string, int) {
 // of these rows the *field count* is the answer and a joined string would
 // render the same either way.
 func TestAnIndirectionResolvesAParameterReference(t *testing.T) {
+	t.Parallel()
 	const preamble = `set -- p q r; a=(A B C); `
 	for _, tc := range []struct{ name, spec, want string }{
 		{"the positional list", "@", "<p><q><r>"},
@@ -76,6 +77,7 @@ func TestAnIndirectionResolvesAParameterReference(t *testing.T) {
 // of the target answered one field for all four, which is where an element
 // holding a space goes missing.
 func TestAnIndirectionKeepsTheFieldsOfAList(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ spec, want string }{
 		{"@", "3"},
 		{"a[@]", "3"},
@@ -103,6 +105,7 @@ func TestAnIndirectionKeepsTheFieldsOfAList(t *testing.T) {
 // `a=(x y z); i=0; v='a[i++]'` gives `x` with `i` at 1, and two spellings in
 // one word give `x` and `y` with `i` at 2.
 func TestAnIndirectionReadsItsTargetOnce(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"one expansion moves it one place",
@@ -142,6 +145,7 @@ func TestAnIndirectionReadsItsTargetOnce(t *testing.T) {
 // `echo after` is in every row because the status alone cannot show it: a
 // shell that wrote the sentence and carried on would look the same without it.
 func TestNounsetReachesTheTargetOfAnIndirection(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a name naming an unset name",
@@ -190,6 +194,7 @@ func TestNounsetReachesTheTargetOfAnIndirection(t *testing.T) {
 // with none is empty and quiet, and the *outer* name being `q` or `v` says
 // nothing about that.
 func TestNounsetLeavesAnIndirectionThatSuppliesAValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a default", `set -u; v=nope; echo "[${!v-D}]"; echo after`, "[D]\nafter\n"},
 		{"a colon default", `set -u; v=nope; echo "[${!v:-D}]"; echo after`, "[D]\nafter\n"},
@@ -220,6 +225,7 @@ func TestNounsetLeavesAnIndirectionThatSuppliesAValue(t *testing.T) {
 // ksh93u+ 2012 — where the expansion is the name — writes `v: parameter not
 // set` and `nosucharr[9]: parameter not set` with no sigil at all.
 func TestAnIndirectionsRefusalWearsTheSigilOnlyWhereItIndirects(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		yield Answer
@@ -253,6 +259,7 @@ func TestAnIndirectionsRefusalWearsTheSigilOnlyWhereItIndirects(t *testing.T) {
 // the parameter rather than to the `set -u` sentence. Measured, `${!v?msg}` is
 // `!v: msg` and `${!a[9]?msg}` is `!a[9]: msg` in both bash columns.
 func TestAnIndirectionsErrorOperatorNamesTheSameSubject(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a plain name", `v=nope; echo "[${!v?missing}]"; echo after`, "!v: missing"},
 		{"a name holding a reference", `a=(x y z); w='a[9]'; echo "[${!w?missing}]"; echo after`, "!w: missing"},
@@ -282,6 +289,7 @@ func TestAnIndirectionsErrorOperatorNamesTheSameSubject(t *testing.T) {
 // `!1: unbound variable` in bash 5.3.20 and bash 3.2.57, and so is the same
 // line with no parameters passed at all.
 func TestAnIndirectionThroughAPositionalNameIsStillTheIndirectionsRefusal(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"the positional holds an unset name", `set -- nope; set -u; echo "[${!1}]"; echo after`},
 		{"the positional itself is unset", `set --; set -u; echo "[${!1}]"; echo after`},

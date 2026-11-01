@@ -37,6 +37,7 @@ func voiceRunner(t *testing.T, out, errs *strings.Builder, names bool) *Runner {
 // location is the only thing that says which — so the two are asserted
 // side by side, as whole lines.
 func TestADiagnosticThatIsNotTheBuiltinsOwnLeavesItsNameOut(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := voiceRunner(t, &out, &errs, true)
 	r.Register("loader", func(rr *Runner, _ context.Context, _ []string) int {
@@ -61,6 +62,7 @@ func TestADiagnosticThatIsNotTheBuiltinsOwnLeavesItsNameOut(t *testing.T) {
 // third. This is what a saved-and-restored field is for, and a nil restore
 // would look right in the test above and wrong here.
 func TestTheBuiltinsNameComesBackAfterALoudersDiagnostic(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := voiceRunner(t, &out, &errs, true)
 	r.Register("loader", func(rr *Runner, _ context.Context, _ []string) int {
@@ -85,6 +87,7 @@ func TestTheBuiltinsNameComesBackAfterALoudersDiagnostic(t *testing.T) {
 // the same message — which is the point: nothing here invents a distinction
 // the dialect does not draw.
 func TestADialectThatNamesNoBuiltinWritesBothTheSameWay(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := voiceRunner(t, &out, &errs, false)
 	r.Register("loader", func(rr *Runner, _ context.Context, _ []string) int {
@@ -110,6 +113,7 @@ func TestADialectThatNamesNoBuiltinWritesBothTheSameWay(t *testing.T) {
 // distinction is the whole reason this exists: a builtin asking whether the
 // shell *provides* `options` must not be fooled by a script's `options=(a)`.
 func TestAProducedParameterIsNotAVariableAScriptSet(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := voiceRunner(t, &out, &errs, true)
 	r.SetDynamic("MADE", func(*Runner) string { return "x" })

@@ -84,6 +84,7 @@ func runReadonlyElementSemantics(t *testing.T, src string, set func(*Semantics))
 // at status 0: an assertion that only looked for an error would have passed
 // against it.
 func TestAnElementOfAReadonlyAssociativeArrayIsRefused(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; m[a]=1; typeset -r m
 m[k]=v
 echo "st=$? k=[${m[k]-unset}] a=[${m[a]}]"`
@@ -107,6 +108,7 @@ echo "st=$? k=[${m[k]-unset}] a=[${m[a]}]"`
 //
 // bash 5.3.15 leaves `x y`; ours left `z y` behind the same message.
 func TestAnElementOfAReadonlyIndexedArrayIsNotWrittenEither(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -a a=(x y); typeset -r a
 a[0]=z
 echo "st=$? all=[${a[*]}]"`
@@ -127,6 +129,7 @@ echo "st=$? all=[${a[*]}]"`
 // frozen, so nothing reaches the table. Measured against bash 5.3.15, which
 // gives the same message and the same untouched table for all six.
 func TestEveryAssignmentShapeIsRefusedOnAFrozenArray(t *testing.T) {
+	t.Parallel()
 	// frozen is the name the complaint carries, which is the base and never
 	// the subscript: every shell that reaches the check says `m`, not `m[k]`.
 	tests := []struct{ name, frozen, src, want string }{
@@ -230,6 +233,7 @@ echo "st=$? all=[${a[*]}]"`,
 // 5.9.2 both leave the value in place for all four spellings below; ksh93
 // does not cluster `-ar` at all and refuses the flag rather than the value.
 func TestADeclarationsOwnArrayValueSurvivesItsReadonlyFlag(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ name, src, want string }{
 		{
 			"an indexed literal as a declaration operand",
@@ -278,6 +282,7 @@ echo "st=$? all=[${a[*]}]"`,
 // stood over the value it did not: `readonly a; typeset -a a=(p q)` said
 // `a: readonly variable` and reported 0. bash 5.3.15 reports 1.
 func TestARefusedDeclarationOperandReportsOne(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -a a=(x y); typeset -r a
 typeset -a a=(p q)
 echo "st=$? all=[${a[*]}]"`
@@ -298,6 +303,7 @@ echo "st=$? all=[${a[*]}]"`
 // Measured in bash 5.3.15 and zsh 5.9.2: `in` reads the array and `out` finds
 // nothing, which is what says the value never reached the caller's scope.
 func TestADeferredFreezeStaysInsideTheFunctionThatDeclaredIt(t *testing.T) {
+	t.Parallel()
 	const src = `f() { typeset -ar l=(m n); echo "in=[${l[*]}]"; }
 f
 echo "out=[${l[*]-unset}]"`
@@ -340,6 +346,7 @@ func runReadonlyElementFatal(t *testing.T, src string) (out string, status int) 
 // form: the wording is what a dialect that names the builtin would change, and
 // the abandoned line is what a dialect that does not would.
 func TestARefusedArrayOperandIsABareAssignmentAndNotADeclaration(t *testing.T) {
+	t.Parallel()
 	names := Diagnostics{
 		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: readonly variable",
 		ReadonlyRefusalNamesBuiltin:   map[string]bool{"typeset": true},
@@ -372,6 +379,7 @@ echo two`
 // discriminator that survives, and it is a better one: it is a real split in
 // the panel rather than an artifact.
 func TestTheElementPathAsksTheAssignmentAxisAndNotTheDeclarationOne(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; m[a]=1; typeset -r m
 m[k]=v
 echo after`
@@ -418,6 +426,7 @@ echo after`
 // script really stopped — a shell that carried on and happened to leave 1
 // behind would pass on the number alone.
 func TestAFatalRefusalOfADeclarationOperandKeepsItsStatus(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -a a=(x y); typeset -r a
 typeset -a a=(p q)
 echo after`
@@ -435,6 +444,7 @@ echo after`
 // two are one rule: nothing about the fatality is decided by which shape the
 // assignment wore.
 func TestAFatalRefusalOfAnElementWriteKeepsItsStatus(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; m[a]=1; typeset -r m
 m[k]=v
 echo after`

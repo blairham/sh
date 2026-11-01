@@ -51,6 +51,7 @@ func noHome(t *testing.T, policy TildeWithNoHomePolicy, src string) (out string,
 // into the word road alone would make `PATH=~/bin` disagree with `echo ~/bin`
 // in a shell no column has.
 func TestATildeWithNoHomeIsTheDialectsAnswer(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name          string
 		policy        TildeWithNoHomePolicy
@@ -112,6 +113,7 @@ func TestATildeWithNoHomeIsTheDialectsAnswer(t *testing.T) {
 // has to hold for this road too: the password answer is the only one that
 // needs anything outside the shell.
 func TestTheDatabaseAnswerNeedsAHookAndSaysSoBySayingNothing(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, "printf '<%s>\\n' ~/x\n", func(r *Runner) {
 		sem := CoreSemantics()
 		sem.TildeWithNoHome = TildeWithNoHomeReadsThePasswordEntry
@@ -132,6 +134,7 @@ func TestTheDatabaseAnswerNeedsAHookAndSaysSoBySayingNothing(t *testing.T) {
 // must not reach: a shell that read the database for an empty home would
 // answer `~` with a path on a line that deliberately cleared it.
 func TestASetButEmptyHomeIsNotTheNoHomeQuestion(t *testing.T) {
+	t.Parallel()
 	for _, policy := range []TildeWithNoHomePolicy{
 		TildeWithNoHomeStaysWritten,
 		TildeWithNoHomeIsEmpty,
@@ -153,6 +156,7 @@ func TestASetButEmptyHomeIsNotTheNoHomeQuestion(t *testing.T) {
 // of this axis: the axis is about a home the shell has none of, and a name in
 // the script is not that.
 func TestANamedTildeIsUntouchedByTheNoHomeAnswer(t *testing.T) {
+	t.Parallel()
 	for _, policy := range []TildeWithNoHomePolicy{
 		TildeWithNoHomeStaysWritten,
 		TildeWithNoHomeIsEmpty,
@@ -174,6 +178,7 @@ func TestANamedTildeIsUntouchedByTheNoHomeAnswer(t *testing.T) {
 // default flipped onto one column's reading fails here instead of quietly
 // changing what every test above measures.
 func TestTheCoreLeavesATildeWithNoHomeAsWritten(t *testing.T) {
+	t.Parallel()
 	if got := CoreSemantics().TildeWithNoHome; got != TildeWithNoHomeStaysWritten {
 		t.Errorf("CoreSemantics().TildeWithNoHome = %v, want stays written", got)
 	}

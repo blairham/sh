@@ -45,6 +45,7 @@ func runSpreadEdges(t *testing.T, src string) (string, int) {
 // and boundaries under the lay-in rule. See interp/spreadedges.go for the
 // measurement; every row is zsh 5.9.2 under `setopt shwordsplit`.
 func TestTheDistributiveRuleMakesAFieldOfEachEdge(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, setup, word, want string }{
 		// The rows the issue was filed on.
 		{"a blank element in front", `b=(' ' 2)`, `x${^b}y`, `2[xy][x2y]`},

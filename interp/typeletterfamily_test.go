@@ -42,6 +42,7 @@ func typeLetterRun(t *testing.T, src string, set func(*Semantics)) (string, stri
 // A numeric letter over a case attribute, both ways. The listing is the whole
 // of what the two answers differ about, so it is what is read.
 func TestANumericLetterReplacingTheCaseAttributeIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `typeset z=1; typeset -l z; typeset -i z; typeset -p z`
 	out, _, _ := typeLetterRun(t, src, func(s *Semantics) {
 		s.NumericAttributeReplacesTheCaseAttribute = Yes
@@ -60,6 +61,7 @@ func TestANumericLetterReplacingTheCaseAttributeIsAnAxis(t *testing.T) {
 // The float letter is the same family and asks the same axis, which is what
 // makes it one question rather than one per letter.
 func TestTheFloatLetterReplacesTheCaseAttributeToo(t *testing.T) {
+	t.Parallel()
 	const src = `typeset v=1; typeset -u v; typeset -F 2 v; typeset -p v`
 	out, _, _ := typeLetterRun(t, src, func(s *Semantics) {
 		s.NumericAttributeReplacesTheCaseAttribute = Yes
@@ -78,6 +80,7 @@ func TestTheFloatLetterReplacesTheCaseAttributeToo(t *testing.T) {
 // The other direction is its own axis, and the two are independent: this runs
 // with the first answered No so that only the second can be what moves.
 func TestACaseLetterReplacingTheNumericAttributeIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `typeset y=1; typeset -i y; typeset -l y; typeset -p y`
 	out, _, _ := typeLetterRun(t, src, func(s *Semantics) {
 		s.NumericAttributeReplacesTheCaseAttribute = No
@@ -99,6 +102,7 @@ func TestACaseLetterReplacingTheNumericAttributeIsAnAxis(t *testing.T) {
 // listing alone would not show: a name the case letter has untyped stores the
 // text of the next assignment rather than evaluating it.
 func TestTheCaseLetterTakesTheIntegerReadingWithTheLetter(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -i n; typeset -l n; n=5+5; echo "[$n]"`
 	out, _, _ := typeLetterRun(t, src, func(s *Semantics) {
 		s.CaseAttributeReplacesTheNumericAttribute = Yes
@@ -117,6 +121,7 @@ func TestTheCaseLetterTakesTheIntegerReadingWithTheLetter(t *testing.T) {
 // The plus form is not this question: taking a letter off is already its own
 // rule, and a declaration that removes one must not be read as adding it.
 func TestThePlusFormDoesNotReplaceTheOtherLetter(t *testing.T) {
+	t.Parallel()
 	out, _, _ := typeLetterRun(t, `typeset z=1; typeset -l z; typeset +i z; typeset -p z`,
 		func(s *Semantics) { s.NumericAttributeReplacesTheCaseAttribute = Yes })
 	if want := "declare -l z=\"1\"\n"; out != want {
@@ -127,6 +132,7 @@ func TestThePlusFormDoesNotReplaceTheOtherLetter(t *testing.T) {
 // A type letter beside an array literal, both ways. Under Yes the script ends
 // there, which a status alone would not show — `tail` never runs.
 func TestATypeLetterOverAnArrayLiteralIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -ia z=(1 2); echo "st=$? [${z[*]}]"; echo tail`
 	out, errs, st := typeLetterRun(t, src, func(s *Semantics) {
 		s.TypeLetterAndAnArrayLiteralIsAnInconsistentType = Yes
@@ -149,6 +155,7 @@ func TestATypeLetterOverAnArrayLiteralIsAnAxis(t *testing.T) {
 // *type* and not about a pairing: the same line without `-a` is refused, and
 // a case letter with `-a` is taken.
 func TestTheArrayLetterIsNotWhatTheTypeRefusalTurnsOn(t *testing.T) {
+	t.Parallel()
 	out, errs, st := typeLetterRun(t, `typeset -i z=(1 2); echo tail`,
 		func(s *Semantics) { s.TypeLetterAndAnArrayLiteralIsAnInconsistentType = Yes })
 	if out != "" || st == 0 || !strings.Contains(errs, "z: inconsistent type for assignment") {
@@ -165,6 +172,7 @@ func TestTheArrayLetterIsNotWhatTheTypeRefusalTurnsOn(t *testing.T) {
 // name already declared integer takes an array literal from a later
 // declaration that does not write the letter again.
 func TestAStandingTypeAttributeDoesNotRefuseALaterLiteral(t *testing.T) {
+	t.Parallel()
 	out, errs, st := typeLetterRun(t, `typeset -i z; typeset z=(1 2); echo "[${z[*]}]"`,
 		func(s *Semantics) { s.TypeLetterAndAnArrayLiteralIsAnInconsistentType = Yes })
 	if want := "[1 2]\n"; out != want || st != 0 || errs != "" {
@@ -175,6 +183,7 @@ func TestAStandingTypeAttributeDoesNotRefuseALaterLiteral(t *testing.T) {
 // A plain word is not an array literal, which is the control the rule turns
 // on: `typeset -i z=5` is the ordinary integer declaration everywhere.
 func TestATypeLetterOverAPlainWordIsNotRefused(t *testing.T) {
+	t.Parallel()
 	out, errs, st := typeLetterRun(t, `typeset -i z=5+5; echo "[$z]"`,
 		func(s *Semantics) { s.TypeLetterAndAnArrayLiteralIsAnInconsistentType = Yes })
 	if want := "[10]\n"; out != want || st != 0 || errs != "" {
@@ -185,6 +194,7 @@ func TestATypeLetterOverAPlainWordIsNotRefused(t *testing.T) {
 // The plus form takes the letter off rather than naming a type, so it raises
 // no question either.
 func TestThePlusFormOfATypeLetterTakesTheLiteral(t *testing.T) {
+	t.Parallel()
 	out, errs, st := typeLetterRun(t, `typeset +i z=(1 2); echo "[${z[*]}]"`,
 		func(s *Semantics) { s.TypeLetterAndAnArrayLiteralIsAnInconsistentType = Yes })
 	if want := "[1 2]\n"; out != want || st != 0 || errs != "" {
@@ -198,6 +208,7 @@ func TestThePlusFormOfATypeLetterTakesTheLiteral(t *testing.T) {
 // `export` do not read a type letter at all here, so there is nothing of
 // theirs to ask.
 func TestTheOtherDeclarationWordRefusesATypeLetterOverALiteral(t *testing.T) {
+	t.Parallel()
 	out, errs, st := typeLetterRun(t, `f(){ local -i z=(1 2); }; f; echo tail`,
 		func(s *Semantics) { s.TypeLetterAndAnArrayLiteralIsAnInconsistentType = Yes })
 	if out != "" || st == 0 || !strings.Contains(errs, "z: inconsistent type for assignment") {
@@ -209,6 +220,7 @@ func TestTheOtherDeclarationWordRefusesATypeLetterOverALiteral(t *testing.T) {
 // same one ScalarOverACompoundIsAnInconsistentType writes, which is why there
 // is one of it.
 func TestTheTypeLetterRefusalUsesTheDialectsWording(t *testing.T) {
+	t.Parallel()
 	_, errs, _ := declRun(t, `typeset -ia z=(1 2)`, func(s *Semantics) {
 		s.DeclareOptions = "aAgilprux"
 		s.TypeLetterAndAnArrayLiteralIsAnInconsistentType = Yes

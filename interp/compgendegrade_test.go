@@ -27,6 +27,7 @@ import (
 // statuses are bash's. And the repeated `-A alias` answering one name is why
 // the report is folded per spelling rather than written per occurrence.
 func TestCompgenDegradesAnActionItCannotGenerate(t *testing.T) {
+	t.Parallel()
 	t.Run("the siblings still answer", func(t *testing.T) {
 		out, st := compgenRun(t, "f1() { :; }\ncompgen -A builtin -A function -A alias -A keyword\n")
 		if !strings.Contains(out, "not implemented") {
@@ -83,6 +84,7 @@ func TestCompgenDegradesAnActionItCannotGenerate(t *testing.T) {
 // This is what makes the rows above discriminating. A change that degraded
 // *everything* would pass every one of them and fail every one of these.
 func TestCompgenStillEndsTheCallForAThingBashDoesNotHaveEither(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a name that is no action, first", "compgen -A nosuch -A builtin cd\n", "invalid action name"},
 		{"a name that is no action, second", "compgen -A builtin -A nosuch cd\n", "invalid action name"},

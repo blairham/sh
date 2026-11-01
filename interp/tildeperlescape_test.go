@@ -20,6 +20,7 @@ import "testing"
 // read `\d` as the letter `d` and happened to be handed a subject with a `d`
 // in it. The second row of each pair is the subject that separates them.
 func TestAnExtendedTildeFlavorKeepsTheExpressionsEscapes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The control, and it is the same question written with a bracket
 		// expression: it matched before this and after it, so a row below

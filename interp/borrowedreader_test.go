@@ -23,6 +23,7 @@ import (
 
 // TestEvalRunsWhatItParsed pins the axis by name.
 func TestEvalRunsWhatItParsed(t *testing.T) {
+	t.Parallel()
 	for _, runs := range []Answer{Yes, No} {
 		dir := t.TempDir()
 		mark := filepath.Join(dir, "ran")
@@ -39,6 +40,7 @@ func TestEvalRunsWhatItParsed(t *testing.T) {
 // TestSourcedFileRunsWhatItParsed is the same question of a file, and a second
 // field because one dialect answers the two differently.
 func TestSourcedFileRunsWhatItParsed(t *testing.T) {
+	t.Parallel()
 	for _, runs := range []Answer{Yes, No} {
 		dir := t.TempDir()
 		mark := filepath.Join(dir, "ran")
@@ -56,6 +58,7 @@ func TestSourcedFileRunsWhatItParsed(t *testing.T) {
 // a time and reads `eval`'s text through first is one the panel contains, so
 // one field could not carry both answers.
 func TestTheTwoReadersAreSeparateFields(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	evalMark := filepath.Join(dir, "eval")
 	fileMark := filepath.Join(dir, "file")
@@ -93,6 +96,7 @@ func TestTheTwoReadersAreSeparateFields(t *testing.T) {
 // Asserted with both left Unspecified, which is the state that makes a
 // question audible: `ask` writes a line naming the axis and refuses.
 func TestTheReaderIsAskedAboutOnlyWhereItDecides(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	script := write(t, dir, "s.sh", "echo one\necho two\n")
 	sem := permissive()
@@ -120,6 +124,7 @@ func TestTheReaderIsAskedAboutOnlyWhereItDecides(t *testing.T) {
 // incremental reader had to keep: text with nothing in it clears a failure,
 // and text with a command in it is shown the caller's status.
 func TestBorrowedTextWithNoCommandsStillClearsTheStatus(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	sem := permissive()
 	if _, st := sourceRun(t, dir, `false; eval ""`, sem, Diagnostics{}); st != 0 {

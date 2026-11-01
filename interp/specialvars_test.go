@@ -35,6 +35,7 @@ func TestTheSubstrateProvidesTheUnanimousParameters(t *testing.T) {
 // A produced parameter cannot be overwritten by assigning to it, and what was
 // assigned is kept where its producer can see it.
 func TestAssigningAProducedParameterReachesItsProducer(t *testing.T) {
+	t.Parallel()
 	setup := func(r *Runner) {
 		r.SetDynamic("COUNTER", func(rr *Runner) string {
 			if v, ok := rr.Assigned("COUNTER"); ok {
@@ -61,6 +62,7 @@ func TestAssigningAProducedParameterReachesItsProducer(t *testing.T) {
 // `set +` takes it off. While this expanded to nothing, `case $- in *e*)` —
 // the standard errexit check — silently took the wrong branch.
 func TestDollarDashReflectsTheLiveOptionState(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	setup := func(r *Runner) { r.Semantics = &sem }
 
@@ -101,6 +103,7 @@ func TestDollarDashReflectsTheLiveOptionState(t *testing.T) {
 // the substrate prefixes whatever it was given — the value here is made up,
 // because which real shell reports what is asserted in dialect/.
 func TestDollarDashStartsWithTheDialectsDefaultLetters(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	sem.DefaultOptionLetters = "789Z"
 	out, _ := run(t, `echo "[$-]"; set -e; echo "[$-]"`, func(r *Runner) { r.Semantics = &sem })
@@ -118,6 +121,7 @@ func TestDollarDashStartsWithTheDialectsDefaultLetters(t *testing.T) {
 // anybody is watching, and the process would answer about the *embedder's*
 // invocation rather than about this shell's.
 func TestDollarDashSaysInteractiveOnlyWhenItWasToldSo(t *testing.T) {
+	t.Parallel()
 	const src = `echo "[$-]"; case $- in *i*) echo yes ;; *) echo no ;; esac`
 	for _, tc := range []struct {
 		name        string
@@ -151,6 +155,7 @@ func TestDollarDashSaysInteractiveOnlyWhenItWasToldSo(t *testing.T) {
 // Which letter noglob shows is an axis: POSIX names `f`, and one shell in the
 // panel reports the capital because that is its own short spelling.
 func TestNoglobLetterFollowsTheAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		isF  Answer
@@ -173,6 +178,7 @@ func TestNoglobLetterFollowsTheAxis(t *testing.T) {
 // A parameter a dialect does not provide stays absent, which is what makes
 // `${RANDOM-}` a usable test for having it.
 func TestAnUnprovidedParameterIsAbsent(t *testing.T) {
+	t.Parallel()
 	if out, _ := run(t, `[ -n "${NOSUCHPARAM-}" ] && echo have || echo none`, nil); strings.TrimSpace(out) != "none" {
 		t.Errorf("got %q, want none", out)
 	}
@@ -181,6 +187,7 @@ func TestAnUnprovidedParameterIsAbsent(t *testing.T) {
 // TestUnderscoreFollowsTheLastArgumentIsAnAxis — bash and zsh move $_ to the
 // previous simple command's last expanded argument; two shells never touch it.
 func TestUnderscoreFollowsTheLastArgumentIsAnAxis(t *testing.T) {
+	t.Parallel()
 	track := func(r *Runner) {
 		sem := CoreSemantics()
 		sem.UnderscoreTracksTheLastArgument = Yes
@@ -216,6 +223,7 @@ func TestUnderscoreFollowsTheLastArgumentIsAnAxis(t *testing.T) {
 // at the invocation exists in the panel, so folding the two into one answer
 // would give it a value it has never had.
 func TestUnderscoreStartsAtTheInvocationIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `echo "[$_]"`
 	for _, tc := range []struct {
 		name          string
@@ -252,6 +260,7 @@ func TestUnderscoreStartsAtTheInvocationIsAnAxis(t *testing.T) {
 // discards is also the one that writes nothing, so it is settled here on the
 // grounds that two questions with two answers make four combinations.
 func TestUnderscoreInheritsFromTheEnvironmentIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name            string
 		inherits, start Answer
@@ -283,6 +292,7 @@ func TestUnderscoreInheritsFromTheEnvironmentIsAnAxis(t *testing.T) {
 // string takes `$0` from its first operand while the process was still
 // executed as the binary.
 func TestTheInvocationIsNotTheNameTheShellCallsItself(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `echo "[$0][$_]"`, func(r *Runner) {
 		sem := CoreSemantics()
 		sem.UnderscoreStartsAtTheInvocation = Yes
@@ -304,6 +314,7 @@ func TestTheInvocationIsNotTheNameTheShellCallsItself(t *testing.T) {
 // one shell against three; both are named axes here rather than shells, as
 // this package requires (#551).
 func TestDollarDashShowsTheRouteItWasInvokedBy(t *testing.T) {
+	t.Parallel()
 	const src = `case $- in *c*) echo has-c ;; *) echo no-c ;; esac
 case $- in *s*) echo has-s ;; *) echo no-s ;; esac`
 	for _, tc := range []struct {
@@ -364,6 +375,7 @@ case $- in *s*) echo has-s ;; *) echo no-s ;; esac`
 // no dialect; refusing the whole expansion over a letter nobody asked for
 // would break every one of them.
 func TestAnUnansweredRouteLetterIsSilent(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	out, st := run(t, `set -e; case $- in *e*) echo has-e ;; *) echo no-e ;; esac`,
 		func(r *Runner) { r.Semantics, r.Route = &sem, RouteCommandString })
@@ -380,6 +392,7 @@ func TestAnUnansweredRouteLetterIsSilent(t *testing.T) {
 // and not a longer one. The letters here are made up, because which real shell
 // reports what is asserted in dialect/.
 func TestDollarDashTakesTheInteractiveLettersInsteadOfTheDefaultOnes(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	sem.DefaultOptionLetters = "789Z"
 	// A set that keeps one of the four, drops three and adds one — which no
@@ -409,6 +422,7 @@ func TestDollarDashTakesTheInteractiveLettersInsteadOfTheDefaultOnes(t *testing.
 // one of the four panel members' real answer and the zero value's meaning:
 // a shell whose `$-` is the same set either way says nothing here.
 func TestAnUnansweredInteractiveVectorLeavesTheDefaultLettersStanding(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	sem.DefaultOptionLetters = "789Z"
 	out, _ := run(t, `echo "[$-]"`, func(r *Runner) {
@@ -424,6 +438,7 @@ func TestAnUnansweredInteractiveVectorLeavesTheDefaultLettersStanding(t *testing
 // adds to whichever of the two vectors was chosen, exactly as it adds to the
 // default one — the vector says where `$-` begins and never what it ends as.
 func TestTheInteractiveLettersAreStillOnlyTheStartingPoint(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	sem.DefaultOptionLetters = "789Z"
 	sem.InteractiveOptionLetters = "7Q"
@@ -445,6 +460,7 @@ func TestTheInteractiveLettersAreStillOnlyTheStartingPoint(t *testing.T) {
 // state — asserted from both sides here, since a vector that quietly carried it
 // would pass the first half alone.
 func TestTheMonitorLetterComesFromTheMonitorAndNotFromTheVector(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	sem.InteractiveOptionLetters = "Q"
 	src := `case $- in *m*) echo has-m ;; *) echo no-m ;; esac`
@@ -470,6 +486,7 @@ func TestTheMonitorLetterComesFromTheMonitorAndNotFromTheVector(t *testing.T) {
 // lands where nothing reads, because the producer answers ahead of the stored
 // table, and the script is told nothing.
 func TestAWriteToAProducedParameterCannotShadowIt(t *testing.T) {
+	t.Parallel()
 	setup := func(r *Runner) {
 		held := "held"
 		r.SetDynamic("VIEW", func(*Runner) string { return held })
@@ -496,6 +513,7 @@ echo "$VIEW"`, setup)
 // rather than a reconciliation once whatever was running has finished: the
 // script reads the other view back inside the same call.
 func TestProducedParametersShareStateLive(t *testing.T) {
+	t.Parallel()
 	setup := func(r *Runner) {
 		whole := "abcdef"
 		at := 2
@@ -525,6 +543,7 @@ echo "[$WHOLE][$HEAD]"`, setup)
 // needs: outside it the name has to read as unset rather than as whatever the
 // producer would say.
 func TestAProducedParameterCanBeTakenAway(t *testing.T) {
+	t.Parallel()
 	setup := func(r *Runner) {
 		r.SetDynamic("BRIEF", func(*Runner) string { return "here" })
 		r.SetDynamicWriter("BRIEF", func(*Runner, string) {})
@@ -616,6 +635,7 @@ echo "[$FROZEN]"`, func(r *Runner) {
 // non-empty in bash 5.3.20, zsh 5.9.2 and ksh93 93u+, and empty in dash and
 // in BusyBox 1.37.0 — where `set -u` stops the script at status 2.
 func TestUnderscoreIsAParameterAtAllIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		is    Answer
@@ -651,6 +671,7 @@ func TestUnderscoreIsAParameterAtAllIsAnAxis(t *testing.T) {
 // $_'` writes `inherited`, and so does BusyBox ash in the pinned image;
 // `_=mine; echo "$_"` writes `mine` in both.
 func TestAShellWithNoUnderscoreStillReadsOneItWasHanded(t *testing.T) {
+	t.Parallel()
 	setup := func(r *Runner) {
 		sem := CoreSemantics()
 		sem.UnderscoreIsAParameterAtAll = No

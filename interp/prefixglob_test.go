@@ -68,6 +68,7 @@ func prefixGlobRun(t *testing.T, src string, answer Answer) (string, string) {
 // directory at every answer the axis takes, so the rows below that report
 // `*.txt` are reporting the value and not an empty directory.
 func TestThePrefixGlobDirectoryReallyHoldsTheNames(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Unspecified, No, Yes} {
 		out, _ := prefixGlobRun(t, `printf '[%s]' *.txt`, answer)
 		if out != "[a.txt][b.txt][c.txt]" {
@@ -88,6 +89,7 @@ func TestThePrefixGlobDirectoryReallyHoldsTheNames(t *testing.T) {
 // Runner with no dialect chosen does, and this axis is read directly against
 // Yes so that a bare core is never asked.
 func TestAPrefixAssignmentValueIsNotAPatternAtNo(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"several would match", `f() { printf '[%s]' "$a"; }; a=*.txt f`, "[*.txt]"},
 		{"one would match", `f() { printf '[%s]' "$a"; }; a=one.* f`, "[one.*]"},
@@ -114,6 +116,7 @@ func TestAPrefixAssignmentValueIsNotAPatternAtNo(t *testing.T) {
 // itself — which is the control that keeps this from being "the axis rewrites
 // every prefix as a list".
 func TestAPrefixAssignmentValueIsAPatternAtYes(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"several matches", `f() { printf '[%s]' "${a[@]}"; }; a=*.txt f`, "[a.txt][b.txt][c.txt]"},
 		{"one match stays a scalar", `f() { printf '[%s]' "${a[@]}"; }; a=one.* f`, "[one.only]"},
@@ -162,6 +165,7 @@ func TestAPrefixAssignmentValueIsAPatternAtYes(t *testing.T) {
 // "the assignment" is the right one. The two readings agree on every row a
 // statement can produce and part here.
 func TestAGlobbedPrefixIsStillTakenBackAfterward(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{No, Yes} {
 		for _, c := range []struct{ name, src, want string }{
 			{"a name that was holding something", `a=kept; a=*.txt true; printf '[%s]' "$a"`, "[kept]"},
@@ -187,6 +191,7 @@ func TestAGlobbedPrefixIsStillTakenBackAfterward(t *testing.T) {
 // The controls are the three rows that must still reach the child: one match,
 // no metacharacter, and the whole grid at No.
 func TestAPrefixThatMatchedSeveralNamesReachesNoChildEnvironment(t *testing.T) {
+	t.Parallel()
 	if _, err := os.Stat("/usr/bin/printenv"); err != nil {
 		t.Skip("no /usr/bin/printenv")
 	}
@@ -242,6 +247,7 @@ func TestAPrefixThatMatchedSeveralNamesReachesNoChildEnvironment(t *testing.T) {
 // at the core's own answer; the column where braces *are* expanded has it in
 // dialect/bash.
 func TestAPrefixAssignmentValueTakesTheAssignmentRoad(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"not split on IFS", `IFS=:; v=a:b; f() { printf '[%s]' "$a"; }; a=$v f`, "[a:b]"},
 		{"inner spaces kept", `v='p  q'; f() { printf '[%s]' "$a"; }; a=$v f`, "[p  q]"},
@@ -271,6 +277,7 @@ func TestAPrefixAssignmentValueTakesTheAssignmentRoad(t *testing.T) {
 // Diagnostics fields that decide those are a different question, and
 // dialect/zsh has the row that pins what that shell writes.
 func TestAGlobbedPrefixIsTracedAsWhatItHandedOver(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, no, yes string }{
 		{"several matches", `a=*.txt true`, `+ a=*.txt`, `+ a=(a.txt b.txt c.txt)`},
 		{"one match", `a=one.* true`, `+ a=one.*`, `+ a=one.only`},

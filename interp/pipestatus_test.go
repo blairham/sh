@@ -29,6 +29,7 @@ func named(name string, tune func(*Semantics)) func(*Runner) {
 // What the record holds. `$?` reports the last element only, which is the
 // whole reason the others are worth keeping.
 func TestThePipelineStatusRecordsEveryElement(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"three elements", `false | true | false; echo "${P[@]}"`, "1 0 1"},
 		{"a command on its own records one", `false; echo "${P[@]}"`, "1"},
@@ -62,6 +63,7 @@ func TestThePipelineStatusRecordsEveryElement(t *testing.T) {
 // Without a dialect to name it, there is no record at all — nothing could read
 // one, so nothing is kept.
 func TestNoNameMeansNoRecord(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `false | true; echo "[${PIPESTATUS[@]}]"`, nil)
 	if strings.TrimSpace(out) != "[]" {
 		t.Errorf("got %q, want an ordinary absent variable", out)
@@ -70,6 +72,7 @@ func TestNoNameMeansNoRecord(t *testing.T) {
 
 // Whether an assignment with no command name counts as a command.
 func TestAssignmentUpdatesPipelineStatusIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		a    Answer
 		want string
@@ -121,6 +124,7 @@ func enableTestAndArith(d *syntax.Dialect) {
 // record holding 0 — the value the bug this fixes actually produced by its
 // third write.
 func TestTestAndArithmeticUpdatePipelineStatusIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -161,6 +165,7 @@ func TestTestAndArithmeticUpdatePipelineStatusIsAnAxis(t *testing.T) {
 // reports a status the pipeline never had. It is the mechanism behind a failed
 // clone being reported as `code: 0`.
 func TestReadingTheRecordTwiceInOneChain(t *testing.T) {
+	t.Parallel()
 	const src = `false | true; if (( P[0] == 141 )); then echo signal; ` +
 		`elif (( P[0] )); then echo "code=${P[0]}"; else echo clean; fi`
 	for _, tc := range []struct {
@@ -197,6 +202,7 @@ func TestReadingTheRecordTwiceInOneChain(t *testing.T) {
 // the constructs the axes cover, which is why they share one predicate: a
 // second helper written for `[[ … ]]` alone would not have carried this.
 func TestNegationAndRedirectionAlwaysWriteTheRecord(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`false | true; ! [[ a = a ]]; echo "${P[@]}"`,
 		`false | true; ! (( 1 )); echo "${P[@]}"`,
@@ -242,6 +248,7 @@ func TestNegationAndRedirectionAlwaysWriteTheRecord(t *testing.T) {
 // with it answered No nothing inside wrote at all, so the condition's own two
 // elements are what stands.
 func TestACompoundCommandWritesTheRecord(t *testing.T) {
+	t.Parallel()
 	const src = `if false | true; then (( 1 )); fi; echo "${P[@]}"`
 	for _, tc := range []struct {
 		policy CompoundPipelineStatusPolicy
@@ -267,6 +274,7 @@ func TestACompoundCommandWritesTheRecord(t *testing.T) {
 // *scalar* does, where unset ends it everywhere, which is why it is asked
 // rather than inherited from the rule Dynamic follows.
 func TestUnsetEndsTheProducedPipelineStatusIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		a    Answer
 		want string
@@ -287,6 +295,7 @@ func TestUnsetEndsTheProducedPipelineStatusIsAnAxis(t *testing.T) {
 // than about this record, measured here because this is the array every shell
 // that has one builds without being asked.
 func TestArrayScalarIsTheWholeArrayIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		a    Answer
@@ -317,6 +326,7 @@ func TestArrayScalarIsTheWholeArrayIsAnAxis(t *testing.T) {
 // Without the guard, the bare core refused every `x=1` over a difference
 // nothing in that shell could observe.
 func TestNoNameAsksNoAxis(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	enableTestAndArith(&d)
 	f, err := syntax.Parse(`false | true; x=1; [[ a = a ]]; (( 1 )); echo done`, d)
@@ -348,6 +358,7 @@ func TestNoNameAsksNoAxis(t *testing.T) {
 // constructs rather than negation: an ordinary command records what it
 // reported whatever the answer.
 func TestANegatedTestRecordsOneStatusOrTheOther(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, post, pre string }{
 		{`false | true; ! [[ a = a ]]; echo "${P[@]}"`, "1", "0"},
 		{`false | true; ! [[ a = b ]]; echo "${P[@]}"`, "0", "1"},
@@ -387,6 +398,7 @@ func TestANegatedTestRecordsOneStatusOrTheOther(t *testing.T) {
 // is the status in every shell either way. A mutant that inverted the status
 // instead of the copy written down survives every row above.
 func TestTheAxisMovesTheRecordAndNotTheStatus(t *testing.T) {
+	t.Parallel()
 	for _, a := range []Answer{Yes, No} {
 		out, _ := runGrammar(t, `false | true; ! [[ a = a ]]; echo "st=$? ps=${P[@]}"`,
 			enableTestAndArith, named("P", func(s *Semantics) {
@@ -415,6 +427,7 @@ func TestTheAxisMovesTheRecordAndNotTheStatus(t *testing.T) {
 // mechanism is TestACompoundLeavesTheRecordToWhatRan below, whose rows are
 // chosen for where the two differ.
 func TestACompoundFollowsItsBody(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, follows string }{
 		// The pair the issue is written around.
 		{`if [[ a = b ]]; then :; fi`, "0"},
@@ -493,6 +506,7 @@ func TestACompoundFollowsItsBody(t *testing.T) {
 // both shells that keep a record answer the same way. Measured 2026-09-11,
 // `false | true; f() { :; }` is `1 0` in bash 5.3.15 and zsh 5.9.2 alike.
 func TestAFunctionDefinitionLeavesTheRecordAlone(t *testing.T) {
+	t.Parallel()
 	for _, policy := range []CompoundPipelineStatusPolicy{
 		CompoundPipelineStatusFromTheBody,
 		CompoundPipelineStatusFromWhatRan,
@@ -521,6 +535,7 @@ func TestAFunctionDefinitionLeavesTheRecordAlone(t *testing.T) {
 // body-reading one every `want` here would be the compound's own status
 // instead — a single 0 for all but the last two.
 func TestACompoundLeavesTheRecordToWhatRan(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		// The condition ran and wrote the record; the clause wrote nothing
 		// over it. This is the row the issue is written around.
@@ -574,6 +589,7 @@ func TestACompoundLeavesTheRecordToWhatRan(t *testing.T) {
 // And with no answer the compound writes, which is the safe direction, with
 // the axis named — rather than a default standing in for a dialect.
 func TestACompoundWithNoAnswerReports(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `false | true; { :; }; echo "${P[@]}"`,
 		named("P", func(s *Semantics) {
 			s.CompoundPipelineStatusRecord = CompoundPipelineStatusUnspecified
@@ -587,6 +603,7 @@ func TestACompoundWithNoAnswerReports(t *testing.T) {
 // the question is unobservable there, and the core must not refuse `{ :; }`
 // over a difference nothing could see.
 func TestACompoundAsksNothingWithoutANameForTheRecord(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `false | true; { :; }; echo done`, func(r *Runner) {
 		sem := PosixSemantics()
 		sem.CompoundPipelineStatusRecord = CompoundPipelineStatusUnspecified

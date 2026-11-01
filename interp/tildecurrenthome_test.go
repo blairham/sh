@@ -49,6 +49,7 @@ import (
 // of the last two alone passed against a runner mutated to freeze the first
 // home it read.
 func TestABareTildeReadsTheCurrentHomeBeforeAndAfterAChild(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	// Three reads, and the order is what makes them discriminate. One before
 	// the assignment fixes what the shell started with, one after it, and one
@@ -103,6 +104,7 @@ func TestABareTildeReadsTheCurrentHomeBeforeAndAfterAChild(t *testing.T) {
 // startup or from a cache a child refreshes, and #4039 is the second issue
 // filed here from one that could not.
 func TestEveryTildeRoadReadsTheOneCurrentHome(t *testing.T) {
+	t.Parallel()
 	first := t.TempDir()
 	second := filepath.Join(t.TempDir(), "second")
 	if err := os.MkdirAll(second, 0o700); err != nil {

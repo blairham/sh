@@ -81,6 +81,7 @@ func renameAway(t *testing.T, root string) string {
 }
 
 func TestARelativePathStillReachesADirectoryThatHasBeenRenamed(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, wrote string }{
 		{
 			// A redirection: the one that broke with `no such file or
@@ -130,6 +131,7 @@ func TestARelativePathStillReachesADirectoryThatHasBeenRenamed(t *testing.T) {
 // into the same place, so a pass up there is about the rename and not about
 // the shell writing files anywhere at all.
 func TestARelativePathReachesTheDirectoryWhenNothingHasMoved(t *testing.T) {
+	t.Parallel()
 	root := renamedTree(t)
 	sem := PosixSemantics()
 	r := newTestRunner(t, &Runner{
@@ -148,6 +150,7 @@ func TestARelativePathReachesTheDirectoryWhenNothingHasMoved(t *testing.T) {
 // which is how `/bin/pwd` came back 126 where all six real shells print the
 // renamed directory and exit 0.
 func TestAnExternalCommandRunsInADirectoryThatHasBeenRenamed(t *testing.T) {
+	t.Parallel()
 	if _, err := os.Stat("/bin/pwd"); err != nil {
 		t.Skip("no /bin/pwd on this machine")
 	}
@@ -181,6 +184,7 @@ func TestAnExternalCommandRunsInADirectoryThatHasBeenRenamed(t *testing.T) {
 // the shell is in `e`. The only thing that moves is whether the path `cd`
 // builds — `…/d/s` — is there.
 func TestWhatDecidesIsThePathCdBuiltAndNotWhereTheShellIs(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name           string
 		impostorHoldsS bool
@@ -229,6 +233,7 @@ func TestWhatDecidesIsThePathCdBuiltAndNotWhereTheShellIs(t *testing.T) {
 }
 
 func TestCdFromARenamedDirectoryAnswersTheAxis(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
 		policy CdDestinationNotTherePolicy
@@ -291,6 +296,7 @@ func TestCdFromARenamedDirectoryAnswersTheAxis(t *testing.T) {
 // columns and must put no question at all: otherwise a Runner with no answer
 // here would refuse `cd nosuchdir`.
 func TestOnlyACdFromARenamedDirectoryPutsTheQuestion(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src string
 		rename    bool
@@ -329,6 +335,7 @@ func TestOnlyACdFromARenamedDirectoryPutsTheQuestion(t *testing.T) {
 // name stays as it was because there is none to take. Measured — zsh, bash and
 // ksh93 all answer `cd .` in a removed directory with 0 and an unchanged $PWD.
 func TestCdInADirectoryThatHasBeenRemovedKeepsItsName(t *testing.T) {
+	t.Parallel()
 	root := renamedTree(t)
 	sem := PosixSemantics()
 	sem.CdDestinationIsNotThere = CdDestinationNotThereEntersAndTakesTheKernelsName
@@ -356,6 +363,7 @@ func TestCdInADirectoryThatHasBeenRemovedKeepsItsName(t *testing.T) {
 // before a rename still finds the directory afterwards, which is what
 // `mv ../d ../e; (cd .)` asks of every shell in the panel.
 func TestACopyMadeBeforeTheRenameStillFindsTheDirectory(t *testing.T) {
+	t.Parallel()
 	root := renamedTree(t)
 	sem := PosixSemantics()
 	sem.CdDestinationIsNotThere = CdDestinationNotThereEntersAndTakesTheKernelsName
@@ -384,6 +392,7 @@ func TestACopyMadeBeforeTheRenameStillFindsTheDirectory(t *testing.T) {
 // consulted where the script asked to move and the directory is held where the
 // operating system is about to be handed a path.
 func TestARelativePathFollowsTheDirectoryAndNotTheNameThatCameBack(t *testing.T) {
+	t.Parallel()
 	root := renamedTree(t)
 	sem := PosixSemantics()
 	errs := &strings.Builder{}
@@ -414,6 +423,7 @@ func TestARelativePathFollowsTheDirectoryAndNotTheNameThatCameBack(t *testing.T)
 // gets wrong: the shell is in the new `d` afterwards, so what it writes goes
 // there.
 func TestCdIntoADirectoryThatTookTheNameBackMovesTheShell(t *testing.T) {
+	t.Parallel()
 	root := renamedTree(t)
 	sem := PosixSemantics()
 	sem.CdDestinationIsNotThere = CdDestinationNotThereEntersAndTakesTheKernelsName
@@ -496,6 +506,7 @@ func TestASubshellThatMovesLeavesNoDescriptorBehind(t *testing.T) {
 // the verification from the removed-directory row above it, where the stale
 // name and the built name happen to be the same string.
 func TestADirectoryRenamedAndThenRemovedKeepsTheNameCdBuilt(t *testing.T) {
+	t.Parallel()
 	root := renamedTree(t)
 	sem := PosixSemantics()
 	sem.CdDestinationIsNotThere = CdDestinationNotThereEntersAndTakesTheKernelsName
@@ -525,6 +536,7 @@ func TestADirectoryRenamedAndThenRemovedKeepsTheNameCdBuilt(t *testing.T) {
 // past by it. The control is the same `cd` with the same rename and a gate
 // that allows, which moves.
 func TestAPolicyThatHidesADirectoryIsNotWalkedPastByTheRetry(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name     string
 		decision Decision

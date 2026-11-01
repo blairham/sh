@@ -18,6 +18,7 @@ import (
 // answer 6. A name is one expression among others, which is why this is the
 // same axis and not a second one beside it.
 func TestAStoredValueReadAgainAsAnExpression(t *testing.T) {
+	t.Parallel()
 	sem := func(a Answer) Semantics {
 		s := testSemantics()
 		s.ArithNameValueRecurses = a

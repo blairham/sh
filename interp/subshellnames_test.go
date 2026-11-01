@@ -24,6 +24,7 @@ import (
 // TestASubshellOwnsTheFunctionTable is the three things a subshell can do to a
 // function, and the parent must see none of them.
 func TestASubshellOwnsTheFunctionTable(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// A definition. The control for it is the row below: the subshell
 		// must still be able to *read* the parent's table, or this would
@@ -70,6 +71,7 @@ func TestASubshellOwnsTheFunctionTable(t *testing.T) {
 // says so, and the whole listing is asked for rather than one name: a
 // not-found lookup is three more axes and none of them is the subject.
 func TestASubshellOwnsTheAliasTable(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"defined in one", `alias z=echo; (alias q=ls); alias`, "z='echo'\n"},
 		{"read from the parent", `alias z=echo; (alias z)`, "z='echo'\n"},
@@ -94,6 +96,7 @@ func TestASubshellOwnsTheAliasTable(t *testing.T) {
 // PATH like any other word, and `printf` is on PATH. So a test that ran the
 // name would pass whichever table it read.
 func TestASubshellOwnsTheDisabledBuiltinTable(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"switched off in one", "enable -n :\n(enable -n printf)\nenable -n", "enable -n :\n"},
 		{"switched on in one", "enable -n :\n(enable :)\nenable -n", "enable -n :\n"},

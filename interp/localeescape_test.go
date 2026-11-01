@@ -52,6 +52,7 @@ func echoingUnicodeUnset(p OutsideLocaleEscapePolicy, locale string, unset Answe
 // than echoed: four digits or eight, upper-cased, and the letter chosen by the
 // value rather than taken from the input.
 func TestAnEscapeOutsideTheLocaleMayStandAsWritten(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"padded to four digits", `echo 'a\ue9Z'`, `a\u00E9Z` + "\n"},
 		{"upper-cased", `echo 'a\u00e9Z'`, `a\u00E9Z` + "\n"},
@@ -81,6 +82,7 @@ func TestAnEscapeOutsideTheLocaleMayStandAsWritten(t *testing.T) {
 const refusal = "sh: character not in range\n"
 
 func TestAnEscapeOutsideTheLocaleMayBeRefused(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the text before it, and the newline", `echo 'a\u00e9Z'`, refusal + "a\n"},
 		{"and no newline where none was asked for", `echo -n 'a\u00e9Z'`, refusal + "a"},
@@ -101,6 +103,7 @@ func TestAnEscapeOutsideTheLocaleMayBeRefused(t *testing.T) {
 // The refusal abandons the script, and the status it leaves is the one it
 // already had rather than a failure.
 func TestARefusedEscapeAbandonsTheScriptWithoutFailingIt(t *testing.T) {
+	t.Parallel()
 	want := refusal + "a\n"
 	out, st := run(t, `echo 'a\u00e9Z'; echo AFTER`,
 		echoingUnicode(OutsideLocaleEscapeRefused, "C"))
@@ -113,6 +116,7 @@ func TestARefusedEscapeAbandonsTheScriptWithoutFailingIt(t *testing.T) {
 // is what keeps the axis at the disagreement: a dialect that has not answered
 // it still writes every escape a UTF-8 locale can hold.
 func TestAnEscapeInsideTheLocaleNeverAsksTheAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, locale, src, want string }{
 		{"a UTF-8 locale holds it", "en_US.UTF-8", `echo 'a\u00e9Z'`, "a\u00e9Z\n"},
 		{"and the codeset is read without case or hyphen", "en_US.utf8", `echo 'a\u00e9Z'`, "a\u00e9Z\n"},
@@ -142,6 +146,7 @@ func TestAnEscapeInsideTheLocaleNeverAsksTheAxis(t *testing.T) {
 // give to `s=héllo; echo ${#s}` and to uppercasing `café`. So one question
 // decides all three (#2020), and this is the escape's half of it.
 func TestAnUnsetLocaleDecidesWhetherTheEscapeFits(t *testing.T) {
+	t.Parallel()
 	t.Run("Unicode-aware, so the character is written and no axis is asked",
 		func(t *testing.T) {
 			// UnicodeEscapeOutsideTheLocale left unspecified on purpose:
@@ -183,6 +188,7 @@ func TestAnUnsetLocaleDecidesWhetherTheEscapeFits(t *testing.T) {
 // refuses. It is the answer this shell gave everywhere before the axis existed
 // (#2021).
 func TestAnEscapeOutsideTheLocaleMayBeEncodedAnyway(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `echo 'a\u00e9Z'`, echoingUnicode(OutsideLocaleEscapeEncoded, "C"))
 	if want := "a\u00e9Z\n"; out != want || st != 0 {
 		t.Errorf("got %q status %d, want %q status 0", out, st, want)
@@ -198,6 +204,7 @@ func TestAnEscapeOutsideTheLocaleMayBeEncodedAnyway(t *testing.T) {
 // as well — so it is one rather than whatever was already there, exactly as
 // the builtin sites' zero is zero rather than what was there (#2021).
 func TestADollarSingleEscapeOutsideTheLocaleIsRefusedAtTheWord(t *testing.T) {
+	t.Parallel()
 	dollarSingle := func(p OutsideLocaleEscapePolicy) func(*Runner) {
 		return func(r *Runner) {
 			sem := PosixSemantics()
@@ -269,6 +276,7 @@ func TestADollarSingleEscapeOutsideTheLocaleIsRefusedAtTheWord(t *testing.T) {
 // `61` alone — without the newline the format ends with — and the next command
 // does not run, with the script's status left at 0.
 func TestAPrintfEscapeOutsideTheLocaleEndsTheBuiltin(t *testing.T) {
+	t.Parallel()
 	printfLocale := func(p OutsideLocaleEscapePolicy) func(*Runner) {
 		return func(r *Runner) {
 			sem := PosixSemantics()
@@ -309,6 +317,7 @@ func TestAPrintfEscapeOutsideTheLocaleEndsTheBuiltin(t *testing.T) {
 // `61 c3 a9 5a` there as everywhere, which is what the axis means by a shell
 // that never reads a locale.
 func TestAnEscapeInALocalesCharsetIsTheCharsetsBytes(t *testing.T) {
+	t.Parallel()
 	charsetLocale := func(p OutsideLocaleEscapePolicy, locale string) func(*Runner) {
 		return func(r *Runner) {
 			sem := PosixSemantics()

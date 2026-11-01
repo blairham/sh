@@ -26,6 +26,7 @@ func printfElementSem(assigns Answer) Semantics {
 // before this, so the name was a *scalar* spelled with brackets in it: the
 // array a script then read was untouched and the builtin still reported 0.
 func TestPrintfWithVReachesAnElement(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"an indexed element",
@@ -65,6 +66,7 @@ func TestPrintfWithVReachesAnElement(t *testing.T) {
 // instead of printing it, so a refusal after the fact would have formatted
 // and thrown away.
 func TestPrintfWithVRefusesAFrozenElement(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"an indexed element of a frozen array",

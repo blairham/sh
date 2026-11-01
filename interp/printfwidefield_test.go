@@ -16,6 +16,7 @@ import "testing"
 // pinned from outside by TestAFieldWiderThanFmtRendersIsLaidOutHere, whose
 // first row asserts the padding byte.
 func TestAZeroInTheWidthIsNotTheZeroFlag(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, spec            string
 		wantNarrow, wantFlags string

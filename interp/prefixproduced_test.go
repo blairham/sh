@@ -57,6 +57,7 @@ func countsFromWhatItWasAssigned(r *Runner) string {
 }
 
 func TestAPrefixToAProducedNameIsTakenBackAfterABuiltin(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	sem := permissive()
 	r := producedPrefixRunner(t, &out, &errs, &sem)
@@ -74,6 +75,7 @@ echo "after=[$counter]"`)
 // the control: a take-back that ran too early would pass the test above and
 // make the prefix do nothing at all.
 func TestAPrefixToAProducedNameReachesTheCommandItPrefixes(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	sem := permissive()
 	r := producedPrefixRunner(t, &out, &errs, &sem)
@@ -93,6 +95,7 @@ echo "after=[$counter]"`)
 // A name the shell had already seeded goes back to *that* message rather than
 // to none, which is what makes the record a tri-state rather than a flag.
 func TestAPrefixToAnAlreadySeededProducedNameGoesBackToWhatItHeld(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	sem := permissive()
 	r := producedPrefixRunner(t, &out, &errs, &sem)
@@ -112,6 +115,7 @@ echo "after=[$counter]"`)
 // four stores alone reported that nothing had moved, so the axis was never
 // asked and the seeding stood under *both* readings.
 func TestAPrefixToAProducedNameIsTakenBackAfterAFunctionWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	sem := permissive()
 	sem.AssignmentPrefixPersistsAfterAFunction = No
@@ -135,6 +139,7 @@ echo "after=[$counter]"`)
 // And stands where the other reading is chosen, which is the row that says the
 // comparison reaches the axis rather than restoring on its own.
 func TestAPrefixToAProducedNameStandsAfterAFunctionWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	sem := permissive()
 	sem.AssignmentPrefixPersistsAfterAFunction = Yes
@@ -154,6 +159,7 @@ echo "after=[$counter]"`)
 // so a take-back that only put Runner.assigned back would leave whatever the
 // writer did standing.
 func TestAPrefixToAProducedNameWithAWriterPutsTheProducerBack(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	sem := permissive()
 	r := producedPrefixRunner(t, &out, &errs, &sem)
@@ -174,6 +180,7 @@ echo "after=[$cell]"`)
 // And the writer is reached while the command runs, which is the control on
 // the row above.
 func TestAPrefixToAProducedNameWithAWriterReachesTheCommand(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	sem := permissive()
 	r := producedPrefixRunner(t, &out, &errs, &sem)

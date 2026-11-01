@@ -321,6 +321,7 @@ func TestProcessSubstitutionIgnoresTheProcessTMPDIR(t *testing.T) {
 // sees it. Recorded because the alternative — a field seeded once at
 // construction — would leave the assignment inert with nothing saying so.
 func TestProcessSubstitutionHonorsAnAssignedTMPDIR(t *testing.T) {
+	t.Parallel()
 	assigned := t.TempDir()
 	handedIn := t.TempDir()
 
@@ -342,6 +343,7 @@ func TestProcessSubstitutionHonorsAnAssignedTMPDIR(t *testing.T) {
 // A Runner with no TMPDIR anywhere still works, because the zero value of
 // this package is meant to be usable and a nil Env is genuinely empty.
 func TestProcessSubstitutionWithoutATMPDIR(t *testing.T) {
+	t.Parallel()
 	var r *Runner
 	out, st := runGrammar(t, `cat =(echo hi)`, withFileSubst, func(rr *Runner) {
 		r = rr
@@ -376,6 +378,7 @@ func TestProcessSubstitutionWithoutATMPDIR(t *testing.T) {
 // and naming it is what keeps the second half from passing against a shell
 // that never made one at all.
 func TestASubstitutionsDirectoryIsTakenAwayAgain(t *testing.T) {
+	t.Parallel()
 	tmp := t.TempDir()
 	var r *Runner
 	out, st := runGrammar(t, `cat =(echo hi)`, withFileSubst, func(rr *Runner) {
@@ -407,6 +410,7 @@ func TestASubstitutionsDirectoryIsTakenAwayAgain(t *testing.T) {
 // in the *parent* still works is what says the sharing did not turn into the
 // subshell tidying up behind a shell that was still running.
 func TestASubshellsDirectoryIsTheParentsToRemove(t *testing.T) {
+	t.Parallel()
 	tmp := t.TempDir()
 	var r *Runner
 	out, st := runGrammar(t, `( cat =(echo one) ); cat =(echo two)`, withFileSubst, func(rr *Runner) {
@@ -433,6 +437,7 @@ func TestASubshellsDirectoryIsTheParentsToRemove(t *testing.T) {
 // counter in the box the directory is in is what keeps the names distinct,
 // and it is atomic because these two are goroutines.
 func TestPipelineHalvesNumberTheirPipesApart(t *testing.T) {
+	t.Parallel()
 	tmp := t.TempDir()
 	var r *Runner
 	out, st := runGrammar(t, `cat =(echo a) | ( cat =(echo b) )`, withFileSubst, func(rr *Runner) {
@@ -463,6 +468,7 @@ func TestPipelineHalvesNumberTheirPipesApart(t *testing.T) {
 // one's for the same reason — a directory the framework is about to remove
 // anyway could not tell us who removed it.
 func TestTheHelperRegistersTheCleanUpSoNoTestHasTo(t *testing.T) {
+	t.Parallel()
 	tmp := t.TempDir()
 	var dir string
 	t.Run("a runner left open, which nothing else cleans up after", func(t *testing.T) {
@@ -632,6 +638,7 @@ func TestTheExecReplacementCleansUpBeforeTheExecve(t *testing.T) {
 // the interp constant killed no test at all. This is the assertion that makes
 // the two literals one fact.
 func TestThePipeDirectoryCarriesTheMarkerTheGuardLooksFor(t *testing.T) {
+	t.Parallel()
 	tmp := t.TempDir()
 	var r *Runner
 	if _, st := runGrammar(t, `cat =(echo hi) >/dev/null`, withFileSubst, func(rr *Runner) {

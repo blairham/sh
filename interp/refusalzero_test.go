@@ -31,6 +31,7 @@ func refusalZeroSrc(inner string) string {
 // same refusal in the same dialect, so what varies is only where the shell was
 // when it unwound.
 func TestWhereARefusalsZeroIsRaisedBackToOne(t *testing.T) {
+	t.Parallel()
 	const refuse = `typeset "a[-5]"=v`
 	for _, c := range []struct {
 		name  string
@@ -80,6 +81,7 @@ func TestWhereARefusalsZeroIsRaisedBackToOne(t *testing.T) {
 // that route reports 1 whatever the refusal left, where `-c` reports the
 // refusal's own number.
 func TestAScriptFilesTopLevelRaisesARefusalsZero(t *testing.T) {
+	t.Parallel()
 	const src = "a=(x y)\n" + `typeset "a[-5]"=v` + "\necho after"
 	for _, c := range []struct {
 		name  string
@@ -110,6 +112,7 @@ func TestAScriptFilesTopLevelRaisesARefusalsZero(t *testing.T) {
 // Answered No, the refusal leaves the 1 every other one leaves, wherever it
 // stands — so the raisers are about the 0 and not about the give-up.
 func TestARefusalThatDoesNotLeaveZeroIsUnmovedByTheRaisers(t *testing.T) {
+	t.Parallel()
 	for _, inner := range []string{`typeset "a[-5]"=v`, `typeset "a[-5]"=v && echo yes`} {
 		out, _ := refusalZeroRun(t, No, refusalZeroSrc(inner))
 		if !strings.Contains(out, "next=1") {
@@ -127,6 +130,7 @@ func TestARefusalThatDoesNotLeaveZeroIsUnmovedByTheRaisers(t *testing.T) {
 // a command that merely *failed* is still inverted — `! nosuchcommand` is 0
 // there. The `exit` row was wrong here before this and in the other direction.
 func TestANegationDoesNotInvertAStatusTheShellIsEndingWith(t *testing.T) {
+	t.Parallel()
 	out, _ := refusalZeroRun(t, Yes, "a=(x y)\n( ! exit 3 )\n"+`echo "next=$?"`)
 	if !strings.Contains(out, "next=3") {
 		t.Errorf("out %q inverted the status the shell exited with", out)

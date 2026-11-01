@@ -64,6 +64,7 @@ func sentencePathRun(t *testing.T, sentence, report TraceQuoting, src string) st
 
 // The sentence quotes and the bare path does not, which is the whole field.
 func TestTheSentenceQuotesThePathWhereTheBarePathFormDoesNot(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the plain sentence", `type "a b"`, "a b is '<dir>/bb/a b'"},
 		{"the same sentence under command -V", `command -V "a b"`, "a b is '<dir>/bb/a b'"},
@@ -89,6 +90,7 @@ func TestTheSentenceQuotesThePathWhereTheBarePathFormDoesNot(t *testing.T) {
 // The mutation: with the field at its zero, every sentence above writes the
 // path exactly as it was resolved and nothing else moves.
 func TestTheSentenceWritesThePathAsItIsWhereNothingSaysOtherwise(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the plain sentence", `type "a b"`, "a b is <dir>/bb/a b"},
 		{"command -V", `command -V "a b"`, "a b is <dir>/bb/a b"},
@@ -112,6 +114,7 @@ func TestTheSentenceWritesThePathAsItIsWhereNothingSaysOtherwise(t *testing.T) {
 // name at the front of the sentence, and the bare path with no sentence
 // around it at all.
 func TestQuotingTheReportedNameAndQuotingTheSentencesPathAreNotOneField(t *testing.T) {
+	t.Parallel()
 	// The name field alone: the name is quoted and so is the path, in the
 	// sentence *and* in the bare-path form.
 	if got := sentencePathRun(t, QuoteNever, QuoteShell, `type "a b"`); got != "'a b' is '<dir>/bb/a b'" {

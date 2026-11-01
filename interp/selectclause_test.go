@@ -31,6 +31,7 @@ func answering(t *testing.T, src, input string, tune func(*Semantics)) (out, err
 // The parts every shell agrees on: what the reply selects, what REPLY holds,
 // and that a blank line reprints the menu without running the body.
 func TestSelectReadsAReplyAndNamesTheItem(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, input, want string }{
 		{"in range", "1\n", "got=a rep=1"},
 		{"the other one", "2\n", "got=b rep=2"},
@@ -78,6 +79,7 @@ func TestTheMenuIsPrintedOnceAndThePromptEachTime(t *testing.T) {
 // An empty menu does not prompt at all. The alternative is a loop that asks a
 // question with no answers, forever.
 func TestAnEmptyMenuDoesNotRun(t *testing.T) {
+	t.Parallel()
 	out, errOut := answering(t, `select x in; do echo hi; done; echo "st=$?"`, "1\n", nil)
 	if strings.TrimSpace(out) != "st=0" {
 		t.Errorf("got %q, want st=0", out)
@@ -90,6 +92,7 @@ func TestAnEmptyMenuDoesNotRun(t *testing.T) {
 // `in` omitted builds the menu from the positional parameters, the same
 // distinction the for-loop draws between an absent list and an empty one.
 func TestSelectWithNoListUsesThePositionals(t *testing.T) {
+	t.Parallel()
 	out, _ := answering(t, `set -- p q; select x; do echo "got=$x"; break; done`, "2\n", nil)
 	if strings.TrimSpace(out) != "got=q" {
 		t.Errorf("got %q, want got=q", out)
@@ -99,6 +102,7 @@ func TestSelectWithNoListUsesThePositionals(t *testing.T) {
 // PS3 is read fresh each time, so a body that changes it changes the next
 // prompt.
 func TestThePromptIsReadEachIteration(t *testing.T) {
+	t.Parallel()
 	_, errOut := answering(t, `PS3=A; select x in a b; do PS3=B; echo "$x"; done`, "1\n2\n", nil)
 	if want := "1) a\n2) b\nABB"; errOut != want {
 		t.Errorf("got %q, want %q", errOut, want)
@@ -107,6 +111,7 @@ func TestThePromptIsReadEachIteration(t *testing.T) {
 
 // The three layouts, named by layout rather than by shell.
 func TestSelectMenuLayouts(t *testing.T) {
+	t.Parallel()
 	const twelve = `select x in 1 2 3 4 5 6 7 8 9 10 11 12; do break; done`
 	const three = `select x in a b c; do break; done`
 	for _, tc := range []struct {
@@ -164,6 +169,7 @@ func TestSelectMenuLayouts(t *testing.T) {
 // An unset COLUMNS is 80 in one layout and no limit at all in the other, which
 // is why forty items are four lines in one shell and one line in another.
 func TestSelectAssumesUnboundedWidthIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `select x in 1 2 3 4 5 6 7 8 9 10 11 12; do break; done`
 	for _, tc := range []struct {
 		a    Answer
@@ -185,6 +191,7 @@ func TestSelectAssumesUnboundedWidthIsAnAxis(t *testing.T) {
 // What happens when the input runs out: a status and two newlines, and no
 // shell in the panel answers all three the same way.
 func TestSelectEndOfInputIsThreeQuestions(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name              string
 		success, nl, line Answer
@@ -211,6 +218,7 @@ func TestSelectEndOfInputIsThreeQuestions(t *testing.T) {
 
 // The status the loop leaves when the input ends.
 func TestSelectEofStatusIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		a    Answer
 		want int
@@ -231,6 +239,7 @@ func TestSelectEofStatusIsAnAxis(t *testing.T) {
 // The prompt is withheld unless the input is a terminal, which one shell does
 // and the others do not. A strings.Reader is not one, so the axis decides.
 func TestSelectPromptNeedsTerminalIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		a       Answer
 		wantErr string
@@ -254,6 +263,7 @@ func TestSelectPromptNeedsTerminalIsAnAxis(t *testing.T) {
 //
 // Only reachable from a pipe or a file: a terminal ends every line.
 func TestAnUnterminatedFinalReplyIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `select x in a b; do echo "picked=$x"; break; done; echo "st=$?"`
 	// Taken: the reply chooses, the body runs, and the loop ends on its own
 	// terms rather than on the input running out.
@@ -295,6 +305,7 @@ func answeringErr(t *testing.T, src, input string, tune func(*Semantics)) (out, 
 // The axis is asked only when there is an unterminated reply to ask about, so
 // a script whose input ends properly runs under a dialect that never answered.
 func TestTheUnterminatedReplyAxisIsAskedOnlyWhenItArises(t *testing.T) {
+	t.Parallel()
 	const src = `select x in a b; do echo "picked=$x"; break; done; echo "st=$?"`
 	unset := func(s *Semantics) { s.SelectTakesUnterminatedReply = Unspecified }
 	// A terminated reply never reaches the question.

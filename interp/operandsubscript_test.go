@@ -35,6 +35,7 @@ func runOperandQuoting(t *testing.T, q OperandSubscriptQuotingPolicy, src string
 // first `]` however it was written. The element a script meant to clear
 // survived, silently, in the dialect that quotes (#3049).
 func TestAnOperandSubscriptEndsWhereTheDialectSaysItEnds(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
 		src    string
@@ -62,6 +63,7 @@ func TestAnOperandSubscriptEndsWhereTheDialectSaysItEnds(t *testing.T) {
 // The backslash is the rung between the two: the dialect that reads it and
 // not the quotes removes the one and refuses the others.
 func TestTheBackslashIsItsOwnRungOnTheOperandQuotingLadder(t *testing.T) {
+	t.Parallel()
 	const quoted = `typeset -A a; a['x]y']=1; unset "a['x]y']"; echo "n=${#a[@]}"`
 	if out, _ := runOperandQuoting(t, OperandSubscriptBackslashQuotes, quoted); strings.Contains(out, "n=0") {
 		t.Errorf("got %q, want a single-quoted `]` still to end the subscript", out)
@@ -72,6 +74,7 @@ func TestTheBackslashIsItsOwnRungOnTheOperandQuotingLadder(t *testing.T) {
 // an operand that kept its quotes would name an element nothing has. The
 // control is the plain spelling, which must be untouched under every answer.
 func TestAPlainOperandSubscriptIsUnchangedByTheQuotingAnswer(t *testing.T) {
+	t.Parallel()
 	for _, q := range []OperandSubscriptQuotingPolicy{
 		OperandSubscriptQuotesNothing, OperandSubscriptBackslashQuotes, OperandSubscriptEveryQuote,
 	} {

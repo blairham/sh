@@ -23,6 +23,7 @@ import (
 // binary under argv[0] `sh`, bash 3.2.57, dash and ksh93 every one refuse the
 // letter by name and stay where they were.
 func TestCdQuietIsAnOptionInTheOneShellThatHasIt(t *testing.T) {
+	t.Parallel()
 	// resolved says whether `-P` was in the line, and it is asserted rather
 	// than left alone because the quiet letter is the sort of thing that is
 	// easy to grant by borrowing the neighboring case: a `q` that also set
@@ -85,6 +86,7 @@ func TestCdQuietIsAnOptionInTheOneShellThatHasIt(t *testing.T) {
 // operand is exactly the misreading #1558 was filed for, so both halves are
 // asserted.
 func TestCdQuietIsRefusedByNameWhereTheShellHasNoSuchLetter(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		cmd  string
@@ -130,6 +132,7 @@ func TestCdQuietIsRefusedByNameWhereTheShellHasNoSuchLetter(t *testing.T) {
 // the wrong reason: the operand fallback also leaves `cd -q dir` silent at
 // status 1, which is not the same thing as moving.
 func TestCdQuietIsAskedBeforeTheUnknownLetterQuestion(t *testing.T) {
+	t.Parallel()
 	dir, _ := cdTree(t)
 	sem := PosixSemantics()
 	sem.CdHasQuietOption = No
@@ -171,6 +174,7 @@ func TestCdQuietIsAskedBeforeTheUnknownLetterQuestion(t *testing.T) {
 // of one holds either way. It was written that way first and a mutant walked
 // through it.
 func TestCdQuietUnansweredIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name    string
 		refuses Answer
@@ -216,6 +220,7 @@ const unansweredTail = "the shells disagree here and no dialect was chosen"
 // `cd --`, which is the same rule TestCdWithOnePathOptionAsksNothing states
 // for the other conditional axis.
 func TestCdWithoutAQuietLetterAsksNothingAboutOne(t *testing.T) {
+	t.Parallel()
 	for _, cmd := range []string{"cd link/sub", "cd -P link/sub", "cd -- link/sub", "cd -L link/sub"} {
 		t.Run(cmd, func(t *testing.T) {
 			dir, _ := cdTree(t)
@@ -248,6 +253,7 @@ func TestCdWithoutAQuietLetterAsksNothingAboutOne(t *testing.T) {
 // is reached. Measured in zsh 5.9.2, where a `-q` directory beside a `-Z` one
 // is entered for `cd -Z` and not for `cd -q`.
 func TestADirectoryCalledDashQIsReachedThroughTheEndOfOptions(t *testing.T) {
+	t.Parallel()
 	dir, _ := cdTree(t)
 	if err := os.Mkdir(filepath.Join(dir, "-q"), 0o755); err != nil {
 		t.Fatal(err)

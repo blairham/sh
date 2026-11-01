@@ -42,6 +42,7 @@ func runForHeader(t *testing.T, src string) string {
 }
 
 func TestAForHeaderPartIsQuotedAsItWasWritten(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		// A part the parser could read, failing when it ran: the blank after
 		// the divisor is what the offset has to land in front of.
@@ -66,6 +67,7 @@ func TestAForHeaderPartIsQuotedAsItWasWritten(t *testing.T) {
 // i++ ))` — bash 5.3.15 writes `+ (( i=0  ))`, two blanks before the close,
 // and zsh 5.9.2 `+zsh:1> i=0 `.
 func TestAForHeaderPartIsTracedWithWhatFollowedItAndNotWhatCameBefore(t *testing.T) {
+	t.Parallel()
 	out, _ := runGrammar(t, "set -x; for (( i=0 ; i<1 ; i++ )); do :; done",
 		func(d *syntax.Dialect) { d.CStyleFor = true },
 		func(r *Runner) {

@@ -62,6 +62,7 @@ var nulValueRows = []struct{ name, spelling string }{
 }
 
 func TestAConditionsOperandKeepsANULTheValueCarried(t *testing.T) {
+	t.Parallel()
 	for _, tc := range nulValueRows {
 		t.Run(tc.name, func(t *testing.T) {
 			src := `v=` + tc.spelling + `; [[ $v == "$v" ]] && printf same || printf differs`
@@ -81,6 +82,7 @@ func TestAConditionsOperandKeepsANULTheValueCarried(t *testing.T) {
 // a condition at all, so a row that reads "three characters" is not reading
 // its own answer back.
 func TestAConditionsOperandDoesNotShortenTheValueItCompares(t *testing.T) {
+	t.Parallel()
 	const decl = `v=$'a\0b'; `
 	for _, tc := range []struct{ name, cond, want string }{
 		// What the shortening looked like: the two surviving bytes.
@@ -109,6 +111,7 @@ func TestAConditionsOperandDoesNotShortenTheValueItCompares(t *testing.T) {
 // marking, and a fix that marked everything unconditionally — or that stopped
 // marking — would pass every row above and break this one.
 func TestAValuesBracketInsideAWrittenSubscriptIsStillPartOfTheKey(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; k='x]'; m[$k]=5; m[x]=9; [[ m[$k] -eq 5 ]] && printf key || printf other`
 	if got, st := run(t, src, valuesBracketIsPartOfTheKey); got != "key" || st != 0 {
 		t.Errorf("%q (status %d), want %q at 0", got, st, "key")

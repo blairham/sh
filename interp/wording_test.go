@@ -11,6 +11,7 @@ import (
 )
 
 func TestWordingFallsBackToTheSubstrate(t *testing.T) {
+	t.Parallel()
 	// A dialect states only where it differs, so an unset format must not
 	// produce an empty message.
 	if got := Wording("", "%s: not found", "x"); got != "x: not found" {
@@ -67,6 +68,7 @@ func TestWordingFallsBackToTheSubstrate(t *testing.T) {
 // ScriptLocation lets a dialect name line 1 in a file while leaving it
 // unnamed under `-c`, which is what ForScript switches to.
 func TestScriptDiagnosticsCanNameTheirFirstLine(t *testing.T) {
+	t.Parallel()
 	d := Diagnostics{
 		Location:       LocationLineWordAfterFirst,
 		ScriptLocation: LocationLineWord,
@@ -94,6 +96,7 @@ func TestScriptDiagnosticsCanNameTheirFirstLine(t *testing.T) {
 // general answer alone, which is what every dialect without a prompt answer
 // of its own gets.
 func TestPromptDiagnosticsAreTheirOwnRoute(t *testing.T) {
+	t.Parallel()
 	d := Diagnostics{
 		Location:               LocationLineWord,
 		PromptLocation:         LocationNameOnly,

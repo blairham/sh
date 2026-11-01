@@ -28,6 +28,7 @@ func nesting(d *syntax.Dialect) {
 // bash 3.2, bash 5.3 and dash answer `bad substitution` and ksh93 a syntax
 // error, and the corpus records that half.
 func TestAnExpansionStandsWhereANameWould(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -120,6 +121,7 @@ func TestAnExpansionStandsWhereANameWould(t *testing.T) {
 // and an implementation that appended it would be answering a shape no shell
 // reads.
 func TestTextBesideANestedExpansionIsNotAName(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`v=abc; printf "[%s]" "${x${v}}"`,
 		`v=abc; printf "[%s]" "${${v}x}"`,
@@ -150,6 +152,7 @@ func TestTextBesideANestedExpansionIsNotAName(t *testing.T) {
 // `"${${a[@]}[@]}"` — the subscript said outright — is one field each. See
 // nestedsub_test.go for that half.
 func TestANestedInnerThatIsAListKeepsItsElements(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"unquoted, one field per element", `a=(one two); printf "[%s]" ${${a[@]}}`, "[one][two]"},
 		{"quoted, one field with them joined", `a=(one two); printf "[%s]" "${${a[@]}}"`, "[one two]"},
@@ -187,6 +190,7 @@ func TestANestedInnerThatIsAListKeepsItsElements(t *testing.T) {
 // Without the grammar flag the same characters are not this shape at all, and
 // the expansion is refused rather than read one shell's way.
 func TestNestingIsAGrammarFlag(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `v=abc; printf "[%s]" "${${v}#a}"`, func(d *syntax.Dialect) {
 		d.ParamExpansionFlags = true
 	}, nil)
@@ -201,6 +205,7 @@ func TestNestingIsAGrammarFlag(t *testing.T) {
 // A nested expansion's inner runs its substitutions once, not once per
 // operator — the same promise an ordinary operand makes.
 func TestANestedInnerRunsOnce(t *testing.T) {
+	t.Parallel()
 	const src = `printf "[%s]" "${$(printf x >>marks; echo abc)#a}"; printf "n=%s" "$(cat marks)"`
 	out, st := runGrammar(t, src, nesting, nil)
 	if want := "[bc]n=x"; out != want || st != 0 {
@@ -226,6 +231,7 @@ func TestANestedInnerRunsOnce(t *testing.T) {
 // around a `$(…)` is ordinary in a plugin manager, and a `git` or a `date` in
 // there is a duplicated call.
 func TestANestedInnerRunsOnceUnderEveryConditional(t *testing.T) {
+	t.Parallel()
 	const mark = `$(printf x >>marks; echo abc)`
 	for _, tc := range []struct{ name, src, want string }{
 		// The reproduction, and the shape the issue was filed on.
@@ -263,6 +269,7 @@ func TestANestedInnerRunsOnceUnderEveryConditional(t *testing.T) {
 // there is no outer name. A runner that fell back to an empty name would give
 // the same answer for `${${v}}` and `${${w}}`, which this tells apart.
 func TestTheOuterOperatorSeesTheInnersValue(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `v=abc; w=xyz; printf "[%s][%s]" "${${v}#a}" "${${w}#x}"`, nesting, nil)
 	if want := "[bc][yz]"; out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, want)
@@ -273,6 +280,7 @@ func TestTheOuterOperatorSeesTheInnersValue(t *testing.T) {
 // the path the inner came to. Its own semantics axis says whether `:h` is a
 // modifier at all, so the test names it rather than relying on a default.
 func TestAModifierFollowsANestedExpansion(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `v=/a/b/c.txt; printf "[%s]" "${${v}:h}"`, nesting,
 		func(r *Runner) {
 			sem := testSemantics()
@@ -289,6 +297,7 @@ func TestAModifierFollowsANestedExpansion(t *testing.T) {
 // dialect that reads an expansion's result as a pattern never escapes it, so
 // the test that matters is the one where it does.
 func TestANestedValueCarriesNoGlobMarks(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a bare nesting", `v="a*b"; printf "[%s]" "${${v}}"`, "[a*b]"},
 		{"and one with an operator", `v="a*b"; printf "[%s]" "${${v}#a}"`, "[*b]"},
@@ -321,6 +330,7 @@ func TestANestedValueCarriesNoGlobMarks(t *testing.T) {
 // Before #929 the bare inner joined to a single field and this expansion
 // returned `one two` at status 0, which is the silent shape of the same gap.
 func TestANestedBareArrayNameIsTheListLikeTheSubscriptedOne(t *testing.T) {
+	t.Parallel()
 	listly := func(r *Runner) {
 		sem := *r.Semantics
 		sem.ArrayScalarIsTheWholeArray = Yes

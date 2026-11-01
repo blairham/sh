@@ -38,6 +38,7 @@ func matchesUnder(t *testing.T, p UnknownClassPolicy, pattern, subject string) b
 // `[[:nope:]]` on its own is a miss under all three, because there is nothing
 // beside the name for it to have an effect on.
 func TestAnUnknownClassNameHasThreeAnswers(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		pattern, subject     string
 		inert, ends, empties bool
@@ -77,6 +78,7 @@ func TestAnUnknownClassNameHasThreeAnswers(t *testing.T) {
 // answers exactly as `[a[:nope:]b]` under every policy, measured in every
 // column of the panel.
 func TestAnEmptyClassNameIsAnUnknownOne(t *testing.T) {
+	t.Parallel()
 	for _, p := range []UnknownClassPolicy{
 		UnknownClassIsInert,
 		UnknownClassEndsTheScan,
@@ -97,6 +99,7 @@ func TestAnEmptyClassNameIsAnUnknownOne(t *testing.T) {
 // in force — otherwise the policy would be a rule about brackets rather than
 // about a name nobody recognizes.
 func TestAKnownClassIsUntouchedByTheAxis(t *testing.T) {
+	t.Parallel()
 	for _, p := range []UnknownClassPolicy{
 		UnknownClassIsInert,
 		UnknownClassEndsTheScan,
@@ -124,6 +127,7 @@ func TestAKnownClassIsUntouchedByTheAxis(t *testing.T) {
 // which answers nothing, still matches an ordinary bracket and still refuses
 // this one.
 func TestTheUnknownClassAxisIsAskedOnlyWhenItApplies(t *testing.T) {
+	t.Parallel()
 	if out, st := run(t, `case b in [abc]) echo in;; *) echo out;; esac`,
 		withSem(CoreSemantics())); out != "in\n" || st != 0 {
 		t.Errorf("an ordinary bracket in the core: got %q status %d", out, st)

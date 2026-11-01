@@ -41,6 +41,7 @@ func presented(s *Semantics) {
 // builtin, so this is the mark deciding which answer a name gets rather than
 // every prelude name being promoted.
 func TestEverySurfaceCallsAPresentedNameABuiltin(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, out string
 		status   int
@@ -65,6 +66,7 @@ func TestEverySurfaceCallsAPresentedNameABuiltin(t *testing.T) {
 // the shell's own command and refuse a function, and a dialect written as
 // shell has to reconstruct that boundary by hand.
 func TestTheWordsThatAskForABuiltinReachAPresentedName(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"builtin q", "command q"} {
 		out, errs, st := preludeListingRun(t, listingPrelude, src+"\n", presented)
 		if out != "q\n" || errs != "" || st != 0 {
@@ -79,6 +81,7 @@ func TestTheWordsThatAskForABuiltinReachAPresentedName(t *testing.T) {
 // spelling exists — and it is the case a fix that merely added the names to
 // a listing would still get wrong.
 func TestAWordAskingForABuiltinPassesOverAScriptsOwnFunction(t *testing.T) {
+	t.Parallel()
 	src := "q() { echo wrapped; builtin q; }\nq\n"
 	out, errs, st := preludeListingRun(t, listingPrelude, src, presented)
 	if want := "wrapped\nq\n"; out != want || errs != "" || st != 0 {
@@ -92,6 +95,7 @@ func TestAWordAskingForABuiltinPassesOverAScriptsOwnFunction(t *testing.T) {
 // nothing but this would stop the word reaching it — which would have made
 // the switch a silent no-op the moment `enable` started accepting the name.
 func TestSwitchingAPresentedNameOffStopsTheWordFinding(t *testing.T) {
+	t.Parallel()
 	out, _, st := preludeListingRun(t, listingPrelude, "enable -n q\nq\n", presented)
 	if out != "" {
 		t.Errorf("stdout = %q, want nothing — the name was switched off", out)
@@ -119,6 +123,7 @@ func TestSwitchingAPresentedNameOffStopsTheWordFinding(t *testing.T) {
 // naming one of these answered `not a shell builtin` at 1, from the same
 // missing table `type` was reading.
 func TestSwitchingAPresentedNameIsNotRefused(t *testing.T) {
+	t.Parallel()
 	out, errs, st := preludeListingRun(t, listingPrelude, "enable p\n", presented)
 	if out != "" || errs != "" || st != 0 {
 		t.Errorf("stdout %q stderr %q status %d, want a silent 0", out, errs, st)
@@ -146,6 +151,7 @@ func TestSwitchingAPresentedNameIsNotRefused(t *testing.T) {
 // a rule keyed on the live table instead of on the prelude's record would
 // get the last two rows wrong in a way nothing else asks about.
 func TestAScriptsFunctionShadowsAPresentedNameRatherThanReplacingIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, out string }{
 		{"p() { echo mine; }\ntype p\n", "p is a function\n"},
 		{"p() { echo mine; }\ncompgen -A builtin p\n", "p\nprintf\npwd\n"},

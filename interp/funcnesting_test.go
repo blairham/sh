@@ -51,6 +51,7 @@ func boundedZshWise() func(*Runner) {
 // script that set the parameter to hold a runaway short got no refusal and the
 // wrong count in the variable it was watching.
 func TestAFunctionCallIsBoundedByTheParameter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The bound lets that many calls stand and refuses the next, so a
 		// counter in the body reaches exactly the bound.
@@ -115,6 +116,7 @@ func boundJunk(value string) string {
 // The control for the suite above: without it every row there would pass in a
 // shell that bounded calls at five whatever anybody said.
 func TestNoParameterMeansNoBoundOfTheScripts(t *testing.T) {
+	t.Parallel()
 	src := boundJunk("2")
 	out, _ := run(t, src, func(r *Runner) {
 		sem := permissive()
@@ -138,6 +140,7 @@ func TestNoParameterMeansNoBoundOfTheScripts(t *testing.T) {
 // it as no bound, so a change that made zero a bound by making every
 // unreadable value one would fail this row.
 func TestZeroIsABoundWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"zero admits no call at all",
@@ -170,6 +173,7 @@ func TestZeroIsABoundWhereTheDialectSaysSo(t *testing.T) {
 // `||` is refused in both, which is what says this is the give-up growing
 // rather than a different refusal.
 func TestTheRefusalEndsTheScriptWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	src := "f() { f; }\nFUNCNEST=2\nf || echo or\necho AFTER"
 	out, st := run(t, src, boundedZshWise())
 	got := strings.TrimSpace(strings.ReplaceAll(out, "sh: ", ""))

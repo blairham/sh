@@ -38,6 +38,7 @@ func keyEndsAxis(a Answer) func(*Runner) {
 // The table stores through the subscript and reads back under both keys, so
 // which element moved says which reading was taken.
 func TestAKeyEndsOrDoesNotEndAtAQuotedExpansion(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, ends, keeps string
 	}{
@@ -96,6 +97,7 @@ func TestAKeyEndsOrDoesNotEndAtAQuotedExpansion(t *testing.T) {
 // that says this is the performing and not the quotation: the key is the
 // whole subscript under either answer.
 func TestAQuotedRunWithNoExpansionEndsNothing(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; (( m[q'r'z] = 42 )); printf '[%s]' "${m[qrz]}"`
 	for _, a := range []Answer{Yes, No} {
 		out, st := runGrammar(t, src, quotedKeyGrammar, keyEndsAxis(a))
@@ -108,6 +110,7 @@ func TestAQuotedRunWithNoExpansionEndsNothing(t *testing.T) {
 // And an apostrophe *inside a double quotation* is not a run at all, so the
 // key keeps every character under either answer — the second control.
 func TestAnApostropheInsideADoubleQuotationEndsNothing(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; kq=q; (( m["'$kq'z"] = 42 )); printf "[%s]" "${m["'q'z"]}"`
 	for _, a := range []Answer{Yes, No} {
 		out, st := runGrammar(t, src, quotedKeyGrammar, keyEndsAxis(a))
@@ -121,6 +124,7 @@ func TestAnApostropheInsideADoubleQuotationEndsNothing(t *testing.T) {
 // apostrophes stop the expansion there, so there is nothing performed for a
 // key to end at.
 func TestAnArrivedSubscriptsKeyDoesNotEndEarly(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; kq=q; e="m['\$kq'z]"; (( $e = 42 )); printf '[%s]' "${m[$'\x24'kqz]}"`
 	for _, a := range []Answer{Yes, No} {
 		out, st := runGrammar(t, src, quotedKeyGrammar, keyEndsAxis(a))
@@ -133,6 +137,7 @@ func TestAnArrivedSubscriptsKeyDoesNotEndEarly(t *testing.T) {
 // An axis nothing has answered is a refusal by name rather than a guess at
 // which of the two keys was meant.
 func TestAnUnansweredKeyEndingIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; kq=q; (( m[q'$kq'z] = 42 ))`
 	out, _ := runGrammar(t, src, quotedKeyGrammar, keyEndsAxis(Unspecified))
 	if !strings.Contains(out, "ending at the apostrophe-quoted run") {

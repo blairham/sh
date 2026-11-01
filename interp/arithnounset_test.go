@@ -27,6 +27,7 @@ func arithNounset(refused, fatal Answer) func(*Runner) {
 // seam rather than a row: they all go through one lookup, so a fix that
 // reached only the expansion would pass a test written on `$(( ))` alone.
 func TestAnUnsetNameInAnExpressionUnderNounset(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"an expansion", `set -u; echo $((b)); echo OK`},
 		{"an operand of one", `set -u; a=1; echo $((a+b)); echo OK`},
@@ -55,6 +56,7 @@ func TestAnUnsetNameInAnExpressionUnderNounset(t *testing.T) {
 // It is **unset** and not empty, at either value of the axis — which is what
 // makes it a lookup rule rather than a reading of the text.
 func TestAnEmptyNameInAnExpressionIsZeroUnderNounset(t *testing.T) {
+	t.Parallel()
 	for _, a := range []Answer{Yes, No} {
 		src := `set -u; b=; echo $((b+7)); echo OK`
 		out, st := run(t, src, arithNounset(a, a))
@@ -67,6 +69,7 @@ func TestAnEmptyNameInAnExpressionIsZeroUnderNounset(t *testing.T) {
 // And with the option off the refusal is never raised, whatever the axis says
 // — so the axis widens `set -u` rather than changing what arithmetic reads.
 func TestTheExpressionIsZeroWithTheOptionOff(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `echo $((b+7)); echo OK`, arithNounset(Yes, Yes))
 	if strings.TrimSpace(out) != "7\nOK" || st != 0 {
 		t.Errorf("= %q status %d, want 7 then OK at 0", out, st)
@@ -78,6 +81,7 @@ func TestTheExpressionIsZeroWithTheOptionOff(t *testing.T) {
 // shows: at Yes the shell is gone, at No the construct's status is left behind
 // and the next command runs.
 func TestWhetherTheArithmeticNounsetRefusalIsFatal(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"an arithmetic command", `set -u; (( b )); echo OK`},
 		{"a let operand", `set -u; let "x=b"; echo OK`},

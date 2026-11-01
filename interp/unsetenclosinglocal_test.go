@@ -26,6 +26,7 @@ func keepsTheBinding(s *Semantics) { s.UnsetRemovesAnEnclosingLocal = No }
 // callee sees, what the owning call sees after the callee returns, and what
 // the script sees once the owning call has returned too.
 func TestUnsetOfACallersLocalCanTakeTheBindingAway(t *testing.T) {
+	t.Parallel()
 	const src = `v=GLOBAL
 g() { unset v; echo "g=[${v-UNSET}]"; }
 f() { local v=L; g; echo "f=[${v-UNSET}]"; }
@@ -48,6 +49,7 @@ echo "top=[${v-UNSET}]"`
 // declaration it was written beside would fail here rather than pass by
 // accident.
 func TestUnsetOfTheRunningScopesOwnLocalIsNotTheAxis(t *testing.T) {
+	t.Parallel()
 	const src = `v=GLOBAL
 f() { local v=L; unset v; echo "f=[${v-UNSET}]"; }
 f
@@ -66,6 +68,7 @@ echo "top=[${v-UNSET}]"`
 // the same name, which is the sharper form of the control above: a search
 // that walked outwards looking for *any* shadow would take the caller's here.
 func TestTheRunningScopesLocalAnswersBeforeAnEnclosingOne(t *testing.T) {
+	t.Parallel()
 	const src = `v=GLOBAL
 g() { local v=G; unset v; echo "g=[${v-UNSET}]"; }
 f() { local v=F; g; echo "f=[${v-UNSET}]"; }
@@ -85,6 +88,7 @@ echo "top=[${v-UNSET}]"`
 // name, the innermost enclosing one is taken and the *next* one out shows
 // through — not the global underneath them both.
 func TestTakingABindingTakesTheInnermostEnclosingOne(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `v=GLOBAL
 h() { unset v; echo "h=[${v-UNSET}]"; }
 g() { local v=G; h; echo "g=[${v-UNSET}]"; }
@@ -101,6 +105,7 @@ echo "top=[${v-UNSET}]"`, takesTheBinding, Diagnostics{})
 // binding taken is the innermost one that exists, however many calls stand
 // between it and the `unset`.
 func TestAScopeWithNoShadowIsSteppedOver(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `v=GLOBAL
 h() { unset v; echo "h=[${v-UNSET}]"; }
 g() { h; }
@@ -120,6 +125,7 @@ echo "top=[${v-UNSET}]"`, takesTheBinding, Diagnostics{})
 // A shell that merely made the outer value *visible* would give the first two
 // readings and leave `top` at GLOBAL.
 func TestATakenBindingIsGoneRatherThanHidden(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `v=GLOBAL
 g() { unset v; v=NEW; echo "g=[${v-UNSET}]"; }
 f() { local v=L; g; echo "f=[${v-UNSET}]"; }
@@ -137,6 +143,7 @@ echo "top=[${v-UNSET}]"`, takesTheBinding, Diagnostics{})
 // belongs to the callee, and what the caller sees when the callee returns is
 // what lay beyond — not the value the caller declared.
 func TestTheOwningCallHasNothingLeftToPutBack(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `v=GLOBAL
 g() { unset v; local v=GL; echo "g=[${v-UNSET}]"; }
 f() { local v=F; g; echo "f=[${v-UNSET}]"; }
@@ -152,6 +159,7 @@ echo "top=[${v-UNSET}]"`, takesTheBinding, Diagnostics{})
 // A second `unset` reaches the next binding out, and at the bottom of the
 // stack that is the ordinary removal: the name is gone for good.
 func TestASecondUnsetReachesWhatTheFirstRevealed(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `v=GLOBAL
 g() { unset v; echo "one=[${v-UNSET}]"; unset v; echo "two=[${v-UNSET}]"; }
 f() { local v=L; g; echo "f=[${v-UNSET}]"; }
@@ -167,6 +175,7 @@ echo "top=[${v-UNSET}]"`, takesTheBinding, Diagnostics{})
 // the name absent rather than leaving the call's empty behind, and the script
 // sees nothing afterwards either.
 func TestTakingABindingThatDisplacedNothing(t *testing.T) {
+	t.Parallel()
 	const src = `g() { unset v; echo "g=[${v-UNSET}]"; }
 f() { local v=L; g; echo "f=[${v-UNSET}]"; }
 f
@@ -185,6 +194,7 @@ echo "top=[${v-UNSET}]"`
 // that one as well: a fix that reached the scalar table alone would leave the
 // callee reading the caller's elements.
 func TestTakingABindingReachesTheArrayTable(t *testing.T) {
+	t.Parallel()
 	const src = `v=(G1 G2)
 g() { unset v; echo "g=[${v[@]-UNSET}]"; }
 f() { local v=(L1 L2); g; echo "f=[${v[@]-UNSET}]"; }
@@ -205,6 +215,7 @@ echo "top=[${v[@]-UNSET}]"`
 // A subshell holds its own copy of the scopes, so what it takes away is its
 // own: the parent's call still has the binding it declared.
 func TestABindingTakenInASubshellIsTheSubshells(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `v=GLOBAL
 g() { unset v; echo "g=[${v-UNSET}]"; }
 f() { local v=L; ( g ); echo "f=[${v-UNSET}]"; }
@@ -222,6 +233,7 @@ echo "top=[${v-UNSET}]"`, takesTheBinding, Diagnostics{})
 // has not answered it still unsets a name at the top level, and still unsets
 // its own local.
 func TestUnsetAsksTheAxisOnlyAtTheDisagreement(t *testing.T) {
+	t.Parallel()
 	unanswered := func(s *Semantics) { s.UnsetRemovesAnEnclosingLocal = Unspecified }
 	for _, tc := range []struct{ name, src, want string }{
 		{"a top-level name", `v=GLOBAL
@@ -248,6 +260,7 @@ echo "top=[${v-UNSET}]"`, "f=[UNSET]\ntop=[GLOBAL]\n"},
 // And where they *do* differ an unanswered axis refuses by name and leaves
 // the binding where it is, rather than quietly picking one of the two.
 func TestUnsetRefusesAnUnansweredAxisAtTheDisagreement(t *testing.T) {
+	t.Parallel()
 	out, errs, _ := declRun(t, `v=GLOBAL
 g() { unset v; echo "st=$? g=[${v-UNSET}]"; }
 f() { local v=L; g; echo "f=[${v-UNSET}]"; }
@@ -271,6 +284,7 @@ echo "top=[${v-UNSET}]"`, func(s *Semantics) {
 // both ways: the getter reads the axis back rather than a second bit, so the
 // two cannot drift apart.
 func TestTheSwitchOverTakingACallersBinding(t *testing.T) {
+	t.Parallel()
 	// The Runner runs nothing here — the question is what the getter reads
 	// off the vector — so it needs no directory. testrunner:bare
 	r := &Runner{}
@@ -297,6 +311,7 @@ func TestTheSwitchOverTakingACallersBinding(t *testing.T) {
 // note that the frame has to be reachable from a function the prefixed one
 // *calls*, which is the shape the panel measures.
 func TestUnsetOfACallsPrefixBindingCanTakeItAway(t *testing.T) {
+	t.Parallel()
 	const src = `v=GLOBAL
 g() { unset v; echo "g=[${v-UNSET}]"; }
 f() { g; echo "f=[${v-UNSET}]"; }
@@ -320,6 +335,7 @@ echo "top=[${v-UNSET}]"`
 // in the middle put back the slice it had captured on the way in and
 // resurrected the entry.
 func TestAWriteAfterUnsettingACallsPrefixBindingReachesTheShell(t *testing.T) {
+	t.Parallel()
 	const src = `q=GLOBAL
 d() { unset q; q=NEW; }
 c() { d; echo "c=[${q-UNSET}]"; }
@@ -338,6 +354,7 @@ echo "top=[${q-UNSET}]"`
 // The innermost frame is the one removed: a call two frames out keeps its own
 // entry, which is what makes this a stack rather than one live prefix.
 func TestUnsetTakesTheInnermostCallsPrefixBinding(t *testing.T) {
+	t.Parallel()
 	const src = `z=GLOBAL
 b() { unset z; echo "b=[${z-UNSET}]"; }
 a() { z=INNER b; echo "a=[${z-UNSET}]"; }
@@ -353,6 +370,7 @@ echo "top=[${z-UNSET}]"`
 // whatever a call further out is holding: the local is unset where it stands
 // under both answers, and the prefix's entry is untouched.
 func TestARunningScopesLocalIsNotACallsPrefixBinding(t *testing.T) {
+	t.Parallel()
 	const src = `w=GLOBAL
 k() { local w=L; unset w; echo "k=[${w-UNSET}]"; }
 j() { k; echo "j=[${w-UNSET}]"; }
@@ -392,6 +410,7 @@ func records(yes Answer) func(*Semantics) {
 // control above: the name is unset either way, and in the column that keeps
 // the record it is still a row in a listing.
 func TestUnsetOfTheRunningScopesOwnLocalLeavesItDeclared(t *testing.T) {
+	t.Parallel()
 	const src = `v=GLOBAL
 f() { local v=L; unset v; typeset -p v; echo "st=$?"; echo "f=[${v-UNSET}]"; }
 f
@@ -412,6 +431,7 @@ typeset -p v`
 // took the local. The two records are two fields for exactly this reader —
 // a bare declaration nothing has unset *is* a parameter and takes the turn.
 func TestThePlaceholderIsNotAParameterTheFunctionTableHidesBehind(t *testing.T) {
+	t.Parallel()
 	const src = `wrap() {
 f() { echo "f ran"; }
 local f
@@ -434,6 +454,7 @@ wrap`
 // The letters go with the value, which is what says the record is the bare
 // one rather than the declaration the scope started with.
 func TestUnsetOfALocalDropsItsLettersAndKeepsTheRecord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, decl string }{
 		{"the export letter", "local -x v"},
 		{"the integer letter", "local -i v"},
@@ -454,6 +475,7 @@ func TestUnsetOfALocalDropsItsLettersAndKeepsTheRecord(t *testing.T) {
 // with the attributes, so this is about the binding rather than about
 // `unset`.
 func TestUnsetAtTheTopLevelLeavesNoRecord(t *testing.T) {
+	t.Parallel()
 	const src = `typeset v
 v=1
 unset v
@@ -475,6 +497,7 @@ typeset -p v`
 // bare — an exported global, an integer global, and the export letter the
 // declaration wrote itself (#4050).
 func TestThePlaceholderKeepsTheExportACallPrefixGaveIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the prefix's export stays on the record",
@@ -526,6 +549,7 @@ func TestThePlaceholderKeepsTheExportACallPrefixGaveIt(t *testing.T) {
 // a listing, for the reason declarationexport_test.go gives. See
 // hiddenExports.
 func TestThePlaceholderOverACallPrefixIsWhatAChildIsTold(t *testing.T) {
+	t.Parallel()
 	const probe = `/usr/bin/env | /usr/bin/grep '^foo=' || echo "(none)"`
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -564,6 +588,7 @@ func TestThePlaceholderOverACallPrefixIsWhatAChildIsTold(t *testing.T) {
 // rows, and note that its two answers are told apart only where the
 // missing-name axis says something, which is why that one is Yes here.
 func TestAValuelessRecordCanStillBeANameTheShellHas(t *testing.T) {
+	t.Parallel()
 	const src = `v=GLOBAL
 f() { local v=L; unset v; typeset -p v; echo "st=$?"; echo "[${v-UNSET}]"; }
 f`
@@ -594,6 +619,7 @@ f`
 // which is the control that keeps the axis from being read as "`-p` never
 // reports".
 func TestANameWithNoRecordIsStillMissing(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Yes, No} {
 		out, errs, st := declRun(t, "typeset -p nosuchzz\necho \"st=$?\"", func(s *Semantics) {
 			records(No)(s)
@@ -611,6 +637,7 @@ func TestANameWithNoRecordIsStillMissing(t *testing.T) {
 // And a dialect whose listing *does* write a row never reaches the axis at
 // all: the row is what the name being known then means.
 func TestAListedRecordNeverAsksWhetherTheNameIsThere(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, "v=GLOBAL\nf() { local v=L; unset v; typeset -p v; }\nf",
 		func(s *Semantics) {
 			records(Yes)(s)

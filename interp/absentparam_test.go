@@ -49,6 +49,7 @@ func runAbsent(t *testing.T, src string) (out, errs string, status int) {
 // shell that expanded to nothing quietly, which is the exact bug this seam
 // exists to prevent.
 func TestAnAbsentParameterRefusesByNameOnEveryRoute(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`printf '[%s]' "$nothere"`,
 		`printf '[%s]' "${nothere}"`,
@@ -78,6 +79,7 @@ func TestAnAbsentParameterRefusesByNameOnEveryRoute(t *testing.T) {
 // conditional operators — which are a script saying what to do when there is
 // no value — are left alone, exactly as `set -u` leaves them.
 func TestAnAbsentParameterYieldsToTheScriptsOwnAnswer(t *testing.T) {
+	t.Parallel()
 	out, errs, status := runAbsent(t, `printf '[%s]' "${nothere-d}" "${nothere+set}"
 nothere=mine
 printf '[%s]' "$nothere" "${#nothere}"`)
@@ -95,6 +97,7 @@ printf '[%s]' "$nothere" "${#nothere}"`)
 // would let a module load over a parameter that reads empty, undoing the rule
 // this seam exists to serve.
 func TestAnAbsentParameterIsNotADynamicOne(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.SetAbsentParameter("nothere", "parameter not implemented yet")
@@ -130,6 +133,7 @@ func TestAnAbsentParameterIsNotADynamicOne(t *testing.T) {
 // Both keys are here for that reason: a test with only one of them passes
 // against a fix that reads the subscript first.
 func TestAnAbsentParameterRefusesAnUnsetOfAnElement(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`unset "nothere[k]"`,
 		`unset 'nothere[somepath]'`,
@@ -158,6 +162,7 @@ func TestAnAbsentParameterRefusesAnUnsetOfAnElement(t *testing.T) {
 // this the refusal would be about owning a spelling rather than about reading
 // something absent.
 func TestUnsettingAnElementOfAnAbsentNameTheScriptOwnsIsOrdinary(t *testing.T) {
+	t.Parallel()
 	out, errs, status := runAbsentWithVar(t, `nothere=one
 unset "nothere[1]"
 printf '[%s]' "${nothere-gone}"`, "unused", "")
@@ -236,6 +241,7 @@ func runAbsentSetTest(t *testing.T, src string) (out, errs string, status int) {
 // operator takes it away, which is measured rather than read off the flag —
 // see refuseAbsentParameter for the reference's rows.
 func TestTheSetTestOfAnAbsentParameterIsAnswered(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`printf '[%s]' "${+nothere}"`, "[0]"},
 		// A subscript does not make it a value read.
@@ -263,6 +269,7 @@ func TestTheSetTestOfAnAbsentParameterIsAnswered(t *testing.T) {
 // Each of these carries the `+` and reads a value through an operator or a
 // length, so each still names the parameter and still fails.
 func TestASetTestWithAnOperatorStillRefuses(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`printf '[%s]' "${+nothere#a}"`,
 		`printf '[%s]' "${+nothere%a}"`,

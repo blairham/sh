@@ -49,6 +49,7 @@ func radixFixture(t *testing.T) string {
 // under the stricter one it is not a number at all, and the shells that hold it
 // say so out loud.
 func TestTheRadixPolicyDecidesWhatIsWrittenAndRead(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name         string
 		policy       interp.RadixPolicy
@@ -111,6 +112,7 @@ func TestTheRadixPolicyDecidesWhatIsWrittenAndRead(t *testing.T) {
 // shell with no answer running under `LC_ALL=C` must be silent rather than
 // stopped.
 func TestARadixThatIsThePointAsksNobodyAnything(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, locale string }{
 		{"the C locale", "C"},
 		{"a locale with no data", "zz_ZZ.UTF-8"},
@@ -136,6 +138,7 @@ func TestARadixThatIsThePointAsksNobodyAnything(t *testing.T) {
 // An axis nothing answered, reached by a locale that really has its own radix,
 // refuses by name rather than taking a side.
 func TestAnUnansweredRadixPolicyRefuses(t *testing.T) {
+	t.Parallel()
 	_, errs := radixRun(t, interp.RadixUnspecified, `printf '%.4f' 1`)
 	if !strings.Contains(errs, "radix character") {
 		t.Errorf("stderr = %q, want the axis named in the refusal", errs)

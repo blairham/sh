@@ -60,6 +60,7 @@ func prefixCompoundRun(t *testing.T, src string, set func(*Semantics)) (string, 
 // indexed one is here beside it so that a store which stops writing a scalar
 // cell cannot reopen this quietly.
 func TestAPrefixListingNamesACompoundTable(t *testing.T) {
+	t.Parallel()
 	written := func(s *Semantics) { s.PrefixListingNamesADeclaredOnlyCompound = No }
 	for _, tc := range []struct{ name, src, want string }{
 		{"a keyed table", `typeset -A zqm=([k]=v); echo "[${!zq@}]"`, "[zqm]"},
@@ -89,6 +90,7 @@ func TestAPrefixListingNamesACompoundTable(t *testing.T) {
 // so `=()` behind the same declaration is listed under both answers and an
 // element written and then unset is too.
 func TestADeclaredOnlyCompoundIsListedOnlyWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		yes, no   string
@@ -123,6 +125,7 @@ func TestADeclaredOnlyCompoundIsListedOnlyWhereTheAxisSaysSo(t *testing.T) {
 // a name is a candidate: a shell that has written to everything it declared
 // never reaches the axis, so the listing beside it is silent and at 0.
 func TestTheDeclaredOnlyAxisIsAskedOnlyWhereItDecides(t *testing.T) {
+	t.Parallel()
 	out, errs, st := prefixCompoundRun(t, `typeset -A zqm=([k]=v); echo "[${!zq@}]"`, nil)
 	if out != "[zqm]" || errs != "" || st != 0 {
 		t.Errorf("a written table = %q (stderr %q, status %d), want the name and silence", out, errs, st)

@@ -60,6 +60,7 @@ func TestACachedSpanReadIsTheReadItStandsFor(t *testing.T) {
 // A hit hands back a copy: what a caller does to the slice it was given is
 // not what the next caller is given.
 func TestACachedSpanReadIsACopy(t *testing.T) {
+	t.Parallel()
 	r := cacheTestRunner()
 	const text = " $a + $b "
 	r.arithSpans(text)
@@ -103,6 +104,7 @@ func TestTheSpanCacheIsKeyedOnWhatReadsTheText(t *testing.T) {
 // Shared by every runner in the process, so it is read and filled from
 // several goroutines at once; -race is the judge.
 func TestTheSpanCacheIsSharedSafely(t *testing.T) {
+	t.Parallel()
 	var wg sync.WaitGroup
 	for g := range 8 {
 		wg.Add(1)
@@ -124,6 +126,7 @@ func TestTheSpanCacheIsSharedSafely(t *testing.T) {
 // hands back holds what a fresh copy would: the moved field, and every other
 // field as the dialect it came from had it.
 func TestADialectMoveIsKeptAndIsTheCopyItStandsFor(t *testing.T) {
+	t.Parallel()
 	r := cacheTestRunner()
 	base := r.Dialect
 	r.SetDoubledQuoteInSingleQuotes(true)

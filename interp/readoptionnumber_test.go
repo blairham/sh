@@ -26,6 +26,7 @@ import "testing"
 // other accepts it. So a word is taken when it *looks* like a number, and
 // whether it is one is the letter's own question afterwards.
 func TestWhichNextWordIsAnOptionLettersNumber(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		word string
 		want bool

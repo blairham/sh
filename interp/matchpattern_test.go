@@ -18,6 +18,7 @@ import (
 // would need a second matcher, and a shell whose `case` and whose settings
 // disagreed about what `@(a|b)` means would be one thing pretending to be two.
 func TestMatchPatternAnswersForASetting(t *testing.T) {
+	t.Parallel()
 	sem := interp.PosixSemantics()
 	r := newTestRunner(t, &interp.Runner{Semantics: &sem})
 	for _, tc := range []struct {
@@ -60,6 +61,7 @@ func TestMatchPatternAnswersForASetting(t *testing.T) {
 // being a package function: a setting written as a pattern means what the
 // shell it was written for means by it.
 func TestMatchPatternFollowsTheDialect(t *testing.T) {
+	t.Parallel()
 	sem := interp.PosixSemantics()
 
 	off := syntax.Dialect{}

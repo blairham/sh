@@ -30,6 +30,7 @@ func inDir(dir string) func(*Runner) {
 }
 
 func TestUnmatchedPatternIsEmptyDeletesTheWord(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		on   bool
@@ -59,6 +60,7 @@ func TestUnmatchedPatternIsEmptyDeletesTheWord(t *testing.T) {
 }
 
 func TestPatternsMatchHiddenLiftsTheLeadingPeriodRule(t *testing.T) {
+	t.Parallel()
 	dir := fileDir(t, ".hid", "vis")
 	for _, tc := range []struct {
 		on   bool
@@ -75,6 +77,7 @@ func TestPatternsMatchHiddenLiftsTheLeadingPeriodRule(t *testing.T) {
 }
 
 func TestGlobFoldsCaseReachesOnlyPathnameExpansion(t *testing.T) {
+	t.Parallel()
 	dir := fileDir(t, "Apple")
 	for _, tc := range []struct {
 		src  string
@@ -111,6 +114,7 @@ func TestGlobFoldsCaseReachesOnlyPathnameExpansion(t *testing.T) {
 // of parameter expansion was exempt on exactly that evidence, and was half
 // wrong for two releases (#1969).
 func TestMatchFoldsCaseReachesCaseConditionsAndSubstitutions(t *testing.T) {
+	t.Parallel()
 	dir := fileDir(t, "Apple")
 	for _, tc := range []struct {
 		name string
@@ -157,6 +161,7 @@ func TestMatchFoldsCaseReachesCaseConditionsAndSubstitutions(t *testing.T) {
 // Written out rather than inferred: a substitution that had simply started
 // folding unconditionally would pass every row above.
 func TestTheSubstitutionOperatorsAreExactWithoutTheOption(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`x=ABC; echo ${x//b/X}`, "ABC"},
 		{`x=ABC; echo ${x/b/X}`, "ABC"},
@@ -176,6 +181,7 @@ func TestTheSubstitutionOperatorsAreExactWithoutTheOption(t *testing.T) {
 // ${v//b/<&>}` is `A<B>C` — the upper-case B, matched by a lower-case
 // pattern.
 func TestTheFoldDoesNotReachWhatAnAmpersandStandsFor(t *testing.T) {
+	t.Parallel()
 	setup := withOption(MatchFoldsCase, true, readingTheAmpersand)
 	if out, _ := run(t, `x=ABC; echo ${x//b/<&>}`, setup); strings.TrimSpace(out) != "A<B>C" {
 		t.Errorf("${x//b/<&>} = %q, want A<B>C — the subject's own case", strings.TrimSpace(out))
@@ -198,6 +204,7 @@ func treeDir(t *testing.T) string {
 }
 
 func TestStarStarCrossesDirectories(t *testing.T) {
+	t.Parallel()
 	dir := treeDir(t)
 	for _, tc := range []struct {
 		on    bool
@@ -238,6 +245,7 @@ func TestStarStarCrossesDirectories(t *testing.T) {
 // is empty and written, which is what the index test in glob asks about and
 // what a "nothing but empties follow" test would get wrong.
 func TestStarStarAloneIsItsOwnQuestion(t *testing.T) {
+	t.Parallel()
 	dir := treeDir(t)
 	for _, tc := range []struct {
 		alone bool
@@ -270,6 +278,7 @@ func TestStarStarAloneIsItsOwnQuestion(t *testing.T) {
 }
 
 func TestStarStarSkipsHiddenUnlessAsked(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, ".h"), 0o750); err != nil {
 		t.Fatal(err)
@@ -294,6 +303,7 @@ func TestStarStarSkipsHiddenUnlessAsked(t *testing.T) {
 }
 
 func TestQuantifiedGroupsEverywhereIsARunTimeSwitch(t *testing.T) {
+	t.Parallel()
 	// The pattern arrives through a variable because the outer parse is the
 	// core's, which has no quantified groups; the switch is about what the
 	// *matcher* reads, and eval below is about what nested parses read.
@@ -327,6 +337,7 @@ func TestQuantifiedGroupsEverywhereIsARunTimeSwitch(t *testing.T) {
 // other half — a subshell's change never escaping — needs a builtin to flip
 // one mid-script, so it is asserted in the dialect that registers one.
 func TestMatchOptionsReachASubshell(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, _ := run(t, `(echo zz*zz); echo zz*zz`,
 		withOption(UnmatchedPatternIsEmpty, true, inDir(dir)))
@@ -348,6 +359,7 @@ func TestMatchOptionsReachASubshell(t *testing.T) {
 // came from, which is patternOpts.foldClass and is pinned by
 // TestAnInlineFoldFlagReachesAPosixClass in dialect/ksh.
 func TestTheOptionFoldStopsAtAPosixClassInABracket(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a class is exact", `case A in [[:lower:]]) echo fold;; *) echo exact;; esac`, "exact"},
 		{
@@ -379,6 +391,7 @@ func TestTheOptionFoldStopsAtAPosixClassInABracket(t *testing.T) {
 // implementation already had once, where the matcher folded a class for
 // everybody.
 func TestThePathnameFoldStopsAtAPosixClassToo(t *testing.T) {
+	t.Parallel()
 	dir := fileDir(t, "A", "b")
 	for _, tc := range []struct{ name, src, want string }{
 		{"a class is exact", `echo [[:lower:]]`, "b"},

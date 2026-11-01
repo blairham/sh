@@ -73,6 +73,7 @@ var fourWordRows = []struct {
 }
 
 func TestFourWordsLedByANegationNegateTheNegationBehindThemOnce(t *testing.T) {
+	t.Parallel()
 	for _, tc := range fourWordRows {
 		t.Run(tc.src, func(t *testing.T) {
 			out, st := run(t, tc.src, negateOnce(Yes))
@@ -86,6 +87,7 @@ func TestFourWordsLedByANegationNegateTheNegationBehindThemOnce(t *testing.T) {
 // The other answer over the same rows, which is the mutation: the seven that
 // are not controls move and the twelve controls do not.
 func TestFourWordsLedByANegationNegateTwiceWhereNothingSaysOtherwise(t *testing.T) {
+	t.Parallel()
 	moved := 0
 	for _, tc := range fourWordRows {
 		out, st := run(t, tc.src, negateOnce(No))
@@ -115,6 +117,7 @@ func TestFourWordsLedByANegationNegateTwiceWhereNothingSaysOtherwise(t *testing.
 // other twice, and the difference is entirely in whether the second `!` is a
 // negation or the left operand of a comparison.
 func TestTheFoldingFollowsTheReadingAndNotTheLeadingWords(t *testing.T) {
+	t.Parallel()
 	if _, st := run(t, `test ! ! -n x`, negateOnce(Yes)); st != 1 {
 		t.Errorf("a negation behind the `!`: status %d, want 1 — the outer `!` is absorbed", st)
 	}

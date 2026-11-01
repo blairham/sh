@@ -61,6 +61,7 @@ func parseCore(t *testing.T, src string) *syntax.File {
 
 // The named function, then the list, in the order the list holds it.
 func TestTheDirectoryChangeHookFiresOnACdThatMoved(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r, _ := hookRunner(t, &out)
 	runCd(t, r, `moved() { echo HOOKMARK-NAMED; }
@@ -83,6 +84,7 @@ echo "st=$?"
 // other than the axis — the empty name has to mean "no hook" and not "a hook
 // called nothing".
 func TestACdFiresNothingWhereNoHookIsNamed(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r, _ := hookRunner(t, &out)
 	r.Semantics.DirectoryChangeHook = ""
@@ -103,6 +105,7 @@ echo "st=$?"
 // fired unconditionally would still pass if the assertion were only about
 // where the shell ended up.
 func TestACdThatFailedFiresNothing(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r, _ := hookRunner(t, &out)
 	runCd(t, r, `moved() { echo HOOKMARK-NAMED; }
@@ -123,6 +126,7 @@ echo "st=$?"
 // Both halves in one case, because a `-q` that suppressed by *not moving*
 // would pass the silence check on its own — which is the shape #1558 was.
 func TestTheQuietLetterSuppressesTheDirectoryChangeHook(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r, _ := hookRunner(t, &out)
 	r.Semantics.CdHasQuietOption = Yes
@@ -146,6 +150,7 @@ pwd
 // Without the letter, the same line fires it — the pairing that keeps the
 // case above from passing because the hook never fires at all.
 func TestTheSameCdWithoutTheQuietLetterFiresIt(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r, _ := hookRunner(t, &out)
 	r.Semantics.CdHasQuietOption = Yes
@@ -161,6 +166,7 @@ cd sub
 // The hook is told where the shell now is and where it was, and is told no
 // arguments at all.
 func TestTheDirectoryChangeHookIsToldWhereAndNothingElse(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r, dir := hookRunner(t, &out)
 	runCd(t, r, `moved() { echo "HOOKMARK n=$# pwd=$PWD old=$OLDPWD"; }
@@ -177,6 +183,7 @@ cd sub
 // The reading a hook list wants is not the one `${x[0]}` wants, and the two
 // are one call apart — so the case is worth holding rather than inferring.
 func TestAScalarByTheListsNameIsNotAHookList(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r, _ := hookRunner(t, &out)
 	runCd(t, r, `a() { echo HOOKMARK-A; }
@@ -191,6 +198,7 @@ echo "st=$?"
 
 // A shell with no list suffix is the named function and nothing else.
 func TestWithoutAListSuffixTheHookIsTheNamedFunctionAlone(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r, _ := hookRunner(t, &out)
 	r.Semantics.HookListSuffix = ""
@@ -207,6 +215,7 @@ cd sub
 // The chain is told the status of the command before the `cd`, cannot change
 // what the next command reads, and a member that fails stops nothing.
 func TestTheDirectoryChangeChainIsToldTheStatusAndCannotChangeIt(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r, _ := hookRunner(t, &out)
 	runCd(t, r, `moved() { echo "HOOKMARK-NAMED=$?"; return 3; }
@@ -225,6 +234,7 @@ echo "after=$?"
 
 // A member that calls `exit` ends the chain and the script with it.
 func TestAMemberThatExitsEndsTheDirectoryChangeChain(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r, _ := hookRunner(t, &out)
 	f := parseCore(t, `moved() { echo HOOKMARK-NAMED; }
@@ -249,6 +259,7 @@ echo NOTREACHED
 // A hook that itself moves fires the hook again, and nothing here guards
 // against that beyond the limit an ordinary recursive call meets.
 func TestAHookThatMovesFiresItAgain(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	r, _ := hookRunner(t, &out)
 	if err := os.MkdirAll(filepath.Join(r.Dir, "sub", "deeper"), 0o755); err != nil {

@@ -30,6 +30,7 @@ func printsFunctions(reports, variables Answer) func(*Semantics) {
 }
 
 func TestDeclarePrintCanReportAMissingFunctionName(t *testing.T) {
+	t.Parallel()
 	const src = "g() { :; }\ntypeset -pf nosuch\necho \"st=$?\""
 	out, errs, st := declRun(t, src, printsFunctions(Yes, Yes), Diagnostics{})
 	if want := "st=1\n"; out != want || st != 0 {
@@ -49,6 +50,7 @@ func TestDeclarePrintCanReportAMissingFunctionName(t *testing.T) {
 // both answers — which is what keeps the axis from being read as "the
 // function letter reports".
 func TestTheFunctionLetterAloneNeverReportsAMissingName(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Yes, No} {
 		out, errs, st := declRun(t, "typeset -f nosuch\necho \"st=$?\"",
 			printsFunctions(answer, Yes), Diagnostics{})
@@ -63,6 +65,7 @@ func TestTheFunctionLetterAloneNeverReportsAMissingName(t *testing.T) {
 // reported on its own — the row that says the report is per operand rather
 // than a refusal of the command.
 func TestAFoundFunctionListsBesideAMissingOne(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, "g() { :; }\ntypeset -pf g nosuch\necho \"st=$?\"",
 		printsFunctions(Yes, Yes), Diagnostics{})
 	if !strings.Contains(out, "g ()") {
@@ -83,6 +86,7 @@ func TestAFoundFunctionListsBesideAMissingOne(t *testing.T) {
 // axis is not asked there — a whole-table `-pf` over a shell with no
 // functions is a silent 1 whatever the answer is.
 func TestAWholeTableFunctionListingAsksNothing(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.DeclarePrintReportsAMissingFunctionName = Unspecified
 	sem.DeclarePrintReportsAMissingName = Yes
@@ -98,6 +102,7 @@ func TestAWholeTableFunctionListingAsksNothing(t *testing.T) {
 // than the bare name: the word asks for the shape the line could be reissued
 // in. The bare form is the control, and the two differ by nothing else.
 func TestThePrintWordMakesANamesOnlyListingADeclaration(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, "g() { :; }\ntypeset -F g\ntypeset -pF g",
 		printsFunctions(Yes, Yes), Diagnostics{})
 	if want := "g\ndeclare -f g\n"; out != want || errs != "" || st != 0 {

@@ -63,6 +63,7 @@ func phraseRun(t *testing.T, src string, set func(*Semantics)) (string, string, 
 // about it. A form that wrote every parameter would put `plain` in the
 // output; one that wrote the scope's own would leave `ex` out.
 func TestAnAttributeListingWritesOnlyTheNamesThatCarryOne(t *testing.T) {
+	t.Parallel()
 	src := strings.Join([]string{
 		"plain=1",
 		"typeset -x ex=2",
@@ -101,6 +102,7 @@ func TestAnAttributeListingWritesOnlyTheNamesThatCarryOne(t *testing.T) {
 // The value is not there, and that is the form rather than an omission: the
 // same name written through a listing that carries values says `n=3`.
 func TestAnAttributeListingWritesNoValue(t *testing.T) {
+	t.Parallel()
 	out, _, _ := phraseRun(t, "typeset -i n=3\ntypeset", withAttributePhrases)
 	if strings.Contains(out, "3") {
 		t.Errorf("the value reached the listing: %q", out)
@@ -118,6 +120,7 @@ func TestAnAttributeListingWritesNoValue(t *testing.T) {
 // attribute — so this is not the scope's table read the other way round. The
 // undeclared local is the control in the same body.
 func TestAnAttributedLocalListsAndAnUndeclaredOneDoesNot(t *testing.T) {
+	t.Parallel()
 	src := "f() { typeset -i loc=9; typeset plainloc=1; typeset; }\nf\n"
 	out, errs, st := phraseRun(t, src, withAttributePhrases)
 	if want := "integer loc\n"; out != want || errs != "" || st != 0 {
@@ -129,6 +132,7 @@ func TestAnAttributedLocalListsAndAnUndeclaredOneDoesNot(t *testing.T) {
 // table because the three rows are one rule and a renderer that special-cased
 // only the one it was shown would pass a single row.
 func TestTheCaseLettersBesideTheNumericOneAreWidthAndSign(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ letters, want string }{
 		{"-i", "integer v"},
 		{"-li", "long integer v"},
@@ -148,6 +152,7 @@ func TestTheCaseLettersBesideTheNumericOneAreWidthAndSign(t *testing.T) {
 // A base of ten is the default and earns no word, which is what says the
 // `base` words follow the *named* base rather than the one in force.
 func TestOnlyABaseThatIsNotTheDefaultIsAWord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ letters, want string }{
 		{"-i", "integer v"},
 		{"-i10", "integer v"},
@@ -167,6 +172,7 @@ func TestOnlyABaseThatIsNotTheDefaultIsAWord(t *testing.T) {
 // against both listings in the same run — a letter added to one form and not
 // the other turns this red rather than going out as a silent blank.
 func TestBothAttributeVocabulariesSpellEveryAttribute(t *testing.T) {
+	t.Parallel()
 	// Every letter the attribute-word head has something to say about, which
 	// is the set this test is a guard over. `-f` is not an attribute on a
 	// name and `-p` is not an attribute at all.

@@ -19,6 +19,7 @@ import (
 // that is accepted and neither honored nor refused would be silently dropped,
 // which is the failure the refusal exists to prevent.
 func TestEveryTildeLetterHasExactlyOneReading(t *testing.T) {
+	t.Parallel()
 	for i := 0; i < len(honoredTildeLetters); i++ {
 		c := honoredTildeLetters[i]
 		if strings.IndexByte(kshTildeLetters, c) < 0 {
@@ -56,6 +57,7 @@ func TestEveryTildeLetterHasExactlyOneReading(t *testing.T) {
 // the wrong side — fails here rather than in a shell probe that happens to
 // cover it.
 func TestTheHonoredTildeLettersRead(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		body string
 		want tildeModifier
@@ -106,6 +108,7 @@ func TestTheHonoredTildeLettersRead(t *testing.T) {
 // The group's extent, which is what the lexer handed over and what the matcher
 // has to take back off the front of the pattern.
 func TestSplittingATildeModifier(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src, body, rest string
 		ok              bool
@@ -131,6 +134,7 @@ func TestSplittingATildeModifier(t *testing.T) {
 // are absences and a probe that answers "the word stood as written" cannot
 // tell an unread group from a group read and found not to matter.
 func TestATildeGroupMakesAFieldAPattern(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		field string
 		group bool
@@ -172,6 +176,7 @@ func TestATildeGroupMakesAFieldAPattern(t *testing.T) {
 // 2026-09-20 with `s=$'a\nb'` — `[[ $s == ~(E)a.b ]]` matches there and
 // `[[ $s == ~(E)^b ]]` does not. See regexDotAll.
 func TestATildeRegexReadsANewlineAsOrdinaryGround(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		letters string
 		pattern string
@@ -215,6 +220,7 @@ func TestATildeRegexReadsANewlineAsOrdinaryGround(t *testing.T) {
 // supplied through a variable so that nothing reaches it first. See breToRE2
 // for the rows in the reference shell's own spelling.
 func TestABasicRegularExpressionTranslates(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		pattern string
 		subject string
@@ -292,6 +298,7 @@ func TestABasicRegularExpressionTranslates(t *testing.T) {
 // `[[ abab == ~(X)ab&ab$ ]]` as the controls that say each anchor alone is
 // satisfiable.
 func TestAConjunctionTakesOneSpan(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		pattern string
 		subject string
@@ -350,6 +357,7 @@ func TestAConjunctionTakesOneSpan(t *testing.T) {
 // refusals, so every row carries the pattern that is the same shape and is
 // taken.
 func TestAFlavorRefusesTheConstructsItsEngineLacks(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		letters string
 		pattern string
@@ -399,6 +407,7 @@ func TestAFlavorRefusesTheConstructsItsEngineLacks(t *testing.T) {
 // backslash-quoted single character is never one of these, whatever the
 // flavor, and a glob has no engine for a backslash to reach.
 func TestWhichBackslashesBelongToTheExpression(t *testing.T) {
+	t.Parallel()
 	backslashed := func(v string) syntax.Span {
 		return syntax.Span{Kind: syntax.Literal, Quoting: syntax.BackslashQuoted, Value: v}
 	}

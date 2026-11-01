@@ -148,6 +148,7 @@ func sharedTableRows() []sharedTableRow {
 // half also checks each side reads back its own write, so a run where a write
 // landed nowhere does not pass as one where nothing leaked.
 func TestASubshellWriteToASharedTableStaysInTheSubshell(t *testing.T) {
+	t.Parallel()
 	for _, row := range sharedTableRows() {
 		t.Run(row.name+"/subshell writes", func(t *testing.T) {
 			parent := newTestRunner(t, &Runner{})
@@ -208,6 +209,7 @@ func TestASubshellWriteToASharedTableStaysInTheSubshell(t *testing.T) {
 // cost the parent a copy on its next write, which is the cost the clone used
 // to pay up front.
 func TestAFinishedSubshellLeavesItsParentTheTable(t *testing.T) {
+	t.Parallel()
 	parent := newTestRunner(t, &Runner{})
 	parent.setAssocElem("tbl", "k", "v")
 	parent.recordFunctionOrigin("f", funcOrigin{file: "x"})
@@ -246,6 +248,7 @@ func TestAFinishedSubshellLeavesItsParentTheTable(t *testing.T) {
 // by the listing's count, and added in when the table becomes this runner's.
 // The count is the subshell's and never the parent's.
 func TestAHitOnASharedHashIsCountedBesideIt(t *testing.T) {
+	t.Parallel()
 	parent := newTestRunner(t, &Runner{})
 	parent.putHashedCommand("ls", "/bin/ls", 1)
 	child := parent.clone()
@@ -280,6 +283,7 @@ func TestAHitOnASharedHashIsCountedBesideIt(t *testing.T) {
 // every later write to it would reach the subshell — and race it, where the
 // subshell runs on a goroutine.
 func TestATableMovedWhileSharedIsNotTheSubshells(t *testing.T) {
+	t.Parallel()
 	parent := newTestRunner(t, &Runner{})
 	parent.setAssocElem("src", "k", "before")
 	child := parent.clone()

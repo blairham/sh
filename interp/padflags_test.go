@@ -14,6 +14,7 @@ import (
 // and never a shell.
 
 func TestPaddingFlagValues(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ name, src, want string }{
 		{"l pads with spaces", `v=ab; printf "[%s]" "${(l:5:)v}"`, "[   ab]"},
 		{"l pads with a fill", `v=ab; printf "[%s]" "${(l:5::-:)v}"`, "[---ab]"},
@@ -80,6 +81,7 @@ func TestPaddingFlagValues(t *testing.T) {
 // puts padding anywhere else in the pipeline passes the table above and fails
 // here.
 func TestPaddingRunsLateInTheGroup(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ name, src, want string }{
 		{"after the length", `v=abc; printf "[%s]" "${(l:5::x:)#v}"`, "[xxxx3]"},
 		{"after the case conversion", `u=ab; printf "[%s]" "${(Ul:4::x:)u}"`, "[xxAB]"},
@@ -113,6 +115,7 @@ func TestPaddingRunsLateInTheGroup(t *testing.T) {
 // The five widths are one table because only the run of them says where the
 // odd unit goes — a word of even width cannot tell the two halvings apart.
 func TestPaddingOnBothSidesHalvesTheWord(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ name, src, want string }{
 		{"an empty word", `v=""; printf "[%s]" "${(l:4::L:r:4::R:)v}"`, "[LLLLRRRR]"},
 		{"one unit", `v=a; printf "[%s]" "${(l:4::L:r:4::R:)v}"`, "[LLLLaRRR]"},
@@ -139,6 +142,7 @@ func TestPaddingOnBothSidesHalvesTheWord(t *testing.T) {
 // character and the second pads with spaces whatever `$IFS` holds. Under the
 // default `$IFS` the two agree, so the axis is only visible with one set.
 func TestPaddingReadsAnEmptyFillFromIFS(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ name, src, want string }{
 		{"a fill written empty", `IFS=.; v=ab; printf "[%s]" "${(l:5:::)v}"`, "[...ab]"},
 		{"a second fill written empty", `IFS=.; v=ab; printf "[%s]" "${(l:5::x:::)v}"`, "[xx.ab]"},
@@ -164,6 +168,7 @@ func TestPaddingReadsAnEmptyFillFromIFS(t *testing.T) {
 // Fatal rather than skipped, measured: a failed expansion stops the shell
 // reading further, so the `echo` behind it never runs.
 func TestPaddingReportsAWidthThatWillNotEvaluate(t *testing.T) {
+	t.Parallel()
 	out, errs, st := flagsRun(t, `v=ab; printf "[%s]" "${(l:x y:)v}"; echo after`)
 	if !strings.Contains(errs, "operator expected") {
 		t.Errorf("stderr = %q, want the arithmetic failure named", errs)
@@ -180,6 +185,7 @@ func TestPaddingReportsAWidthThatWillNotEvaluate(t *testing.T) {
 // *fill* is refused by name rather than answered. A fill has to be counted as
 // text and escaped as text, and a marked one is neither.
 func TestPaddingRefusesAMarkedFill(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a marked left fill",

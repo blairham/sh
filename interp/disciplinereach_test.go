@@ -52,6 +52,7 @@ func disciplineSemantics() Semantics {
 // A **set-ness test** asks the store, so the value's producer is not run for
 // it. The left column is the whole of what keeps that narrow.
 func TestASetnessTestDoesNotRunTheValuesProducer(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		fires     bool
@@ -88,6 +89,7 @@ func TestASetnessTestDoesNotRunTheValuesProducer(t *testing.T) {
 // An `unset` that removes a variable takes its hooks with it: the binding is
 // to the variable and not to the name.
 func TestUnsettingAVariableDiscardsItsDisciplines(t *testing.T) {
+	t.Parallel()
 	out, _ := runDisciplined(t, `s=1
 function s.set { echo SET; }
 function plain { :; }
@@ -130,6 +132,7 @@ s=3`)
 // to the **call**, and the append is what makes that visible: there is
 // nothing in a fresh cell to append to.
 func TestAPrefixToAKeywordFunctionCanBelongToTheCall(t *testing.T) {
+	t.Parallel()
 	src := `s=base
 function s.set { echo SET; }
 function s.append { echo APP; }

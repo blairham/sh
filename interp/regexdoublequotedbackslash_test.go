@@ -49,6 +49,7 @@ func standingBackslash(t *testing.T, src string, stands Answer) string {
 // Measured 2026-09-28 — see Semantics.RegexDoubleQuotedBackslashStands for
 // the whole panel and the binaries.
 func TestADoubleQuotedBackslashEitherStandsOrIsAQuote(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, stands, quote string }{
 		// The control: with no backslash in it, a quoted run is still an
 		// expression under both readings, so the operand is read at all.
@@ -139,6 +140,7 @@ func TestADoubleQuotedBackslashEitherStandsOrIsAQuote(t *testing.T) {
 // axis builds, so both of its values answer the same — and that answer is
 // the whole quoted run as text, which is neither of the two above.
 func TestTheWholeRunReadingWinsOverAStandingBackslash(t *testing.T) {
+	t.Parallel()
 	run := func(src string, stands Answer) string {
 		t.Helper()
 		out, _ := runGrammar(t, src+"\n", func(d *syntax.Dialect) {

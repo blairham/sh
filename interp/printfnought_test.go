@@ -21,6 +21,7 @@ import (
 // Go's `fmt` applies the first and drops the second, which wrote nothing at
 // all (#3024).
 func TestASignSurvivesAPrecisionOfNought(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -81,6 +82,7 @@ func TestASignSurvivesAPrecisionOfNought(t *testing.T) {
 // moving the axis moves the answer rather than only one of them being
 // checked.
 func TestTheAlternateFormAtNoughtIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name            string
 		src             string
@@ -146,6 +148,7 @@ func TestTheAlternateFormAtNoughtIsAnAxis(t *testing.T) {
 // conversion that asked anyway would refuse a construct nobody disagrees
 // about.
 func TestTheAlternateFormAxisIsAskedOnlyAtNought(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name     string
 		src      string

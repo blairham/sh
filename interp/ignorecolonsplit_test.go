@@ -65,6 +65,7 @@ func colonTree(t *testing.T) string {
 // Every row is measured 2026-09-22 on bash 5.3.20, by what `echo *` leaves in
 // exactly the directory colonTree builds.
 func TestTheIgnoreValueIsCutOnlyAtASeparatingColon(t *testing.T) {
+	t.Parallel()
 	dir := colonTree(t)
 	for _, tc := range []struct {
 		name, value, want string

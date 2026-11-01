@@ -19,6 +19,7 @@ import (
 // 2026-09-27; nothing here names a shell, because the construct is a grammar
 // flag and the letters are that construct's.
 func TestATildeAnchorGroupInTheMiddleOfAPattern(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The controls. A group at the front is read — that is the reading
 		// this one is being held against — and a letter no shell has cannot
@@ -83,6 +84,7 @@ func TestATildeAnchorGroupInTheMiddleOfAPattern(t *testing.T) {
 // and one answering `bXc` is it not being, and neither is the subject
 // happening to agree.
 func TestATildeGreedGroupInTheMiddleOfATrim(t *testing.T) {
+	t.Parallel()
 	const v = `v=aXbXc; printf "[%s]" `
 	for _, tc := range []struct{ name, src, want string }{
 		// The three controls, so that both answers are known to be
@@ -133,6 +135,7 @@ func TestATildeGreedGroupInTheMiddleOfATrim(t *testing.T) {
 // than the matcher: the gate at the top of the walk has to read the field as
 // a pattern at all. See holdsTildeFoldGroup.
 func TestATildeAnchorGroupInTheMiddleOfAGlob(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, n := range []string{"za", "zb"} {
 		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {
@@ -191,6 +194,7 @@ func TestATildeAnchorGroupInTheMiddleOfAGlob(t *testing.T) {
 // the same value answers differently with the operator doubled, so a shell
 // that had simply stopped reading `l` on any suffix trim fails half of this.
 func TestAShortestSuffixTrimDoesNotReadTheLeftTildeAnchor(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The controls: the trim without a group, and the anchor a suffix
 		// trial holds by construction.

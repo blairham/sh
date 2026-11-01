@@ -15,6 +15,7 @@ import (
 // `(( m[k] += 1 ))` was fine. Measured on bash 5.3, ksh93u+ and zsh 5.9.2:
 // every one of these is the same answer in all three.
 func TestAnOperatorWritesThroughASubscript(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"postfix on a key", `typeset -A m; m[k]=1; (( m[k]++ )); echo "${m[k]}"`, "2"},
 		{"prefix on a key", `typeset -A m; m[k]=1; (( ++m[k] )); echo "${m[k]}"`, "2"},
@@ -44,6 +45,7 @@ func TestAnOperatorWritesThroughASubscript(t *testing.T) {
 // An expression that names no storage still cannot be incremented: the
 // operator reaching an element must not make it reach a literal.
 func TestAnIncrementStillNeedsSomethingToWriteTo(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`(( 1++ ))`,
 		`(( ++1 ))`,
@@ -63,6 +65,7 @@ func TestAnIncrementStillNeedsSomethingToWriteTo(t *testing.T) {
 // stored under that number. Both were silent: the wrong element came back
 // with no diagnostic at all.
 func TestAnAssociativeSubscriptIsAKeyInsideAnExpression(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The case that tells the two readings apart: with a value under `k`
 		// and a different one under `0`, an index would answer 99.
@@ -91,6 +94,7 @@ func TestAnAssociativeSubscriptIsAKeyInsideAnExpression(t *testing.T) {
 // bash and ksh93 answer 5. The storage an operand came out of is not what
 // decides how it reads.
 func TestAnElementIsReadAsAnOperandLikeAName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an indexed element holding a name", `y=5; a=(y); echo "$(( a[0] ))"`, "5"},
 		{"a key holding a name", `typeset -A m; y=5; m[k]=y; echo "$(( m[k] ))"`, "5"},
@@ -114,6 +118,7 @@ func TestAnElementIsReadAsAnOperandLikeAName(t *testing.T) {
 // they cannot — `-1` appears nowhere in the line that failed. Measured on
 // bash 5.3, which is the dialect in the panel that quotes the subscript back.
 func TestARefusedSubscriptInAnExpressionIsNamedAsWritten(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`x=1; (( a[x-2] = 5 ))`,
 		`x=1; (( a[x-2]++ ))`,

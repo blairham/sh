@@ -58,6 +58,7 @@ func appendArrayOperandRun(t *testing.T, takes Answer, src string) string {
 // answer that keeps the marker declares nothing called `u`, and the answer
 // that takes it declares `u` and stores the elements.
 func TestAnAppendingArrayOperandKeepsItsMarker(t *testing.T) {
+	t.Parallel()
 	const src = "typeset u+=(3 4)\n" + `printf "[%s]" "${u[@]}"` + "\n"
 
 	took := appendArrayOperandRun(t, Yes, src)
@@ -82,6 +83,7 @@ func TestAnAppendingArrayOperandKeepsItsMarker(t *testing.T) {
 // operator has no marker to place, so neither answer may move it. Without this
 // a change that put a `+` on every operand would pass every assertion above.
 func TestAPlainArrayOperandIsTheSameWordUnderBothAnswers(t *testing.T) {
+	t.Parallel()
 	const src = "typeset a=(3 4)\n" + `printf "[%s]" "${a[@]}"` + "\n"
 	took := appendArrayOperandRun(t, Yes, src)
 	kept := appendArrayOperandRun(t, No, src)
@@ -98,6 +100,7 @@ func TestAPlainArrayOperandIsTheSameWordUnderBothAnswers(t *testing.T) {
 // is a word the utility reads for itself — DeclarationTakesAnAppendOperand is
 // what decides it — so moving this axis must not touch it.
 func TestAnAppendingScalarOperandIsNotThisAxis(t *testing.T) {
+	t.Parallel()
 	const src = "u=1\ntypeset u+=3\n" + `printf "[%s]" "$u"` + "\n"
 	took := appendArrayOperandRun(t, Yes, src)
 	kept := appendArrayOperandRun(t, No, src)
@@ -111,6 +114,7 @@ func TestAnAppendingScalarOperandIsNotThisAxis(t *testing.T) {
 // already had rather than replacing them, which is what says the word handed
 // over was still read as an append.
 func TestAnAppendingArrayOperandJoinsWhatTheNameHeld(t *testing.T) {
+	t.Parallel()
 	const src = "typeset a=(1 2)\ntypeset a+=(3 4)\n" + `printf "[%s]" "${a[@]}"` + "\n"
 	took := appendArrayOperandRun(t, Yes, src)
 	if took != "[1][2][3][4]" {

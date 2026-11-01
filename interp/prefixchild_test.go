@@ -15,6 +15,7 @@ import (
 
 // The hook fires, and the value it leaves is the child's.
 func TestAPrefixToAnExternalStoresInTheChild(t *testing.T) {
+	t.Parallel()
 	out, status := runDisciplined(t,
 		"function s.set { echo \"SET[${.sh.value}]\" >&2; }\n"+
 			"s=5 /usr/bin/env | grep '^s=' || echo '(none)'")
@@ -40,6 +41,7 @@ func TestAPrefixToAnExternalStoresInTheChild(t *testing.T) {
 
 // And nothing the hook did reaches this shell.
 func TestAPrefixToAnExternalLeavesThisShellAlone(t *testing.T) {
+	t.Parallel()
 	out, _ := runDisciplined(t, `s=1
 function s.set { t=HOOKRAN; }
 s=5 /usr/bin/env >/dev/null
@@ -59,6 +61,7 @@ echo "t=[$t] s=[$s]"`)
 // what the child's **environment** is built from — so a hook that writes some
 // other exported name is answered by the child.
 func TestOneChildServesTheWholePrefixList(t *testing.T) {
+	t.Parallel()
 	out, _ := runDisciplined(t, `function a.set { t=HOOK; .sh.value="A[$t]"; }
 function b.set { .sh.value="B[$t]"; }
 a=1 b=2 /usr/bin/env | grep -E '^(a|b)=' | sort`)
@@ -77,6 +80,7 @@ s=5 /usr/bin/env | grep '^E='`)
 // is handed the join — which is the same rule the spellings that store in
 // this shell already keep.
 func TestAnAppendPrefixToAnExternalEntersTheAppendEvent(t *testing.T) {
+	t.Parallel()
 	out, _ := runDisciplined(t, `s=base
 function s.append { echo "APP[${.sh.value}]" >&2; }
 s+=5 /usr/bin/env | grep '^s='
@@ -92,6 +96,7 @@ echo "parent=[$s]"`)
 // A command that does not exist still made the store, because the fork
 // happens before the search does.
 func TestAPrefixToACommandThatIsNotThereStillStores(t *testing.T) {
+	t.Parallel()
 	out, _ := runDisciplined(t,
 		"function s.set { echo SET; }\ns=5 /nonexistent/nosuchfile-3159")
 	if !strings.Contains(out, "SET") {

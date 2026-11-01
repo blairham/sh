@@ -26,6 +26,7 @@ func noexecNegationSem(a Answer) Semantics {
 }
 
 func TestUnrunNegationInvertsOnlyWhereTheDialectSays(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -63,6 +64,7 @@ func TestUnrunNegationInvertsOnlyWhereTheDialectSays(t *testing.T) {
 // what its `!` does, so asking the vector on the running route would refuse a
 // question the panel never posed.
 func TestUnrunNegationIsAskedOnlyUnderNoExec(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		want int
@@ -91,6 +93,7 @@ func TestUnrunNegationIsAskedOnlyUnderNoExec(t *testing.T) {
 // one that asked and then inverted anyway would turn the 2 into a 0 and
 // report success under its own diagnostic.
 func TestUnrunNegationRefusedNamesItselfAndEndsAtTwo(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, "set -n\n! true\n", withSem(CoreSemantics()))
 	if st != 2 {
 		t.Errorf("an unanswered axis should end at 2, got status %d with %q", st, out)

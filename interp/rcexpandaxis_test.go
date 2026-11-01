@@ -49,6 +49,7 @@ const rcAxisCount = `f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; `
 // a row that cannot tell an implementation that reads the axis from one that
 // ignores it, which is what shipped before #4549.
 func TestTheDistributiveAxisIsTheDefaultForASpecWithNoCaret(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, off, on string }{
 		{
 			"a bare array name",
@@ -144,6 +145,7 @@ func TestTheDistributiveAxisIsTheDefaultForASpecWithNoCaret(t *testing.T) {
 // reading that combined the two switches into a single per-word answer can
 // produce.
 func TestAWrittenCaretOverridesTheDistributiveAxisInBothDirections(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, off, on string }{
 		{`a=(1 2); f x${^a}y`, `2:[x1y][x2y]`, `2:[x1y][x2y]`},
 		{`a=(1 2); f x${^^a}y`, `2:[x1][2y]`, `2:[x1][2y]`},
@@ -177,6 +179,7 @@ func TestAWrittenCaretOverridesTheDistributiveAxisInBothDirections(t *testing.T)
 // Runner.rcExpandOn passes every row of the two tests above and fails the
 // first row here.
 func TestTheDistributiveAxisIsAskedOfAParameterExpansionAndNotOfAnyFields(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, off, on string }{
 		{
 			"a bare command substitution is never distributed",
@@ -234,6 +237,7 @@ func TestTheDistributiveAxisIsAskedOfAParameterExpansionAndNotOfAnyFields(t *tes
 // one that has the option, so there is no conflict to raise. Asking through
 // Runner.ask here would refuse on every word holding a parameter expansion.
 func TestTheDistributiveAxisUnansweredIsNotARefusal(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, rcAxisCount+`a=(1 2); f x${a}y`, rcExpandAxisGrammar,
 		func(r *Runner) {
 			sem := *r.Semantics
@@ -256,6 +260,7 @@ func TestTheDistributiveAxisUnansweredIsNotARefusal(t *testing.T) {
 // handed a copy keeps its own answer, which is what makes `(setopt …)` stay
 // in the subshell on the dialect side.
 func TestTheDistributiveAxisTravelsOnTheVector(t *testing.T) {
+	t.Parallel()
 	var d syntax.Dialect
 	rcExpandAxisGrammar(&d)
 	if d.ParamRcExpandFlag != true {

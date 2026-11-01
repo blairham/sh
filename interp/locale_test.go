@@ -39,6 +39,7 @@ func localeRunner(t *testing.T, vars map[string]string) *Runner {
 // answer of its own, which is the rule that separates `LC_ALL= LANG=x` from
 // `LC_ALL=y LANG=x`.
 func TestALocaleCategoryIsReadUnderLcAllAndOverLang(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name     string
 		vars     map[string]string
@@ -74,6 +75,7 @@ func TestALocaleCategoryIsReadUnderLcAllAndOverLang(t *testing.T) {
 // and the caller supplies the default, since nothing but the caller knows what
 // a locale with no encoding is called.
 func TestTheCodesetIsTheLocaleNamesOwnSpelling(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ locale, want string }{
 		{"", ""},
 		{"C", ""},
@@ -107,6 +109,7 @@ func TestTheCodesetIsTheLocaleNamesOwnSpelling(t *testing.T) {
 // thing about the locale and whose LocaleFor says another has two readings of
 // the same variables.
 func TestTheEncodingReadingAndTheCategoryReadingAreOneReading(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	for _, c := range []struct {
 		name   string

@@ -19,6 +19,7 @@ import (
 // reading, so a runner that ignored the axis entirely would fail every other
 // row under two of the three.
 func TestADeclarationIsRecognizedByTheWordAsTheAxisSays(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct {
 		name, line string
 		// splits names the readings under which the value is split, so a row
@@ -74,6 +75,7 @@ func TestADeclarationIsRecognizedByTheWordAsTheAxisSays(t *testing.T) {
 // where the utility is looked for and not which one runs, and under the
 // readings keyed on the written word it is not the prefix as written.
 func TestACommandPrefixKeepsADeclarationWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct {
 		name, line string
 		// keptUnder names the readings under which this spelling is still a
@@ -125,6 +127,7 @@ func TestACommandPrefixKeepsADeclarationWhereTheAxisSaysSo(t *testing.T) {
 // leaves it Unspecified, and a script that would consult it reports rather
 // than guessing.
 func TestTheCommandPrefixAxisIsAskedOnlyBehindADeclaration(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	sem.DeclarationCommandWord = DeclarationByWrittenWord
 	sem.CommandPrefixKeepsADeclaration = Unspecified

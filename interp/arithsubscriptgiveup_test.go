@@ -37,6 +37,7 @@ const arithOwnSrc = `(( b c )); echo "same=$?"` + "\n" +
 
 // The sentence names no construct, which is unanimous and so is not an axis.
 func TestASubscriptsFailureInsideAnArithmeticCommandIsNotTheConstructs(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{ArithErrorNamesTheConstruct: true}
 	out, _ := arithSubRun(t, No, dg, arithSubSrc)
 	if strings.Contains(out, "((: ") {
@@ -54,6 +55,7 @@ func TestASubscriptsFailureInsideAnArithmeticCommandIsNotTheConstructs(t *testin
 // wherever a bad subscript is written; the others let the construct catch it
 // and answer with its own status and fatality.
 func TestWhatABadSubscriptInsideAnArithmeticCommandGivesUp(t *testing.T) {
+	t.Parallel()
 	t.Run("given up as the subscript's", func(t *testing.T) {
 		out, _ := arithSubRun(t, Yes, Diagnostics{}, arithSubSrc)
 		if strings.Contains(out, "same=") {
@@ -79,6 +81,7 @@ func TestWhatABadSubscriptInsideAnArithmeticCommandGivesUp(t *testing.T) {
 // copy that answered only `(( ))` is how this repository keeps re-finding the
 // same bug.
 func TestABadSubscriptInAForHeaderIsGivenUpTheSameWay(t *testing.T) {
+	t.Parallel()
 	const src = "a=(1 2 3)\n" +
 		`for (( i=a[b c]; i<1; i++ )); do echo x; done; echo "same=$?"` + "\n" +
 		`echo "next=$?"` + "\n" +
@@ -105,6 +108,7 @@ func TestABadSubscriptInAForHeaderIsGivenUpTheSameWay(t *testing.T) {
 // An axis nobody answered is refused by name rather than guessed at: one
 // column takes the line away and two leave it running.
 func TestABadSubscriptInsideAnArithmeticCommandRefusesAnUnspecifiedAxis(t *testing.T) {
+	t.Parallel()
 	out, _ := arithSubRun(t, Unspecified, Diagnostics{}, arithSubSrc)
 	if !strings.Contains(out, "no dialect was chosen") {
 		t.Errorf("out %q is not a refusal naming the axis", out)

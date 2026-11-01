@@ -66,6 +66,7 @@ func readonlyPrefixRun(t *testing.T, src string) (stdout, stderr string, status 
 }
 
 func TestAPrefixToAFrozenNameOnAnExternalCommandIsReported(t *testing.T) {
+	t.Parallel()
 	out, errs, st := readonlyPrefixRun(t,
 		"readonly x=1\nx=2 /bin/echo RAN\necho after")
 	if want := "testsh: line 2: x: readonly variable\n"; errs != want {
@@ -83,6 +84,7 @@ func TestAPrefixToAFrozenNameOnAnExternalCommandIsReported(t *testing.T) {
 }
 
 func TestAPrefixToAFrozenNameOnAFunctionIsReported(t *testing.T) {
+	t.Parallel()
 	out, errs, st := readonlyPrefixRun(t,
 		"readonly x=1\nf() { echo INFUNC; }\nx=2 f\necho after")
 	if want := "testsh: line 3: x: readonly variable\n"; errs != want {
@@ -97,6 +99,7 @@ func TestAPrefixToAFrozenNameOnAFunctionIsReported(t *testing.T) {
 }
 
 func TestAPrefixToAFrozenNameOnAMissingCommandIsReportedFirst(t *testing.T) {
+	t.Parallel()
 	_, errs, _ := readonlyPrefixRun(t,
 		"readonly x=1\nx=2 nosuchcmd_zz\necho after")
 	want := "testsh: line 2: x: readonly variable\n" +
@@ -107,6 +110,7 @@ func TestAPrefixToAFrozenNameOnAMissingCommandIsReportedFirst(t *testing.T) {
 }
 
 func TestARefusedPrefixIsNotHandedToTheChild(t *testing.T) {
+	t.Parallel()
 	// Exported first, because that is the only spelling where the child's
 	// environment tells a refused assignment from an absent one: it must see
 	// the value the name still holds and never the one it was refused.
@@ -121,6 +125,7 @@ func TestARefusedPrefixIsNotHandedToTheChild(t *testing.T) {
 }
 
 func TestAnUnfrozenNameBesideAFrozenOneStillReachesTheChild(t *testing.T) {
+	t.Parallel()
 	// The refusal is one name's and not the prefix list's.
 	out, errs, _ := readonlyPrefixRun(t,
 		"readonly x=1\nx=2 y=3 /usr/bin/printenv y")
@@ -133,6 +138,7 @@ func TestAnUnfrozenNameBesideAFrozenOneStillReachesTheChild(t *testing.T) {
 }
 
 func TestEveryFrozenNameInOnePrefixIsReported(t *testing.T) {
+	t.Parallel()
 	// A shell that carries on names them all, in written order; naming only
 	// the first is what the shells that abandon the command do, and
 	// abandoning is the question this leaves alone.
@@ -146,6 +152,7 @@ func TestEveryFrozenNameInOnePrefixIsReported(t *testing.T) {
 }
 
 func TestEveryFrozenNameInAPrefixToAFunctionIsReported(t *testing.T) {
+	t.Parallel()
 	// The same completeness on the other path, because the two paths refuse
 	// separately and a loop that stops at the first refusal reads as correct
 	// against a one-name probe.
@@ -159,6 +166,7 @@ func TestEveryFrozenNameInAPrefixToAFunctionIsReported(t *testing.T) {
 }
 
 func TestAnOrdinaryPrefixIsNotReported(t *testing.T) {
+	t.Parallel()
 	// The control: a prefix to a name nothing froze complains about nothing,
 	// which is what tells a broken harness from a finding.
 	out, errs, st := readonlyPrefixRun(t,
@@ -175,6 +183,7 @@ func TestAnOrdinaryPrefixIsNotReported(t *testing.T) {
 }
 
 func TestARefusedPrefixWaitsForItsValueToExpand(t *testing.T) {
+	t.Parallel()
 	// Which of two errors a prefix reports is a dialect question and not this
 	// change's: bash names the frozen name and never evaluates the
 	// expression, and dash, ksh93 and zsh name the division and never
@@ -192,6 +201,7 @@ func TestARefusedPrefixWaitsForItsValueToExpand(t *testing.T) {
 }
 
 func TestAPrefixIsNeverRefusedAsADeclaration(t *testing.T) {
+	t.Parallel()
 	// A prefix is an assignment and never a declaration, so it takes the
 	// plain wording and never keeps a builtin's name in its location — even
 	// when it is refused with a builtin on the record. Asked with a
@@ -237,6 +247,7 @@ func TestAPrefixIsNeverRefusedAsADeclaration(t *testing.T) {
 }
 
 func TestAnOperandOnAShadowedDeclarationUtilityIsNotAPrefix(t *testing.T) {
+	t.Parallel()
 	// An array given to a declaration utility is an *operand* rather than a
 	// prefix — `local a=(x y)` — and it reaches the command as the bare name,
 	// so a function that shadows the utility is handed an argument and no

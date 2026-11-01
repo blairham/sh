@@ -62,6 +62,7 @@ func runKindWith(t *testing.T, src string, set func(*Semantics)) (string, int) {
 }
 
 func TestAnArrayDeclarationOverATableIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A h; h[k]=v; typeset -a h; echo "st=$?"; typeset -p h; echo after`
 
 	t.Run("refused", func(t *testing.T) {
@@ -99,6 +100,7 @@ func TestAnArrayDeclarationOverATableIsAnAxis(t *testing.T) {
 }
 
 func TestATableDeclarationOverAnArrayIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -a a=(x y); typeset -A a; echo "st=$?"; printf "[%s][%s]" "${a[0]}" "${a[1]}"; echo " after"`
 
 	t.Run("refused", func(t *testing.T) {
@@ -138,6 +140,7 @@ func TestATableDeclarationOverAnArrayIsAnAxis(t *testing.T) {
 // A sparse array carries its own subscripts across rather than a run from
 // zero, which is what says the keys are the array's and not the loop's.
 func TestTheKeysCarriedOverAreTheSubscriptsTheArrayHeld(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -a a; a[0]=x; a[5]=q; typeset -A a; printf "[%s][%s][%s]" "${a[0]}" "${a[5]}" "${a[1]}"`
 	out, st := runKind(t, CompoundKindChangeRefused, CompoundKindChangeKeepsTheElements, src)
 	if out != "[x][q][]" || st != 0 {
@@ -147,6 +150,7 @@ func TestTheKeysCarriedOverAreTheSubscriptsTheArrayHeld(t *testing.T) {
 
 // The axis is asked where the two kinds actually collide and nowhere else.
 func TestTheCompoundKindAxesAreAskedAtTheCollision(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		asked     bool
@@ -190,6 +194,7 @@ func TestTheCompoundKindAxesAreAskedAtTheCollision(t *testing.T) {
 
 // The array letter with a literal over a table, all three answers.
 func TestAnArrayLiteralDeclarationOverATableIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A h; h[k]=v
 typeset -a h=(x)
 echo "st=$?"; typeset -p h; echo after`
@@ -236,6 +241,7 @@ typeset -a h=(x); echo "st=$?"; typeset -p h; echo after`
 // The abandon costs the line and not the input, which is the square #1182
 // records and the one #2287 was filed on the wrong cell of.
 func TestTheAbandonedLiteralConversionRunsTheNextLine(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A h; h[k]=v
 typeset -a h=(x); echo "st=$?"; echo same-line
 echo next-line`
@@ -252,6 +258,7 @@ echo next-line`
 // the array's elements do not come across as keys the way the valueless table
 // letter carries them in one column.
 func TestATableLiteralDeclarationOverAnArrayIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -a a=(x y)
 typeset -A a=([k]=v)
 echo "st=$?"; printf "[%s][%s]" "${a[k]}" "${a[0]}"; echo; echo after`
@@ -277,6 +284,7 @@ typeset -A a=([k]=v); echo "st=$?"; echo after`
 
 // An unanswered literal axis refuses rather than picking a shell.
 func TestAnUnansweredLiteralConversionRefuses(t *testing.T) {
+	t.Parallel()
 	out, st := runKindLiteral(t, CompoundKindChangeUnspecified, CompoundKindChangeUnspecified,
 		`typeset -A h; h[k]=v; typeset -a h=(x)`)
 	if st == 0 || !strings.Contains(out, "an array literal declaration over a name already declared a table") {
@@ -287,6 +295,7 @@ func TestAnUnansweredLiteralConversionRefuses(t *testing.T) {
 // And a literal over a name that is *not* the other kind asks nothing, which
 // is what keeps the axis off every array literal in every script.
 func TestALiteralOverTheSameKindAsksNothing(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`typeset -a a=(p); typeset -a a=(x); typeset -p a`,
 		`typeset -A m=([j]=1); typeset -A m=([k]=v); typeset -p m`,
@@ -320,6 +329,7 @@ func abandonsInAFunction(s *Semantics) {
 // top-level row above is the control that keeps it from being "the refusal
 // always says two things".
 func TestALiteralConversionRefusedInsideAFunctionSaysTwoThings(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -a u=(1 2)
 eee() { typeset -gA u=([k]=v); echo "st=$?"; }
 eee
@@ -344,6 +354,7 @@ echo after`
 // The **innermost** function is the one named, which is what says the word in
 // front is read off the stack rather than off the call the script wrote.
 func TestTheRefusalNamesTheInnermostFunction(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -a u=(1 2)
 inner() { typeset -gA u=([k]=v); }
 outer() { inner; }
@@ -361,6 +372,7 @@ outer`
 // outside it: it is the literal that adds the second, which is why the two
 // wordings are two fields.
 func TestTheValuelessFormStaysOneSentenceInsideAFunction(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A h; h[k]=v
 eee() { typeset -ga h; echo "st=$?"; }
 eee`

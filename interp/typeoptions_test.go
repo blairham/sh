@@ -40,6 +40,7 @@ func typeRun(t *testing.T, src, path string, set func(*Semantics)) (string, stri
 // TestTypeAListsEveryResolution: the shell's own answer and then every PATH
 // hit, worded `name is /path` whatever the dialect's plain external wording.
 func TestTypeAListsEveryResolution(t *testing.T) {
+	t.Parallel()
 	dir, exe := typeDir(t)
 	out, _, st := typeRun(t, "type -a echo\necho st=$?", dir, func(s *Semantics) {
 		s.TypeOptions = "afpP"
@@ -53,6 +54,7 @@ func TestTypeAListsEveryResolution(t *testing.T) {
 // TestTypePSpeaksOnlyForFiles in one answer, searches past the shell in the
 // other — and the answer's shape is its own axis.
 func TestTypePSpeaksOnlyForFiles(t *testing.T) {
+	t.Parallel()
 	dir, exe := typeDir(t)
 	out, errs, st := typeRun(t, "type -p echo\necho st=$?", dir, func(s *Semantics) {
 		s.TypeOptions = "afpP"
@@ -94,6 +96,7 @@ func TestTypePSpeaksOnlyForFiles(t *testing.T) {
 
 // TestTypeCapitalPAlwaysSearches: the PATH answer even for a builtin.
 func TestTypeCapitalPAlwaysSearches(t *testing.T) {
+	t.Parallel()
 	dir, exe := typeDir(t)
 	out, _, _ := typeRun(t, "type -P echo", dir, func(s *Semantics) {
 		s.TypeOptions = "afpP"
@@ -105,6 +108,7 @@ func TestTypeCapitalPAlwaysSearches(t *testing.T) {
 
 // TestTypeFSkipsOrSays: functions left out of the search, or printed whole.
 func TestTypeFSkipsOrSays(t *testing.T) {
+	t.Parallel()
 	dir, exe := typeDir(t)
 	tool := filepath.Join(dir, "tool")
 	if err := testenv.WriteExecutable(tool, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {

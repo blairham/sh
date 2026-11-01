@@ -40,6 +40,7 @@ import (
 // An em dash is a column that does not refuse there at all and so never
 // arrives here.
 func TestARefusedElementAssignmentGivesUpTheLineOrTheFile(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		// Each of the four sites that raise the refusal, because they are
 		// four functions and a fix reaching one of them passes a single row.
@@ -86,6 +87,7 @@ func TestARefusedElementAssignmentGivesUpTheLineOrTheFile(t *testing.T) {
 // readings apart. Every earlier probe of this path was that shape, which is
 // how the whole family stayed invisible.
 func TestARefusedElementAssignmentGivesUpItsListUnderEitherAnswer(t *testing.T) {
+	t.Parallel()
 	for _, abandons := range []Answer{Yes, No} {
 		out, _, _ := subscriptAbandonRun(t, "a[1+]=q; echo SAME\necho NEXT\n", abandons)
 		if strings.Contains(out, "SAME") {
@@ -125,6 +127,7 @@ func TestARefusedElementAssignmentUnwindsPastEveryEnclosingShape(t *testing.T) {
 // An element assignment that *works* still reports success, which is what
 // says the new door is opened by a refusal and not by a subscript.
 func TestAnElementAssignmentThatWorkedStillReportsSuccess(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"a=(1 2 3); a[1]=q\necho \"NEXT=$?\"\n",
 		"a=(1 2 3); a[1+1]=q\necho \"NEXT=$?\"\n",

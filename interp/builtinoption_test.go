@@ -47,6 +47,7 @@ func optRunAs(t *testing.T, tweak func(*Semantics), dg Diagnostics, src string, 
 // `export -Q x=1` exported x and said nothing about the -Q. A typo, or a shell
 // whose options are not the ones the script was written for, went unnoticed.
 func TestAnOptionABuiltinDoesNotHaveIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"export", "readonly", "unset"} {
 		out, st := optRun(t, nil, Diagnostics{}, name+` -Q x=1; echo "st=$?"; echo "[${x-unset}]"`)
 		if !strings.Contains(out, "-Q") {
@@ -65,6 +66,7 @@ func TestAnOptionABuiltinDoesNotHaveIsRefused(t *testing.T) {
 
 // The options they do have still work, which is the half a refusal could break.
 func TestTheOptionsTheyDoHaveStillWork(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`x=1; export x; unset -v x; echo "[${x-unset}]"`, "[unset]"},
 		{`export -- y=2; echo "[$y]"`, "[2]"},
@@ -85,6 +87,7 @@ func TestTheOptionsTheyDoHaveStillWork(t *testing.T) {
 // Where the dialect says a special builtin's failure is fatal, the script stops
 // there rather than carrying on with the next command.
 func TestABadOptionCanEndTheScript(t *testing.T) {
+	t.Parallel()
 	out, _ := optRun(t, func(s *Semantics) { s.BadOptionToSpecialBuiltinFatal = Yes },
 		Diagnostics{}, `export -Q x; echo after`)
 	if strings.Contains(out, "after") {
@@ -99,6 +102,7 @@ func TestABadOptionCanEndTheScript(t *testing.T) {
 
 // The usage line is per builtin and only two of the four print one.
 func TestTheUsageLineFollowsWhereTheDialectPrintsOne(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		BuiltinBadOption: "%[1]s: %[2]s: invalid option",
 		BuiltinUsage:     map[string]string{"export": "export: usage: export [-fn]"},
@@ -141,6 +145,7 @@ func TestOnlyASpecialBuiltinEndsTheScriptOverABadOption(t *testing.T) {
 // TestWhichPartOfABadOptionIsNamed is three answers to the same word, and
 // `--version` is what tells them apart.
 func TestWhichPartOfABadOptionIsNamed(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		naming BadOptionName
@@ -181,6 +186,7 @@ func TestWhichPartOfABadOptionIsNamed(t *testing.T) {
 // TestASingleLetterIsNamedTheSameWayByAll, which is why this needed a word
 // with two dashes to measure at all: `-q` is `-q` under every rule.
 func TestASingleLetterIsNamedTheSameWayByAll(t *testing.T) {
+	t.Parallel()
 	for _, naming := range []BadOptionName{
 		BadOptionFirstCharacter, BadOptionWholeWord, BadOptionFirstUnknownLetter,
 	} {
@@ -196,6 +202,7 @@ func TestASingleLetterIsNamedTheSameWayByAll(t *testing.T) {
 // different situations and must not be confused: one is "this shell has no
 // such option", the other is "this dialect has it and this shell does not".
 func TestAnOptionIsRefusedOrSaidToBeMissing(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		BuiltinBadOption:           "%[1]s: %[2]s: bad",
 		UnimplementedOptionLetters: map[string]string{"read": "s"},
@@ -221,6 +228,7 @@ func TestAnOptionIsRefusedOrSaidToBeMissing(t *testing.T) {
 // the word rather than against the one being named, a word that happens to
 // contain a real option's letter would be called missing.
 func TestTheMissingListIsCheckedAgainstTheOffendingLetterOnly(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		BuiltinBadOption:           "%[1]s: %[2]s: bad",
 		UnimplementedOptionLetters: map[string]string{"read": "s"},
@@ -238,6 +246,7 @@ func TestTheMissingListIsCheckedAgainstTheOffendingLetterOnly(t *testing.T) {
 // as everyone — measured with `read -rx`, which every shell in the panel
 // answers with `-x` and never with `-rx`.
 func TestWholeWordNamingIsOnlyForDoubleDashWords(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		BadOptionNaming:  BadOptionWholeWord,
 		BuiltinBadOption: "%[1]s: %[2]s: bad",

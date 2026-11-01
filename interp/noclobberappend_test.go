@@ -42,6 +42,7 @@ func runAppend(t *testing.T, src string, blocks interp.Answer) (string, int, fun
 // TestNoclobberBlocksAppendCreateYesRefusesToCreate is the axis answering Yes:
 // under noclobber an append to a name that is not there is a refusal.
 func TestNoclobberBlocksAppendCreateYesRefusesToCreate(t *testing.T) {
+	t.Parallel()
 	for _, op := range []string{">>", "&>>"} {
 		out, st, file := runAppend(t, "set -C; echo hi "+op+" f", interp.Yes)
 		if st == 0 {
@@ -60,6 +61,7 @@ func TestNoclobberBlocksAppendCreateYesRefusesToCreate(t *testing.T) {
 // which is what the standard requires: noclobber is about `>` and an append
 // still creates.
 func TestNoclobberBlocksAppendCreateNoCreatesTheFile(t *testing.T) {
+	t.Parallel()
 	for _, op := range []string{">>", "&>>"} {
 		out, st, file := runAppend(t, "set -C; echo hi "+op+" f", interp.No)
 		if out != "" || st != 0 {
@@ -76,6 +78,7 @@ func TestNoclobberBlocksAppendCreateNoCreatesTheFile(t *testing.T) {
 // built from a bare Semantics would otherwise be unable to append at all,
 // which is the commonest redirection there is.
 func TestTheAxisIsOnlyAskedUnderNoclobber(t *testing.T) {
+	t.Parallel()
 	out, st, file := runAppend(t, "echo hi >> f", interp.Unspecified)
 	if out != "" || st != 0 {
 		t.Errorf("got %q status %d, want a silent 0: the axis was asked with noclobber off", out, st)
@@ -89,6 +92,7 @@ func TestTheAxisIsOnlyAskedUnderNoclobber(t *testing.T) {
 // same rule, and the one that keeps an unanswered axis honest: reached, it
 // refuses and says which question it could not answer.
 func TestTheAxisUnansweredUnderNoclobberIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	out, st, file := runAppend(t, "set -C; echo hi >> f", interp.Unspecified)
 	if st == 0 {
 		t.Error("status 0 for an unanswered axis, want a refusal")
@@ -106,6 +110,7 @@ func TestTheAxisUnansweredUnderNoclobberIsRefusedByName(t *testing.T) {
 // spelling can — which is the only way to tell the override apart from a
 // plain append at all.
 func TestTheOverrideMarkerCreatesWhereTheAxisRefuses(t *testing.T) {
+	t.Parallel()
 	for _, op := range []string{">>|", ">>!", "&>>|", "&>>!"} {
 		out, st, file := runAppend(t, "set -C; echo hi "+op+" f", interp.Yes)
 		if out != "" || st != 0 {
@@ -125,6 +130,7 @@ func TestTheOverrideMarkerCreatesWhereTheAxisRefuses(t *testing.T) {
 // control is the plain `>` in the same cell: it must refuse, or the override
 // rows below it prove nothing.
 func TestTheOverrideMarkerTruncatesWhereNoclobberRefuses(t *testing.T) {
+	t.Parallel()
 	out, st, file := runAppend(t, "set -C; echo one > f; echo two > f", interp.No)
 	if st == 0 {
 		t.Error("plain > over an existing file under noclobber: status 0, want a refusal")

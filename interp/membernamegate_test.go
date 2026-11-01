@@ -20,6 +20,7 @@ import (
 // The control is the point of the second half: a name that *is* a member has
 // to turn it on, or the first half is a gate that never opens.
 func TestANameSpelledAsANamespaceIsNoEvidenceOfAMember(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := seamRunner(t, &out, &errs)
 	r.SetVar(".private.store", "x")

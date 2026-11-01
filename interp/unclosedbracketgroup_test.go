@@ -27,6 +27,7 @@ import (
 // directory holding `ab`, `a)b`, `a]b`, `x`, `a[` and `abcx`. Both answer
 // every row below the same way.
 func TestAnUnclosedBracketSwallowsTheGroupsCloser(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, n := range []string{"ab", "a)b", "a]b", "x", "a[", "abcx"} {
 		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {
@@ -70,6 +71,7 @@ func TestAnUnclosedBracketSwallowsTheGroupsCloser(t *testing.T) {
 // Re-measured 2026-09-23 through the route the comment names, and the two
 // references agree on every row: yes, yes, yes, no.
 func TestABracketMayTakeTheGroupsCloserAndStillClose(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ subject, pattern, want string }{
 		// `[)]` is the one-member set `)`, so the body is `a[)]b`.
 		{"a)b", `@(a[)]b)`, "yes"},
@@ -97,6 +99,7 @@ func TestABracketMayTakeTheGroupsCloserAndStillClose(t *testing.T) {
 // `x@([;])y` matches `x;y` in both references and here, and the same for `<`,
 // `>` and `&`. So it is the parentheses alone that the bracket does not hold.
 func TestAGroupClosedInsideABracketIsRefusedInAWord(t *testing.T) {
+	t.Parallel()
 	for _, pattern := range []string{`@(a[)]b)`, `!(a[)]b)`, `@(a[)b]|x)`} {
 		if got := matchWith(t, "a)b", pattern, true, false); !strings.HasPrefix(got, "parse:") {
 			t.Errorf("%s = %q, want a parse failure — the group closes inside the bracket", pattern, got)

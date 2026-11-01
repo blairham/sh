@@ -27,6 +27,7 @@ func nameRun(t *testing.T, tweak func(*Semantics), dg Diagnostics, src string) (
 // `export -` exported a variable called `-` and reported success. Three of the
 // four refuse it; the fourth refuses a different set, not none.
 func TestAnOperandThatIsNotANameIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, builtin := range []string{"export", "readonly", "unset"} {
 		for _, operand := range []string{"-", "1x", "a-b", "a b", "a.b", ""} {
 			src := builtin + ` -- "` + operand + `"; echo "st=$?"`
@@ -43,6 +44,7 @@ func TestAnOperandThatIsNotANameIsRefused(t *testing.T) {
 
 // A name still works, which is the half a refusal could break.
 func TestTheNamesThatAreNamesStillWork(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`export _a1=2; echo "[$_a1]"`, "[2]"},
 		{`readonly w=3; echo "[$w]"`, "[3]"},
@@ -62,6 +64,7 @@ func TestTheNamesThatAreNamesStillWork(t *testing.T) {
 // than stopping at the first. The other three print one line because the first
 // is fatal there, which falls out of that rather than needing its own rule.
 func TestEveryBadOperandIsReportedAndTheGoodOnesAreKept(t *testing.T) {
+	t.Parallel()
 	out, _ := nameRun(t, nil, Diagnostics{}, `export a=1 1x b=2 2y; echo "[$a][$b]"`)
 	if n := strings.Count(out, "not a valid identifier"); n != 2 {
 		t.Errorf("said %q, want two complaints, got %d", out, n)
@@ -77,6 +80,7 @@ func TestEveryBadOperandIsReportedAndTheGoodOnesAreKept(t *testing.T) {
 // Where the dialect says so the script stops there, and `unset` is asked
 // separately because ksh93 answers the two differently.
 func TestABadNameCanEndTheScript(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		tweak func(*Semantics)
@@ -105,6 +109,7 @@ func TestABadNameCanEndTheScript(t *testing.T) {
 // What may stand where a name is wanted is per builtin, because zsh answers
 // the two with sets that overlap only at `0`.
 func TestWhatElseMayStandWhereANameIsWanted(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name    string
 		takes   NameOperands
@@ -141,6 +146,7 @@ func TestWhatElseMayStandWhereANameIsWanted(t *testing.T) {
 // different places — ksh93 between `export` and the other two, zsh between
 // `unset` and the other two.
 func TestTheComplaintIsWordedPerBuiltin(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{BuiltinBadName: map[string]string{
 		"export":   "%[1]s: %[2]s: is not an identifier",
 		"readonly": "%[1]s: %[2]s: invalid variable name",
@@ -167,6 +173,7 @@ func TestTheComplaintIsWordedPerBuiltin(t *testing.T) {
 // An operand that starts with a digit is a different complaint in the one
 // dialect that tells the two apart.
 func TestALeadingDigitCanBeADifferentComplaint(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		BuiltinBadName:        map[string]string{"export": "not valid in this context: %[2]s"},
 		BuiltinBadNameNumeric: map[string]string{"export": "not an identifier: %[2]s"},
@@ -192,6 +199,7 @@ func TestALeadingDigitCanBeADifferentComplaint(t *testing.T) {
 // Two of the four quote back the whole operand and two name only the part in
 // front of the `=`.
 func TestTheOperandIsQuotedBackWholeOrNamedInPart(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{BuiltinBadName: map[string]string{"export": "%[1]s: %[2]s: bad"}}
 	out, _ := nameRun(t, nil, dg, `export 1x=v`)
 	if !strings.Contains(out, "export: 1x: bad") {
@@ -209,6 +217,7 @@ func TestTheOperandIsQuotedBackWholeOrNamedInPart(t *testing.T) {
 
 // The status is the dialect's, and dash is the one that says 2.
 func TestTheStatusIsTheDialects(t *testing.T) {
+	t.Parallel()
 	if out, _ := nameRun(t, nil, Diagnostics{}, `export 1x; echo "st=$?"`); !strings.Contains(out, "st=1") {
 		t.Errorf("said %q, want the default status of 1", out)
 	}
@@ -221,6 +230,7 @@ func TestTheStatusIsTheDialects(t *testing.T) {
 // A function name is not a variable name, and `unset -f` keeps its own laxer
 // rule: bash takes `unset -f 1x` without a word where it refuses `unset -v 1x`.
 func TestUnsetFKeepsItsOwnRule(t *testing.T) {
+	t.Parallel()
 	out, _ := nameRun(t, nil, Diagnostics{}, `unset -f 1x; echo "st=$?"`)
 	if !strings.Contains(out, "st=0") {
 		t.Errorf("said %q, want `unset -f` to take a name a variable could not have", out)
@@ -233,6 +243,7 @@ func TestUnsetFKeepsItsOwnRule(t *testing.T) {
 // An operand that is only spaces around a name is not a name — all four
 // refuse `export " a "`, and a name check that trimmed first would take it.
 func TestSurroundingSpaceIsNotTrimmedAway(t *testing.T) {
+	t.Parallel()
 	for _, operand := range []string{" a ", " a", "a ", " "} {
 		src := `export -- "` + operand + `"; echo "st=$?"`
 		if out, _ := nameRun(t, nil, Diagnostics{}, src); !strings.Contains(out, "st=1") {
@@ -249,6 +260,7 @@ func TestSurroundingSpaceIsNotTrimmedAway(t *testing.T) {
 // takes any run of digits — an empty string is not a run of digits, and
 // nothing but a test says so.
 func TestTheEmptyOperandIsNeverAName(t *testing.T) {
+	t.Parallel()
 	for _, takes := range []NameOperands{PlainNamesOnly, NamesAndSpecialParameters, NamesAndPositionals} {
 		out, _ := nameRun(t, func(s *Semantics) {
 			s.DeclarationNameOperands, s.UnsetNameOperands = takes, takes
@@ -262,6 +274,7 @@ func TestTheEmptyOperandIsNeverAName(t *testing.T) {
 // Where a bad name ends the script it ends it at the *first* one: dash and zsh
 // print one line for `export 1x 2y` where bash prints two.
 func TestAFatalBadNameStopsAtTheFirst(t *testing.T) {
+	t.Parallel()
 	out, _ := nameRun(t, func(s *Semantics) { s.BadNameToDeclarationFatal = Yes },
 		Diagnostics{}, `export 1x 2y; echo after`)
 	if n := strings.Count(out, "not a valid identifier"); n != 1 {
@@ -279,6 +292,7 @@ func TestAFatalBadNameStopsAtTheFirst(t *testing.T) {
 // still gets a name checked — which is the only thing that tells the loose
 // answer from no validation having been written.
 func TestABareUnsetMayCheckNothingWhereUnsetVStillDoes(t *testing.T) {
+	t.Parallel()
 	loose := func(s *Semantics) { s.UnsetNameOperands = AnythingIsAName }
 	for _, c := range []struct {
 		src     string
@@ -315,6 +329,7 @@ func TestABareUnsetMayCheckNothingWhereUnsetVStillDoes(t *testing.T) {
 
 // With no dialect chosen the substrate refuses rather than picking a set.
 func TestNoDialectMeansNoAnswer(t *testing.T) {
+	t.Parallel()
 	out, _ := nameRun(t, func(s *Semantics) {
 		s.DeclarationNameOperands = NameOperandsUnspecified
 	}, Diagnostics{}, `export "?"`)
@@ -326,6 +341,7 @@ func TestNoDialectMeansNoAnswer(t *testing.T) {
 // TestASubscriptedOperandIsAskedPerBuiltin is why this is two fields rather
 // than one: the same shell takes it for `unset` and refuses it for `export`.
 func TestASubscriptedOperandIsAskedPerBuiltin(t *testing.T) {
+	t.Parallel()
 	both := func(decl, unset Answer) func(*Semantics) {
 		return func(s *Semantics) {
 			s.DeclarationTakesASubscript = decl
@@ -367,6 +383,7 @@ func TestASubscriptedOperandIsAskedPerBuiltin(t *testing.T) {
 // the four need no new text for this at all: what they say about `export
 // a[0]` is what they say about `export 1x`.
 func TestARefusedSubscriptUsesTheOrdinaryBadNameWording(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) {
 		s.DeclarationTakesASubscript = No
 		s.BadNameToDeclarationFatal = No
@@ -383,6 +400,7 @@ func TestARefusedSubscriptUsesTheOrdinaryBadNameWording(t *testing.T) {
 // TestAnOperandWithNoSubscriptAsksNothing keeps the question off the path
 // every other operand takes.
 func TestAnOperandWithNoSubscriptAsksNothing(t *testing.T) {
+	t.Parallel()
 	out, _ := nameRun(t, nil, Diagnostics{}, `export ok=1; echo "[$ok]"`)
 	if !strings.Contains(out, "[1]") {
 		t.Errorf("said %q, want an ordinary operand to need no answer", out)
@@ -397,6 +415,7 @@ func TestAnOperandWithNoSubscriptAsksNothing(t *testing.T) {
 // what they say about any bad name, and the third has two messages of its
 // own — one per builtin.
 func TestADialectCanHaveItsOwnComplaintAboutASubscript(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) {
 		s.DeclarationTakesASubscript = No
 		s.BadNameToDeclarationFatal = No
@@ -435,6 +454,7 @@ func TestADialectCanHaveItsOwnComplaintAboutASubscript(t *testing.T) {
 // TestNoComplaintOfItsOwnMeansTheOrdinaryOne, which is two of the three and
 // is why they needed no new text at all.
 func TestNoComplaintOfItsOwnMeansTheOrdinaryOne(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) {
 		s.DeclarationTakesASubscript = No
 		s.BadNameToDeclarationFatal = No
@@ -449,6 +469,7 @@ func TestNoComplaintOfItsOwnMeansTheOrdinaryOne(t *testing.T) {
 // answers it two ways: its message about the subscript carries no builtin in
 // the location and its message about array elements does.
 func TestWhichSubscriptComplaintNamesTheBuiltin(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) {
 		s.DeclarationTakesASubscript = No
 		s.BadNameToDeclarationFatal = No
@@ -477,6 +498,7 @@ func TestWhichSubscriptComplaintNamesTheBuiltin(t *testing.T) {
 // special builtin gets — the wording being the dialect's own does not make
 // the fatality a different question.
 func TestASubscriptRefusalCanEndTheScript(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{BuiltinBadSubscript: map[string]string{"export": "%[3]s: no"}}
 
 	fatal := func(s *Semantics) {

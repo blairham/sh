@@ -25,6 +25,7 @@ func withFileSubst(d *syntax.Dialect) { d.ProcessSubstitutionToFile = true }
 //
 // Every row is measured against zsh 5.9.2, 2026-09-11.
 func TestFileProcessSubstitutionRunsACommandIntoAFile(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the output is the file", `cat =(echo hi)`, "hi\n"},
 		{"two in one command", `cat =(echo one) =(echo two)`, "one\ntwo\n"},
@@ -77,6 +78,7 @@ func TestFileProcessSubstitutionRunsACommandIntoAFile(t *testing.T) {
 // over, so there is no end-of-stream decision to get wrong — and the
 // assertion is written this way so that it would still catch one.
 func TestFileProcessSubstitutionOutrunsAPipeBuffer(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `wc -c < =(yes hello | head -c 200000)`, withFileSubst, nil)
 	if st != 0 {
 		t.Fatalf("status %d, want 0: %q", st, out)
@@ -93,6 +95,7 @@ func TestFileProcessSubstitutionOutrunsAPipeBuffer(t *testing.T) {
 // in the same list and removed by the same removeProcSubs rather than getting
 // a mechanism of its own.
 func TestFileProcessSubstitutionIsRemovedWithItsCommand(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `f==(echo hi); [ -e "$f" ] && echo there || echo gone`, withFileSubst, nil)
 	if st != 0 {
 		t.Fatalf("status %d: %q", st, out)
@@ -112,6 +115,7 @@ func TestFileProcessSubstitutionIsRemovedWithItsCommand(t *testing.T) {
 // as an EventAccess for exactly the reason ownPipe gives, so asserting on it
 // pins the recording as well as the mode.
 func TestFileProcessSubstitutionMakesAPrivateRegularFile(t *testing.T) {
+	t.Parallel()
 	var mu sync.Mutex
 	var paths []string
 	var modes []os.FileMode
@@ -170,6 +174,7 @@ func TestFileProcessSubstitutionMakesAPrivateRegularFile(t *testing.T) {
 // exits 0 in zsh 5.9.2. So the diagnostic is the body's and the status is the
 // outer command's, and neither reaches the other.
 func TestFileProcessSubstitutionKeepsTheWordWhenTheBodyFails(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `[ -f =(nosuchcmd-xyz-1878) ] && echo regular`, withFileSubst, nil)
 	if st != 0 {
 		t.Errorf("status %d, want 0", st)

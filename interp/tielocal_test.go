@@ -22,6 +22,7 @@ import (
 // and not the pair left a function-local search path in the caller for the
 // rest of the script (#1630).
 func TestALocalOfAShellsOwnTieShadowsBothHalves(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunTied(t, `S=one:two
 f() { local S=zzz; echo "in=[$S][${s[@]}]"; }
 f
@@ -37,6 +38,7 @@ echo "after=[$S][${s[@]}]"`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s
 // takes: the local array is a fresh one holding nothing, not the caller's
 // elements, and the scalar half is displaced and empty beside it.
 func TestALocalOfAShellsOwnTiesArrayHalfIsAFreshEmptyArray(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunTied(t, `S=one:two
 f() { local -a s; echo "in=[${#s[@]}][${s[*]}][$S]"; }
 f
@@ -54,6 +56,7 @@ echo "after=[${#s[@]}][$S]"`, withHidingAndTies, Diagnostics{}, [2]string{"S", "
 // instead answers this with the caller's elements still in view, since they
 // live in a table of their own.
 func TestALocalOfAShellsOwnTiesArrayHalfIsAnArrayWithoutTheLetter(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunTied(t, `S=one:two
 f() { local s; echo "in=[${#s[@]}][${s[*]}][$S]"; }
 f`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
@@ -69,6 +72,7 @@ f`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 // splits that string into the one field it has — so the array holds one empty
 // element where the row above holds none.
 func TestALocalOfAShellsOwnTiesScalarHalfSplitsTheEmptyString(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunTied(t, `S=one:two
 f() { local S; echo "in=[$S][${#s[@]}][${s[1]-NONE}]"; }
 f`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
@@ -84,6 +88,7 @@ f`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 // mirroring, and so does one *inside* the local — the pair the function is
 // holding is still a pair.
 func TestATieGoesOnMirroringInsideAndOutsideALocal(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunTied(t, `S=one:two
 echo "top=[${s[@]}]"
 f() { local S=zzz; s=(p q); echo "in=[$S][${s[@]}]"; }
@@ -100,6 +105,7 @@ echo "after=[$S][${s[@]}]"`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s
 // which is simply not tied, and the other half goes on naming the outer cell.
 // A pair-shadow applied to every tie would answer this `[zzz][zzz]`.
 func TestALocalOfAScriptsTieIsAnOrdinaryLocal(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -T S s
 S=one:two
 f() { local S=zzz; echo "in=[$S][${s[@]}]"; }
@@ -115,6 +121,7 @@ echo "after=[$S][${s[@]}]"`, withHidingAndTies, Diagnostics{})
 // And a script's tie is untouched by a local of its *array* half in the same
 // way: the scalar keeps the outer value rather than being emptied with it.
 func TestALocalOfAScriptsTieArrayHalfLeavesTheScalarAlone(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -T S s
 S=one:two
 f() { local -a s; echo "in=[$S]"; }
@@ -132,6 +139,7 @@ echo "after=[$S][${s[@]}]"`, withHidingAndTies, Diagnostics{})
 // so a rule that asked "is either half shadowed anywhere" turned every
 // function-local tie off the moment it was made.
 func TestATieMadeInAFunctionIsNotDetachedByItsOwnDeclaration(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `f() {
   typeset -T S s
   S=one:two
@@ -151,6 +159,7 @@ f`, withHidingAndTies, Diagnostics{})
 // A function called from inside the local sees the local pair, both halves of
 // it, and the caller's pair is back the moment the outer call returns.
 func TestAShellsOwnTieShadowedByALocalIsWhatACalleeSees(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRunTied(t, `S=one:two
 g() { echo "g=[$S][${s[@]}]"; }
 f() { local S=zzz; g; }
@@ -175,6 +184,7 @@ g`, withHidingAndTies, Diagnostics{}, [2]string{"S", "s"})
 // shadow is standing over. It is the same approximation `-h` already carries
 // — see the comment on hidesItsTie.
 func TestAWriteToTheOtherHalfOfAScriptsTieReachesTheCaller(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -T S s
 S=one:two
 f() { local S=zzz; s=(p q); }

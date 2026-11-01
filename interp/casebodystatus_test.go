@@ -27,6 +27,7 @@ import "testing"
 // failure — which is why the status is handed over only where the arm has
 // commands in it, rather than restored around the whole clause.
 func TestACaseArmsBodyReadsTheStatusFromBeforeTheCase(t *testing.T) {
+	t.Parallel()
 	const pre = "five() { return 5; }\nfive\n"
 	for _, c := range []struct{ name, src, want string }{
 		{"a matched arm", "case x in x) printf %s \"$?\";; esac", "5"},

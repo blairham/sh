@@ -44,6 +44,7 @@ func runBase(t *testing.T, leadingZero, twoDigits Answer, src string) (string, i
 // `010#11` say the base was read in decimal, since nine is no octal digit and
 // eleven is two of them.
 func TestABaseMayBeWrittenWithALeadingZero(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`echo $((010#5))`, "5"},
 		{`echo $((010#9))`, "9"},
@@ -60,6 +61,7 @@ func TestABaseMayBeWrittenWithALeadingZero(t *testing.T) {
 // And under the other answer none of them is a base at all: the text is read
 // as an ordinary numeral, which the `#` in it makes unreadable.
 func TestABaseWrittenWithALeadingZeroIsNoBase(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`echo "v=$((010#5))"`, `echo "v=$((010#9))"`, `echo "v=$((0010#5))"`} {
 		out, st := runBase(t, No, No, src)
 		if strings.Contains(out, "v=") || st == 0 {
@@ -77,6 +79,7 @@ func TestABaseWrittenWithALeadingZeroIsNoBase(t *testing.T) {
 // so it is asserted with the leading zero *allowed*, where the two axes would
 // otherwise be indistinguishable.
 func TestABaseStopsAfterTwoCharactersWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src         string
 		capped, not string
@@ -109,6 +112,7 @@ func TestABaseStopsAfterTwoCharactersWhereTheDialectSaysSo(t *testing.T) {
 // from, which is the line between this and the two axes above: `1#0` names a
 // base and cannot have one, where `010#5` names no base at all.
 func TestABaseALiteralNamesOutsideTheAlphabetIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`echo "v=$((1#0))"`, `echo "v=$((0#5))"`, `echo "v=$((65#1))"`} {
 		out, st := runBase(t, Yes, No, src)
 		if strings.Contains(out, "v=") || st == 0 {
@@ -123,6 +127,7 @@ func TestABaseALiteralNamesOutsideTheAlphabetIsRefused(t *testing.T) {
 // words them differently and the rest word them alike, so the wording is read
 // through Diagnostics and the *choice* is made here.
 func TestALiteralIsBlamedOnWhetherTheByteIsADigitAtAll(t *testing.T) {
+	t.Parallel()
 	const tooGreat, noDigit = "too great", "no digit"
 	for _, c := range []struct{ src, want string }{
 		// `8` is a digit and base eight has none.
@@ -157,6 +162,7 @@ func TestALiteralIsBlamedOnWhetherTheByteIsADigitAtAll(t *testing.T) {
 // what ksh93 and dash do — asserted so that an empty field is a measured
 // answer rather than a gap the default happens to fill.
 func TestOneSentenceCoversBothWhereTheDialectHasNoSecond(t *testing.T) {
+	t.Parallel()
 	const only = "one sentence"
 	for _, src := range []string{`echo $((08))`, `echo $((010#5))`} {
 		out, _ := runGrammar(t, src,

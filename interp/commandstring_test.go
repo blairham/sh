@@ -19,6 +19,7 @@ import (
 // Both doors to it: an unset parameter under `set -u`, and one `${x?}` was
 // asked about.
 func TestAFailedExpansionMayAnswerByHowTheShellStarted(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"set -u\nunset V\necho \"$V\"\n",
 		"unset V\necho \"${V?}\"\n",
@@ -48,6 +49,7 @@ func TestAFailedExpansionMayAnswerByHowTheShellStarted(t *testing.T) {
 // it was invoked — so a shell that applied this everywhere would be wrong
 // about all of them.
 func TestOnlyAFailedExpansionAnswersByHowTheShellStarted(t *testing.T) {
+	t.Parallel()
 	// A command that does not exist stops nothing and reports its own
 	// status, whatever the invocation was.
 	for _, cs := range []bool{true, false} {
@@ -68,6 +70,7 @@ func TestOnlyAFailedExpansionAnswersByHowTheShellStarted(t *testing.T) {
 // The pair is the shape: a subshell row alone cannot tell "a boundary drops
 // it" from "only the outermost statement carries it".
 func TestTheCommandStringStatusBelongsToTheShellHandedTheString(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"set -u\nunset V\n", "unset V\n"} {
 		read := "echo \"$V\"\n"
 		if !strings.HasPrefix(src, "set -u") {
@@ -96,6 +99,7 @@ func TestTheCommandStringStatusBelongsToTheShellHandedTheString(t *testing.T) {
 // subshell that died of the failure is the dialect's fatal one and not the
 // command-string answer.
 func TestASubshellThatDiesOfAFailedExpansionReportsTheFatalStatus(t *testing.T) {
+	t.Parallel()
 	var buf strings.Builder
 	sem := PosixSemantics()
 	sem.FatalErrorStatusIsOne = Yes
@@ -157,6 +161,7 @@ func cmdStringStatus(t *testing.T, src string, commandString bool, answer int) i
 // So both routes are asserted here against the same program, and the pair is
 // the shape: a single cell cannot tell a route rule from a separator one.
 func TestAReadonlyReassignmentAnswersTheSameByEitherRoute(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name    string
 		src     string
@@ -204,6 +209,7 @@ func TestAReadonlyReassignmentAnswersTheSameByEitherRoute(t *testing.T) {
 // assigning to the same name are two questions, which is what is left of the
 // "two questions" the removed field was thought to make three of.
 func TestOnlyAnAssignmentStandingAloneAsksTheOrdinaryQuestion(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src           string
 		base, byDeclaration Answer
@@ -256,6 +262,7 @@ func TestOnlyAnAssignmentStandingAloneAsksTheOrdinaryQuestion(t *testing.T) {
 // a different set of shells from either of the other two, and the same
 // answer by both invocation routes.
 func TestAReadonlyReassignmentByADeclaration(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"readonly x=1\nexport x=2\necho after\n",
 		"readonly x=1\ntypeset x=2\necho after\n",
@@ -305,6 +312,7 @@ func TestAReadonlyReassignmentByADeclaration(t *testing.T) {
 // The special builtins' half of the declaration question is its own: with it
 // fatal and the other half not, `export x=2` stops and `typeset x=2` does not.
 func TestAReadonlyReassignmentByASpecialBuiltin(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src     string
 		carried bool
@@ -339,6 +347,7 @@ func TestAReadonlyReassignmentByASpecialBuiltin(t *testing.T) {
 // And where it is fatal the status is the failure's, not the builtin's own —
 // which is the half a builtin that returns a status of its own can undo.
 func TestADeclarationYieldsTheFailuresStatus(t *testing.T) {
+	t.Parallel()
 	var buf strings.Builder
 	sem := PosixSemantics()
 	sem.ReadonlyReassignmentByDeclarationFatal = Yes
@@ -363,6 +372,7 @@ func TestADeclarationYieldsTheFailuresStatus(t *testing.T) {
 // What a declaration says, which is not what a plain assignment says in
 // every dialect — and where the builtin's name goes.
 func TestWhatADeclarationSaysAboutAReadonlyName(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		dg   Diagnostics

@@ -44,6 +44,7 @@ import (
 // here for the same reason `C.UTF-8` is, and `c` is a language name rather
 // than a case-folded `C`.
 func TestWhichLocaleNamesThisShellCanAnswerFor(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		locale string
 		want   bool
@@ -86,6 +87,7 @@ func TestWhichLocaleNamesThisShellCanAnswerFor(t *testing.T) {
 // where bash and zsh group 3 then 2 and ksh93 groups 3. See
 // interp/localenumeric.go.
 func TestTheNumericDataIsTheCLocalesAndThereIsNoOther(t *testing.T) {
+	t.Parallel()
 	numeric, ok := LocaleNumericFor("C")
 	if !ok {
 		t.Fatal("no numeric data for the C locale, which is the one locale there is data for")

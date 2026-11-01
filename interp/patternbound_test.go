@@ -12,6 +12,7 @@ import "testing"
 // `Version AJM 93u+ 2012-08-01`; the two are unanimous on all twelve cells
 // and the table is repeated in boundOf's own comment.
 func TestAQuantifierIsABound(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		quant byte
 		want  repeatBound
@@ -53,6 +54,7 @@ func TestAQuantifierIsABound(t *testing.T) {
 // are written at the values such a count produces, not at the values `+` and
 // `*` produce.
 func TestABoundCountsDownAsTheGroupRepeats(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name      string
 		b         repeatBound
@@ -95,6 +97,7 @@ func TestABoundCountsDownAsTheGroupRepeats(t *testing.T) {
 // the arm that failed as well as the one that matched, and the pattern would
 // then refuse a subject for want of repetitions it had never used.
 func TestSpendingABoundLeavesTheCallersAlone(t *testing.T) {
+	t.Parallel()
 	b := repeatBound{2, 3}
 	_ = b.afterOne()
 	_ = b.afterOne()

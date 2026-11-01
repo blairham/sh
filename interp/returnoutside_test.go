@@ -20,6 +20,7 @@ import (
 // statement is that `return`: identical output, and a status of 2 against
 // our 127, which only a comparison that reads the status could see.
 func TestAReturnWithNothingToReturnFrom(t *testing.T) {
+	t.Parallel()
 	const src = "echo before\nreturn 7\necho \"after st=$?\"\n"
 	for _, c := range []struct {
 		name    string
@@ -63,6 +64,7 @@ func TestAReturnWithNothingToReturnFrom(t *testing.T) {
 // Inside a function there is something to return from, so the question is
 // never put and both answers behave alike.
 func TestAReturnInsideAFunctionIsAlwaysObeyed(t *testing.T) {
+	t.Parallel()
 	for _, refused := range []Answer{Yes, No, Unspecified} {
 		out, st := returnRun(t, "f() { return 7; }\nf\necho \"st=$?\"\n", refused)
 		if !strings.Contains(out, "st=7") {
@@ -81,6 +83,7 @@ func TestAReturnInsideAFunctionIsAlwaysObeyed(t *testing.T) {
 // something to return from. Unanimous across the panel, which is what makes
 // the axis about the remaining case alone.
 func TestAReturnInsideASourcedFileIsAlwaysObeyed(t *testing.T) {
+	t.Parallel()
 	for _, refused := range []Answer{Yes, No, Unspecified} {
 		dir := t.TempDir()
 		src := "printf 'return 7\\n' > " + dir + "/s.sh\n. " + dir + "/s.sh\necho \"st=$?\"\n"
@@ -98,6 +101,7 @@ func TestAReturnInsideASourcedFileIsAlwaysObeyed(t *testing.T) {
 // not end the script either — which is the safe direction, because obeying
 // would stop it somewhere the other answer would not.
 func TestAReturnWithNoAnswerRecordedIsRefused(t *testing.T) {
+	t.Parallel()
 	out, _ := returnRun(t, "echo before\nreturn 7\necho after\n", Unspecified)
 	if !strings.Contains(out, "return") || !strings.Contains(out, "disagree") {
 		t.Errorf("said %q, want the axis named", out)
@@ -137,6 +141,7 @@ func returnRun(t *testing.T, src string, refused Answer) (string, int) {
 // Without that, sourcing anything at all would leave the rest of the script
 // looking like the inside of a sourced file for good.
 func TestSourcingDoesNotLeaveTheScriptLookingSourced(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	src := "printf 'echo sourced\\n' > " + dir + "/s.sh\n" +
 		". " + dir + "/s.sh\n" +
@@ -165,6 +170,7 @@ func TestSourcingDoesNotLeaveTheScriptLookingSourced(t *testing.T) {
 // binary between the two. So this is the axis' other value over the same
 // source, and the sentence is unchanged by it.
 func TestARefusedReturnEndsTheScriptWhereAFailedSpecialBuiltinDoes(t *testing.T) {
+	t.Parallel()
 	const src = "echo before\nreturn 7\necho \"after st=$?\"\n"
 	for _, c := range []struct {
 		name   string

@@ -29,6 +29,7 @@ func runConditional(t *testing.T, colonIsAToken bool, d *Diagnostics, src string
 }
 
 func TestAnIncompleteConditionalIsWordedByPosition(t *testing.T) {
+	t.Parallel()
 	// A dialect that words all three apart, so each row can be told from the
 	// others rather than from a default.
 	all := &Diagnostics{
@@ -61,6 +62,7 @@ func TestAnIncompleteConditionalIsWordedByPosition(t *testing.T) {
 // end-of-input sentence, which is what two of the four do — so an empty field
 // is "as the neighboring failure" rather than "no wording".
 func TestAnIncompleteConditionalFallsThroughToTheOrdinarySentence(t *testing.T) {
+	t.Parallel()
 	plain := &Diagnostics{ArithExpressionRanOut: "ran out", ArithOperandExpected: "operand"}
 	for _, src := range []string{`echo "v=$((1 ?))"`, `echo "v=$((1 ? 2 :))"`} {
 		if out, _ := runConditional(t, false, plain, src); !strings.Contains(out, "ran out") {
@@ -80,6 +82,7 @@ func TestAnIncompleteConditionalFallsThroughToTheOrdinarySentence(t *testing.T) 
 // it runs out of input, and with something after it, it has a complaint only
 // a reader that got that far could make.
 func TestAStrayColonIsAMathTokenWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	d := &Diagnostics{
 		ArithExpressionRanOut:     "ran out",
 		ArithOperandExpected:      "operand",
@@ -116,6 +119,7 @@ func TestAStrayColonIsAMathTokenWhereTheDialectSaysSo(t *testing.T) {
 // then-expression is parsed at the assignment level and recurses through the
 // same frame.
 func TestAColonThatBelongsToAConditionalIsNotAStrayOne(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`echo "$((1 ? 2 : 3))"`, "2"},
 		{`echo "$((0 ? 2 : 3))"`, "3"},

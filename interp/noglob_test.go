@@ -12,6 +12,7 @@ import (
 
 // noglob switches off the *filesystem* half and nothing else.
 func TestNoGlobStopsPathnameExpansionOnly(t *testing.T) {
+	t.Parallel()
 	dir := fileDir(t, "a.txt", "b.txt")
 	inDir := func(r *Runner) { r.Dir = dir }
 	for _, tc := range []struct{ src, want string }{
@@ -36,6 +37,7 @@ func TestNoGlobStopsPathnameExpansionOnly(t *testing.T) {
 // uses `-f` for something that does not touch globbing, so a script that
 // writes `set -f` there still globs.
 func TestSetFTurnsOffGlobbingIsAnAxis(t *testing.T) {
+	t.Parallel()
 	dir := fileDir(t, "a.txt")
 	answer := func(a Answer) func(*Runner) {
 		return func(r *Runner) {
@@ -69,6 +71,7 @@ func TestSetFTurnsOffGlobbingIsAnAxis(t *testing.T) {
 // does not — rather than accepting it and doing nothing, which would let a
 // script believe it had asked for something.
 func TestSetONamesEveryOption(t *testing.T) {
+	t.Parallel()
 	// Each option is checked by what it *does*, since a name accepted and
 	// ignored would look identical to one that worked.
 	for _, tc := range []struct {

@@ -44,6 +44,7 @@ func letRun(t *testing.T, src string, sem Semantics) string {
 // makes the answer visible. `1 @` and `0 @` fail identically and part company
 // only over the value that stood before the byte.
 func TestLetKeepsTheValueBeforeAnIllegalByte(t *testing.T) {
+	t.Parallel()
 	const src = `let '1 @'; echo "one=$?"
 let '0 @'; echo "zero=$?"
 let '1+2 @'; echo "sum=$?"
@@ -69,6 +70,7 @@ let '@'; echo "alone=$?"`
 // none of them keeps it under either answer — the reader gave up mid-stream in
 // the row above and the grammar rejected the whole expression here.
 func TestOnlyARefusedByteKeepsAnything(t *testing.T) {
+	t.Parallel()
 	const src = `let '1+'; echo "ranout=$?"
 let '5 5'; echo "leftover=$?"
 let '1/0'; echo "divzero=$?"`
@@ -85,6 +87,7 @@ let '1/0'; echo "divzero=$?"`
 // The expressions after the one that failed are not evaluated: `let '0 @' '3'`
 // is the zero's answer and not the three's.
 func TestLetStopsAtTheRefusedByte(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	sem.LetKeepsTheValueBeforeAnIllegalByte = Yes
 	if out, want := letRun(t, `let '0 @' '3'; echo "st=$?"`, sem), "st=1\n"; out != want {
@@ -95,6 +98,7 @@ func TestLetStopsAtTheRefusedByte(t *testing.T) {
 // An unanswered axis is refused by name, and only a refused byte reaches it:
 // an expression that reads cleanly, and one that fails another way, never ask.
 func TestAnUnansweredLetValueIsRefused(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	sem.LetKeepsTheValueBeforeAnIllegalByte = Unspecified
 	for _, src := range []string{`let '1+2'; echo "ok=$?"`, `let '1+'; echo "ok=$?"`} {
@@ -116,6 +120,7 @@ func TestAnUnansweredLetValueIsRefused(t *testing.T) {
 // is the wrong answer rendered the right way, and only the location rule
 // running over both settings can tell the two apart.
 func TestArithErrorNamesTheBuiltin(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		names bool
 		want  string
@@ -152,6 +157,7 @@ func TestArithErrorNamesTheBuiltin(t *testing.T) {
 // the same three answers, which is why this rides on the message's rule rather
 // than on a field of its own (#3342).
 func TestADeclarationsBadValueNamesTheBuiltinWhereLetDoes(t *testing.T) {
+	t.Parallel()
 	// Both doors: the expression the reader could not finish, and the one it
 	// read and could not evaluate. They are separate call sites and the first
 	// draft named the builtin at only one of them.
@@ -184,6 +190,7 @@ func TestADeclarationsBadValueNamesTheBuiltinWhereLetDoes(t *testing.T) {
 // no name in front of that one — `typeset -i a=1; a+=2+` is a bare `2+:
 // arithmetic syntax error` there — because there is no builtin to name.
 func TestAnIntegerAssignmentOutsideADeclarationNamesNobody(t *testing.T) {
+	t.Parallel()
 	for _, names := range []bool{true, false} {
 		diag := Diagnostics{
 			ArithErrorNamesTheBuiltin: names,
@@ -201,6 +208,7 @@ func TestAnIntegerAssignmentOutsideADeclarationNamesNobody(t *testing.T) {
 // shell's `let` with no operand at all is the builtin's own complaint and
 // still names it.
 func TestALetWithNoOperandStillNamesTheBuiltin(t *testing.T) {
+	t.Parallel()
 	diag := Diagnostics{
 		ArithErrorNamesTheBuiltin: false,
 		NamesBuiltinInLocation:    true,

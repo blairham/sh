@@ -31,6 +31,7 @@ func valuelessRun(t *testing.T, src string) (string, int) {
 }
 
 func TestAValuelessLocalStillHandsAChildTheNameItShadowed(t *testing.T) {
+	t.Parallel()
 	const probe = `export FOO=bar; f() { echo "read=[${FOO-UNSET}]"; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f`
 	out, st := valuelessRun(t, strings.Replace(probe, "f() {", "f() { local FOO;", 1))
 	if st != 0 || out != "read=[UNSET]\nFOO=bar\n" {
@@ -39,6 +40,7 @@ func TestAValuelessLocalStillHandsAChildTheNameItShadowed(t *testing.T) {
 }
 
 func TestAValuelessLocalHandsOverTheNearestShadowedValue(t *testing.T) {
+	t.Parallel()
 	// Two functions deep: what a child is told is the caller's local, not
 	// the global standing behind it, so the record belongs to the scope that
 	// took the name rather than to the name.
@@ -51,6 +53,7 @@ func TestAValuelessLocalHandsOverTheNearestShadowedValue(t *testing.T) {
 }
 
 func TestAnAssignmentToTheLocalSupersedesWhatItShadowed(t *testing.T) {
+	t.Parallel()
 	// One entry, not two: a name handed over twice is settled by whichever
 	// of the two the exec keeps, which is not a thing to leave to chance.
 	out, st := valuelessRun(t,
@@ -62,6 +65,7 @@ func TestAnAssignmentToTheLocalSupersedesWhatItShadowed(t *testing.T) {
 }
 
 func TestAValuelessLocalOverAnUnexportedNameHandsOverNothing(t *testing.T) {
+	t.Parallel()
 	// `-x` on the declaration is the local's own attribute and says nothing
 	// about the name it shadows. The shadowed name is not exported, so there
 	// is nothing behind the local to tell a child about, and the local
@@ -74,6 +78,7 @@ func TestAValuelessLocalOverAnUnexportedNameHandsOverNothing(t *testing.T) {
 }
 
 func TestAValuelessLocalOverAnExportedNameIgnoresTheLocalsOwnAttribute(t *testing.T) {
+	t.Parallel()
 	// The shadowed binding is what speaks, so `+x` on the local — which
 	// takes the attribute off it outright — does not stop the outer value
 	// reaching a child.
@@ -87,6 +92,7 @@ func TestAValuelessLocalOverAnExportedNameIgnoresTheLocalsOwnAttribute(t *testin
 }
 
 func TestAValuelessLocalOverAnImportedNameHandsOverWhatArrived(t *testing.T) {
+	t.Parallel()
 	// The other half of the question: a name is exported by having arrived
 	// in the environment, and it is not in the runner's own table at all.
 	// Taking the table's answer alone recorded nothing for the whole of this
@@ -122,6 +128,7 @@ func TestAValuelessLocalOverAnImportedNameHandsOverWhatArrived(t *testing.T) {
 }
 
 func TestTheShadowedValueGoesBackWhenTheFunctionReturns(t *testing.T) {
+	t.Parallel()
 	out, st := valuelessRun(t,
 		`export FOO=bar; f() { local FOO; }; f; echo "read=[$FOO]"; /usr/bin/env | grep '^FOO='`)
 	if st != 0 || out != "read=[bar]\nFOO=bar\n" {
@@ -130,6 +137,7 @@ func TestTheShadowedValueGoesBackWhenTheFunctionReturns(t *testing.T) {
 }
 
 func TestALocalThatDoesNotInheritTheAttributeHandsOverNothing(t *testing.T) {
+	t.Parallel()
 	// The axis answers this shape too rather than leaving it to a rule of
 	// its own: a shell whose local carries no export attribute tells a child
 	// nothing under the name, with a value or without one.
@@ -203,6 +211,7 @@ func TestAValuelessDeclarationThatHidesNothingHandsOverOneEntry(t *testing.T) {
 }
 
 func TestADeclarationOutsideAFunctionRecordsNothing(t *testing.T) {
+	t.Parallel()
 	// No scope was taken, so nothing is standing in front of the name and an
 	// exported name with no value reaches no child.
 	out, st := valuelessRun(t, `export FOO; /usr/bin/env | grep '^FOO=' || echo "(none)"`)
@@ -212,6 +221,7 @@ func TestADeclarationOutsideAFunctionRecordsNothing(t *testing.T) {
 }
 
 func TestADeclarationWithoutAValueTellsNoChildAboutTheName(t *testing.T) {
+	t.Parallel()
 	// The dialect that considers a name declared without a value to be set
 	// reads it as empty and still tells no command about it. Every listing
 	// spells the two the same way, so a child is the only place the
@@ -274,6 +284,7 @@ func TestADeclarationWithoutAValueTellsNoChildAboutTheName(t *testing.T) {
 }
 
 func TestADeclarationWithNoScopeToDeclareIntoRecordsNothing(t *testing.T) {
+	t.Parallel()
 	// A dialect can give `typeset` a scope only in a function defined with
 	// the keyword; in the other kind the declaration is an ordinary
 	// assignment that reaches the caller. Nothing was shadowed there, so
@@ -293,6 +304,7 @@ func TestADeclarationWithNoScopeToDeclareIntoRecordsNothing(t *testing.T) {
 }
 
 func TestTypesetsOwnExportLetterSaysNothingAboutTheNameItShadows(t *testing.T) {
+	t.Parallel()
 	// The same reading as `local -x`, through the other builtin, because the
 	// two are separate paths and each has to read the name's attribute
 	// before applying this declaration's own.
@@ -325,6 +337,7 @@ func TestTypesetsOwnExportLetterSaysNothingAboutTheNameItShadows(t *testing.T) {
 }
 
 func TestASecondDeclarationHandsOverWhatTheFirstOneLeft(t *testing.T) {
+	t.Parallel()
 	// A declaration of a name this scope has already taken hides the value
 	// the scope itself put there, not the one it will put back. The two
 	// readings differ only where a scope declares the same name twice.
@@ -346,6 +359,7 @@ func TestASecondDeclarationHandsOverWhatTheFirstOneLeft(t *testing.T) {
 // shadowed exports passed it over because the local has a value of its own.
 // Neither claimed it and the child was told nothing at all.
 func TestALocalThatDropsTheAttributeStillHandsAChildWhatItShadowed(t *testing.T) {
+	t.Parallel()
 	out, st := valuelessRun(t,
 		`export FOO=bar; f() { local +x FOO=z; /usr/bin/env | grep '^FOO=' || echo "(none)"; `+
 			`echo "read=[$FOO]"; }; f; echo "after=[$FOO]"`)
@@ -362,6 +376,7 @@ func TestALocalThatDropsTheAttributeStillHandsAChildWhatItShadowed(t *testing.T)
 // child nothing. A fix that handed the outer value over unconditionally would
 // pass the test above and fail this one.
 func TestALocalThatDropsTheAttributeOverAnUnexportedNameHandsOverNothing(t *testing.T) {
+	t.Parallel()
 	out, st := valuelessRun(t,
 		`FOO=bar; f() { local +x FOO=z; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f`)
 	if want := "(none)\n"; out != want {
@@ -376,6 +391,7 @@ func TestALocalThatDropsTheAttributeOverAnUnexportedNameHandsOverNothing(t *test
 // is then told the local's own value rather than the one it shadowed — once,
 // not twice.
 func TestExportingTheLocalAgainSupersedesTheBindingBehindIt(t *testing.T) {
+	t.Parallel()
 	out, st := valuelessRun(t,
 		`export FOO=bar; f() { local +x FOO=z; export FOO; `+
 			`/usr/bin/env | grep -c '^FOO=z$'; /usr/bin/env | grep -c '^FOO='; }; f`)
@@ -391,6 +407,7 @@ func TestExportingTheLocalAgainSupersedesTheBindingBehindIt(t *testing.T) {
 // rather than the global behind it — the same rule the valueless form follows,
 // reached with a value on the line.
 func TestALocalThatDropsTheAttributeHandsOverTheNearestShadowedValue(t *testing.T) {
+	t.Parallel()
 	out, st := valuelessRun(t,
 		`export FOO=bar; g() { local +x FOO=in; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; `+
 			`f() { local FOO=mid; g; }; f`)
@@ -406,6 +423,7 @@ func TestALocalThatDropsTheAttributeHandsOverTheNearestShadowedValue(t *testing.
 // under the name, with a value on the declaration as without one — so this
 // half needs no rule of its own and must not gain one.
 func TestALocalThatDropsTheAttributeWhereNoLocalInheritsItHandsOverNothing(t *testing.T) {
+	t.Parallel()
 	out, st := axisRun(t,
 		`export FOO=bar; f() { local +x FOO=z; /usr/bin/env | grep '^FOO=' || echo "(none)"; `+
 			`echo "read=[$FOO]"; }; f`,
@@ -427,6 +445,7 @@ func TestALocalThatDropsTheAttributeWhereNoLocalInheritsItHandsOverNothing(t *te
 // empty in its own right, and a child is then told about it. See
 // Runner.declarationOwnsTheStandingEmpty for the eight rows this comes from.
 func TestASecondDeclarationGivesTheNameTheEmptyItHolds(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, second, want string }{
 		// Every one of these names an attribute, so every one owns the empty.
 		{"the same letter again", "typeset -x FOO", "FOO=\n"},
@@ -462,6 +481,7 @@ func TestASecondDeclarationGivesTheNameTheEmptyItHolds(t *testing.T) {
 // outer name is the *first* declaration of the cell it writes, so it records
 // rather than owns.
 func TestALocalOverADeclaredEmptyNameIsAFirstDeclaration(t *testing.T) {
+	t.Parallel()
 	out, st := axisRun(t,
 		`typeset -x FOO; f() { local -x FOO; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f`,
 		func(s *Semantics) {
@@ -479,6 +499,7 @@ func TestALocalOverADeclaredEmptyNameIsAFirstDeclaration(t *testing.T) {
 // even though the shell itself reads the name as unset. See
 // Semantics.NumericTypeWithNoValueReachesAChildAsZero.
 func TestAnExportedNumericTypeWithNoValueIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const probe = `typeset -ix Z; echo "read=[${Z-UNSET}]"; ` +
 		`/usr/bin/env | grep '^Z=' || echo "(none)"`
 	set := func(a Answer) func(*Semantics) {
@@ -501,6 +522,7 @@ func TestAnExportedNumericTypeWithNoValueIsAnAxis(t *testing.T) {
 // It is the numeric letters and no others, which is what makes it a *type*
 // rather than any attribute a valueless declaration wrote.
 func TestOnlyANumericTypeReachesAChildWithNoValue(t *testing.T) {
+	t.Parallel()
 	for _, decl := range []string{"typeset -ux Z", "typeset -ax Z", "typeset -x Z"} {
 		out, st := axisRun(t, decl+`; /usr/bin/env | grep '^Z=' || echo "(none)"`,
 			func(s *Semantics) {
@@ -518,6 +540,7 @@ func TestOnlyANumericTypeReachesAChildWithNoValue(t *testing.T) {
 // after the declaration is what the child is told, and an `unset` takes the
 // name away entirely rather than leaving the type behind to speak for it.
 func TestAStoreAndAnUnsetBothSupersedeTheTypesZero(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) {
 		s.DeclaredNameWithoutValueIsEmpty = No
 		s.DeclareOptions = "ix"

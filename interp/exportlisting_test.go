@@ -15,6 +15,7 @@ import (
 // first, an unmarked one out of the second.
 
 func TestExportListingNamesTheExported(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		form DeclarationListingForm
@@ -45,6 +46,7 @@ func TestExportListingNamesTheExported(t *testing.T) {
 }
 
 func TestReadonlyListingNamesTheReadonly(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `readonly R=2; free=3; readonly -p`, func(r *Runner) {
 		sem := CoreSemantics()
 		sem.ReadonlyListing = DeclareListingCommandWord
@@ -68,6 +70,7 @@ func TestReadonlyListingNamesTheReadonly(t *testing.T) {
 // that was the second half of the same fault, and it is not what tells the
 // forms apart.
 func TestTheExportListingFormDecidesWhetherLettersAreWritten(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -i -x n=5; typeset -a -x a=(1 2); export -p`
 	for _, tc := range []struct {
 		name string
@@ -129,6 +132,7 @@ func onlyProbeNames(out string) string {
 // builtin's own attribute, which is what makes the two rows different — the
 // exported name is out of `readonly +` and the frozen one out of `export +`.
 func TestASignAloneIsAnOptionWordToExportIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `export E=1; readonly R=2; plain=3; export +; echo --; readonly +`
 	out, errs, st := plusRun(t, src, Yes)
 	if want := "E\n--\nR\n"; out != want || st != 0 || errs != "" {
@@ -144,6 +148,7 @@ func TestASignAloneIsAnOptionWordToExportIsAnAxis(t *testing.T) {
 // leaves them off. The pair in one test, because either row alone reads as a
 // listing that happens to have no value to write.
 func TestThePlusListingWritesNamesAndTheDashWritesValues(t *testing.T) {
+	t.Parallel()
 	out, _, st := plusRun(t, `export E=1; export +`, Yes)
 	if want := "E\n"; out != want || st != 0 {
 		t.Errorf("plus: got %q/%d, want %q", out, st, want)
@@ -161,6 +166,7 @@ func TestThePlusListingWritesNamesAndTheDashWritesValues(t *testing.T) {
 // path already answers, so the axis is not even asked — which is what keeps a
 // name that happens to be written after a sign from being swallowed.
 func TestTheSignIsOnlyReadWhenItIsTheWholeLine(t *testing.T) {
+	t.Parallel()
 	out, _, st := plusRun(t, `export E=1; export + E`, Yes)
 	if out != "" || st == 0 {
 		t.Errorf("got %q/%d, want the operand line refused", out, st)
@@ -170,6 +176,7 @@ func TestTheSignIsOnlyReadWhenItIsTheWholeLine(t *testing.T) {
 // And the refusal is real where nothing answered, which is what says the two
 // readings above are decisions rather than a question nothing reaches.
 func TestTheSignAloneToExportAxisIsAsked(t *testing.T) {
+	t.Parallel()
 	out, errs, _ := plusRun(t, `export +`, Unspecified)
 	if !strings.Contains(errs, "a bare `+` given to `export` or `readonly`") {
 		t.Errorf("got %q stderr %q, want a refusal naming the axis", out, errs)

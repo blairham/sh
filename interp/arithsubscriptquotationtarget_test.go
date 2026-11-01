@@ -33,6 +33,7 @@ func unclosedQuoteTargetDiag(r *Runner) {
 }
 
 func TestABadSubscriptsStoreIsRefusedInItsOwnWords(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name          string
 		src           string
@@ -72,6 +73,7 @@ func TestABadSubscriptsStoreIsRefusedInItsOwnWords(t *testing.T) {
 // neither sentence and stores through the brackets as it always did, which is
 // what says both are the one axis's and not a second one nobody answered.
 func TestTheReadingAnswerWritesNeitherRefusal(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, quotedKeyTable+`let "a[$k] = 9"; printf '[%s]' "${a[$k]}"`,
 		quotedKeyGrammar, func(r *Runner) {
 			quotedKeyAxis(No, false)(r)
@@ -88,6 +90,7 @@ func TestTheReadingAnswerWritesNeitherRefusal(t *testing.T) {
 // words Wording falls back to — the refusal is the axis's and the field is
 // only how this dialect spells it.
 func TestAnUnwordedStoreRefusalStillReportsTheOperand(t *testing.T) {
+	t.Parallel()
 	out, _ := runGrammar(t, quotedKeyTable+`let "a[$k] = 9"`,
 		quotedKeyGrammar, quotedKeyAxis(Yes, false))
 	if !strings.Contains(out, "a[q'r]") {
@@ -101,6 +104,7 @@ func TestAnUnwordedStoreRefusalStillReportsTheOperand(t *testing.T) {
 // answer at a different status and is not what this sentence stands for. See
 // Runner.reportArithSubscriptUnclosedQuoteTarget.
 func TestAStoreThroughANameThatIsNoTableIsNotRefusedInTheseWords(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, table string }{
 		{"an indexed array", `b=(1 2 3); `},
 		{"a name that is not set", ``},

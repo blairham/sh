@@ -39,6 +39,7 @@ func withFreshCells(empty, replaces Answer) func(*Semantics) {
 // listing is the instrument rather than `${#a[@]}` alone, because it is the
 // only read that says the name is still an array while holding nothing.
 func TestAValuelessArrayDeclarationDropsTheOuterElements(t *testing.T) {
+	t.Parallel()
 	src := `a=(x y)
 f() { local -a a; echo "in n=${#a[@]} [${a[*]}]"; typeset -p a; }
 f
@@ -66,6 +67,7 @@ echo "after n=${#a[@]} [${a[*]}]"`
 // held anything answers. The listing and a subscript past the first are what
 // tell the fresh cell from the caller's.
 func TestAValuelessDeclarationWithoutTheArrayLetterDropsThemToo(t *testing.T) {
+	t.Parallel()
 	src := `a=(x y)
 f() { local a; echo "in [${a[*]}] [${a[1]-NONE}]"; typeset -p a; }
 f
@@ -91,6 +93,7 @@ echo "after n=${#a[@]} [${a[*]}]"`
 // since one reading answers it with the empty scalar it made and the other
 // with nothing; the *second* is the caller's alone under both.
 func TestNeitherReadingOfAValuelessDeclarationKeepsTheOuterElements(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		empty Answer
@@ -120,6 +123,7 @@ echo "after n=${#a[@]} [${a[*]}]"`
 // again, so it is its own row rather than a corollary: a declaration that
 // dropped only the elements would leave a caller's table in the fresh cell.
 func TestAValuelessDeclarationDropsTheOuterTable(t *testing.T) {
+	t.Parallel()
 	src := `typeset -A m; m[k]=v; m[j]=w
 f() { local -A m; echo "in n=${#m[@]} [${m[k]-NONE}]"; typeset -p m; }
 f
@@ -137,6 +141,7 @@ echo "after n=${#m[@]} [${m[k]}]"`
 // gets; here there is nothing to merge with, so the name is the scalar the
 // declaration wrote.
 func TestADeclarationWithAValueIntoAFreshCellIsNotMergedWithTheOuterArray(t *testing.T) {
+	t.Parallel()
 	src := `a=(x y)
 f() { local a=q; typeset -p a; }
 f
@@ -152,6 +157,7 @@ echo "after [${a[*]}]"`
 // axis: the same declaration where no scope was taken merges, because there
 // the compound in front of it is the one the name is really holding.
 func TestADeclarationWithAValueAndNoScopeIsStillMergedWithTheArray(t *testing.T) {
+	t.Parallel()
 	src := `a=(x y); typeset a=q; typeset -p a`
 	out, errs, st := declRun(t, src, withFreshCells(Yes, No), Diagnostics{})
 	const want = "declare -a a=([0]=\"q\" [1]=\"y\")\n"
@@ -164,6 +170,7 @@ func TestADeclarationWithAValueAndNoScopeIsStillMergedWithTheArray(t *testing.T)
 // the scope declines the fresh cell with it, so a global declaration merges
 // where the local one beside it does not.
 func TestAGlobalDeclarationInsideAFunctionKeepsTheOuterArray(t *testing.T) {
+	t.Parallel()
 	src := `a=(x y)
 f() { typeset -g a=q; typeset -p a; }
 f
@@ -180,6 +187,7 @@ echo "after [${a[*]}]"`
 // declared is writing over a cell of its own, and the compound in front of it
 // is the one the first declaration made.
 func TestASecondDeclarationInTheSameScopeKeepsWhatTheFirstDeclared(t *testing.T) {
+	t.Parallel()
 	src := `a=(x y)
 f() { local -a a=(q w); local -a a; echo "in n=${#a[@]} [${a[*]}]"; }
 f`
@@ -195,6 +203,7 @@ f`
 // instead, this is the row that would have been missed — as the compound mark
 // itself was, in #1535.
 func TestASubscriptedDeclarationIntoAFreshCellWritesTheOnlyElement(t *testing.T) {
+	t.Parallel()
 	src := `a=(x y z)
 f() { local a[1]=q; echo "in n=${#a[@]} [${a[*]}] [${a[0]-NONE}]"; }
 f
@@ -218,6 +227,7 @@ echo "after [${a[*]}]"`
 // the global cell: the caller here is itself a function that assigned the
 // array, and the callee's declaration must not see those elements either.
 func TestAFreshCellInANestedCallDropsTheCallersElements(t *testing.T) {
+	t.Parallel()
 	src := `a=(x y)
 inner() { local -a a; echo "in n=${#a[@]} [${a[*]}]"; }
 outer() { a=(p q r); inner; echo "outer n=${#a[@]} [${a[*]}]"; }
@@ -235,6 +245,7 @@ echo "after n=${#a[@]} [${a[*]}]"`
 // it. The append is what turns a stale cell into wrong output rather than
 // merely into a wrong length.
 func TestAFreshCellAppendedToHoldsOnlyWhatTheFunctionAdded(t *testing.T) {
+	t.Parallel()
 	src := `files=(stale1 stale2)
 audit() { local -a files extra; files+=(real1); echo "in n=${#files[@]} [${files[*]}] extra=${#extra[@]}"; }
 audit

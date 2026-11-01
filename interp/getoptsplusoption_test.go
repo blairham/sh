@@ -35,6 +35,7 @@ func plusDiag() *Diagnostics {
 // The axis itself: the same word is an option in one answer and the operand
 // that ends the scan in the other.
 func TestGetoptsTakesAPlusPrefixedOptionIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `set -- +a rest; o=INIT
 getopts "a" o
 echo "st=$? [$o] ind=$OPTIND"`
@@ -64,6 +65,7 @@ echo "st=$? [$o] ind=$OPTIND"`
 // cluster, an argument is taken in both spellings, and the two signs mix in
 // one command line.
 func TestGetoptsPlusPrefixedOptionScansLikeAnyOther(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, params, spec, want string }{
 		{"a cluster", `set -- +ab`, `ab`, "[+a][+b] ind=2\n"},
 		{"both signs in one line", `set -- +a -b`, `ab`, "[+a][b] ind=3\n"},
@@ -88,6 +90,7 @@ printf ' ind=%s\n' "$OPTIND"`
 // The sign reaches the complaint and OPTARG as well as the name, which is
 // what makes it *the letter as reported* rather than a flag on the scan.
 func TestGetoptsPlusPrefixedOptionCarriesTheSignIntoWhatItReports(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"an unknown letter",
@@ -125,6 +128,7 @@ func TestGetoptsPlusPrefixedOptionCarriesTheSignIntoWhatItReports(t *testing.T) 
 // `++` is a `+` word naming `+`. Gluing them together would write one of
 // these as the other.
 func TestGetoptsSignAndLetterAreSeparateVerbs(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ words, want string }{
 		{`-+`, "sh: bad option: -+\n"},
 		{`++`, "sh: bad option: ++\n"},
@@ -144,6 +148,7 @@ func TestGetoptsSignAndLetterAreSeparateVerbs(t *testing.T) {
 // one worth pinning: `++` is **not** the `--` that ends the options — it is
 // the option `+`, which no ordinary option string has.
 func TestGetoptsPlusIsNotAnEndOfOptionsWord(t *testing.T) {
+	t.Parallel()
 	// The `?` in the rows that end the scan is
 	// Semantics.GetoptsEndOfOptionsNamesIt, which this vector answers yes; the
 	// dialect that reads a `+` word as an option answers it no and leaves the
@@ -170,6 +175,7 @@ func TestGetoptsPlusIsNotAnEndOfOptionsWord(t *testing.T) {
 // ordinary operands reaches no question at all, which is every `getopts` a
 // portable script writes.
 func TestGetoptsPlusPrefixedOptionIsAskedOnlyAtAPlusWord(t *testing.T) {
+	t.Parallel()
 	const axis = "a `+`-prefixed word read as an option rather than as an operand"
 	t.Run("a plus word", func(t *testing.T) {
 		sem := plusSem(Unspecified)

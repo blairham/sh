@@ -26,6 +26,7 @@ func exportResetRun(t *testing.T, src string, set func(*Semantics)) (string, int
 }
 
 func TestADeclarationThatAssignsClearingTheExportAttributeIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const probe = `export FOO=bar; typeset FOO=baz; ` +
 		`/usr/bin/env | grep '^FOO=' || echo "(none)"; echo "read=[$FOO]"`
 	out, st := exportResetRun(t, probe, func(s *Semantics) {
@@ -43,6 +44,7 @@ func TestADeclarationThatAssignsClearingTheExportAttributeIsAnAxis(t *testing.T)
 }
 
 func TestNamingTheAttributeOnTheDeclarationAnswersItOutright(t *testing.T) {
+	t.Parallel()
 	// `-x` on the line settles it, so the axis is not asked and the answer
 	// is the same on both sides of it.
 	for _, answer := range []Answer{Yes, No} {
@@ -59,6 +61,7 @@ func TestNamingTheAttributeOnTheDeclarationAnswersItOutright(t *testing.T) {
 }
 
 func TestAValuelessDeclarationDoesNotAskAboutTheExportAttribute(t *testing.T) {
+	t.Parallel()
 	// The value on the line is what asks it. With none, the attribute is
 	// left alone whichever way the axis is answered.
 	for _, answer := range []Answer{Yes, No} {
@@ -72,6 +75,7 @@ func TestAValuelessDeclarationDoesNotAskAboutTheExportAttribute(t *testing.T) {
 }
 
 func TestAPlainAssignmentDoesNotAskAboutTheExportAttribute(t *testing.T) {
+	t.Parallel()
 	// Not a declaration utility's doing at all, and no shell measured takes
 	// the attribute off for one.
 	out, st := exportResetRun(t,
@@ -83,6 +87,7 @@ func TestAPlainAssignmentDoesNotAskAboutTheExportAttribute(t *testing.T) {
 }
 
 func TestClearingTheExportAttributeIsAResetAndNotARefusal(t *testing.T) {
+	t.Parallel()
 	out, st := exportResetRun(t,
 		`export FOO=bar; typeset FOO=baz; export FOO; /usr/bin/env | grep '^FOO=' || echo "(none)"`,
 		func(s *Semantics) { s.DeclarationAssignmentResetsTheAttributes = Yes })
@@ -92,6 +97,7 @@ func TestClearingTheExportAttributeIsAResetAndNotARefusal(t *testing.T) {
 }
 
 func TestReadonlyAsksTheSameQuestionAsTypeset(t *testing.T) {
+	t.Parallel()
 	// One shell's `readonly` is its `typeset -r`, so an assignment through
 	// it resets the attribute where `typeset`'s does.
 	out, st := exportResetRun(t,
@@ -109,6 +115,7 @@ func TestReadonlyAsksTheSameQuestionAsTypeset(t *testing.T) {
 }
 
 func TestExportItselfNeverAsksTheQuestion(t *testing.T) {
+	t.Parallel()
 	// `export NAME=value` names the attribute in the word that runs it, so
 	// it is the same case as `typeset -x` by another spelling.
 	out, st := exportResetRun(t,
@@ -120,6 +127,7 @@ func TestExportItselfNeverAsksTheQuestion(t *testing.T) {
 }
 
 func TestAnImportedNameIsResetTheSameWay(t *testing.T) {
+	t.Parallel()
 	// A name is exported by having arrived, so the question is the same by
 	// that route — and the runner's own record has to say so, because there
 	// is nothing in its table for the environment to be superseded by.
@@ -138,6 +146,7 @@ func TestAnImportedNameIsResetTheSameWay(t *testing.T) {
 }
 
 func TestAScopedDeclarationAsksTheOtherAxisInstead(t *testing.T) {
+	t.Parallel()
 	// Where the declaration took a scope, the export question is
 	// LocalInheritsTheExportAttribute and this axis must not fire as well:
 	// the attribute comes back when the function returns, and taking it off
@@ -183,6 +192,7 @@ func TestAScopedDeclarationAsksTheOtherAxisInstead(t *testing.T) {
 }
 
 func TestAnUnansweredExportResetIsRefused(t *testing.T) {
+	t.Parallel()
 	// A runner with no dialect refuses the declaration rather than making it
 	// one way and saying so.
 	_, st := axisRun(t, `export FOO=bar; typeset FOO=baz`, func(s *Semantics) {

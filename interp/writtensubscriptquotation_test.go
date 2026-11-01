@@ -30,6 +30,7 @@ func writtenQuotationAxis(a Answer) func(*Runner) {
 }
 
 func TestAWrittenSubscriptQuotationStopsOrPerformsWhatItHolds(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; kq=q; (( m['$kq'] = 42 )); ` +
 		`printf '[%s][%s]' "${m[q]}" "${m['$kq']}"`
 	for _, tc := range []struct {
@@ -57,6 +58,7 @@ func TestAWrittenSubscriptQuotationStopsOrPerformsWhatItHolds(t *testing.T) {
 // the control the axis rests on: it is the apostrophe and not quoting in
 // general.
 func TestAWrittenSubscriptsDoubleQuotationPerformsWhatItHoldsEitherWay(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; kq=q; (( m["$kq"] = 42 )); printf '[%s]' "${m[q]}"`
 	for _, axis := range []Answer{Yes, No} {
 		out, st := runGrammar(t, src, quotedKeyGrammar, writtenQuotationAxis(axis))
@@ -70,6 +72,7 @@ func TestAWrittenSubscriptsDoubleQuotationPerformsWhatItHoldsEitherWay(t *testin
 // double quotation is the one in charge — the second control, and the one a
 // rule written over the apostrophe alone would get wrong.
 func TestAnApostropheInsideADoubleQuotationStopsNothing(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; kq=q; (( m["'$kq'"] = 42 )); printf "[%s]" "${m["'q'"]}"`
 	for _, axis := range []Answer{Yes, No} {
 		out, st := runGrammar(t, src, quotedKeyGrammar, writtenQuotationAxis(axis))
@@ -83,6 +86,7 @@ func TestAnApostropheInsideADoubleQuotationStopsNothing(t *testing.T) {
 // other question, and does not move with this one: the apostrophes stop the
 // expansion there under both answers here.
 func TestAnArrivedSubscriptsQuotationIsNotThisAxis(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; kq=q; e="m['\$kq']"; (( $e = 42 )); printf '[%s]' "${m['$kq']}"`
 	for _, axis := range []Answer{Yes, No} {
 		out, st := runGrammar(t, src, quotedKeyGrammar, writtenQuotationAxis(axis))
@@ -96,6 +100,7 @@ func TestAnArrivedSubscriptsQuotationIsNotThisAxis(t *testing.T) {
 // thrown away: a command substitution an apostrophe holds is a command that
 // does not run.
 func TestAStoppedSubscriptExpansionIsNeverPerformed(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; ran=no; (( m['$(ran=yes; echo x)'] = 1 )); printf '[%s]' "$ran"`
 	out, st := runGrammar(t, src, quotedKeyGrammar, writtenQuotationAxis(Yes))
 	if out != "[no]" || st != 0 {
@@ -106,6 +111,7 @@ func TestAStoppedSubscriptExpansionIsNeverPerformed(t *testing.T) {
 // An axis nothing has answered is a refusal by name rather than a guess at
 // which of the two keys was meant.
 func TestAnUnansweredWrittenSubscriptQuotationIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; kq=q; (( m['$kq'] = 42 ))`
 	out, _ := runGrammar(t, src, quotedKeyGrammar, writtenQuotationAxis(Unspecified))
 	if !strings.Contains(out, "stopping the expansion") {
@@ -116,6 +122,7 @@ func TestAnUnansweredWrittenSubscriptQuotationIsRefusedByName(t *testing.T) {
 // A subscript with an apostrophe but no expansion inside it never puts the
 // question, so a dialect that has not answered still reaches the element.
 func TestAWrittenQuotationWithNoExpansionAsksNothing(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; (( m['q'] = 42 )); printf '[%s]' "${m[q]}"`
 	out, st := runGrammar(t, src, quotedKeyGrammar, writtenQuotationAxis(Unspecified))
 	if out != "[42]" || st != 0 {

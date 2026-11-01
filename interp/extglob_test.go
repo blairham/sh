@@ -39,6 +39,7 @@ func matchWith(t *testing.T, subject, pattern string, extended, alternation bool
 
 // The five quantifiers, each against something it should and should not match.
 func TestExtendedPatternQuantifiers(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ subject, pattern, want string }{
 		// Exactly one of the arms.
 		{"abc", "@(abc|xyz)", "yes"},
@@ -85,6 +86,7 @@ func TestExtendedPatternQuantifiers(t *testing.T) {
 // A bare group is the other reading of the same text, and the two are not
 // compatible: `@(abc|xyz)` matches `abc` under one and `@abc` under the other.
 func TestABareGroupIsADifferentReading(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		subject, pattern           string
 		extended, alternationWants string
@@ -112,6 +114,7 @@ func TestABareGroupIsADifferentReading(t *testing.T) {
 // Without either flag the parentheses are not a group at all, and the word
 // does not even reach the matcher.
 func TestWithoutAFlagAGroupIsNotOne(t *testing.T) {
+	t.Parallel()
 	for _, pattern := range []string{"@(abc|xyz)", "a(b|c)", "+(a)"} {
 		got := matchWith(t, "abc", pattern, false, false)
 		if !strings.HasPrefix(got, "parse:") {
@@ -144,6 +147,7 @@ func runWith(t *testing.T, src string, extended, alternation bool) string {
 // rule is too wide, which is why none of these can be a parsing test: the
 // difference is only in what the word turns out to be.
 func TestAGroupDoesNotSwallowWhatIsNotOne(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// A `(` that starts a word opens a subshell. Absorbed into the word,
 		// `(echo hi)` becomes a command with that name.
@@ -176,6 +180,7 @@ func TestAGroupDoesNotSwallowWhatIsNotOne(t *testing.T) {
 // so by the time text reaches the matcher a bare paren came from somewhere the
 // dialect allows.
 func TestANestedGroupNeedsNoQuantifier(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ subject, pattern, want string }{
 		{"b", "@(a|(b))", "yes"},
 		{"a", "@(a|(b))", "yes"},
@@ -224,6 +229,7 @@ func condRunGlob(t *testing.T, src string, extended, condOnly, alternation bool,
 // That holds for text the lexer saw. It does not hold for text an *expansion*
 // supplies, which reaches the matcher without passing the lexer at all.
 func TestGroupsAreReadByWhereThePatternStands(t *testing.T) {
+	t.Parallel()
 	const inCase = `p="(b)"; case b in $p) echo yes;; *) echo no;; esac`
 	const inCond = `p="@(b|c)"; [[ b == $p ]] && echo yes || echo no`
 
@@ -258,6 +264,7 @@ func TestGroupsAreReadByWhereThePatternStands(t *testing.T) {
 // metacharacters — otherwise a `(b)` from a variable becomes a group in the
 // one shell that has bare groups and does *not* re-read expansions.
 func TestParenthesesFromAnExpansionAreEscaped(t *testing.T) {
+	t.Parallel()
 	const asGroup = `p="(b)"; case b in $p) echo yes;; *) echo no;; esac`
 	const asText = `p="(b)"; case "(b)" in $p) echo yes;; *) echo no;; esac`
 
@@ -297,6 +304,7 @@ func TestParenthesesFromAnExpansionAreEscaped(t *testing.T) {
 // three answer `a b` to `@(a|b)`, `+(a|b)`, `?(a|b)` and `*(a|b)`, and `b` to
 // `!(a)`.
 func TestAQuantifiedGroupReachesTheFilesystem(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, n := range []string{"a", "b"} {
 		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {
@@ -382,6 +390,7 @@ func runGlobIn(t *testing.T, dir, src string, extended bool) string {
 // So this asserts what the fix does *not* change, which is the half a
 // predicate about metacharacters has no business deciding.
 func TestAQuantifierDoesNotSuspendTheLeadingPeriodRule(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, n := range []string{"a", ".hid"} {
 		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {
@@ -450,6 +459,7 @@ func TestAQuantifierDoesNotSuspendTheLeadingPeriodRule(t *testing.T) {
 // value is protected and prints as six characters; without it the same field
 // is thought to hold nothing worth protecting.
 func TestAQuantifiedGroupFromAnExpansionIsEscaped(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, n := range []string{"a", "b"} {
 		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {

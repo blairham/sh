@@ -15,6 +15,7 @@ import "testing"
 // was writing in place; a row that took a vector the runner never owned would
 // pass without the take doing anything.
 func TestAnEditNeverReachesAVectorSomebodyHolds(t *testing.T) {
+	t.Parallel()
 	rows := []struct {
 		name string
 		// take hands the runner's vector to somebody and returns what they
@@ -84,6 +85,7 @@ func TestAFunctionsVectorIsReusedAtItsNextCall(t *testing.T) {
 // the vector the call was writing, so that vector must not become the spare
 // the next call fills, however the call ends.
 func TestAVectorASubshellTookIsNotTheNextSpare(t *testing.T) {
+	t.Parallel()
 	r := newTestRunner(t, &Runner{Semantics: &Semantics{}})
 	saved := r.KeepSemantics()
 	r.EditSemantics().SplitParamExpansion = Yes

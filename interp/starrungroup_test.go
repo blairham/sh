@@ -22,6 +22,7 @@ import (
 // each other's controls: they differ only in what stands between the `ab` and
 // the group, and each quantifier answers differently.
 func TestAStarRunStopsAtAStarThatOpensAGroup(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, n := range []string{"ab", "abef", "abcdef", "abcfef"} {
 		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {

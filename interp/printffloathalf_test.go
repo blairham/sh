@@ -22,6 +22,7 @@ import (
 // that rounds the rest of them up, so a field that could say only "away"
 // would be wrong about both.
 func TestAFloatingConversionsExactHalf(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		policy PrintfFloatHalfPolicy
@@ -104,6 +105,7 @@ func TestAFloatingConversionsExactHalf(t *testing.T) {
 // a half: a conversion of anything else is written without a question being
 // put to anybody.
 func TestAnUnansweredFloatHalfRefusesOnlyAHalf(t *testing.T) {
+	t.Parallel()
 	sem := printfSem()
 	sem.PrintfFloatHalf = PrintfFloatHalfUnspecified
 

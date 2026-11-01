@@ -22,6 +22,7 @@ import (
 // reads a command substitution, which is what the panel does and what this
 // prints.
 func TestAContinuationInsideAnArithmeticExpansionsDelimitersIsReadOver(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the opener", "echo \"[$(\\\n( 1 + 2 ))]\"", "[3]"},
 		{"the closer", "echo \"[$(( 1 + 2 )\\\n)]\"", "[3]"},

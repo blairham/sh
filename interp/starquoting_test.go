@@ -47,6 +47,7 @@ func starQuoteRun(t *testing.T, src string, distributes Answer) (string, int) {
 // that answers no it came back as one field holding `oxo y`: the trim applied
 // to a field boundary instead of to an element.
 func TestAnUnquotedStarSubscriptAlwaysDistributes(t *testing.T) {
+	t.Parallel()
 	const src = `a=(oxo yo); set -- ${a[*]%o}; printf "%d" "$#"; printf "[%s]" "$@"`
 	for _, a := range []Answer{Yes, No, Unspecified} {
 		if out, st := starQuoteRun(t, src, a); out != `2[ox][y]` || st != 0 {
@@ -59,6 +60,7 @@ func TestAnUnquotedStarSubscriptAlwaysDistributes(t *testing.T) {
 // the same characters differently trimmed, which is why the text is the
 // assertion here and the count is the assertion above.
 func TestAQuotedStarSubscriptAsksWhetherTheOperatorDistributes(t *testing.T) {
+	t.Parallel()
 	const src = `a=(oxo yo); set -- "${a[*]%o}"; printf "%d" "$#"; printf "[%s]" "$@"`
 	if out, st := starQuoteRun(t, src, Yes); out != `1[ox y]` || st != 0 {
 		t.Errorf("distributing: got %q status %d, want %q at 0", out, st, `1[ox y]`)
@@ -71,6 +73,7 @@ func TestAQuotedStarSubscriptAsksWhetherTheOperatorDistributes(t *testing.T) {
 // The `[@]` spelling is neither question: it keeps one field per element and
 // the operator reaches every one of them, whatever the axis says.
 func TestAnAtSubscriptIsNotTheDistributionQuestion(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`a=(oxo yo); set -- ${a[@]%o}; printf "%d" "$#"; printf "[%s]" "$@"`,
 		`a=(oxo yo); set -- "${a[@]%o}"; printf "%d" "$#"; printf "[%s]" "$@"`,
@@ -88,6 +91,7 @@ func TestAnAtSubscriptIsNotTheDistributionQuestion(t *testing.T) {
 // some elements drops *nothing* — and a filter that ran where the shell would
 // have left the array alone looks exactly like a pattern that did not match.
 func TestAQuotedStarSubscriptDoesNotFilterElements(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			// `ba*` matches two of three elements and does not match the
@@ -130,6 +134,7 @@ func TestAQuotedStarSubscriptDoesNotFilterElements(t *testing.T) {
 // Unquoted, the same three still filter — the half that was already right and
 // must stay so. Answered three ways, because this is not the axis.
 func TestAnUnquotedStarSubscriptStillFiltersElements(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(foo bar baz); set -- ${a[*]:#ba*}; printf "%d" "$#"; printf "[%s]" "$@"`, `1[foo]`},
 		{`a=(x y z); b=(y); set -- ${a[*]:|b}; printf "%d" "$#"; printf "[%s]" "$@"`, `2[x][z]`},
@@ -151,6 +156,7 @@ func TestAnUnquotedStarSubscriptStillFiltersElements(t *testing.T) {
 // way the expansion is quoted, and only the join afterwards differs. Unanimous
 // in all three shells with arrays, so it is core and reaches no axis.
 func TestASliceUnderAStarSubscriptAlwaysReadsTheList(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(one two three); set -- ${a[*]:1}; printf "%d" "$#"; printf "[%s]" "$@"`, `2[two][three]`},
 		{`a=(one two three); set -- "${a[*]:1}"; printf "%d" "$#"; printf "[%s]" "$@"`, `1[two three]`},
@@ -174,6 +180,7 @@ func TestASliceUnderAStarSubscriptAlwaysReadsTheList(t *testing.T) {
 // reading — which is what the second table asserts, with the rewrite's axis
 // answered both ways.
 func TestAQuotedBareArrayNameSlicesTheList(t *testing.T) {
+	t.Parallel()
 	whole := func(t *testing.T, src string, scalarIsArray Answer) (string, int) {
 		t.Helper()
 		return runGrammar(t, src, func(d *syntax.Dialect) {
@@ -225,6 +232,7 @@ func TestAQuotedBareArrayNameSlicesTheList(t *testing.T) {
 // reading the two answers differ on, so the rewrite must decline and the
 // substring must stay a substring.
 func TestTheQuotedRewriteDeclinesWhereThereIsNoList(t *testing.T) {
+	t.Parallel()
 	run := func(t *testing.T, src string, a Answer) (string, int) {
 		t.Helper()
 		return runGrammar(t, src, nil, func(r *Runner) {

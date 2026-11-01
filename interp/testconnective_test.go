@@ -29,6 +29,7 @@ import (
 // non-empty, which is the one-argument rule applied to each operand — there
 // is no room for an operator on either side of a three-word expression.
 func TestThreeWordConnectivesJoinTwoStrings(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		src  string
@@ -61,6 +62,7 @@ func TestThreeWordConnectivesJoinTwoStrings(t *testing.T) {
 // neither connective is also a comparison — and it is asserted so that adding
 // one cannot quietly change which rule a three-word expression takes.
 func TestAComparisonStillWinsOverTheConnectives(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		src  string
@@ -82,6 +84,7 @@ func TestAComparisonStillWinsOverTheConnectives(t *testing.T) {
 // swallowed `a -o b` whole would associate `[ a -o b -a c ]` the other way
 // and answer the opposite.
 func TestTheConnectivesKeepTheirPrecedencePastThreeWords(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		src  string
@@ -114,6 +117,7 @@ func TestTheConnectivesKeepTheirPrecedencePastThreeWords(t *testing.T) {
 // machine. The false half is a path that does not exist, which is false for
 // every file operator and so needs no identity of its own.
 func TestOwnershipOperatorsAskAboutTheEffectiveIdentity(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "mine"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)

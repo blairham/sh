@@ -65,6 +65,7 @@ func ignoring(dir string) func(*Runner) {
 // are recorded rather than made an axis; the golden record carries bash32's
 // own answer on the corpus row for this.
 func TestIgnoredNamesTakeWordsOutOfAPathnameExpansion(t *testing.T) {
+	t.Parallel()
 	dir := ignoreTree(t)
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -165,6 +166,7 @@ func TestIgnoredNamesTakeWordsOutOfAPathnameExpansion(t *testing.T) {
 // The operand is a pattern that *did* match — every `.txt` name is there —
 // which is what makes this the filter's miss and not the walk's.
 func TestIgnoredNamesEmptiedByTheOptionsThatDecideAMiss(t *testing.T) {
+	t.Parallel()
 	dir := ignoreTree(t)
 	for _, tc := range []struct {
 		name   string
@@ -206,6 +208,7 @@ func TestIgnoredNamesEmptiedByTheOptionsThatDecideAMiss(t *testing.T) {
 // second of the two rules in this file where the two builds part. No preset
 // is bash 3.2, so the divergence is recorded and not given an axis.
 func TestIgnoredNamesFoldCaseWithTheExpansion(t *testing.T) {
+	t.Parallel()
 	dir := ignoreTree(t)
 	for _, tc := range []struct {
 		name string
@@ -240,6 +243,7 @@ func TestIgnoredNamesFoldCaseWithTheExpansion(t *testing.T) {
 // The second row is what makes the first falsifiable. A run that only checked
 // the inherited value could be passing because the filter is broken.
 func TestIgnoredNamesFollowTheAssignmentAndNotTheValue(t *testing.T) {
+	t.Parallel()
 	dir := ignoreTree(t)
 	inherited := func(r *Runner) {
 		ignoring(dir)(r)
@@ -274,6 +278,7 @@ func TestIgnoredNamesFollowTheAssignmentAndNotTheValue(t *testing.T) {
 // switch, is asserted in dialect/bash — the core has no such name and must
 // not learn one.
 func TestIgnoredNamesWriteTheHiddenNameSwitch(t *testing.T) {
+	t.Parallel()
 	dir := ignoreTree(t)
 	for _, tc := range []struct {
 		name   string
@@ -343,6 +348,7 @@ func TestIgnoredNamesWriteTheHiddenNameSwitch(t *testing.T) {
 // of the hook rather than the null one — so hidden names go with it, and come
 // back at the return.
 func TestIgnoredNamesLastAsLongAsTheirBinding(t *testing.T) {
+	t.Parallel()
 	dir := ignoreTree(t)
 	const outer = `GLOBIGNORE='*.log'; `
 	for _, tc := range []struct{ name, src, want string }{
@@ -384,6 +390,7 @@ func TestIgnoredNamesLastAsLongAsTheirBinding(t *testing.T) {
 // with the field empty the parameter is an ordinary variable and `GLOBIGNORE`
 // means nothing at all.
 func TestIgnoredNamesAreOffWhereTheDialectNamesNoParameter(t *testing.T) {
+	t.Parallel()
 	dir := ignoreTree(t)
 	out, _ := run(t, `GLOBIGNORE='*.txt'; printf "[%s]" *`, inDir(dir))
 	const want = `[a.txt][b.txt][c.log][sub]`
@@ -398,6 +405,7 @@ func TestIgnoredNamesAreOffWhereTheDialectNamesNoParameter(t *testing.T) {
 // The rows above are one dialect's whole model; these are the seams, each
 // with both answers and the refusal that says the question has to be asked.
 func TestTheIgnoreFacilityHasThreeAxes(t *testing.T) {
+	t.Parallel()
 	dir := ignoreTree(t)
 	// A colon is a separator, or it is a character in one pattern.
 	list := func(r *Runner) {
@@ -472,6 +480,7 @@ func TestTheIgnoreFacilityHasThreeAxes(t *testing.T) {
 // three of the six columns put `.` and `..` beside the entries a directory
 // holds and three do not.
 func TestTheListingHasDotAndDotDotOrItDoesNot(t *testing.T) {
+	t.Parallel()
 	dir := ignoreTree(t)
 	with := func(r *Runner) {
 		r.Dir = dir
@@ -515,6 +524,7 @@ func TestTheListingHasDotAndDotDotOrItDoesNot(t *testing.T) {
 // Measured on the shell that holds this answer; see
 // Semantics.IgnoredNamesMatchTheLastComponent.
 func TestTheEntryReadingFiltersEveryListing(t *testing.T) {
+	t.Parallel()
 	dir := ignoreTree(t)
 	word := func(r *Runner) {
 		ignoring(dir)(r)
@@ -569,6 +579,7 @@ func TestTheEntryReadingFiltersEveryListing(t *testing.T) {
 // *behind* the `**`, which sees neither because neither is a level the walk
 // entered.
 func TestADescentListsDotAndDotDotWhereTheListingHasThem(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "p", "q"), 0o750); err != nil {
 		t.Fatal(err)

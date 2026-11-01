@@ -45,6 +45,7 @@ func runNounsetElement(t *testing.T, chars Answer, names bool, src string) (stri
 // refusal gives up the script, and a shell that wrote the sentence and carried
 // on would look the same without it.
 func TestASubscriptThatNamesNoElementIsRefusedUnderNounset(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an index past the end", `a=(x y z); set -u; echo "[${a[9]}]"; echo after`, "a[9]: parameter not set"},
 		{"an index below the base", `a=(x y z); set -u; echo "[${a[-9]}]"; echo after`, "a[-9]: parameter not set"},
@@ -83,6 +84,7 @@ func TestASubscriptThatNamesNoElementIsRefusedUnderNounset(t *testing.T) {
 // refusal reaching one more spelling, and these rows are what keeps the
 // answer from being given here by accident.
 func TestASubscriptThatNamesNothingMissingIsQuietUnderNounset(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an empty array under [@]", `a=(); set -u; echo "n=${#a[@]} at=[${a[@]}]"; echo after`, "n=0 at=[]\nafter\n"},
 		{"a name that holds nothing under [@]", `set -u; echo "at=[${nope[@]}]"; echo after`, "at=[]\nafter\n"},
@@ -111,6 +113,7 @@ func TestASubscriptThatNamesNothingMissingIsQuietUnderNounset(t *testing.T) {
 // `v=x; set -u; echo "${v[5]}"` is empty at 0 in zsh 5.9.2 and `v[5]: unbound
 // variable` in bash 5.3.
 func TestACharacterPastTheEndOfAStringIsNotUnsetUnderNounset(t *testing.T) {
+	t.Parallel()
 	src := `v=x; set -u; echo "[${v[5]}]"; echo after`
 	t.Run("counted as characters", func(t *testing.T) {
 		out, st := runNounsetElement(t, Yes, false, src)
@@ -135,6 +138,7 @@ func TestACharacterPastTheEndOfAStringIsNotUnsetUnderNounset(t *testing.T) {
 // `a[9]`. See Diagnostics.UnboundElementNamesTheSubscriptsValue, which also
 // records the shape it does not reach.
 func TestAnUnboundElementCanBeNamedByTheSubscriptsValue(t *testing.T) {
+	t.Parallel()
 	src := `i=9; a=(x); set -u; echo "[${a[$i]}]"`
 	t.Run("the text that was typed", func(t *testing.T) {
 		out, _ := runNounsetElement(t, No, false, src)
@@ -155,6 +159,7 @@ func TestAnUnboundElementCanBeNamedByTheSubscriptsValue(t *testing.T) {
 // a second sentence about it would be this check reporting the first one's
 // aftermath.
 func TestARefusedSubscriptIsNotAlsoReportedAsUnbound(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, unwanted string }{
 		{"an expression that will not evaluate", `a=(x y z); set -u; echo "[${a[b c]}]"`, "a[b c]: parameter not set"},
 		{"brackets with nothing in them", `a=(x y z); set -u; echo "[${a[]}]"`, "a[]: parameter not set"},

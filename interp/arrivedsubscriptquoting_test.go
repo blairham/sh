@@ -48,6 +48,7 @@ const letQuotedKeyTable = `typeset -A a; a[k]=1; q='"k"'; a[$q]=2; `
 const letQuotedKeyRead = `; printf '[%s][%s]' "${a[k]}" "${a[$q]}"`
 
 func TestALetOperandsSubscriptIsAQuotingContextOrIsTakenAsWritten(t *testing.T) {
+	t.Parallel()
 	const src = letQuotedKeyTable + `let '++a["k"]'` + letQuotedKeyRead
 	for _, tc := range []struct {
 		name string
@@ -80,6 +81,7 @@ func TestALetOperandsSubscriptIsAQuotingContextOrIsTakenAsWritten(t *testing.T) 
 // that reaches one route, so a test driving only `let` cannot tell an axis
 // that was consulted from a value that happened to match.
 func TestAnArithmeticCommandsSubscriptKeepsTheOtherQuotingAxis(t *testing.T) {
+	t.Parallel()
 	const src = letQuotedKeyTable + `(( ++a["k"] ))` + letQuotedKeyRead
 	for _, tc := range []struct {
 		name  string
@@ -110,6 +112,7 @@ func TestAnArithmeticCommandsSubscriptKeepsTheOtherQuotingAxis(t *testing.T) {
 // A backslash is taken off with the quotes or kept with them, so the axis is
 // quote removal and not one character being spared.
 func TestALetOperandsSubscriptKeepsOrDropsABackslashWithTheQuotes(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A a; a[k]=1; e='\k'; a[$e]=2; let '++a[\k]'; printf '[%s][%s]' "${a[k]}" "${a[$e]}"`
 	for _, tc := range []struct {
 		axis Answer
@@ -135,6 +138,7 @@ func TestALetOperandsSubscriptKeepsOrDropsABackslashWithTheQuotes(t *testing.T) 
 // a marked quote alone — unanimous in the panel, and unmoved by either answer
 // here.
 func TestAValuesQuoteCharactersReachALetOperandUnmarked(t *testing.T) {
+	t.Parallel()
 	const table = `typeset -A a; k="q'r'z"; a[$k]=4; `
 	for _, tc := range []struct {
 		axis Answer
@@ -163,6 +167,7 @@ func TestAValuesQuoteCharactersReachALetOperandUnmarked(t *testing.T) {
 // An axis nothing has answered is a refusal by name rather than a guess at
 // which of the two keys was meant.
 func TestAnUnansweredLetOperandSubscriptQuotingIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	const src = letQuotedKeyTable + `let '++a["k"]'` + letQuotedKeyRead
 	out, _ := runGrammar(t, src, quotedKeyGrammar, letQuotingAxis(Unspecified, Yes))
 	if !strings.Contains(out, "quoting context") {
@@ -174,6 +179,7 @@ func TestAnUnansweredLetOperandSubscriptQuotingIsRefusedByName(t *testing.T) {
 // that answers neither still reaches the element — which is nearly every
 // subscript a script writes.
 func TestASubscriptWithNoQuotingAsksNeitherQuotingAxis(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A a; a[k]=1; let '++a[k]'; printf '[%s]' "${a[k]}"`
 	out, st := runGrammar(t, src, quotedKeyGrammar, letQuotingAxis(Unspecified, Unspecified))
 	if out != "[2]" || st != 0 {
@@ -189,6 +195,7 @@ func TestASubscriptWithNoQuotingAsksNeitherQuotingAxis(t *testing.T) {
 // the bracketed text came from agree on every probe that drives only `let`,
 // so a test that stopped there could not tell one from the other.
 func TestAnArrivedSubscriptsQuotingIsTheAxisWhateverBroughtIt(t *testing.T) {
+	t.Parallel()
 	// The table holds one element under the bare key and one under the same
 	// key with its apostrophes, both stored through a value so the two
 	// spellings stay put while the axis moves. The subscript under test
@@ -220,6 +227,7 @@ func TestAnArrivedSubscriptsQuotingIsTheAxisWhateverBroughtIt(t *testing.T) {
 // time the source's own, answer the *other* axis and do not move with this
 // one.
 func TestASourcesOwnBracketsDoNotTakeTheArrivedAnswer(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A a; a[qrz]=1; q="q'r'z"; a[$q]=2; ` +
 		`(( ++a[q'r'z] )); printf '[%s][%s]' "${a[qrz]}" "${a[$q]}"`
 	for _, axis := range []Answer{Yes, No} {
@@ -238,6 +246,7 @@ func TestASourcesOwnBracketsDoNotTakeTheArrivedAnswer(t *testing.T) {
 // happens as part of performing an expansion in it" agree everywhere except
 // here.
 func TestAnArrivedSubscriptStillHoldingAnExpansionIsRemovedEitherWay(t *testing.T) {
+	t.Parallel()
 	// The expansion is outside the apostrophes, because one *inside* them is
 	// stopped rather than performed — that is the neighboring axis and it is
 	// what the last probe in this file holds still.

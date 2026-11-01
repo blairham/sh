@@ -60,6 +60,7 @@ func runProduced(t *testing.T, r *Runner, src string) {
 // The two halves that used to disagree: the name's own reading of itself said
 // it was gone and the view behind it went on answering every lookup.
 func TestUnsetOfAProducedTableTakesTheProducerWithIt(t *testing.T) {
+	t.Parallel()
 	table := map[string]string{"k": "v"}
 	var out strings.Builder
 	r := producedTableRunner(t, table, &out)
@@ -83,6 +84,7 @@ echo "after=[${view[k]}]"`)
 // And the name is an ordinary one afterwards, in both directions: a scalar
 // stored under it reads back as itself, and the producer is not consulted.
 func TestAStoreAfterUnsettingAProducedTableIsOrdinary(t *testing.T) {
+	t.Parallel()
 	table := map[string]string{"k": "v"}
 	var out strings.Builder
 	r := producedTableRunner(t, table, &out)
@@ -99,6 +101,7 @@ echo "v=[$view]"`)
 // answers the other way. A suite that only ran the unset rows could not tell
 // the producer having been taken away from its never having been registered.
 func TestTheProducedTableAnswersWhileItIsThere(t *testing.T) {
+	t.Parallel()
 	table := map[string]string{"k": "v"}
 	var out strings.Builder
 	r := producedTableRunner(t, table, &out)

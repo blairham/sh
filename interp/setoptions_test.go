@@ -18,6 +18,7 @@ import (
 // `set +o posix` is the thirteenth line of Homebrew's own `brew`, and it used
 // to end the run there with `invalid option name`.
 func TestTurningOffWhatThisShellNeverDoesSucceeds(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"posix", "notify", "vi"} {
 		t.Run(name, func(t *testing.T) {
 			// The status of `set` itself, and no complaint of any kind.
@@ -84,6 +85,7 @@ func listedState(out, name string) string {
 // out: TestPosixModeMovesAnAxis and
 // TestTheTwoEditingModesAreOneStateWithThreeValues hold those two to it.
 func TestANameThisShellDoesNotDoIsRememberedRatherThanRefused(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"notify", "ignoreeof", "nolog"} {
 		t.Run(name, func(t *testing.T) {
 			// The status of `set` itself, which a later command would
@@ -128,6 +130,7 @@ func TestANameThisShellDoesNotDoIsRememberedRatherThanRefused(t *testing.T) {
 // Pinned rather than left to the table, because a branch nothing can reach is
 // dead data that reads as a rule.
 func TestADeclaredNameWithNothingBehindItIsStillRefused(t *testing.T) {
+	t.Parallel()
 	const name = "embedders-own-name"
 	setup := func(r *Runner) { r.AddSetOptions(name) }
 	out, _ := run(t, "set -o "+name+"\necho \"st=$?\"\n", setup)
@@ -150,6 +153,7 @@ func TestADeclaredNameWithNothingBehindItIsStillRefused(t *testing.T) {
 // interp/clonetables.go, which is where that is enforced rather than
 // remembered.
 func TestARecordedOptionDoesNotEscapeASubshell(t *testing.T) {
+	t.Parallel()
 	// The parent moves a recorded name *first*, and that is the whole of what
 	// makes this discriminating. The store is allocated lazily, and
 	// maps.Clone keeps a nil map nil — so a parent that has never recorded
@@ -176,6 +180,7 @@ func TestARecordedOptionDoesNotEscapeASubshell(t *testing.T) {
 // reach. That is neither a refusal nor a move, and it is the reason this test
 // reads the listing rather than the status. See Runner.AddInertSetOptions.
 func TestAnInertOptionIsTakenAndDoesNotMove(t *testing.T) {
+	t.Parallel()
 	setup := func(r *Runner) {
 		withExtras(r)
 		r.AddInertSetOptions("privileged")
@@ -198,6 +203,7 @@ func TestAnInertOptionIsTakenAndDoesNotMove(t *testing.T) {
 // A name this shell does not have at all is a different complaint, and keeps
 // the wording it had.
 func TestANameThisShellDoesNotHaveIsStillInvalid(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"bogus", "notanoption"} {
 		t.Run(name, func(t *testing.T) {
 			out, _ := run(t, "set +o "+name+"\necho \"st=$?\"\n", withExtras)
@@ -228,6 +234,7 @@ func TestANameThisShellDoesNotHaveIsStillInvalid(t *testing.T) {
 // is buildable and was built in #1856. The names left in this kind are the
 // ones with nothing behind them to move.
 func TestANameThisShellAlreadyDoesIsTakenInBothDirections(t *testing.T) {
+	t.Parallel()
 	setup := func(r *Runner) { r.AddSetOptions("interactive-comments") }
 	out, st := run(t, "set -o interactive-comments\necho \"st=$?\"\n", setup)
 	if st != 0 || !strings.Contains(out, "st=0") {
@@ -250,6 +257,7 @@ func TestANameThisShellAlreadyDoesIsTakenInBothDirections(t *testing.T) {
 // the option that really is one-way, which is what says this one had to be
 // asserted rather than assumed.
 func TestBraceExpansionIsASwitchAndNotOneWay(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		status          int
@@ -302,6 +310,7 @@ func TestBraceExpansionIsASwitchAndNotOneWay(t *testing.T) {
 // The name a dialect does not declare is not available even though another
 // dialect has it, which is what makes the list a dialect's answer.
 func TestAnExtraNameNeedsDeclaring(t *testing.T) {
+	t.Parallel()
 	// No AddSetOptions call at all, so only the common names exist.
 	out, _ := run(t, "set +o posix\n", nil)
 	if !strings.Contains(out, "invalid option name") {
@@ -316,6 +325,7 @@ func TestAnExtraNameNeedsDeclaring(t *testing.T) {
 // `set -a` marks what is assigned afterwards for the environment, which is
 // the one unanimous name in this change that this shell now really has.
 func TestAllexportMarksAssignmentsForTheEnvironment(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, "set -a\nFOO=bar\n/bin/sh -c 'echo [$FOO]'\n", withExtras)
 	if st != 0 || !strings.Contains(out, "[bar]") {
 		t.Errorf("got %q (status %d), want the assignment carried to the child", out, st)
@@ -345,6 +355,7 @@ func withExtras(r *Runner) {
 // with the answers spelled out, because a `go test` run does not reach the
 // corpus and these were invisible to it.
 func TestARefusedNameIsWordedByTheDialect(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		dg   Diagnostics
@@ -411,6 +422,7 @@ func runWorded(t *testing.T, src string, dg Diagnostics) string {
 // after it are read and never executed, nothing turns it back off, and the
 // script still ends at 0. All four shells agree.
 func TestSetNReadsAndNeverRuns(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `set -n; echo nope; set +n; echo plusn`, nil)
 	if out != "" || st != 0 {
 		t.Errorf("out=%q st=%d, want silence at 0", out, st)
@@ -477,6 +489,7 @@ func TestSetTraceLettersAreAnAxis(t *testing.T) {
 // TestLongAndShortSpellingsAreTheSameOption — an option reachable by letter
 // is reachable by name with the same behavior, because one table drives both.
 func TestLongAndShortSpellingsAreTheSameOption(t *testing.T) {
+	t.Parallel()
 	// `set -o noexec` reads and never runs, exactly as `set -n` does.
 	out, st := run(t, "echo before\nset -o noexec\necho after\n", nil)
 	if out != "before\n" || st != 0 {
@@ -505,6 +518,7 @@ func TestLongAndShortSpellingsAreTheSameOption(t *testing.T) {
 // it outright. The shapes are asserted here by axis and diagnostic, never by
 // shell name.
 func TestMonitorWithoutATerminalIsAnAxis(t *testing.T) {
+	t.Parallel()
 	granted := func(r *Runner) {
 		sem := CoreSemantics()
 		sem.MonitorNeedsATerminal = No
@@ -588,6 +602,7 @@ func TestMonitorWithoutATerminalIsAnAxis(t *testing.T) {
 // TestTheHLetterIsAnAxis — three shells have `set -h` and no two mean quite
 // the same thing by it; the fourth refuses the letter.
 func TestTheHLetterIsAnAxis(t *testing.T) {
+	t.Parallel()
 	// The names involved, declared the way a dialect declares them.
 	declare := func(sem Semantics) func(*Runner) {
 		return func(r *Runner) {
@@ -645,6 +660,7 @@ func TestTheHLetterIsAnAxis(t *testing.T) {
 // declaration is allowed to answer. A test that varied the letters instead
 // would agree under both readings on every row it could write.
 func TestTheStartingStateOfCommandTrackingIsTheDialectsAndNotAlwaysTheLetters(t *testing.T) {
+	t.Parallel()
 	declare := func(sem Semantics) func(*Runner) {
 		return func(r *Runner) {
 			r.Semantics = &sem
@@ -698,6 +714,7 @@ func TestTheStartingStateOfCommandTrackingIsTheDialectsAndNotAlwaysTheLetters(t 
 // says it exists, and the listings have to say so: `set -o` shows the row and
 // `set +o` writes it back re-inputtable, in both states.
 func TestPipefailIsListedWhereDeclared(t *testing.T) {
+	t.Parallel()
 	withPipefail := func(r *Runner) {
 		sem := CoreSemantics()
 		sem.PipefailOption = Yes
@@ -738,6 +755,7 @@ func TestPipefailIsListedWhereDeclared(t *testing.T) {
 // is a value here and this package does not know any: what the test says is
 // that the value travels.
 func TestARefusedLetterReportsTheDialectsStatus(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name           string
 		dg             Diagnostics
@@ -787,6 +805,7 @@ func opposite(a Answer) Answer {
 // on everywhere — so a script that asked for an option its shell does not have
 // ran the rest of itself in three shells that would have stopped.
 func TestARefusedLetterEndsTheScriptWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		fatal Answer
@@ -827,6 +846,7 @@ func TestARefusedLetterEndsTheScriptWhereTheDialectSaysSo(t *testing.T) {
 // call it makes. It returned a bool, so the one status the caller had was the
 // only one an invocation could exit with however the dialect answered.
 func TestSetOptionLettersReportsAStatus(t *testing.T) {
+	t.Parallel()
 	newRunner := func(status int) *Runner {
 		sem := PosixSemantics()
 		sem.BadSetOptionLetterFatal = No
@@ -866,6 +886,7 @@ func TestSetOptionLettersReportsAStatus(t *testing.T) {
 // wording takes the spelling as written and the bare letter and uses the one
 // it means (#598).
 func TestARefusedLetterIsWordedByTheDialect(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		dg   Diagnostics
@@ -918,6 +939,7 @@ func TestARefusedLetterIsWordedByTheDialect(t *testing.T) {
 // `-o` name, whose complaint is a sentence of its own; another prints it
 // under both.
 func TestTheUsageLineFollowsTheLetterAndNotAlwaysTheName(t *testing.T) {
+	t.Parallel()
 	usage := Diagnostics{BuiltinUsage: map[string]string{"set": "Usage: set [-abc]"}}
 	both := usage
 	both.SetInvalidOptionNameUsage = true
@@ -938,6 +960,7 @@ func TestTheUsageLineFollowsTheLetterAndNotAlwaysTheName(t *testing.T) {
 // telling it the truth. The same rule every other builtin's letters follow —
 // see Diagnostics.UnimplementedOptionLetters.
 func TestALetterTheDialectHasIsCalledMissingRatherThanUnknown(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		SetInvalidOptionLetter:     "set: %[1]s: unknown option",
 		UnimplementedOptionLetters: map[string]string{"set": "b"},
@@ -965,6 +988,7 @@ func TestALetterTheDialectHasIsCalledMissingRatherThanUnknown(t *testing.T) {
 // Driven through SetOptionLetters and SetNamedOption, which are the front
 // end's only way in and therefore what marks the route.
 func TestAnOptionRefusedAtAnInvocationDoesNotNameTheBuiltin(t *testing.T) {
+	t.Parallel()
 	newRunner := func(dg Diagnostics) (*Runner, *strings.Builder) {
 		var errs strings.Builder
 		sem := PosixSemantics()
@@ -1051,6 +1075,7 @@ func TestAnOptionRefusedAtAnInvocationDoesNotNameTheBuiltin(t *testing.T) {
 // not turn expansion off, or `sh` would stop expanding aliases the moment
 // anything re-read the route.
 func TestAliasExpansionAndPosixModeAreIndependent(t *testing.T) {
+	t.Parallel()
 	// testrunner:bare — the subject is the two option bits and nothing else
 	// here reads the filesystem.
 	r := &Runner{}
@@ -1094,6 +1119,7 @@ func TestAliasExpansionAndPosixModeAreIndependent(t *testing.T) {
 // A shell with no line to edit has no mode selected either, which is the row
 // that changed in #1858 — a keymap is not something a script is in.
 func TestTheTwoEditingModesAreOneStateWithThreeValues(t *testing.T) {
+	t.Parallel()
 	// The listing is what a script reads the state through, and both names
 	// are in it, so one script line can show both answers at once.
 	for _, tc := range []struct{ name, src, want string }{
@@ -1156,6 +1182,7 @@ func hasOptionRow(listing, name, state string) bool {
 // Asserted from both sides, because a runner that had simply lost the
 // fatality would pass the first half alone.
 func TestARefusalThroughTheDialectsSeamDoesNotEndTheScript(t *testing.T) {
+	t.Parallel()
 	fatal := func(r *Runner) {
 		sem := CoreSemantics()
 		sem.MonitorNeedsATerminal = Yes
@@ -1188,6 +1215,7 @@ func TestARefusalThroughTheDialectsSeamDoesNotEndTheScript(t *testing.T) {
 // "already off" — turning it off is granted and turning it on is refused,
 // which is setoptions.go's bargain and not a rule about this letter.
 func TestThePrivilegedLetter(t *testing.T) {
+	t.Parallel()
 	has := func(a Answer) func(*Runner) {
 		return func(r *Runner) {
 			s := *r.Semantics

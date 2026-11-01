@@ -18,6 +18,7 @@ import "testing"
 //
 // docs/spec/semantics.md, the `:s` modifier.
 func TestABackslashReachesTheModifierThatReadsIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The shape the fault was found in: the value's own separator is
 		// also the delimiter, so the escape is the only thing holding the
@@ -53,6 +54,7 @@ func TestABackslashReachesTheModifierThatReadsIt(t *testing.T) {
 // written: an empty pattern reaches for the string that was searched for,
 // which is the escape's result and not the escape.
 func TestTheRememberedPatternIsTheOneThatWasSearchedFor(t *testing.T) {
+	t.Parallel()
 	const src = `x=a/b/c; y=d/e; echo "[${x:s/\//:/}][${y:s//+/}]"`
 	out, st := runWithModifiers(t, src)
 	if want := "[a:b/c][d+e]\n"; out != want || st != 0 {

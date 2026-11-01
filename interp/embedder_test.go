@@ -41,6 +41,7 @@ func embed(t *testing.T, r *Runner, src string) int {
 // A caller embedding a shell in a program starts here, and if this stops
 // working there is no smaller thing to fall back to.
 func TestTheZeroValueRuns(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &errs})
 	if status := embed(t, r, "echo hi; x=1; echo $x; /bin/echo external"); status != 0 {
@@ -56,6 +57,7 @@ func TestTheZeroValueRuns(t *testing.T) {
 
 // State handed in before the run is state the script has.
 func TestVariablesAndArraysHandedIn(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	sem := PosixSemantics()
 	r := newTestRunner(t, &Runner{
@@ -76,6 +78,7 @@ func TestVariablesAndArraysHandedIn(t *testing.T) {
 // the next read is still a new number — and it is the reason a producer is a
 // separate table rather than a value in Vars.
 func TestAProducedParameter(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	sem := PosixSemantics()
 	n := 0
@@ -134,6 +137,7 @@ func TestARegisteredBuiltin(t *testing.T) {
 // order that copying produces is the thing to check: a builtin and a program
 // writing in turn have to come out in turn.
 func TestStreamsThatAreNotFiles(t *testing.T) {
+	t.Parallel()
 	var out, errs strings.Builder
 	sem := PosixSemantics()
 	r := newTestRunner(t, &Runner{Semantics: &sem, Stdout: &out, Stderr: &errs})
@@ -151,6 +155,7 @@ func TestStreamsThatAreNotFiles(t *testing.T) {
 // `read` takes a line and the program after it takes the rest. Handing the
 // whole reader to each would give the child everything or nothing.
 func TestAReaderThatIsNotAFileIsShared(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	sem := PosixSemantics()
 	r := newTestRunner(t, &Runner{
@@ -166,6 +171,7 @@ func TestAReaderThatIsNotAFileIsShared(t *testing.T) {
 
 // The working directory a caller hands in is the one everything uses.
 func TestTheWorkingDirectoryHandedIn(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	var out strings.Builder
 	sem := PosixSemantics()
@@ -186,6 +192,7 @@ func TestTheWorkingDirectoryHandedIn(t *testing.T) {
 // shell's globs, $PWD and `cd` never see or move the other's — which is why
 // the core's `cd` sets r.Dir and nothing here ever asks os.Getwd.
 func TestTwoRunnersDoNotShareAWorkingDirectory(t *testing.T) {
+	t.Parallel()
 	dirA, dirB := t.TempDir(), t.TempDir()
 	for dir, name := range map[string]string{dirA: "alpha.txt", dirB: "beta.txt"} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o644); err != nil {
@@ -230,6 +237,7 @@ func TestTwoRunnersDoNotShareAWorkingDirectory(t *testing.T) {
 // use, so `pwd` and $PWD report `.`. A caller that wants absolute answers
 // hands one in; driver does.
 func TestNoDirectoryHandedInStaysRelative(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	sem := PosixSemantics()
 	// testrunner:bare — an unset Dir is the subject here, so this is the one
@@ -244,6 +252,7 @@ func TestNoDirectoryHandedInStaysRelative(t *testing.T) {
 
 // The environment a caller hands in is the environment, and export adds to it.
 func TestTheEnvironmentHandedIn(t *testing.T) {
+	t.Parallel()
 	var out strings.Builder
 	sem := PosixSemantics()
 	r := newTestRunner(t, &Runner{

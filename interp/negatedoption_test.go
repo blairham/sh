@@ -52,6 +52,7 @@ func negatedRunner(t *testing.T, src string, plusLists bool) (string, int) {
 // The listing writes the negated spelling, with the state the other way up,
 // and the substrate's own name is gone from it.
 func TestANegatedNameReplacesTheSubstratesInTheListing(t *testing.T) {
+	t.Parallel()
 	out, st := negatedRunner(t, "set -o\n", false)
 	if st != 0 {
 		t.Fatalf("status %d, want 0", st)
@@ -69,6 +70,7 @@ func TestANegatedNameReplacesTheSubstratesInTheListing(t *testing.T) {
 // And it follows the state, which is what says the row is one option read
 // upside down rather than a second one.
 func TestANegatedRowFollowsTheStateItNegates(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"set -o noclobber\nset -o\n", "clobber        off\n"},
 		{"set +o clobber\nset -o\n", "clobber        off\n"},
@@ -88,6 +90,7 @@ func TestANegatedRowFollowsTheStateItNegates(t *testing.T) {
 // The substrate's own name is still a name this shell **has**: only the
 // roster changes, and a script writing the shared spelling is not refused.
 func TestTheSubstratesSpellingIsStillTaken(t *testing.T) {
+	t.Parallel()
 	out, st := negatedRunner(t, "set -o noclobber\nprintf 'st=%s\\n' \"$?\"\n", false)
 	if out != "st=0\n" || st != 0 {
 		t.Errorf("got %q at %d, want %q at 0", out, st, "st=0\n")
@@ -98,6 +101,7 @@ func TestTheSubstratesSpellingIsStillTaken(t *testing.T) {
 // writes the negated row's substrate spelling when it is off, and nothing at
 // all when it is on. An ordinary row is the other way round.
 func TestThePlusOLineNamesTheStoredState(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"set +o\n", "set --default\n"},
 		{"set +o clobber\nset +o\n", "set --default --noclobber\n"},
@@ -116,6 +120,7 @@ func TestThePlusOLineNamesTheStoredState(t *testing.T) {
 // is left out of the `set +o` line — which is a command, so a name `set`
 // would not take has no business in it.
 func TestAnImmovableNameIsListedAndRefused(t *testing.T) {
+	t.Parallel()
 	out, _ := negatedRunner(t, "set -o\n", false)
 	if !strings.Contains(out, "held           off\n") {
 		t.Errorf("listing = %q, want a `held off` row", out)
@@ -136,6 +141,7 @@ func TestAnImmovableNameIsListedAndRefused(t *testing.T) {
 // A shell that declares neither is untouched, which is the control: the
 // substrate's own spelling is what four of the five presets list.
 func TestWithoutTheSeamsTheSubstrateSpellingStands(t *testing.T) {
+	t.Parallel()
 	var buf strings.Builder
 	s := PosixSemantics()
 	d := Diagnostics{}

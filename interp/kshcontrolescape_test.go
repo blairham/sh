@@ -21,6 +21,7 @@ import "testing"
 // agree on half of all subjects: a row asserting only that `~(K)a\nb` fails
 // to match `zanb` would pass for a pattern that matched nothing at all.
 func TestATildeGlobGroupReadsTheControlEscapes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The controls. With no group the escape is the shell's, so `\n` is
 		// the letter `n` — and that pair is what says the rows below it are
@@ -89,6 +90,7 @@ func TestATildeGlobGroupReadsTheControlEscapes(t *testing.T) {
 // newline either way. The class row beside them uses a one-byte subject for
 // the same reason.
 func TestAControlEscapeTakesOneByteAndNotOneUnit(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a multi-byte character is not a newline", `[[ 'zaéb' == z~(K)a\nb ]] && echo YES || echo NO`, "NO"},
 		{"nor a tab", `[[ 'zaéb' == z~(K)a\tb ]] && echo YES || echo NO`, "NO"},

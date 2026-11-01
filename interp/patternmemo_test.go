@@ -230,6 +230,7 @@ func sameReport(a, b matchReport) bool {
 // shell both list one. Nothing else in interp's tests, or any dialect's,
 // noticed — which is why this is a test rather than a comment.
 func TestOneOptionsValueAnswersManySubjects(t *testing.T) {
+	t.Parallel()
 	for _, c := range memoCases {
 		shared := memoTestOpts(c.pattern)
 		for _, subject := range c.subjects {
@@ -258,6 +259,7 @@ func TestOneOptionsValueAnswersManySubjects(t *testing.T) {
 // past bit 63 and aliased every pattern offset above 16383. Nothing would
 // have noticed on the patterns in this file, because they are short.
 func TestThePackedKeyIsInjective(t *testing.T) {
+	t.Parallel()
 	seen := map[uint64]matchKey{}
 	// Values chosen around every boundary the packing has: zero, one, the
 	// byte and 14-bit edges the broken version aliased at, and the top of

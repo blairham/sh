@@ -38,6 +38,7 @@ func decided(t *testing.T, a Answer, src string) (string, int) {
 // TestADecidedOperandIsRunOnlyWhereTheAxisSaysSo is the axis itself, at both
 // values, through every shape the panel was measured in.
 func TestADecidedOperandIsRunOnlyWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, runs, skips string
 	}{
@@ -116,6 +117,7 @@ func TestADecidedOperandIsRunOnlyWhereTheAxisSaysSo(t *testing.T) {
 // on the value alone would score both answers correct and the divergence would
 // stay invisible. That is exactly how it stayed invisible until #2605.
 func TestTheValueIsTheOperatorsUnderEitherAnswer(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`x=0; echo "v=$((0 && (x = 9)))"`, "v=0\n"},
 		{`x=0; echo "v=$((7 || (x = 9)))"`, "v=1\n"},
@@ -135,6 +137,7 @@ func TestTheValueIsTheOperatorsUnderEitherAnswer(t *testing.T) {
 // exactly like one answering the axis Yes: both leave x at 9. What the axis
 // moves is the *decided* operand, and this is the case that says so.
 func TestAnOperandTheLeftSideDidNotDecideIsRunUnderEitherAnswer(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`x=0; : $((1 && (x = 9))); echo "x=$x"`, "x=9\n"},
 		{`x=0; : $((0 || (x = 8))); echo "x=$x"`, "x=8\n"},
@@ -155,6 +158,7 @@ func TestAnOperandTheLeftSideDidNotDecideIsRunUnderEitherAnswer(t *testing.T) {
 // an `&&` written inside that arm never runs either. An axis implemented as
 // "this vector evaluates everything" would move all three of these.
 func TestAConditionalDropsItsArmUnderEitherAnswer(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`w=5; echo "v=$((0 ? (w = 1) : 2)) w=$w"`, "v=2 w=5\n"},
 		{`w=5; echo "v=$((1 ? 2 : (w = 1))) w=$w"`, "v=2 w=5\n"},
@@ -176,6 +180,7 @@ func TestAConditionalDropsItsArmUnderEitherAnswer(t *testing.T) {
 // assignment — walking the operand for stores and performing them — would pass
 // every case above and fail this one.
 func TestAFailureInADecidedOperandFollowsTheAxis(t *testing.T) {
+	t.Parallel()
 	const src = `echo "v=$((0 && (1/0)))"; echo "after st=$?"`
 	if out, _ := decided(t, No, src); out != "v=0\nafter st=0\n" {
 		t.Errorf("No: gave %q, want the expression to answer 0 with nothing raised", out)
@@ -197,6 +202,7 @@ func TestAFailureInADecidedOperandFollowsTheAxis(t *testing.T) {
 // It fails loudly if a later change hoists the ask, which is the whole reason
 // it is written down.
 func TestOrdinaryShortCircuitingAsksNothing(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`echo "v=$((0 && 1)) w=$((1 || 0))"`, "v=0 w=1\n"},
 		{`a=0; b=2; echo "v=$((a && b)) w=$((b || a))"`, "v=0 w=1\n"},
@@ -214,6 +220,7 @@ func TestOrdinaryShortCircuitingAsksNothing(t *testing.T) {
 // behind reaches the disagreement, so an unanswered vector refuses it by name
 // rather than quietly picking a side.
 func TestADecidedOperandWithASideEffectIsRefusedWhenNothingAnswered(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`x=0; : $((0 && (x = 9))); echo "x=$x"`,
 		`y=0; : $((1 || (y = 8))); echo "y=$y"`,

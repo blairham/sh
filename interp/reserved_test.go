@@ -53,6 +53,7 @@ func shadow(t *testing.T, dir, name, body string) {
 // and run in a child — which changed its own state and exited. The call
 // succeeded and nothing happened.
 func TestAMissingBuiltinIsNotLookedForOnPath(t *testing.T) {
+	t.Parallel()
 	// `umask` is not here any more: it is a builtin now, so it is answered
 	// rather than refused, and the dispatch reaches it before this check.
 	// Its own protection is stronger and is tested below.
@@ -90,6 +91,7 @@ func TestAMissingBuiltinIsNotLookedForOnPath(t *testing.T) {
 // With the builtin in place it wins, as builtins do; taken away, the search
 // reaches PATH, and nothing refuses the name in between.
 func TestFcIsNotReserved(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	shadow(t, dir, "fc", "echo ran-the-external")
 	out, st, err := reservedRun(t, dir, "fc -l", nil)
@@ -133,6 +135,7 @@ func TestRegisteringOneStopsItBeingReserved(t *testing.T) {
 
 // A name that is not reserved still resolves from PATH, which is most of them.
 func TestAnOrdinaryNameStillResolvesFromPath(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	shadow(t, dir, "notabuiltin", "echo ran-the-external")
 	out, st, err := reservedRun(t, dir, "notabuiltin", nil)
@@ -147,6 +150,7 @@ func TestAnOrdinaryNameStillResolvesFromPath(t *testing.T) {
 // A function of the same name still wins, because a function shadows both a
 // builtin and an external and is checked before either.
 func TestAFunctionStillShadowsAReservedName(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	shadow(t, dir, "hash", "echo ran-the-external")
 	out, st, err := reservedRun(t, dir, "hash() { echo the-function; }\nhash 077", nil)
@@ -168,6 +172,7 @@ func TestAFunctionStillShadowsAReservedName(t *testing.T) {
 // now; a dialect that removes one is how this path is reached, and the case
 // with the builtin present is TestCommandVReportsARegisteredReservedName's.
 func TestCommandVDoesNotAdvertiseAReservedExternal(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	shadow(t, dir, "hash", "echo ran-the-external")
 	shadow(t, dir, "ordinary", "echo ran-the-external")
@@ -203,6 +208,7 @@ func TestCommandVDoesNotAdvertiseAReservedExternal(t *testing.T) {
 // And a dialect that registers one gets it reported as a builtin, which is the
 // clause that makes reserving conditional on not having it.
 func TestCommandVReportsARegisteredReservedName(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	shadow(t, dir, "hash", "echo ran-the-external")
 	setup := func(r *Runner) {

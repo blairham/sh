@@ -14,6 +14,7 @@ import (
 // than written through: a subshell holds the same pointer, and the front end
 // has nothing but the pointer to notice a grammar by.
 func TestTheShortFormBodyReadingIsWrittenAndReadBack(t *testing.T) {
+	t.Parallel()
 	for _, want := range []bool{true, false} {
 		d := syntax.Core()
 		d.ShortForm = true
@@ -36,6 +37,7 @@ func TestTheShortFormBodyReadingIsWrittenAndReadBack(t *testing.T) {
 // And a reading already in place is left alone, so a runner whose grammar has
 // not moved does not hand the front end a fresh pointer on every option word.
 func TestSettingTheShortFormBodyReadingItAlreadyHasSwapsNothing(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ShortForm = true
 	d.ShortFormBody = true

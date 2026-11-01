@@ -31,6 +31,7 @@ func withHiding(s *Semantics) {
 // The whole of what the letter does. A read is untouched; the listing loses
 // the value and keeps every attribute, and `+H` gives it back.
 func TestTheHidingAttributeWithholdsTheValueFromADeclarationListing(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -H h=hid
 echo "read=[$h]"
 typeset -p h
@@ -47,6 +48,7 @@ typeset -p n`, withHiding, Diagnostics{})
 // A letter outside the dialect's set is still refused, which is what keeps
 // the attribute a dialect's to have rather than the substrate's to assume.
 func TestTheHidingLetterIsTheDialectsToGive(t *testing.T) {
+	t.Parallel()
 	_, errs, st := declRun(t, `typeset -H h=hid`, nil,
 		Diagnostics{UnimplementedOptionLetters: map[string]string{"typeset": "H"}})
 	want := "testsh: typeset: -H is not implemented yet\n"
@@ -57,6 +59,7 @@ func TestTheHidingLetterIsTheDialectsToGive(t *testing.T) {
 
 // Compound names: the kind letters still list, the elements do not.
 func TestTheHidingAttributeWithholdsACompoundValue(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -AH m
 m[k]=v
 echo "elem=[${m[k]}]"
@@ -72,6 +75,7 @@ typeset -p m`, withHiding, Diagnostics{})
 // one. Whole lines, matched as lines: a `Contains` would find `export ex`
 // inside `export ex2=E2` and call the value hidden when it was not.
 func TestTheHidingAttributeReachesEveryListingThatWritesAValue(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -xH ex=E
 typeset -x ex2=E2
 typeset -H zzh=hid
@@ -114,6 +118,7 @@ func hasWholeLine(out, line string) bool {
 // The table attribute was dropped on that path, so `typeset -gA m` left `m`
 // an indexed array and the next `m[k]=v` was a non-numeric subscript.
 func TestTheGlobalLetterStillRecordsTheTableAttribute(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -gA m
 m[k]=v
 echo "elem=[${m[k]}]"
@@ -134,6 +139,7 @@ typeset -p m`, withHiding, Diagnostics{})
 // AttributeRereadsTheValueItFinds and the test below — so the letter asked
 // about here is one that says nothing about a value.
 func TestAValuelessDeclarationKeepsAValueTheNameAlreadyHas(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) {
 		withHiding(s)
 		s.DeclaredNameWithoutValueIsEmpty = Yes
@@ -158,6 +164,7 @@ typeset -p h`, set, Diagnostics{})
 // Not an assignment either way, so a readonly name is re-read rather than
 // refused — `typeset -r r=1; typeset -i r` is 1 at status 0 under both.
 func TestAnAttributeRereadingAStandingValueIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `a=5+2
 typeset -i a
 echo "a=[$a]"
@@ -202,6 +209,7 @@ echo "r=[$r]"`
 // ` 7 ` and `5+2` do not parse at all and are caught either way, which is why
 // they are the control here rather than the subject.
 func TestANumberWrittenOddlyIsStillReread(t *testing.T) {
+	t.Parallel()
 	const src = `a=08
 typeset -i a
 b=+7
@@ -252,6 +260,7 @@ echo "[$a][$b][$c]"`
 // no entry changed nothing any test could see, which is what said the guard
 // was standing in front of a case nothing reached.
 func TestTheRereadReachesAnInheritedValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		answer Answer
 		want   string
@@ -295,6 +304,7 @@ echo "[$INHERITED]"`, set, Diagnostics{}, []string{"INHERITED=bar"})
 // stands under the answer that keeps the elements, so the scalar copy is
 // never rewritten behind the array's back.
 func TestAnAttributeOverAnArrayNameTouchesNothing(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Yes, No} {
 		set := func(s *Semantics) {
 			withHiding(s)
@@ -322,6 +332,7 @@ echo "[${arr[@]}][${arr[0]}]"`, set, Diagnostics{})
 // table rather than anything this axis decides. What is asserted here is that
 // the re-read invents nothing.
 func TestAnAttributeOverAnAssociativeTableInventsNoScalar(t *testing.T) {
+	t.Parallel()
 	for _, answer := range []Answer{Yes, No} {
 		set := func(s *Semantics) {
 			withHiding(s)
@@ -355,6 +366,7 @@ echo "[${m[k]}]"`, set, Diagnostics{})
 // that waits says nothing. `08` is the shape that separates the two: a bad
 // octal digit under `-i`, and bash reads `08` back in silence at 0.
 func TestAnAttributeThatWaitsDoesNotEvaluateTheStandingValue(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) {
 		withHiding(s)
 		s.DeclaredNameWithoutValueIsEmpty = Yes
@@ -372,6 +384,7 @@ echo "read=[$FOO]"`, set, Diagnostics{})
 // the empty value, and the cell a function's shadow makes is created however
 // much the caller held.
 func TestAValuelessDeclarationOfANewCellIsEmpty(t *testing.T) {
+	t.Parallel()
 	set := func(s *Semantics) {
 		withHiding(s)
 		s.DeclaredNameWithoutValueIsEmpty = Yes
@@ -395,6 +408,7 @@ echo "after=[$outer]"`, set, Diagnostics{})
 // are the only place a shell spells an option with a plus, and a refusal that
 // answered `-q` to a `typeset +q` was naming a word the script never wrote.
 func TestARefusedOptionKeepsItsSign(t *testing.T) {
+	t.Parallel()
 	_, errs, st := declRun(t, `typeset +q v`, nil,
 		Diagnostics{BuiltinBadOption: "%[1]s: %[2]s: invalid option"})
 	want := "testsh: typeset: +q: invalid option\n"

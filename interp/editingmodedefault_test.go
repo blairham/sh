@@ -21,6 +21,7 @@ import (
 // three never choose one at all, which is Semantics.InteractiveSelectsEmacs.
 // Measured 2026-09-11, at a terminal as well as without one.
 func TestNoEditingModeIsSelectedUntilOneIs(t *testing.T) {
+	t.Parallel()
 	shell := func(interactive bool, a Answer) func(*Runner) {
 		return func(r *Runner) {
 			s := *r.Semantics
@@ -74,6 +75,7 @@ func TestNoEditingModeIsSelectedUntilOneIs(t *testing.T) {
 // And the mode a binding builtin reads follows the same answer, which is the
 // only thing the mode is for.
 func TestTheModeABindingBuiltinReadsFollowsIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name        string
 		interactive bool

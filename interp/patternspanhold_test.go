@@ -18,6 +18,7 @@ import "testing"
 // answer before the fix as well as after. Taking the clear out of patternSpan
 // fails the other five.
 func TestAPatternReadsItsParameterAfreshEachTimeRound(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`x=a; for c in upper lower; do case $x in [[:$c:]]) printf '%s ' $c;; esac; done`, "lower "},
 		{`x=a; for c in upper lower; do case "$x" in [[:$c:]]) printf '%s ' $c;; esac; done`, "lower "},

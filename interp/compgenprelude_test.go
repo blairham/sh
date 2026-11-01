@@ -34,6 +34,7 @@ import (
 // TestAPreludeFunctionIsNotGeneratedAsACompletion: the listing, by byte, on
 // both streams.
 func TestAPreludeFunctionIsNotGeneratedAsACompletion(t *testing.T) {
+	t.Parallel()
 	out, errs, st := preludeListingRun(t, listingPrelude, "f() { echo f; }\ncompgen -A function\n", nil)
 	if want := "f\n"; out != want {
 		t.Errorf("stdout = %q, want exactly %q — the prelude's three are the shell's", out, want)
@@ -52,6 +53,7 @@ func TestAPreludeFunctionIsNotGeneratedAsACompletion(t *testing.T) {
 // prelude defined there is nothing to offer, and `compgen` says so with 1
 // rather than an empty 0 — a completer asks whether there is anything.
 func TestAPreludeOnlyShellGeneratesNoFunctionsAtAll(t *testing.T) {
+	t.Parallel()
 	out, errs, st := preludeListingRun(t, listingPrelude, "compgen -A function\n", nil)
 	if out != "" || errs != "" {
 		t.Errorf("stdout %q stderr %q, want nothing written", out, errs)
@@ -64,6 +66,7 @@ func TestAPreludeOnlyShellGeneratesNoFunctionsAtAll(t *testing.T) {
 // TestAPreludeFunctionIsNotAMatchForAPrefix: the silent row. A prefix only a
 // prelude name has is "no matches", and the status is what a completer reads.
 func TestAPreludeFunctionIsNotAMatchForAPrefix(t *testing.T) {
+	t.Parallel()
 	for _, word := range []string{"p", "q", "__", "__helper"} {
 		t.Run(word, func(t *testing.T) {
 			out, errs, st := preludeListingRun(t, listingPrelude, "compgen -A function "+word+"\n", nil)
@@ -82,6 +85,7 @@ func TestAPreludeFunctionIsNotAMatchForAPrefix(t *testing.T) {
 // person's function shadows the builtin and is a function; ours agrees for
 // the same reason the listing does.
 func TestARedefinedPreludeFunctionIsGeneratedAgain(t *testing.T) {
+	t.Parallel()
 	out, errs, st := preludeListingRun(t, listingPrelude, "p() { echo mine; }\ncompgen -A function p\n", nil)
 	if want := "p\n"; out != want {
 		t.Errorf("stdout = %q, want exactly %q — a redefinition is the script's own", out, want)
@@ -103,6 +107,7 @@ func TestARedefinedPreludeFunctionIsGeneratedAgain(t *testing.T) {
 // shell two answers to whether `pushd` is a builtin, and #1035's rule is one
 // notion of prelude-ness and one answer.
 func TestThePresentedNamesAreInTheBuiltinListing(t *testing.T) {
+	t.Parallel()
 	out, errs, st := preludeListingRun(t, listingPrelude, "compgen -A builtin p\n", nil)
 	if !strings.HasPrefix(out, "p\n") {
 		t.Errorf("stdout = %q, want the prelude's `p` named as a builtin", out)
@@ -122,6 +127,7 @@ func TestThePresentedNamesAreInTheBuiltinListing(t *testing.T) {
 // so it is in neither listing — real bash has no name like it at all
 // (#2464), and #1117 moves the presented names without moving these.
 func TestAPrivatePreludeHelperIsInNoListingAtAll(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"compgen -A builtin __\n", "compgen -A function __\n"} {
 		out, errs, st := preludeListingRun(t, listingPrelude, src, nil)
 		if out != "" || errs != "" {
@@ -141,6 +147,7 @@ func TestAPrivatePreludeHelperIsInNoListingAtAll(t *testing.T) {
 // one — measured on real bash 5.3.20, where `pushd(){ :; }; compgen -A
 // builtin pushd` still answers `pushd`.
 func TestARedefinedPreludeNameStaysInTheBuiltinListing(t *testing.T) {
+	t.Parallel()
 	out, errs, st := preludeListingRun(t, listingPrelude, "p() { echo mine; }\ncompgen -A builtin p\n", nil)
 	if !strings.HasPrefix(out, "p\n") {
 		t.Errorf("stdout = %q, want `p` still named as a builtin", out)
@@ -155,6 +162,7 @@ func TestARedefinedPreludeNameStaysInTheBuiltinListing(t *testing.T) {
 // it can invoke asks, so a prelude function has to be in it — a private
 // helper is callable and is named by no listing at all.
 func TestEveryFunctionIsStillCallableThroughTheExportedNames(t *testing.T) {
+	t.Parallel()
 	r := preludeNamesRunner(t, listingPrelude, "f() { echo f; }\n")
 	got := strings.Join(r.FuncNames(), " ")
 	if want := "__helper f p q"; got != want {
@@ -168,6 +176,7 @@ func TestEveryFunctionIsStillCallableThroughTheExportedNames(t *testing.T) {
 // BuiltinNames did not name it; it does now, so the two exported accessors
 // between them still offer every word a person can type.
 func TestACommandWordCompleterStillReachesThePresentedNames(t *testing.T) {
+	t.Parallel()
 	r := preludeNamesRunner(t, listingPrelude, "f() { echo f; }\n")
 	offered := map[string]bool{}
 	for _, name := range append(r.BuiltinNames(), r.ListedFuncNames()...) {

@@ -261,6 +261,7 @@ func TestTheTildeFlagExpandsATildeAndAPattern(t *testing.T) {
 // The word form splits into as many words as the pattern matched, which is the
 // half a joined string would hide.
 func TestTheTildeFlagSplitsIntoAsManyWordsAsItMatched(t *testing.T) {
+	t.Parallel()
 	home, dir := tildeFixture(t)
 	out, st := runTilde(t, home, dir,
 		`D=`+dir+"\ng=\"$D/inn*.sh\"\nw=( ${~g} )\nprintf \"%s\" \"${#w[@]}\"")
@@ -286,6 +287,7 @@ func TestTheTildeFlagSplitsIntoAsManyWordsAsItMatched(t *testing.T) {
 // A list expands elementwise, and each element after the first is the head of
 // its own word however the expansion was written.
 func TestTheTildeFlagReachesEveryElementOfAList(t *testing.T) {
+	t.Parallel()
 	home, dir := tildeFixture(t)
 	for _, tc := range []struct{ src, want string }{
 		{`set -- '~/zz' '~/qq'; printf "[%s]" ${~@}`, `[HOME/zz][HOME/qq]`},
@@ -310,6 +312,7 @@ func TestTheTildeFlagReachesEveryElementOfAList(t *testing.T) {
 // conditional, a `case` subject and a pattern operand, not only the word that
 // goes to the filesystem.
 func TestTheTildeFlagMarksAPatternOperandToo(t *testing.T) {
+	t.Parallel()
 	home, dir := tildeFixture(t)
 	for _, tc := range []struct{ src, want string }{
 		{`p='a*'; case abc in ${~p}) printf yes;; *) printf no;; esac`, "yes"},
@@ -328,6 +331,7 @@ func TestTheTildeFlagMarksAPatternOperandToo(t *testing.T) {
 // The run-time option still wins: it is about whether the filesystem pass
 // happens at all, not about what the word is.
 func TestTheTildeFlagIsStillSubjectToTheGlobOptions(t *testing.T) {
+	t.Parallel()
 	home, dir := tildeFixture(t)
 	out, st := runTilde(t, home, dir, `D=`+dir+"\nset -f\ng=\"$D/inn*.sh\"\nprintf \"[%s]\" ${~g}")
 	if want := "[DIR/inn*.sh]"; strings.ReplaceAll(out, dir, "DIR") != want || st != 0 {
@@ -345,6 +349,7 @@ func TestTheTildeFlagIsStillSubjectToTheGlobOptions(t *testing.T) {
 // when it is *reached* — the deferred half of the bad-substitution split.
 // A branch never taken diagnoses nothing, which is measured.
 func TestWithoutTheGrammarFlagTheTildeIsABadSubstitution(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t, `g=x; echo ${~g}`, nil, nil)
 	if !strings.Contains(out, "bad substitution") || st == 0 {
 		t.Errorf("got %q (status %d), want a bad substitution and a failure", out, st)
@@ -358,6 +363,7 @@ func TestWithoutTheGrammarFlagTheTildeIsABadSubstitution(t *testing.T) {
 // A dialect that does not have the flag is not changed by its arrival: the
 // same expansion, the same answer.
 func TestTheFlagChangesNothingWhereItIsOff(t *testing.T) {
+	t.Parallel()
 	home, dir := tildeFixture(t)
 	// The pattern half without any tilde written is the dialect's answer and
 	// nothing else, on both paths — the scalar one and the list one.
@@ -391,6 +397,7 @@ func TestTheFlagChangesNothingWhereItIsOff(t *testing.T) {
 // The contexts that are not an ordinary word, each of which decides the head
 // question for itself. Measured 2026-09-06 on zsh 5.9.2.
 func TestTheTildeFlagInTheContextsThatAreNotAWord(t *testing.T) {
+	t.Parallel()
 	home, dir := tildeFixture(t)
 
 	// A redirection target: the tilde expands at the head of it, so the file
@@ -448,6 +455,7 @@ func TestTheTildeFlagInTheContextsThatAreNotAWord(t *testing.T) {
 // Measured on zsh 5.9.2, 2026-09-12, the one grammar in the panel with the
 // flag; `docs/spec/grammar/parameter-expansion.md` carries the table.
 func TestTheTildeFlagTakesAnAssignmentsColonAsAHead(t *testing.T) {
+	t.Parallel()
 	home, dir := tildeFixture(t)
 	for _, tc := range []struct{ name, src, want string }{
 		{

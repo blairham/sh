@@ -54,6 +54,7 @@ func caretMetaSem(a DollarSingleCaretMetaPolicy) Semantics {
 // delete, and every byte above 0x7f — and then the corners a reading gets
 // wrong. Measured on zsh 5.9.2, 2026-09-08, by `od`.
 func TestDollarSingleCaretAndMeta(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The mask, not an uppercase-and-toggle: the two agree over the
 		// letters and part over a digit, which is why `\C-1` is here.
@@ -104,6 +105,7 @@ func TestDollarSingleCaretAndMeta(t *testing.T) {
 // `\c` gets. Measured: bash keeps both characters, so `$'\C-A'` there is the
 // four characters it was written as.
 func TestDollarSingleCaretAndMetaAbsent(t *testing.T) {
+	t.Parallel()
 	sem := caretMetaSem(DollarSingleCaretMetaAbsent)
 	sem.DollarSingleUnknownEscape = DollarSingleUnknownKeepsBackslash
 	for _, tc := range []struct{ src, want string }{
@@ -124,6 +126,7 @@ func TestDollarSingleCaretAndMetaAbsent(t *testing.T) {
 //
 // Measured 2026-09-13 on ksh93u+ 2012-08-01 through `od -c`.
 func TestDollarSingleCaretAndMetaFoldedWithNoDash(t *testing.T) {
+	t.Parallel()
 	sem := caretMetaSem(DollarSingleCaretMetaFoldedWithNoDash)
 	sem.DollarSingleUnknownEscape = DollarSingleUnknownDropsBackslash
 	for _, tc := range []struct{ name, src, want string }{
@@ -168,6 +171,7 @@ func TestDollarSingleCaretAndMetaFoldedWithNoDash(t *testing.T) {
 // reason the axis is three values rather than a yes: every row here is one
 // text and two different answers.
 func TestTheTwoCaretReadingsPartOverTheSameSpelling(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, masked, folded string }{
 		{`printf '%s' $'\C-A'`, "\x01", "mA"},
 		{`printf '%s' $'\C-1'`, "\x11", "m1"},
@@ -195,6 +199,7 @@ func TestTheTwoCaretReadingsPartOverTheSameSpelling(t *testing.T) {
 // toggle bit 6. Those agree over `@` through `_`, so a test that asks only
 // about `\cA` cannot tell them apart; `\c1` and `\c~` are where they part.
 func TestDollarSingleControlCharacter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name         string
 		src          string
@@ -231,6 +236,7 @@ func TestDollarSingleControlCharacter(t *testing.T) {
 // nothing claims and the unknown-escape axis decides it — which is the whole
 // reason the two axes are separate.
 func TestDollarSingleControlAbsentFallsToTheUnknownRule(t *testing.T) {
+	t.Parallel()
 	sem := dollarSingleSem(DollarSingleControlAbsent, DollarSingleUnknownDropsBackslash, DollarSingleNulIsAByte)
 	if got, _ := run(t, `printf '%s' $'X\cAY'`, withSem(sem)); got != "XcAY" {
 		t.Errorf("dropping: got %q, want %q", got, "XcAY")
@@ -244,6 +250,7 @@ func TestDollarSingleControlAbsentFallsToTheUnknownRule(t *testing.T) {
 // An escape with no meaning either keeps both characters or drops the
 // backslash, and nothing agrees on which.
 func TestDollarSingleUnknownEscape(t *testing.T) {
+	t.Parallel()
 	sem := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, DollarSingleNulEndsTheSpan)
 	if got, _ := run(t, `printf '%s' $'no\qescape'`, withSem(sem)); got != `no\qescape` {
 		t.Errorf("keeping: got %q, want %q", got, `no\qescape`)
@@ -258,6 +265,7 @@ func TestDollarSingleUnknownEscape(t *testing.T) {
 // ends is the *span* rather than the word: the characters after the closing
 // quote were never inside it.
 func TestDollarSingleNulTruncation(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name             string
 		src              string
@@ -289,6 +297,7 @@ func TestDollarSingleNulTruncation(t *testing.T) {
 // only of the escapes the shells agree about has to run under the core, which
 // answers none of the three.
 func TestDollarSingleAxesAreAskedOnlyWhereTheyDecide(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`printf '%s' $'a\tb'`,
 		`printf '%s' $'\x41\101'`,
@@ -335,6 +344,7 @@ func TestDollarSingleAxesAreAskedOnlyWhereTheyDecide(t *testing.T) {
 // can differ — three digits or more — and the empty run only where there are
 // none, so an ordinary `$'\x41'` puts neither question to the dialect.
 func TestDollarSingleHexDigitRun(t *testing.T) {
+	t.Parallel()
 	hexSem := func(every, digitless Answer, nul DollarSingleNulPolicy) Semantics {
 		s := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, nul)
 		s.DollarSingleHexReadsEveryDigit = every
@@ -394,6 +404,7 @@ func TestDollarSingleHexDigitRun(t *testing.T) {
 // there ends it here too — which is why the third column is the same answer
 // as the second and looks nothing like it.
 func TestDollarSingleEscapeWithNoDigits(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, zero, written string }{
 		{"hex with letters after it", `printf '[%s]' $'\xzz'`, "[\x00zz]", `[\xzz]`},
 		{"hex with nothing after it", `printf '[%s]' $'\x'`, "[\x00]", `[\x]`},
@@ -432,6 +443,7 @@ func TestDollarSingleEscapeWithNoDigits(t *testing.T) {
 // unclosed one, a run stopped by a letter, an empty one, and a value past a
 // byte — measured 2026-09-22 under `LC_ALL=C`.
 func TestDollarSingleBracedHex(t *testing.T) {
+	t.Parallel()
 	bracedSem := func(p DollarSingleBracedHexPolicy, nul DollarSingleNulPolicy) Semantics {
 		s := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, nul)
 		s.DollarSingleBracedHex = p
@@ -520,6 +532,7 @@ func TestDollarSingleBracedHex(t *testing.T) {
 // DollarSingleDigitlessEscapeIsAZeroByte's answer and the braces are ordinary
 // text either way.
 func TestDollarSingleBracedHexAbsent(t *testing.T) {
+	t.Parallel()
 	sem := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, DollarSingleNulIsAByte)
 	sem.DollarSingleBracedHex = DollarSingleBracedHexAbsent
 	const src = `printf '[%s]' $'a\x{41}b'`
@@ -536,6 +549,7 @@ func TestDollarSingleBracedHexAbsent(t *testing.T) {
 // A NUL an empty braced run produced is the ordinary road to one, so the
 // dialect that ends a span at a zero byte ends it here.
 func TestDollarSingleBracedHexEmptyRunEndsTheSpan(t *testing.T) {
+	t.Parallel()
 	sem := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, DollarSingleNulEndsTheSpan)
 	sem.DollarSingleBracedHex = DollarSingleBracedHexIsAByte
 	if got, _ := run(t, `printf '[%s]' $'a\x{}b'`, withSem(sem)); got != "[a]" {
@@ -546,6 +560,7 @@ func TestDollarSingleBracedHexEmptyRunEndsTheSpan(t *testing.T) {
 // And an unanswered axis is refused rather than defaulted, which is the whole
 // discipline: a dialect that has not said is not a dialect without the escape.
 func TestDollarSingleBracedHexUnanswered(t *testing.T) {
+	t.Parallel()
 	sem := dollarSingleSem(DollarSingleControlMasked, DollarSingleUnknownKeepsBackslash, DollarSingleNulIsAByte)
 	if _, st := run(t, `printf '[%s]' $'a\x{41}b'`, withSem(sem)); st == 0 {
 		t.Errorf("status %d, want a refusal", st)

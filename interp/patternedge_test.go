@@ -28,6 +28,7 @@ var trimOps = []syntax.ParamOp{
 // Every span of every subject rather than a chosen few, because the failure
 // this guards against is the piece nobody thought to write down.
 func TestTheEdgeLiteralsNeverExcludeAPieceThatMatches(t *testing.T) {
+	t.Parallel()
 	for _, tc := range append(spanCases, edgeCases...) {
 		t.Run(tc.pattern+"|"+tc.subject, func(t *testing.T) {
 			o := spanOptsForTest()
@@ -72,6 +73,7 @@ var edgeCases = []struct{ pattern, subject string }{
 // that gives up on everything. These are the rows that carry the performance
 // claim: what the pattern requires at each end, named exactly.
 func TestTheEdgeLiteralsAreTheCharactersEveryMatchCarries(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		pattern    string
 		head, tail string
@@ -117,6 +119,7 @@ func TestTheEdgeLiteralsAreTheCharactersEveryMatchCarries(t *testing.T) {
 // would pass for a version that had quietly started reasoning past one of
 // the others.
 func TestTheEdgeLiteralsGiveUpOnWhatCouldBypassThem(t *testing.T) {
+	t.Parallel()
 	for _, p := range []string{
 		"a|b", "*a|b", "(a|b)", "^a", "a~b", "*a~b", "(#i)ab", "(#b)(a)b",
 		`a\`,
@@ -174,6 +177,7 @@ func TestTrimAnswersTheSameWithTheEdgeLiteralsAsWithout(t *testing.T) {
 // a split point answers one of the pair correctly and the other by
 // accident, and only a piece taken from the *middle* tells them apart.
 func TestASearchingTrimAndItsMatchAreTheTwoHalvesOfOneSpan(t *testing.T) {
+	t.Parallel()
 	for _, tc := range append(spanCases, edgeCases...) {
 		for _, op := range trimOps {
 			o := spanOptsForTest()
@@ -203,6 +207,7 @@ func TestASearchingTrimAndItsMatchAreTheTwoHalvesOfOneSpan(t *testing.T) {
 // analysis rules out and visits the rest in an order, and this asks only
 // whether the *set* it can reach is the whole set.
 func TestASearchingTrimFindsAMatchWhereverOneExists(t *testing.T) {
+	t.Parallel()
 	for _, tc := range append(spanCases, edgeCases...) {
 		for _, op := range trimOps {
 			o := spanOptsForTest()
@@ -247,6 +252,7 @@ func trimForTest(pattern, subject string, op syntax.ParamOp, edges, search bool)
 // does not. The answer is what is asserted; the time it takes is the point,
 // and a run that has lost the analysis takes seconds rather than failing.
 func TestTheLongestPrefixTrimOnARealPromptCache(t *testing.T) {
+	t.Parallel()
 	const key = "\x1e/home/user:0:%\x1f"
 	var b strings.Builder
 	b.WriteString("head")

@@ -86,6 +86,7 @@ func TestANumeralPastTheWordTakesTheDialectsReading(t *testing.T) {
 // the value: three of these rows keep the same value under the reading that
 // stops at the last digit to fit, and differ only here.
 func TestATruncatedNumeralSaysHowFarItRead(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{ArithNumberTruncated: "number truncated after %[1]d digits: %[2]s"}
 	for _, tc := range []struct{ name, snippet, want string }{
 		{"the digits and the tail", `echo $(( 9999999999999999999 ))`, "number truncated after 18 digits: 9999999999999999999 "},
@@ -112,6 +113,7 @@ func TestATruncatedNumeralSaysHowFarItRead(t *testing.T) {
 // A numeral that stood in a variable, which one column refuses where it
 // answers the same digits written down.
 func TestAStoredNumeralPastTheWordIsRefusedWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	src := "n=10000000000000000000\necho $(( n ))\necho \"st=$?\"\n"
 	refuse := func(r *Runner) {
 		sem := CoreSemantics()

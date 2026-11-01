@@ -34,6 +34,7 @@ import (
 // column answers this from its startup state; it is zsh's MAGIC_EQUAL_SUBST
 // and nothing else, which is why the answer is read at the word.
 func TestTheFirstUnquotedEqualsOpensATildeContext(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, wide, off string }{
 		// The shape's own rows. The core answers the shape No, so these move
 		// on the wide answer alone — which is the subsumption written down
@@ -93,6 +94,7 @@ func TestTheFirstUnquotedEqualsOpensATildeContext(t *testing.T) {
 // one of them is an argument, and an argument moving while the statement
 // stayed put would look the same as both moving.
 func TestTheWideEqualsAnswerLeavesAnAssignmentStatementWhereItWas(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a plain assignment", `v=~; echo "$v"`, "/h"},
 		{"a colon segment", `v=a:~/b; echo "$v"`, "a:/h/b"},
@@ -132,6 +134,7 @@ func TestTheWideEqualsAnswerLeavesAnAssignmentStatementWhereItWas(t *testing.T) 
 // first row refuses, and with the gate widened to any `=` at all the second
 // row would still pass, so both are needed.
 func TestTheWideEqualsAxisIsAskedOnlyWhereATildeCouldMove(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		asks      bool

@@ -69,6 +69,7 @@ func expandVisual(t *testing.T, text string) string {
 }
 
 func TestARestoringSequenceWritesBackWhatIsStillInEffect(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		text, want string
 		why        string
@@ -120,6 +121,7 @@ func TestARestoringSequenceWritesBackWhatIsStillInEffect(t *testing.T) {
 // The state belongs to one walk. Two expansions of the same text draw the
 // same bytes, so nothing a prompt set leaks into the next one drawn.
 func TestVisualStateStartsEmptyAtEveryWalk(t *testing.T) {
+	t.Parallel()
 	const text = "%F{red}a%h"
 	first := expandVisual(t, text)
 	if second := expandVisual(t, text); second != first {
@@ -136,6 +138,7 @@ func TestVisualStateStartsEmptyAtEveryWalk(t *testing.T) {
 // asserting it is what keeps the restore from becoming a rule over the table
 // rather than a row of it.
 func TestASequenceWithNoVisualEntryIsWrittenAlone(t *testing.T) {
+	t.Parallel()
 	st := visualStyle()
 	st.Visual = nil
 	got, _, ok := ExpandPromptStyle(st, "%F{red}a%h%L", nil, nil)

@@ -50,6 +50,7 @@ func readQueryFile(t *testing.T, text string) string {
 // The seed is data no read could produce, so a row that read its name back
 // cannot mistake "left alone" for "filled".
 func TestAQueryReadAnswersYesForTheTwoSpellingsOfY(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		key  string
 		want string
@@ -84,6 +85,7 @@ func TestAQueryReadAnswersYesForTheTwoSpellingsOfY(t *testing.T) {
 // first character is `y` in both cases and only the amount read moves, and
 // the answer moves with it.
 func TestAQueryReadJudgesTheTextAndNotTheFirstCharacter(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, letter, want string }{
 		{"one character of it", "-k1", "st=0 [y]"},
 		{"two characters of it", "-k2", "st=1 [n]"},
@@ -105,6 +107,7 @@ func TestAQueryReadJudgesTheTextAndNotTheFirstCharacter(t *testing.T) {
 // and reading a short read as one would be invisible to a test that only
 // asked for a failure.
 func TestAShortQueryReadIsItsOwnStatus(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, text, want string }{
 		{"nothing at all to read", `read -q -u 5`, "", "st=2 [n]"},
 		{"fewer characters than asked for", `read -q -k3 -u 5`, "y\n", "st=2 [n]"},
@@ -124,6 +127,7 @@ func TestAShortQueryReadIsItsOwnStatus(t *testing.T) {
 // The first operand is the name, and it is the only one filled: the names
 // after it are left exactly as they were.
 func TestAQueryReadFillsOneNamedParameter(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, readQueryFile(t, "y\n")+
 		`REPLY=seed; a=first; b=second; read -q -u 5 a b; echo "st=$? [$a][$b][$REPLY]"`,
 		readsQuery)
@@ -180,6 +184,7 @@ func TestAQueryComesFromTheTerminalAndNotTheStream(t *testing.T) {
 // so a test asking for a failure alone would pass for a shell that had found
 // a terminal and read an `n` from it.
 func TestAQueryWithNoTerminalRefuses(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t,
 		`printf 'yyy' | { REPLY=seed; read -q; echo "st=$? [$REPLY]"; }`, readsQuery)
 	if !strings.Contains(out, "not interactive and can't open terminal") {

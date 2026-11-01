@@ -29,6 +29,7 @@ func exportOption(yes Answer) func(*Semantics) {
 
 // TestAliasExportOptionMarksAndFilters is the dialect that has the letter.
 func TestAliasExportOptionMarksAndFilters(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		// The issue's own row: the call succeeds and defines an ordinary
 		// alias, which the plain listing shows.
@@ -95,6 +96,7 @@ func TestAliasExportOptionMarksAndFilters(t *testing.T) {
 // the answer the rest of the panel gives, which is what makes the suite above
 // a measurement of an axis: the letter is refused, and the refusal names it.
 func TestAliasExportOptionIsRefusedWhereItIsNotAnOption(t *testing.T) {
+	t.Parallel()
 	got, _ := aliasRun(t, exportOption(No), Diagnostics{}, `alias -x xx=1; echo $?; alias xx; echo $?`)
 	// The refusal, the status it leaves — 2, this tree's answer for a bad
 	// option word — and the proof that nothing was defined behind it.
@@ -109,6 +111,7 @@ func TestAliasExportOptionIsRefusedWhereItIsNotAnOption(t *testing.T) {
 // the one place the two axes of #2926 and #2927 touch, and it is measured —
 // `alias -x zz; unalias zz` is 0 on ksh93u+.
 func TestABareExportOperandLeavesTheNameBehind(t *testing.T) {
+	t.Parallel()
 	both := func(s *Semantics) {
 		s.AliasHasExportOption = Yes
 		s.AliasRemembersTheNamesItNames = Yes
@@ -131,6 +134,7 @@ func TestABareExportOperandLeavesTheNameBehind(t *testing.T) {
 // are as load-bearing as the one that prints the glue: a mark with no value
 // is in the plain listing and in the narrowed one alike is not there.
 func TestAMarkWithNoValueBehindItIsOnlyInThePrefixedListing(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"the prefixed listing writes the prefix and glues",

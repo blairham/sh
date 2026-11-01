@@ -45,6 +45,7 @@ func parenRun(t *testing.T, src string, setup func(*Runner)) string {
 // is called `a(b)`, and in a shell reading `(b)` as a group because no file
 // is called `ab`. The fixtures below are what break that tie.
 func TestAParenRunBehindAGroupReadsPerSurface(t *testing.T) {
+	t.Parallel()
 	// Created here so that both readings have something to find. Without
 	// `a(b)` on disk the glob rows agree for the wrong reason.
 	dir := t.TempDir()
@@ -151,6 +152,7 @@ func TestAParenRunBehindAGroupReadsPerSurface(t *testing.T) {
 // bare run *inside* a group is still a group, whichever surface it is on; and
 // the run has to be adjacent to what the reading has already taken.
 func TestAParenRunNeedsAGroupInFrontOfIt(t *testing.T) {
+	t.Parallel()
 	t.Run("a bare run is still refused", func(t *testing.T) {
 		for _, src := range []string{
 			`[[ ab == a(b) ]]`,

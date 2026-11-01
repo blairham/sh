@@ -22,6 +22,7 @@ import (
 // silent: the doubled forms parsed, discarded the pattern, and converted the
 // whole string with status 0 — so a script asking for a subset got the lot.
 func TestCaseChangeAppliesItsPattern(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		// The silent one: only the characters the pattern matches.
 		{"upper, a pattern", `x=abc; echo "${x^^[ab]}"`, "ABc"},
@@ -75,6 +76,7 @@ func TestCaseChangeAppliesItsPattern(t *testing.T) {
 // value is Unicode-aware. LC_ALL outranks LC_CTYPE outranks LANG. What an
 // *unset* locale is is the next test's, because the panel splits on it.
 func TestCaseConversionConsultsTheLocale(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		vars map[string]string
@@ -120,6 +122,7 @@ func TestCaseConversionConsultsTheLocale(t *testing.T) {
 // UnsetLocaleIsUnicodeAware (#2020), and the same answer decides a string's
 // length and a `\u` escape's room.
 func TestAnUnsetLocaleCasesByTheAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -156,6 +159,7 @@ func TestAnUnsetLocaleCasesByTheAxis(t *testing.T) {
 // below 0x80, so the core cases `abc` with no dialect chosen rather than
 // refusing an unanswered axis.
 func TestAnASCIIValueNeverAsksTheUnsetLocaleAxis(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	d.ParamCaseChange = true
 	f, err := syntax.Parse(`x=abc; echo "${x^^}"`, d)
@@ -195,6 +199,7 @@ func TestAnASCIIValueNeverAsksTheUnsetLocaleAxis(t *testing.T) {
 // 5.9.2 gives `CAFé` for both `typeset -u` and `${s:u}`. The panel agrees, so
 // this is a correction and not an axis.
 func TestEverySiteThatChangesCaseAsksTheSameLocale(t *testing.T) {
+	t.Parallel()
 	sites := []struct {
 		name   string
 		src    string
@@ -273,6 +278,7 @@ func TestEverySiteThatChangesCaseAsksTheSameLocale(t *testing.T) {
 // upper-case direction alone — `unicode.ToLower` is the other call each of
 // these sites was making bare.
 func TestLowerCaseNarrowsAtEverySiteToo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the operator", `x=CAFÉ; echo "${x,,}"`, "cafÉ"},
 		{"the attribute", `typeset -l x=CAFÉ; echo "$x"`, "cafÉ"},
@@ -328,6 +334,7 @@ func TestLowerCaseNarrowsAtEverySiteToo(t *testing.T) {
 // is the only one of the two its own option reaches (#2622). So the locale
 // half is a correction and not an axis.
 func TestEverySiteThatFoldsAMatchAsksTheSameLocale(t *testing.T) {
+	t.Parallel()
 	sites := []struct {
 		name   string
 		src    string
@@ -432,6 +439,7 @@ func TestEverySiteThatFoldsAMatchAsksTheSameLocale(t *testing.T) {
 // own. Written out rather than inferred: a `==` that folded unconditionally
 // passes the UTF-8 third of the table and nothing here would notice.
 func TestNoSiteFoldsAMatchWithTheOptionOff(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`[[ ÉTÉ == été ]] && echo fold || echo exact`,
 		`case ÉTÉ in été) echo fold;; *) echo exact;; esac`,
@@ -464,6 +472,7 @@ func TestNoSiteFoldsAMatchWithTheOptionOff(t *testing.T) {
 // 5.3.15 under `LC_ALL=C` with `nocasematch` on — `BASH_REMATCH` holds the
 // upper-case letters the subject held, not the pattern's.
 func TestTheNarrowedRegexFoldStillCapturesTheSubjectsOwnText(t *testing.T) {
+	t.Parallel()
 	const src = `[[ éABCé =~ (a)(b)(c) ]] && echo "[${BASH_REMATCH[0]}][${BASH_REMATCH[1]}][${BASH_REMATCH[3]}]"`
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
@@ -497,6 +506,7 @@ func TestTheNarrowedRegexFoldStillCapturesTheSubjectsOwnText(t *testing.T) {
 // on. Both directions of each pair, because a swap of one side is not
 // symmetric and a table testing one direction would not notice.
 func TestAWideFoldIsTheLowerCaseMapAndNotASwap(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// U+212A KELVIN SIGN lower-cases to the ASCII `k`, so it folds with
 		// both cases of it. A swap through ToUpper would leave it alone.
@@ -544,6 +554,7 @@ func TestAWideFoldIsTheLowerCaseMapAndNotASwap(t *testing.T) {
 // the subject, `é` must still not match `É`, and the block character must
 // still match only itself.
 func TestANarrowedRegexFoldDoesNotCollideWithAPrivateUseSubject(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The subject is the first character of the block and nothing else,
 		// so a stand-in handed out by counting from the start of the block

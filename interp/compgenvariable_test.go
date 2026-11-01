@@ -20,6 +20,7 @@ import (
 //
 // See Runner.compgenVariableNames for the measurements (#4069).
 func TestCompgenVariableListsNamesThatHoldAValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a scalar", "zzv=1\ncompgen -v zzv\n", "zzv\n"},
 		{"an empty scalar counts", "zzv=\ncompgen -v zzv\n", "zzv\n"},
@@ -49,6 +50,7 @@ func TestCompgenVariableListsNamesThatHoldAValue(t *testing.T) {
 // this shell does not have to make the placeholder a candidate to answer the
 // issue's snippet the way bash does.
 func TestCompgenVariableSeesAValueADeclarationDisplaced(t *testing.T) {
+	t.Parallel()
 	out, _ := compgenRun(t, "zzv=global\nf() { local zzv=L; unset zzv; compgen -v zzv; }\nf\n")
 	if want := "zzv\n"; out != want {
 		t.Errorf("a global under the placeholder = %q, want %q", out, want)
@@ -62,6 +64,7 @@ func TestCompgenVariableSeesAValueADeclarationDisplaced(t *testing.T) {
 // The order is the shell's rather than the command line's, and the variables
 // sit between the functions and the filenames — see compgenActionOrder.
 func TestCompgenVariableIsGeneratedAfterTheFunctions(t *testing.T) {
+	t.Parallel()
 	out, _ := compgenRun(t, "zzf() { :; }\nzzv=1\ncompgen -v -A function zz\n")
 	if want := "zzf\nzzv\n"; out != want {
 		t.Errorf("got %q, want %q", out, want)
@@ -76,6 +79,7 @@ func TestCompgenVariableIsGeneratedAfterTheFunctions(t *testing.T) {
 // it is in none of the tables the walk above reads and a child is told about
 // it all the same.
 func TestCompgenVariableListsAnInheritedName(t *testing.T) {
+	t.Parallel()
 	out, _ := compgenRunEnv(t, []string{"ZZENV=1"}, "compgen -v ZZ\n")
 	if want := "ZZENV\n"; out != want {
 		t.Errorf("got %q, want %q", out, want)
@@ -91,6 +95,7 @@ func TestCompgenVariableListsAnInheritedName(t *testing.T) {
 // Nothing to offer is a failure rather than an empty success, which is the
 // rule every action here already follows.
 func TestCompgenVariableWithNoMatchFails(t *testing.T) {
+	t.Parallel()
 	out, st := compgenRun(t, "compgen -v zznosuchname\n")
 	if out != "" || st != 1 {
 		t.Errorf("got %q status %d, want silence at 1", out, st)

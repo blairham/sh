@@ -38,6 +38,7 @@ func refusingReadonly(s *Semantics) {
 // Where the shadow is taken it is an ordinary local: the body sees its own
 // value, the function runs on, and the outer value is back when it returns.
 func TestADeclarationMayShadowAFrozenName(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -r x=1
 f() { local x=2; echo "in=[$x]"; echo running; }
 f
@@ -53,6 +54,7 @@ echo "st=$? out=[$x]"`, shadowingReadonly, Diagnostics{})
 // shadow that merely cleared the attribute would get wrong: a function that
 // thawed a readonly for good is a hole in the whole point of the attribute.
 func TestTheOuterNameIsFrozenAgainAfterTheShadow(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -r x=1
 f() { local x=2; }
 f
@@ -73,6 +75,7 @@ echo "out=[$x]"`, func(s *Semantics) {
 // Every spelling of the declaration takes the shadow, which is why this is
 // one field and not five.
 func TestEverySpellingOfTheDeclarationTakesTheShadow(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ decl, want string }{
 		{`local x=2`, "in=[2]"},
 		{`typeset x=3`, "in=[3]"},
@@ -95,6 +98,7 @@ echo "out=[$x]"`, shadowingReadonly, Diagnostics{})
 // silence: with no value there was no assignment, so nothing met the check
 // and the local was made whatever the answer was.
 func TestAValuelessDeclarationMeetsTheSameQuestion(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -r x=1
 f() { local x; echo "in=[${x-UNSET}]"; }
 f`, refusingReadonly, Diagnostics{})
@@ -110,6 +114,7 @@ f`, refusingReadonly, Diagnostics{})
 // Where the shadow is refused, three things follow together: the outer value
 // stays in view, the builtin reports 1, and the **function runs on**.
 func TestARefusedShadowReportsAndTheFunctionRunsOn(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -r x=1
 f() { local x=2; echo "lst=$?"; echo "in=[$x]"; echo running; }
 f
@@ -131,6 +136,7 @@ echo after`, refusingReadonly, Diagnostics{
 // refused. A refusal that gave up the whole command would leave `y` and `z`
 // global, which is a change to the caller's variables that nothing said.
 func TestARefusedOperandDoesNotCostTheOthers(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -r x=1
 y=outer; z=outer
 f() { local y=1 x=5 z=2; echo "in y=[$y] x=[$x] z=[$z]"; }
@@ -149,6 +155,7 @@ echo "out y=[$y] z=[$z]"`, refusingReadonly, Diagnostics{})
 // The unanswered axis refuses rather than picking a shell, and the
 // declaration is not made either way.
 func TestTheShadowRefusesWithoutTheAxis(t *testing.T) {
+	t.Parallel()
 	out, errs, _ := declRun(t, `typeset -r x=1
 f() { local x=2; echo "in=[$x]"; }
 f`, func(s *Semantics) {
@@ -173,6 +180,7 @@ f`, func(s *Semantics) {
 // and an assignment at top level never reach it — which is what keeps a
 // dialect that has answered nothing from refusing the common path.
 func TestTheQuestionIsAskedOnlyAtTheFrozenName(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `y=outer
 f() { local y=inner; echo "in=[$y]"; }
 f
@@ -190,6 +198,7 @@ echo "out=[$y]"`, func(s *Semantics) {
 // A frozen name assigned at *top level* is the ordinary refusal and not this
 // question: there is no scope to shadow into, so the answer changes nothing.
 func TestATopLevelAssignmentIsNotThisQuestion(t *testing.T) {
+	t.Parallel()
 	_, errs, st := declRun(t, `typeset -r x=1
 typeset x=2`, func(s *Semantics) {
 		s.DeclarationMayShadowAReadonly = Unspecified

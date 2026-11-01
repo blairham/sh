@@ -28,6 +28,7 @@ import (
 // The axis is *which* medium and not whether there is one, so both values are
 // asked the same question and both have to answer it.
 func TestAHereDocumentReachesAChildThatNamesItsDescriptor(t *testing.T) {
+	t.Parallel()
 	for _, medium := range []HeredocBodyMedium{HeredocBodyOnAPipe, HeredocBodyInATemporaryFile} {
 		t.Run(medium.String(), func(t *testing.T) {
 			out := runHeredocMedium(t, medium, "/bin/sh -c 'cat <&3' 3<<X\nchild\nX\necho \"st=$?\"\n")
@@ -76,6 +77,7 @@ func TestTheMediumAHereDocumentBodyIsOnIsVisibleFromAChild(t *testing.T) {
 // read of the body is the case every script writes and the one a change of
 // medium must not touch.
 func TestTheBodyItselfIsUnchangedByTheMedium(t *testing.T) {
+	t.Parallel()
 	for _, medium := range []HeredocBodyMedium{HeredocBodyOnAPipe, HeredocBodyInATemporaryFile} {
 		t.Run(medium.String(), func(t *testing.T) {
 			out := runHeredocMedium(t, medium, "/bin/cat <<X\nfirst\nsecond\nX\n")

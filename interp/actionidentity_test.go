@@ -145,6 +145,7 @@ func TestEveryKindOfActionCarriesAnID(t *testing.T) {
 // failure a fingerprint match had: the wrong record gets closed, and nothing
 // says so.
 func TestTheGateAndTheEventsAgreeOnTheID(t *testing.T) {
+	t.Parallel()
 	rec := runRecorded(t, "/bin/echo hi", nil)
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
@@ -224,6 +225,7 @@ func TestNoTwoActionsShareAnID(t *testing.T) {
 // unnumbered: an audit trail with no gate is the ordinary way to watch a shell,
 // and its records are exactly the ones somebody joins.
 func TestEitherSeamAloneIsEnoughToBeNumbered(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		build func(*recorder, *Runner)

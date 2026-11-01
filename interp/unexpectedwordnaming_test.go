@@ -46,6 +46,7 @@ func naming(v UnexpectedWordNaming) Diagnostics {
 }
 
 func TestARefusedWordIsNamedThreeWays(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		word                         string
 		comesTo, source, whenExpands string
@@ -80,6 +81,7 @@ func TestARefusedWordIsNamedThreeWays(t *testing.T) {
 // in the word keeps every quote in it, so "quotes off" and "quotes off unless
 // it expands" are not the same answer with a longer name.
 func TestOneExpansionKeepsTheWholeWordAsWritten(t *testing.T) {
+	t.Parallel()
 	d := naming(UnexpectedWordIsSourceTextWhenItExpands)
 	withExpansion := refusedWord(t, `"a"$x`, d)
 	if !strings.Contains(withExpansion, "near `\"a\"$x'") {
@@ -94,6 +96,7 @@ func TestOneExpansionKeepsTheWholeWordAsWritten(t *testing.T) {
 // And the axis reaches a *word* alone: an operator was written as the same
 // characters it is named by, so no value of it can move one.
 func TestNamingAWordLeavesAnOperatorAlone(t *testing.T) {
+	t.Parallel()
 	src := "case x in\n;;\nesac"
 	_, err := syntax.Parse(src, syntax.Core())
 	if err == nil {

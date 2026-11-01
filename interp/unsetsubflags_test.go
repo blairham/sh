@@ -52,6 +52,7 @@ const showB = `; printf "[%s]" "${b[@]}"; echo " n=${#b[@]}"`
 // Every row is a measurement on zsh 5.9.2, the one shell with the construct,
 // 2026-09-12.
 func TestUnsettingThroughASubscriptFlagGroup(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the element whose value the search matched",
@@ -120,6 +121,7 @@ func TestUnsettingThroughASubscriptFlagGroup(t *testing.T) {
 // A search over a plain string names a *character* position, and the same
 // store that answers `unset 's[3]'` removes it.
 func TestUnsettingThroughASearchOverAString(t *testing.T) {
+	t.Parallel()
 	out, st := flaggedUnsetRun(t, `s=hello; unset 's[(r)l]'; printf "[%s]" "$s"; echo`)
 	if out != "[helo]\n" || st != 0 {
 		t.Errorf("got %q (status %d), want [helo] at 0", out, st)
@@ -132,6 +134,7 @@ func TestUnsettingThroughASearchOverAString(t *testing.T) {
 // per operand and goes on to the rest, which is the shape it already has for
 // a subscript that will not evaluate — and is what the shell does, measured.
 func TestARefusedSubscriptFlagLeavesUnsetRunningOn(t *testing.T) {
+	t.Parallel()
 	// `(w)` over an array is the ordinary subscript, and `y` is 0 to it —
 	// below the first element, which is what is refused. It was the letter
 	// refused by name until it was carried (#5152); the shape of the line is
@@ -152,6 +155,7 @@ func TestARefusedSubscriptFlagLeavesUnsetRunningOn(t *testing.T) {
 // want that: the brackets are a key there, so nothing matches and nothing
 // goes.
 func TestASubscriptFlagGroupOverATableRemovesNothing(t *testing.T) {
+	t.Parallel()
 	out, st := flaggedUnsetRun(t, `typeset -A m=(a 1 b 2); unset 'm[(r)2]'; printf "[%s]" "${m[a]}" "${m[b]}"; echo`)
 	if out != "[1][2]\n" || st != 0 {
 		t.Errorf("got %q (status %d), want the table untouched at 0", out, st)

@@ -96,6 +96,7 @@ func TestTrimAnswersTheSameWithTheReachAsWithout(t *testing.T) {
 // on every row: a pruned walk that visited the ends in the wrong order, or
 // read the end set from the wrong position, would take the other one.
 func TestAnAlternationTrimTakesTheEndTheOperatorAsksFor(t *testing.T) {
+	t.Parallel()
 	g := shortGroup + ":del" + shortGroup + ":add"
 	// zsh takes the arm that was written first where the arms of a longest
 	// match end in different places — `${v##*(b|bc)}` is `c` there — so the

@@ -35,6 +35,7 @@ func rangeUnsetRun(t *testing.T, src string, set func(*Semantics)) (string, int)
 const showArray = `; echo -n "st=$? "; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`
 
 func TestUnsettingARangeReplacesTheSpanWithOneEmptyElement(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ sub, want string }{
 		{"1,2", "st=0 [][z] n=2\n"},
 		{"1,3", "st=0 [] n=1\n"},
@@ -50,6 +51,7 @@ func TestUnsettingARangeReplacesTheSpanWithOneEmptyElement(t *testing.T) {
 }
 
 func TestTheBelowTheFirstElementRefusalBelongsToTheSpan(t *testing.T) {
+	t.Parallel()
 	// A range that begins out of reach and ends inside is not refused: the
 	// start is the first element. One that lies wholly out of reach is.
 	out, st := rangeUnsetRun(t, `a=(x y z); unset "a[0,1]"`+showArray, nil)
@@ -76,6 +78,7 @@ func TestTheBelowTheFirstElementRefusalBelongsToTheSpan(t *testing.T) {
 }
 
 func TestAReversedRangeInsertsAnEmptyElement(t *testing.T) {
+	t.Parallel()
 	// A span with nothing in it still becomes one empty element, so the array
 	// gains one where the span would have begun. It is the strongest evidence
 	// that this reading is a replacement and not a removal.
@@ -98,6 +101,7 @@ func TestAReversedRangeInsertsAnEmptyElement(t *testing.T) {
 }
 
 func TestARangeStartingPastTheEndDoesNothing(t *testing.T) {
+	t.Parallel()
 	// The other end of the same rule: an end past the last is the last, but a
 	// start past the last has nothing to replace and nothing to stand in
 	// front of.
@@ -117,6 +121,7 @@ func TestARangeStartingPastTheEndDoesNothing(t *testing.T) {
 }
 
 func TestARangesNegativeStartFollowsTheSingleSubscriptsRule(t *testing.T) {
+	t.Parallel()
 	// Only the last element answers to a negative subscript where the span is
 	// blanked, and a range's start is no exception.
 	out, st := rangeUnsetRun(t, `a=(x y z); unset "a[-1,-1]"`+showArray, nil)
@@ -141,6 +146,7 @@ func TestARangesNegativeStartFollowsTheSingleSubscriptsRule(t *testing.T) {
 // for as long as it did (#2373). The rows here are the ones that tell the two
 // readings apart.
 func TestAReversedRangeOverAStringOverlaps(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ sub, want string }{
 		{"2,0", "st=0 [hhello]\n"},
 		{"3,0", "st=0 [hehello]\n"},
@@ -167,6 +173,7 @@ func TestAReversedRangeOverAStringOverlaps(t *testing.T) {
 // the array is left alone — where the same range over a string is the whole
 // string joined to a suffix.
 func TestAStartPastTheEndCutsAStringAndLeavesAnArrayAlone(t *testing.T) {
+	t.Parallel()
 	out, st := rangeUnsetRun(t, `a=(x y z); unset "a[9,0]"`+showArray, nil)
 	if st != 0 || out != "st=0 [x][y][z] n=3\n" {
 		t.Errorf("a[9,0] over an array: got %q status %d, want the array left whole", out, st)
@@ -182,6 +189,7 @@ func TestAStartPastTheEndCutsAStringAndLeavesAnArrayAlone(t *testing.T) {
 // that lands on this rule rather than on a no-op: `[2,x+]` is `[2,0]`, which
 // is `h` joined to `hello`.
 func TestAnEndThatWillNotEvaluateCutsAStringAtZero(t *testing.T) {
+	t.Parallel()
 	out, st := rangeUnsetRun(t, `a=hello; unset "a[2,x+]"; echo "st=$? [${a-UNSET}]"`,
 		func(s *Semantics) {
 			s.ScalarSubscriptIsACharacter = Yes
@@ -197,6 +205,7 @@ func TestAnEndThatWillNotEvaluateCutsAStringAtZero(t *testing.T) {
 }
 
 func TestARangeOverAStringNamesCharacters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ sub, want string }{
 		{"2,3", "st=0 [hlo]\n"},
 		{"1,2", "st=0 [llo]\n"},
@@ -221,6 +230,7 @@ func TestARangeOverAStringNamesCharacters(t *testing.T) {
 }
 
 func TestARangeOverAScalarReadAsAnElement(t *testing.T) {
+	t.Parallel()
 	// No shell measured reads both a range and a scalar-as-element, so this
 	// is the two readings composed: a span that reaches the one element a
 	// scalar is takes the whole name away, and one that does not is the
@@ -258,6 +268,7 @@ func TestARangeOverAScalarReadAsAnElement(t *testing.T) {
 }
 
 func TestARangeRemovesTheSpanWhereThatIsTheAnswer(t *testing.T) {
+	t.Parallel()
 	// The other span policy read over a range. No dialect answers both this
 	// way and reads ranges, so it is the two answers composed rather than a
 	// column of its own — and it is the reading the policy's name states.
@@ -269,6 +280,7 @@ func TestARangeRemovesTheSpanWhereThatIsTheAnswer(t *testing.T) {
 }
 
 func TestAPairWhoseEndsAreTheSameSubscriptAsksNothing(t *testing.T) {
+	t.Parallel()
 	// It is that subscript under either reading, so the single path answers
 	// and the axis is not asked — which is what lets a runner with no dialect
 	// answer `unset "a[2,2]"` at all.
@@ -297,6 +309,7 @@ func TestAPairWhoseEndsAreTheSameSubscriptAsksNothing(t *testing.T) {
 }
 
 func TestARangeEndpointThatWillNotEvaluateIsReported(t *testing.T) {
+	t.Parallel()
 	// Each end is an expression and each is reported where it fails, at both
 	// ends rather than at whichever one is read first. What is *done* about
 	// it differs by end, which is the pair of tests below; here only the
@@ -322,6 +335,7 @@ func TestARangeEndpointThatWillNotEvaluateIsReported(t *testing.T) {
 // and a reversed range in this policy leaves an empty element where the span
 // would have begun.
 func TestARangeEndThatWillNotEvaluateCarriesZero(t *testing.T) {
+	t.Parallel()
 	const bad = "sh: x+: operand expected\n"
 	for _, tc := range []struct{ sub, want string }{
 		{"1,x+", bad + "st=1 [][x][y][z] n=4\n"},
@@ -345,6 +359,7 @@ func TestARangeEndThatWillNotEvaluateCarriesZero(t *testing.T) {
 // answer, because a fix that made the two agree would look right on either
 // one alone.
 func TestARangeStartThatWillNotEvaluateDoesNothing(t *testing.T) {
+	t.Parallel()
 	const bad = "sh: x+: operand expected\n"
 	for _, sub := range []string{"x+,2", "x+,y+"} {
 		out, st := rangeUnsetRun(t, `a=(x y z); unset "a[`+sub+`]"`+showArray,
@@ -363,6 +378,7 @@ func TestARangeStartThatWillNotEvaluateDoesNothing(t *testing.T) {
 // forgotten: an implementation that reported and fell into the ordinary path
 // writes two diagnostics for one mistake.
 func TestASecondComplaintIsSwallowedOnceTheEndpointIsReported(t *testing.T) {
+	t.Parallel()
 	out, st := rangeUnsetRun(t, `a=(x y z); unset "a[0,x+]"`+showArray,
 		func(s *Semantics) { s.BadSubscriptToUnset = BadSubscriptReported })
 	if st != 0 || out != "sh: x+: operand expected\nst=1 [x][y][z] n=3\n" {
@@ -371,6 +387,7 @@ func TestASecondComplaintIsSwallowedOnceTheEndpointIsReported(t *testing.T) {
 }
 
 func TestASubscriptThatIsNotAPairAsksTheRangeAxisNothing(t *testing.T) {
+	t.Parallel()
 	// Even one that will not evaluate: it is not a range, so the failure is
 	// the subscript's own and not an unanswered axis. Read with the axis
 	// unanswered, which is the only way to tell the two reports apart.
@@ -389,6 +406,7 @@ func TestASubscriptThatIsNotAPairAsksTheRangeAxisNothing(t *testing.T) {
 }
 
 func TestARangeOverANameHoldingNothingIsQuiet(t *testing.T) {
+	t.Parallel()
 	// No element and no character for a span to reach, whichever reading is
 	// in force and whatever the dialect does about a subscript on a scalar.
 	for _, sub := range []string{"0,1", "2,3", "1,0"} {

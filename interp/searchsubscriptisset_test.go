@@ -54,6 +54,7 @@ func runSearchIsSet(t *testing.T, src string, baseZero Answer) (string, int) {
 // pair is asserted for each, and a return to the expansion's answer turns
 // each pair into a disagreement. See Runner.searchSubscriptIsSet.
 func TestASearchSubscriptIsSetDoesNotFollowTheExpansion(t *testing.T) {
+	t.Parallel()
 	const arr = "arr=(a b c d)\n"
 	for _, tc := range []struct{ name, sub, want string }{
 		// `(i)` names an index, and that index is read as a **zero-based**
@@ -99,6 +100,7 @@ func TestASearchSubscriptIsSetDoesNotFollowTheExpansion(t *testing.T) {
 // would answer set in both, and every other row in this file would still
 // have agreed.
 func TestTheSearchIndexIsReadAsAZeroBasedOffsetInEitherBase(t *testing.T) {
+	t.Parallel()
 	const arr = "arr=(a b c d)\n"
 	for _, tc := range []struct {
 		name     string
@@ -133,6 +135,7 @@ func TestTheSearchIndexIsReadAsAZeroBasedOffsetInEitherBase(t *testing.T) {
 // empty: it matches, and the operator says set, while the text it
 // substitutes is the empty string. Measured 2026-09-29 on zsh 5.9.2.
 func TestATableSearchIsSetWhenTheSearchMatched(t *testing.T) {
+	t.Parallel()
 	const m = "typeset -A m=(key val num 4 blank '')\n"
 	for _, tc := range []struct{ name, sub, want string }{
 		{"a key search that matched", "(i)key", "SET"},
@@ -173,6 +176,7 @@ func TestATableSearchIsSetWhenTheSearchMatched(t *testing.T) {
 // wholeArraySubscriptIsSet already carries it. See
 // Runner.scalarHasNoElements.
 func TestAScalarHasNoElementsToNameInIsSet(t *testing.T) {
+	t.Parallel()
 	const decl = "str=string\nempty=\narr=(a b c d)\ntypeset -A m=(k v)\n"
 	for _, tc := range []struct{ name, operand, want string }{
 		{"a character by index", "str[1]", "UNSET"},
@@ -205,6 +209,7 @@ func TestAScalarHasNoElementsToNameInIsSet(t *testing.T) {
 // condition's own route. Measured: all three of `[[ -v ]]`, `test -v` and
 // `[ -v ]` agree on every row above in zsh 5.9.2.
 func TestTheTestBuiltinAgreesAboutASearchSubscript(t *testing.T) {
+	t.Parallel()
 	const arr = "arr=(a b c d)\n"
 	for _, sub := range []string{"(i)a", "(i)d", "(i)x", "(I)x", "(r)zz"} {
 		cond := arr + "[[ -v 'arr[" + sub + "]' ]] && echo SET || echo UNSET\n"

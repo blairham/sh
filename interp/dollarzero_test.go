@@ -39,6 +39,7 @@ func zeroSemantics(a DollarZeroScope) Semantics {
 // stack discipline is pinned where it is implemented rather than only where
 // it is graded.
 func TestDollarZeroNamesTheInnermostCall(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		files map[string]string
@@ -125,6 +126,7 @@ func TestDollarZeroNamesTheInnermostCall(t *testing.T) {
 // and a core that refuses every unanswered axis must not refuse `echo $0` in
 // a script that has called nothing.
 func TestDollarZeroOutsideAnyCallNeverAsksTheAxis(t *testing.T) {
+	t.Parallel()
 	sem := zeroSemantics(DollarZeroScopeUnspecified)
 	out, st := sourceRun(t, t.TempDir(), `echo "[$0]"`, sem, Diagnostics{})
 	if out != "[testsh]\n" || st != 0 {
@@ -142,6 +144,7 @@ func TestDollarZeroOutsideAnyCallNeverAsksTheAxis(t *testing.T) {
 // flipping the value the preset stores failed nothing in the whole tree until
 // this existed.
 func TestThePresetsAnswerForThemselves(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "inc.sh", "echo \"in=[$0]\"\n")
 	const src = "f() { echo \"fn=[$0]\"; }\nf\n. ./inc.sh\n"
@@ -170,6 +173,7 @@ func TestThePresetsAnswerForThemselves(t *testing.T) {
 // The two cases are written to raise it on different lines, so a location
 // taken from the wrong frame cannot pass both.
 func TestDollarZeroInsideACallRefusesWhenNothingAnswered(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "inc.sh", "# a comment\n# another\necho \"in=[$0]\"\n")
 	const tail = "$0 naming the function or sourced file it is inside: " +
@@ -210,6 +214,7 @@ func TestDollarZeroInsideACallRefusesWhenNothingAnswered(t *testing.T) {
 // fields: `$0` takes the operand and a location takes the file, from the same
 // frame, at the same time.
 func TestASourcedFilesFrameCarriesBothTheOperandAndTheFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	sub := filepath.Join(dir, "sub")
 	if err := os.MkdirAll(sub, 0o700); err != nil {
@@ -272,6 +277,7 @@ func sourceRunOnPath(t *testing.T, dir, path, src string, sem Semantics, dg Diag
 // wherever it stands, so inside a call it follows `$0` and does not fall back
 // to the script's name.
 func TestADigitRunWorthZeroIsDollarZero(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		src     string
@@ -323,6 +329,7 @@ func TestADigitRunWorthZeroIsDollarZero(t *testing.T) {
 // does. A table whose sources only ever call one thing cannot tell them
 // apart.
 func TestDollarZeroNamesTheInnermostKeywordFunction(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		files map[string]string

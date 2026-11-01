@@ -58,6 +58,7 @@ func runNative(t *testing.T, src string, register func(*Runner)) string {
 // both, so the same argument through two registrations would print the same
 // text, and the two lines here would be one.
 func TestANativeRegistrationKeepsWhetherItsValueIsAFloat(t *testing.T) {
+	t.Parallel()
 	got := runNative(t, "echo $(( whole(2) )) $(( count(2) ))", func(r *Runner) {
 		r.RegisterMathFunction("whole", 1, 1, func(_ *Runner, c MathCall) (MathValue, error) {
 			v, err := c.Value(0)
@@ -81,6 +82,7 @@ func TestANativeRegistrationKeepsWhetherItsValueIsAFloat(t *testing.T) {
 // answers; the evaluating one fails on the same line, which is what says the
 // first is not simply getting lucky.
 func TestAnOperandIsReadableAsANameWithoutBeingEvaluated(t *testing.T) {
+	t.Parallel()
 	register := func(r *Runner) {
 		r.RegisterMathFunction("named", 1, 1, func(_ *Runner, c MathCall) (MathValue, error) {
 			name, ok := c.Name(0)
@@ -143,6 +145,7 @@ func TestTheRegisteredOperandCountIsCheckedBeforeTheImplementationRuns(t *testin
 // [MathUnbounded] says and is the same value the shell-written registrations
 // already used for it.
 func TestAnUnboundedRegistrationTakesAsManyOperandsAsAreWritten(t *testing.T) {
+	t.Parallel()
 	register := func(r *Runner) {
 		r.RegisterMathFunction("count", 0, MathUnbounded, func(_ *Runner, c MathCall) (MathValue, error) {
 			return MathInt(c.Len()), nil
@@ -158,6 +161,7 @@ func TestAnUnboundedRegistrationTakesAsManyOperandsAsAreWritten(t *testing.T) {
 // that refuses says so in its own words, and the sentence is the whole
 // diagnostic rather than being wrapped in one.
 func TestAnImplementationsErrorIsTheExpressionsOwnComplaint(t *testing.T) {
+	t.Parallel()
 	got := runNative(t, "echo $(( refuse(1) ))", func(r *Runner) {
 		r.RegisterMathFunction("refuse", 1, 1, func(*Runner, MathCall) (MathValue, error) {
 			return MathValue{}, errors.New("refuse: nothing to compute")
@@ -179,6 +183,7 @@ func TestAnImplementationsErrorIsTheExpressionsOwnComplaint(t *testing.T) {
 // the builtin that spells them, so it is asserted where that builtin is, in
 // dialect/zsh.
 func TestARegisteredNameIsAskedAboutRatherThanListed(t *testing.T) {
+	t.Parallel()
 	d := syntax.Core()
 	r := newTestRunner(t, &Runner{Dialect: &d})
 	if r.KnownMathFunction("native") {

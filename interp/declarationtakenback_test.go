@@ -40,6 +40,7 @@ func runDeclarationTakenBack(t *testing.T, src string) (string, int) {
 // found it: the letters this line applied are gone, the letters the name
 // already carried stand, and a name the line brought into being is not there.
 func TestAReportedRefusalLeavesTheNameAsTheOperandFoundIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			// The control: with nothing for the letters to land on, the two
@@ -102,6 +103,7 @@ func TestAReportedRefusalLeavesTheNameAsTheOperandFoundIt(t *testing.T) {
 // brought into being at the top level goes, and a local made by the call
 // stands with its letters whatever the aiming did.
 func TestTheSilentRefusalKeepsTheLettersItApplied(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			name: "a name that was already standing",

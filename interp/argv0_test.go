@@ -16,6 +16,7 @@ import (
 // then it is in the output of a program the shell did not write, which is why
 // a whole-machine run sweep had eighteen lines differing by nothing else.
 func TestACommandIsNamedAsItWasWritten(t *testing.T) {
+	t.Parallel()
 	// A command that prints its own argv[0] and nothing else, without
 	// depending on any particular error message: `sh -c 'echo $0'` is run by
 	// name, so what it prints is what it was handed.
@@ -44,6 +45,7 @@ func TestACommandIsNamedAsItWasWritten(t *testing.T) {
 // `exec` replaces the shell, and the name it hands over follows the same rule
 // — with `-a` overriding it, which is the whole point of that option.
 func TestExecNamesTheCommandTheSameWay(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// In a subshell, so the test's own process survives being replaced.
 		{"the word as written", `( exec sh -c 'echo "[$0]"' )`, "[sh]"},

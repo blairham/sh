@@ -20,6 +20,7 @@ import (
 // across every shell in the panel that has arrays at all -- see the corpus
 // rows under `core/appending-an-array-literal-to-a-scalar`.
 func TestAppendingALiteralToAScalarKeepsIt(t *testing.T) {
+	t.Parallel()
 	out, st := runArray(t, `a=1; a+=(2); printf "[%s]" "${a[@]}"; echo " keys=${!a[@]} n=${#a[@]}"`)
 	if got := strings.TrimSpace(out); got != "[1][2] keys=0 1 n=2" {
 		t.Errorf("got %q, want the scalar kept as the first element", got)
@@ -36,6 +37,7 @@ func TestAppendingALiteralToAScalarKeepsIt(t *testing.T) {
 // that promoted only a non-empty scalar answers this exactly as it answers the
 // unset name below -- and a count alone cannot tell those two states apart.
 func TestAppendingALiteralToAnEmptyScalarKeepsIt(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `a=; a+=(2); printf "[%s]" "${a[@]}"; echo " keys=${!a[@]} n=${#a[@]}"`)
 	if got := strings.TrimSpace(out); got != "[][2] keys=0 1 n=2" {
 		t.Errorf("got %q, want an empty first element in front of the appended one", got)
@@ -49,6 +51,7 @@ func TestAppendingALiteralToAnEmptyScalarKeepsIt(t *testing.T) {
 // the name and puts whatever came back in front of the words, and for an unset
 // name that is an empty string nobody asked for.
 func TestAppendingALiteralToAnUnsetNameAddsNothingInFront(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `unset a; a+=(2); printf "[%s]" "${a[@]}"; echo " keys=${!a[@]} n=${#a[@]}"`)
 	if got := strings.TrimSpace(out); got != "[2] keys=0 n=1" {
 		t.Errorf("got %q, want the appended element alone", got)
@@ -68,6 +71,7 @@ func TestAppendingALiteralToAnUnsetNameAddsNothingInFront(t *testing.T) {
 // the field splitting the literal's own bare elements go through: `x y` would
 // become two elements and the count would be three.
 func TestAppendingALiteralToAScalarDoesNotSplitIt(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `a="x y"; a+=(2); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
 	if got := strings.TrimSpace(out); got != "[x y][2] n=2" {
 		t.Errorf("got %q, want the scalar kept whole as one element", got)
@@ -77,6 +81,7 @@ func TestAppendingALiteralToAScalarDoesNotSplitIt(t *testing.T) {
 // An append with no words still promotes: the name is left holding the one
 // element it already had, as an array.
 func TestAppendingAnEmptyLiteralToAScalarKeepsIt(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `a=1; a+=(); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
 	if got := strings.TrimSpace(out); got != "[1] n=1" {
 		t.Errorf("got %q, want the scalar kept with nothing added", got)
@@ -90,6 +95,7 @@ func TestAppendingAnEmptyLiteralToAScalarKeepsIt(t *testing.T) {
 // The combination, because each half works alone: promotion happens before the
 // literal is placed, so the gap between them is a gap and not padding.
 func TestAppendingASubscriptedLiteralToAScalarKeepsIt(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `a=1; a+=([3]=z); printf "[%s]" "${a[@]}"; echo " keys=${!a[@]} n=${#a[@]}"`)
 	if got := strings.TrimSpace(out); got != "[1][z] keys=0 3 n=2" {
 		t.Errorf("got %q, want the scalar at the first element and z at 3", got)
@@ -103,6 +109,7 @@ func TestAppendingASubscriptedLiteralToAScalarKeepsIt(t *testing.T) {
 // about "an array store finding a scalar": `a=(2)` is one element and `a+=(2)`
 // is two, from the same starting state.
 func TestAssigningALiteralOverAScalarStillReplacesIt(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `a=1; a=(2); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
 	if got := strings.TrimSpace(out); got != "[2] n=1" {
 		t.Errorf("got %q, want the scalar replaced rather than kept", got)
@@ -112,6 +119,7 @@ func TestAssigningALiteralOverAScalarStillReplacesIt(t *testing.T) {
 // Appending to a name that is already an array is unchanged: the words go
 // after the highest subscript and nothing is promoted in front of them.
 func TestAppendingALiteralToAnArrayIsUnchanged(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `a=(1 2); a+=(3); printf "[%s]" "${a[@]}"; echo " keys=${!a[@]} n=${#a[@]}"`)
 	if got := strings.TrimSpace(out); got != "[1][2][3] keys=0 1 2 n=3" {
 		t.Errorf("got %q, want the append unchanged over an array", got)
@@ -126,6 +134,7 @@ func TestAppendingALiteralToAnArrayIsUnchanged(t *testing.T) {
 // and it is the row that says so: a promotion reading only `Runner.Vars`
 // passes every other test here and drops the value a script was started with.
 func TestAppendingALiteralToAnInheritedScalarKeepsIt(t *testing.T) {
+	t.Parallel()
 	out, _ := runGrammar(t, `a+=(2); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
 		func(d *syntax.Dialect) {
 			d.ParamIndirection = true

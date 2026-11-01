@@ -18,6 +18,7 @@ import (
 // output is identical either way: the same one line of `echo` comes back
 // whether the status is 0 or 1.
 func TestCommandVOverSeveralNames(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name          string
 		every, counts Answer
@@ -96,6 +97,7 @@ func TestCommandVOverSeveralNames(t *testing.T) {
 // answer the same either way, which is what says the axis is about the word
 // and not about the builtin.
 func TestAnExpandedCommandReportsRatherThanRuns(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src string
 

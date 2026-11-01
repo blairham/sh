@@ -17,6 +17,7 @@ import (
 // expressions are the same throughout, so what moves is the answer and not
 // the match.
 func TestWhatARegexMatchLeavesInTheRecord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name     string
 		survives Answer
@@ -100,6 +101,7 @@ func TestWhatARegexMatchLeavesInTheRecord(t *testing.T) {
 // reached — which is what lets a shell that keeps its captures under another
 // shape leave both unanswered.
 func TestNoRecordNameAsksNeitherAxis(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.RegexMatchSurvivesAFailedMatch = Unspecified
 	sem.RegexMatchOmitsGroupsThatDidNotMatch = Unspecified

@@ -55,6 +55,7 @@ func trimArmRun(t *testing.T, src string, answer Answer) (string, int) {
 }
 
 func TestALongestPrefixTrimAsksWhichArmOfAnAlternationItTakes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, written, longest string
 	}{
@@ -125,6 +126,7 @@ func TestALongestPrefixTrimAsksWhichArmOfAnAlternationItTakes(t *testing.T) {
 // shortest match whichever arm was written first, and both suffix trims take
 // the longest — so every row here answers the same under either value.
 func TestTheOtherThreeTrimsDoNotAskWhichArmWasWritten(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the shortest prefix, shorter arm first", `x=abc; printf '%s' "${x#(a|ab)}"`, "bc"},
 		{"the shortest prefix, longer arm first", `x=abc; printf '%s' "${x#(ab|a)}"`, "bc"},
@@ -152,6 +154,7 @@ func TestTheOtherThreeTrimsDoNotAskWhichArmWasWritten(t *testing.T) {
 // same question, because the fault was in the one walk all of them go
 // through.
 func TestASubstitutionAsksWhichArmOfAnAlternationItTakes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, written, longest string
 	}{
@@ -242,6 +245,7 @@ func TestASubstitutionAsksWhichArmOfAnAlternationItTakes(t *testing.T) {
 // is the correct outcome and is why the rows are written against the axis's
 // three values rather than against the condition.
 func TestTheSubstitutionsThatDoNotAskWhichArmWasWritten(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"anchored at the end", `x=abc; printf '%s' "${x/%(c|bc)/X}"`, "aX"},
 		{"anchored at the end, longer arm first", `x=abc; printf '%s' "${x/%(bc|c)/X}"`, "aX"},
@@ -266,6 +270,7 @@ func TestTheSubstitutionsThatDoNotAskWhichArmWasWritten(t *testing.T) {
 // group reports the arm the search settled on. Both follow the axis, because
 // both are the one match trimSpan found.
 func TestTheArmReachesWhatTheMatchReports(t *testing.T) {
+	t.Parallel()
 	out, _ := trimArmRun(t, `x=abc; printf '%s' "${(M)x##(a|ab)}"`, Yes)
 	if out != "a" {
 		t.Errorf("the kept half under the written-arm answer = %q, want %q", out, "a")
@@ -280,6 +285,7 @@ func TestTheArmReachesWhatTheMatchReports(t *testing.T) {
 // readings — and only where they differ. A pattern whose arms agree, and a
 // pattern with no alternation in it at all, are answered as they always were.
 func TestAnUnansweredArmOrderIsRefusedOnlyWhereTheReadingsDiffer(t *testing.T) {
+	t.Parallel()
 	out, status := trimArmRun(t, `x=abc; printf '%s' "${x##(a|ab)}"`, Unspecified)
 	if !strings.Contains(out, "the shells disagree here and no dialect was chosen") {
 		t.Errorf("an unanswered axis was not refused: %q", out)

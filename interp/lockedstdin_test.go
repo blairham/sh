@@ -20,6 +20,7 @@ import (
 // Nothing observable distinguishes the two in a test that only reads bytes,
 // which is why the contract is asserted here rather than through a script.
 func TestOnlyANonFileStdinIsGuarded(t *testing.T) {
+	t.Parallel()
 	f, err := os.Open(os.DevNull)
 	if err != nil {
 		t.Fatal(err)

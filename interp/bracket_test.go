@@ -23,6 +23,7 @@ func bracketSem(p BracketPolicy) Semantics {
 // `[` is the name of the test builtin, so this is load-bearing rather than
 // exotic.
 func TestUnterminatedBracketHasThreeAnswers(t *testing.T) {
+	t.Parallel()
 	const src = `case "[" in [) echo hit;; *) echo miss;; esac`
 	for _, tc := range []struct {
 		policy BracketPolicy
@@ -72,6 +73,7 @@ func TestUnterminatedBracketHasThreeAnswers(t *testing.T) {
 // TestBracketPolicyIsAskedOnlyWhenItApplies keeps ordinary patterns usable in
 // the core, the same way the caret axis does.
 func TestBracketPolicyIsAskedOnlyWhenItApplies(t *testing.T) {
+	t.Parallel()
 	if got, st := run(
 		t,
 		`case b in [abc]) echo in;; *) echo out;; esac`,
@@ -89,6 +91,7 @@ func TestBracketPolicyIsAskedOnlyWhenItApplies(t *testing.T) {
 // command name, and a policy applied to the filesystem too eagerly stops it
 // running.
 func TestTestBuiltinSurvivesTheBracketPolicy(t *testing.T) {
+	t.Parallel()
 	for _, policy := range []BracketPolicy{BracketLiteral, BracketNoMatch, BracketBadPattern} {
 		sem := bracketSem(policy)
 		if got, _ := run(t, `[ a = a ] && echo yes`, withSem(sem)); got != "yes\n" {
@@ -115,6 +118,7 @@ func TestTestBuiltinSurvivesTheBracketPolicy(t *testing.T) {
 // `echo [[a == a]]` reports the `==` and never reaches the `[[a`. Both axes
 // are named here, because the ordering only shows where both are on.
 func TestEqualsExpansionRunsBeforeGlobbing(t *testing.T) {
+	t.Parallel()
 	sem := bracketSem(BracketBadPattern)
 	sem.EqualsExpansion = Yes
 	// zsh's default `nomatch`, under which the `==` is refused rather than
@@ -140,6 +144,7 @@ func TestEqualsExpansionRunsBeforeGlobbing(t *testing.T) {
 // what makes this the difference between a shell that can hold a color in a
 // variable and one that cannot.
 func TestABracketFromAValueIsNotAPatternWhereExpansionsAreNotGlobbed(t *testing.T) {
+	t.Parallel()
 	sem := bracketSem(BracketBadPattern)
 	sem.GlobExpansionResults = No
 
@@ -262,6 +267,7 @@ func TestAParameterExpansionsOperandAsksTheBracketAxis(t *testing.T) {
 // pattern compiles is not a question about the value, so neither is the
 // refusal.
 func TestAnOperandIsCompiledBeforeItIsMatched(t *testing.T) {
+	t.Parallel()
 	sem := bracketSem(BracketBadPattern)
 	for _, src := range []string{
 		`v=zzz; echo "${v#[a}"`,

@@ -13,6 +13,7 @@ import "testing"
 // letter skip the fold — invisible from the zsh and ksh tests, whose shells
 // start with a typed parameter of their own and so never take the short way.
 func TestTheTwoTypeLetterListsAreOneList(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		give func(r *Runner)

@@ -37,6 +37,7 @@ func runBeforeStart(t *testing.T, p SubscriptBeforeStartPolicy, needs Answer, sr
 // silently empty under every answer, so a script counting back off the end of
 // an array was told nothing by the two shells that say something.
 func TestASubscriptBeforeTheFirstElementIsAnsweredWhereTheDialectAnswersIt(t *testing.T) {
+	t.Parallel()
 	const src = `a=(x y z); echo "[${a[-4]}]"; echo after`
 	for _, c := range []struct {
 		name   string
@@ -87,6 +88,7 @@ func TestASubscriptBeforeTheFirstElementIsAnsweredWhereTheDialectAnswersIt(t *te
 // set-or-not test, the default, an expression and the conditional all reach
 // the same subscript and the answering column complains once at each.
 func TestEveryReadOfASubscriptBeforeTheFirstElementIsAnswered(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`a=(x y z); echo "[${a[-4]}]"`,
 		`a=(x y z); echo "[${#a[-4]}]"`,
@@ -108,6 +110,7 @@ func TestEveryReadOfASubscriptBeforeTheFirstElementIsAnswered(t *testing.T) {
 // question and must stay quiet under every answer — otherwise the complaining
 // column would report the ordinary way of reading the last element.
 func TestASubscriptInsideTheArrayIsNotTheReach(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(x y z); echo "[${a[-3]}]"`, "[x]"},
 		{`a=(x y z); echo "[${a[-1]}]"`, "[z]"},
@@ -125,6 +128,7 @@ func TestASubscriptInsideTheArrayIsNotTheReach(t *testing.T) {
 // array that has been emptied — a name holding a plain string answers the
 // same way, from the one place a string has.
 func TestCountingBackFromANameWithNoElementsIsSilent(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`a=(); echo "[${a[-1]}]"; echo after`,
 		`a=x; echo "[${a[-1]}]"; echo after`,
@@ -187,6 +191,7 @@ func TestCountingBackFromANameWithNoElementsIsSilent(t *testing.T) {
 // zsh is silent on both routes, and ksh93 gives the length the read's own
 // sentence and ends the script on it.
 func TestTheLengthOfAnElementReachedPastIsItsOwnRefusal(t *testing.T) {
+	t.Parallel()
 	runLength := func(t *testing.T, refuses Answer, src string) (string, int) {
 		t.Helper()
 		return runGrammar(t, src, nil, func(r *Runner) {
@@ -244,6 +249,7 @@ func TestTheLengthOfAnElementReachedPastIsItsOwnRefusal(t *testing.T) {
 // where the length over an existing name is the refusal above. A name that is
 // not there has its length answered before the subscript is looked at.
 func TestANameHoldingNothingReachesTheSameDoor(t *testing.T) {
+	t.Parallel()
 	out, _ := runBeforeStart(t, SubscriptBeforeStartIsReported, No,
 		`unset a; echo "[${a[-1]}]"; echo after`)
 	if !strings.Contains(out, "bad array subscript") {

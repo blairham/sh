@@ -43,6 +43,7 @@ func fileCondStatus(t *testing.T, dir, src string) int {
 // file by what it is, and a plain file is none of them. The one portable
 // positive is `-c /dev/null`, a character device on every Unix.
 func TestFileKindOperatorsAskTheFilesystem(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "reg"), nil, 0o600); err != nil {
 		t.Fatal(err)
@@ -76,6 +77,7 @@ func TestFileKindOperatorsAskTheFilesystem(t *testing.T) {
 // TestPermissionBitOperators — `-g`, `-u` and `-k` read the setgid, setuid
 // and sticky bits, which an ordinary file does not have.
 func TestPermissionBitOperators(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for name, mode := range map[string]os.FileMode{
 		"plain":  0o600,
@@ -145,6 +147,7 @@ func newerOlderDir(t *testing.T) string {
 // unanimous, including that equal times are neither newer nor older, and
 // `-ef` is identity rather than equality.
 func TestNewerOlderAndSameFile(t *testing.T) {
+	t.Parallel()
 	dir := newerOlderDir(t)
 	for _, tc := range []struct {
 		src  string
@@ -179,6 +182,7 @@ func TestNewerOlderAndSameFile(t *testing.T) {
 // mirrored cases — a missing file being newer — are false everywhere and must
 // not ask.
 func TestMissingFileIsOlderIsAnAxis(t *testing.T) {
+	t.Parallel()
 	dir := newerOlderDir(t)
 	for _, src := range []string{
 		`[[ new -nt missing ]]`, `[[ missing -ot new ]]`,
@@ -223,6 +227,7 @@ func TestMissingFileIsOlderIsAnAxis(t *testing.T) {
 // #1967 — see interp/terminaltest_test.go for the half that says the fixed
 // false is gone.
 func TestTerminalTestIsFalseForStreamsThatAreNotFiles(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, src := range []string{`[[ -t 0 ]]`, `[[ -t 1 ]]`, `[[ -t 99 ]]`, `test -t 0`, `test -t 99`} {
 		out, st := fileCondRun(t, dir, src, nil)
@@ -236,6 +241,7 @@ func TestTerminalTestIsFalseForStreamsThatAreNotFiles(t *testing.T) {
 // number splits the panel between an integer complaint at 2 and a plain
 // false at 1.
 func TestTerminalTestRequiresANumberIsAnAxis(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, src := range []string{`[[ -t x ]]`, `[[ -t "" ]]`, `test -t x`} {
 		out, st := fileCondRun(t, dir, src, func(s *Semantics) {

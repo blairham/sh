@@ -21,6 +21,7 @@ import (
 // is what reaches the reader's guards — a spelling that is not one of them
 // falls back to NamedOption whether the guards are there or not.
 func TestAnOptionReaderAgreesWithNamedOption(t *testing.T) {
+	t.Parallel()
 	// Every name the substrate holds beyond the common set, so that a name
 	// the runner never declared is asked too: the reader holds its row, and
 	// only the runner can say the name is not this shell's.

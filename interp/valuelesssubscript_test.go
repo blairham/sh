@@ -18,6 +18,7 @@ import (
 // where zsh and ksh93 both end the script, and `typeset 'a[1]'` left a zsh
 // array untouched where zsh empties the element (#3501).
 func TestAValuelessSubscriptedOperandIsReadWhereTheDialectReadsIt(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
 		p      ValuelessSubscriptedOperandPolicy
@@ -57,6 +58,7 @@ func TestAValuelessSubscriptedOperandIsReadWhereTheDialectReadsIt(t *testing.T) 
 // only reachable at all in the two columns that read it, and then it gives up
 // as much as Semantics.BadSubscriptToADeclaration says (#3495).
 func TestAValuelessOperandsBadSubscriptGivesUpWhereItIsRead(t *testing.T) {
+	t.Parallel()
 	const src = "a=(1 2 3)\n" +
 		`typeset 'a[b c]'; echo "same=$?"` + "\n" +
 		`echo "next=$? a=[${a[*]}]"`
@@ -97,6 +99,7 @@ func TestAValuelessOperandsBadSubscriptGivesUpWhereItIsRead(t *testing.T) {
 // refused the operand as `cannot convert associative to indexed array` in all
 // three, and ended the script for it in the ksh column.
 func TestAValuelessSubscriptedOperandOnATableWritesTheKey(t *testing.T) {
+	t.Parallel()
 	const src = "typeset -A m\n" +
 		`typeset 'm[b c]'; echo "same=$?"` + "\n" +
 		`echo "key=[${m[b c]-none}]"`
@@ -122,6 +125,7 @@ func TestAValuelessSubscriptedOperandOnATableWritesTheKey(t *testing.T) {
 // which is the half a status cannot show — and it is the measured tell that
 // the valueless form really is the empty-value form there.
 func TestAValuelessOperandWritingTheElementGrowsTheArray(t *testing.T) {
+	t.Parallel()
 	// Sparse is the axis that decides how far: the column that writes the
 	// element is also the column that fills the gap, so the array reaches
 	// the subscript rather than gaining one element.
@@ -143,6 +147,7 @@ func TestAValuelessOperandWritingTheElementGrowsTheArray(t *testing.T) {
 // declaration and not about which word spells it — and a second copy that
 // omitted a case is what this repository keeps doing to itself.
 func TestEverySpellingOfAValuelessSubscriptedOperandReadsIt(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src string }{
 		{"typeset", `typeset 'a[b c]'`},
 		{"local in a function", `f() { local 'a[b c]'; }; f`},
@@ -178,6 +183,7 @@ func TestEverySpellingOfAValuelessSubscriptedOperandReadsIt(t *testing.T) {
 // 'a[1]'` leaves `declare -a a`, a fresh local array, and ksh93's `readonly
 // 'a[1]'` and `export 'a[1]'` leave `typeset -r -a a` and `typeset -x -a a`.
 func TestAValuelessSubscriptedOperandDeclaresTheBaseAtEverySpelling(t *testing.T) {
+	t.Parallel()
 	// A listing of the *base*, and the status of asking for one: with the
 	// brackets left on the name there is no `a` to list at all.
 	const LISTING = `typeset -p a; echo "listed=$?"`
@@ -214,6 +220,7 @@ func TestAValuelessSubscriptedOperandDeclaresTheBaseAtEverySpelling(t *testing.T
 
 // An axis nobody answered is refused by name rather than guessed.
 func TestAValuelessSubscriptedOperandRefusesAnUnspecifiedAxis(t *testing.T) {
+	t.Parallel()
 	out, _ := valuelessSubRun(t, ValuelessSubscriptedOperandUnspecified,
 		"a=(1 2 3)\n"+`typeset 'a[1]'; echo "same=$?"`)
 	if !strings.Contains(out, "no dialect was chosen") {
@@ -232,6 +239,7 @@ func TestAValuelessSubscriptedOperandRefusesAnUnspecifiedAxis(t *testing.T) {
 // declaration half arrived with the abandon itself (#3495, #3506). Measured
 // 2026-09-17 in bash 5.3.20 and 3.2.57 alike.
 func TestAGiveUpAtOneOperandStopsTheBuiltinThere(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"a declaration",
@@ -268,6 +276,7 @@ func TestAGiveUpAtOneOperandStopsTheBuiltinThere(t *testing.T) {
 // writes the empty string whichever side of the declaration it falls, so a
 // change that made every empty value list bare fails them.
 func TestAValuelessOperandOnATableLeavesAKeyHoldingNothing(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"declared and holding nothing", `typeset 'm[k]'`, "typeset -A m=([k]=)\n"},
 		{"assigned the empty string", `m[k]=`, "typeset -A m=([k]='')\n"},
@@ -296,6 +305,7 @@ func TestAValuelessOperandOnATableLeavesAKeyHoldingNothing(t *testing.T) {
 // the `+` form and reads back empty. A state that hid the key from any of
 // those would pass the listing rows above and be wrong.
 func TestADeclaredTableKeyIsAnOrdinaryKeyEverywhereElse(t *testing.T) {
+	t.Parallel()
 	const probe = `echo "n=${#m[@]} k=[${!m[@]}] v=[${m[@]}] set=[${m[k]+SET}] len=${#m[k]}"`
 	want := "n=1 k=[k] v=[] set=[SET] len=0\n"
 	for _, c := range []struct{ name, src string }{
@@ -393,6 +403,7 @@ func valuelessSubSemantics(s *Semantics) {
 // is what makes it a property of this policy rather than of subscripts
 // (#3511).
 func TestAValuelessOperandsSubscriptIsReadTwiceWhereItIsReadAtAll(t *testing.T) {
+	t.Parallel()
 	for _, spelling := range []string{"typeset", "readonly", "export"} {
 		src := "c=(1 2 3); i=0\n" + spelling + " 'c[i++]'\n" + `echo "i=$i"`
 		out, _ := valuelessSubRun(t, ValuelessSubscriptedOperandReadsTheSubscript, src)

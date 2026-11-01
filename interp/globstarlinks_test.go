@@ -68,6 +68,7 @@ func crossing(dir string) func(*Runner) {
 // path is a *second name for a file already matched*: a count says two and
 // says nothing about which two.
 func TestStarStarDoesNotEnterASymbolicLink(t *testing.T) {
+	t.Parallel()
 	dir := starStarLinkDir(t)
 	for _, tc := range []struct{ name, src, want string }{
 		// The reproduction, in its shortest form.
@@ -134,6 +135,7 @@ func TestStarStarIsBoundedByALinkToItsOwnAncestor(t *testing.T) {
 // wrong fix is to drop every link from the set, which passes every assertion
 // there and answers nothing here.
 func TestStarStarStartsWhereThePatternSaysEvenThroughALink(t *testing.T) {
+	t.Parallel()
 	dir := starStarLinkDir(t)
 	for _, tc := range []struct{ name, src, want string }{
 		{"a component behind it", `printf "[%s]" s/**/x`, `[s/x]`},
@@ -159,6 +161,7 @@ func TestStarStarStartsWhereThePatternSaysEvenThroughALink(t *testing.T) {
 // Neither shell **enters** the link, which is what makes this a second
 // question rather than the first one asked again: `**/x` is `r/x` in both.
 func TestStarStarSlashListsALinkOnlyWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	dir := starStarLinkDir(t)
 	for _, tc := range []struct {
 		name string
@@ -183,6 +186,7 @@ func TestStarStarSlashListsALinkOnlyWhereTheDialectSaysSo(t *testing.T) {
 // turning it on to answer bash's `**/` would quietly reopen the bug it was
 // added beside.
 func TestStarStarSeeingALinkStillDoesNotEnterIt(t *testing.T) {
+	t.Parallel()
 	dir := starStarLinkDir(t)
 	opt := withOption(StarStarSeesLinkedDirectories, true, crossing(dir))
 	if out, _ := run(t, `printf "[%s]" **/x`, opt); out != `[r/x]` {
@@ -200,6 +204,7 @@ func TestStarStarSeeingALinkStillDoesNotEnterIt(t *testing.T) {
 // Measured 2026-09-16 on ksh93u+ 2012-08-01 under `set -o globstar` in this
 // fixture, against bash 5.3.20 under `shopt -s globstar` and zsh 5.9.2.
 func TestAStarStarPatternReadsNoLinkedDirectoryWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	dir := starStarLinkDir(t)
 	// The crossing on and the link reading off, which is the ksh93 pair. The
 	// zero-level option is off with it, so `s/**` has no self match to fall
@@ -258,6 +263,7 @@ func TestAStarStarPatternReadsNoLinkedDirectoryWhereTheDialectSaysSo(t *testing.
 // option on, a link to the directory's own ancestor is still never descended
 // through, so the answer is finite and is the same one.
 func TestAComponentBehindAStarStarLooksInsideALinkedLevelWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	dir := starStarLinkDir(t)
 	for _, tc := range []struct {
 		name string

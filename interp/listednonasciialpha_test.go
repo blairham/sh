@@ -42,6 +42,7 @@ func listedCharRun(t *testing.T, src string, set func(*Semantics)) (string, stri
 // The bare column is what every dialect but one does with every one of these
 // characters; the narrowed column leaves only the alphabetic ones alone.
 func TestANonAlphabeticCharacterAboveAsciiIsSettledBothWays(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		narrowed        Answer
 		degree, euro    string
@@ -84,6 +85,7 @@ func TestANonAlphabeticCharacterAboveAsciiIsSettledBothWays(t *testing.T) {
 // general category: a decimal digit, a letter-number and an enclosed letter
 // are each bare, where two other symbols in the suite above are not.
 func TestAnAlphabeticCharacterAboveAsciiStaysBare(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct{ name, src, want string }{
 		{"a letter", `v='é'; typeset -p v`, "v=é"},
 		{"a micro sign", `v='µ'; typeset -p v`, "v=µ"},
@@ -109,6 +111,7 @@ func TestAnAlphabeticCharacterAboveAsciiStaysBare(t *testing.T) {
 // half a per-character fix would get wrong: the `é` beside it would have
 // stood bare on its own and is spelled out anyway.
 func TestOneNonAlphabeticCharacterTakesTheWholeValue(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct{ src, want string }{
 		{`v='é°'; typeset -p v`, `v=$'\u[e9]\u[b0]'`},
 		{`v='°é'; typeset -p v`, `v=$'\u[b0]\u[e9]'`},
@@ -135,6 +138,7 @@ func TestOneNonAlphabeticCharacterTakesTheWholeValue(t *testing.T) {
 // a character leaves the head bare; a `#` is left bare only where the text in
 // front of it is *not* a name, so the same character quotes it.
 func TestACharacterAboveAsciiCountsAsAName(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct{ name, src, want string }{
 		{"a bare assignment head", `v='é=a'; typeset -p v`, "v=é=a"},
 		{"and the hash rule the other way", `v='é#a'; typeset -p v`, `v='é#a'`},

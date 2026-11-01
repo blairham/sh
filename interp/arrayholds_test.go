@@ -21,6 +21,7 @@ import (
 // the long way is the definition, and writing the answers out again by hand
 // would only record what somebody believed twice.
 func TestArrayHoldsAgreesWithListingTheArray(t *testing.T) {
+	t.Parallel()
 	// The shapes, built by running shell rather than by filling the map, so
 	// that what is under test is an array the interpreter made.
 	const build = `

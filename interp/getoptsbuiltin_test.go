@@ -27,6 +27,7 @@ func getoptsSem() Semantics {
 // shape that reported success while doing nothing when this was a separate
 // program that could not reach the shell's variables.
 func TestGetoptsTheUnanimousParts(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the loop runs its body",
@@ -63,6 +64,7 @@ func TestGetoptsTheUnanimousParts(t *testing.T) {
 // environment to see, which is why it is asserted here rather than left to
 // the first assertion passing for the wrong reason.
 func TestOptindHasItsStartupValueBeforeGetoptsRuns(t *testing.T) {
+	t.Parallel()
 	const src = `echo "[${OPTIND-unset}]"`
 	for _, tc := range []struct {
 		name string
@@ -93,6 +95,7 @@ func TestOptindHasItsStartupValueBeforeGetoptsRuns(t *testing.T) {
 // supplied at startup from one re-supplied on every chunk; the whole
 // difference is only visible through RunPart.
 func TestTheStartupOptindIsAStartingValueAndNotAFloor(t *testing.T) {
+	t.Parallel()
 	var out bytes.Buffer
 	sem := getoptsSem()
 	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Semantics: &sem})
@@ -113,6 +116,7 @@ func TestTheStartupOptindIsAStartingValueAndNotAFloor(t *testing.T) {
 // A bad option leaves OPTARG unset in three of the four and empty in one,
 // which a script testing `${OPTARG-}` can tell apart.
 func TestGetoptsClearsOptargIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -136,6 +140,7 @@ func TestGetoptsClearsOptargIsAnAxis(t *testing.T) {
 
 // The two complaints, and the three amounts of prefix they are printed with.
 func TestGetoptsComplaintsAreLocatedThreeWays(t *testing.T) {
+	t.Parallel()
 	sem := getoptsSem()
 	for _, tc := range []struct {
 		name string
@@ -177,6 +182,7 @@ func TestGetoptsComplaintsAreLocatedThreeWays(t *testing.T) {
 // *assignment* that restarts the word, not the number, since the value it
 // writes is often the one OPTIND already held.
 func TestGetoptsAssignmentRestartsWordIsAnAxis(t *testing.T) {
+	t.Parallel()
 	const src = `set -- -ab; getopts "ab" o; OPTIND=1; getopts "ab" o; echo "[$o]"`
 	for _, tc := range []struct {
 		name   string
@@ -201,6 +207,7 @@ func TestGetoptsAssignmentRestartsWordIsAnAxis(t *testing.T) {
 // here, so any leading `-` word is the question — refused as an option under
 // one answer, taken as the optstring under the other.
 func TestALeadingDashIsTheOptstringOrAnOption(t *testing.T) {
+	t.Parallel()
 	refuse := func(r *Runner) {
 		s := *r.Semantics
 		s.GetoptsRejectsUnknownOption = Yes
@@ -232,6 +239,7 @@ func TestALeadingDashIsTheOptstringOrAnOption(t *testing.T) {
 // TestAnOrdinaryGetoptsAsksNothing, so a shell with no answer still parses
 // options — the question is only about a leading dash.
 func TestAnOrdinaryGetoptsAsksNothing(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `set -- -a; getopts ab o; echo "[$o]"`, func(r *Runner) {
 		s := CoreSemantics()
 		r.Semantics = &s
@@ -248,6 +256,7 @@ func TestAnOrdinaryGetoptsAsksNothing(t *testing.T) {
 // optstring rather than refusing it — the control for the case above, and
 // the shape a script uses when its optstring might begin with a dash.
 func TestDashDashEndsGetoptsOptions(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `set -- -a; getopts -- ab o; echo "[$o]"`, func(r *Runner) {
 		s := *r.Semantics
 		s.GetoptsRejectsUnknownOption = Yes
@@ -287,6 +296,7 @@ func getoptsFrozenSem() Semantics {
 // taking the bare assignment's answer: the refusal gave up what the shell was
 // running, so the `echo` after the `;` never happened (#3147).
 func TestGetoptsRefusedWriteKeepsTheRestOfTheLine(t *testing.T) {
+	t.Parallel()
 	sem := getoptsFrozenSem()
 	dg := Diagnostics{ReadonlyVariable: "%s: frozen"}
 	out, _ := run(t, `set -- -a val; readonly OPTARG; getopts "a:" o; echo "reached [$o]"; echo after`,
@@ -300,6 +310,7 @@ func TestGetoptsRefusedWriteKeepsTheRestOfTheLine(t *testing.T) {
 // builtin's own in ksh93 and zsh, and a `readonly` on either is not consulted
 // there at all — where bash, dash and BusyBox ash refuse the write and say so.
 func TestGetoptsOwnParametersIgnoreAFreezeIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -324,6 +335,7 @@ func TestGetoptsOwnParametersIgnoreAFreezeIsAnAxis(t *testing.T) {
 // And the freeze is put back afterwards: writing through one is a single
 // store's exemption and not the end of the name being frozen.
 func TestGetoptsWritingThroughAFreezeLeavesItOn(t *testing.T) {
+	t.Parallel()
 	sem := getoptsFrozenSem()
 	sem.GetoptsOwnParametersIgnoreAFreeze = Yes
 	dg := Diagnostics{ReadonlyVariable: "%s: frozen"}
@@ -341,6 +353,7 @@ echo "[$OPTARG]"`,
 // reports it and writes the rest anyway. OPTIND is the half that says which
 // of the two happened.
 func TestGetoptsRefusedWriteEndsTheBuiltinIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -367,6 +380,7 @@ func TestGetoptsRefusedWriteEndsTheBuiltinIsAnAxis(t *testing.T) {
 // assignment — which is what keeps this apart from ReadonlyReassignmentFatal,
 // answered Yes by three shells that carry on here.
 func TestReadonlyRefusalInABuiltinIsFatalIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -393,6 +407,7 @@ func TestReadonlyRefusalInABuiltinIsFatalIsAnAxis(t *testing.T) {
 // cannot report — except at the end of the options, where there is no letter
 // and the 1 that says so stands.
 func TestGetoptsRefusedNameCostsTheBuiltinItsStatus(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a letter it cannot report",
@@ -419,6 +434,7 @@ func TestGetoptsRefusedNameCostsTheBuiltinItsStatus(t *testing.T) {
 // And where the dialect stops the builtin over a refusal it stops it here too,
 // so the end of the options is 2 rather than 1.
 func TestGetoptsRefusedNameAtTheEndFollowsTheAxis(t *testing.T) {
+	t.Parallel()
 	sem := getoptsFrozenSem()
 	sem.GetoptsRefusedWriteEndsTheBuiltin = Yes
 	dg := Diagnostics{ReadonlyVariable: "%s: frozen"}
@@ -434,6 +450,7 @@ func TestGetoptsRefusedNameAtTheEndFollowsTheAxis(t *testing.T) {
 // argument is refused, reported, and leaves the value standing — where the
 // same line over an unfrozen name leaves OPTARG unset.
 func TestGetoptsClearingOptargMeetsAFreeze(t *testing.T) {
+	t.Parallel()
 	sem := getoptsFrozenSem()
 	dg := Diagnostics{ReadonlyVariable: "%s: frozen"}
 	out, _ := run(t, `set -- -b; OPTARG=PRE; readonly OPTARG; getopts "a:b" o; echo "[$o][${OPTARG-gone}]"`,
@@ -448,6 +465,7 @@ func TestGetoptsClearingOptargMeetsAFreeze(t *testing.T) {
 // reverses it is the one whose refusal ends the script, and it never writes
 // the second at all.
 func TestGetoptsBadOptionComplainsBeforeRefusingTheName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -475,6 +493,7 @@ func TestGetoptsBadOptionComplainsBeforeRefusingTheName(t *testing.T) {
 // `export: x: is read only` with — which a bare assignment's form never
 // reaches, because that wording is a declaration's.
 func TestGetoptsRefusalNamesTheBuiltin(t *testing.T) {
+	t.Parallel()
 	sem := getoptsFrozenSem()
 	dg := Diagnostics{
 		ReadonlyVariable:              "%s: frozen",
@@ -494,6 +513,7 @@ func TestGetoptsRefusalNamesTheBuiltin(t *testing.T) {
 // script reading `$OPTARG` after its `while getopts` loop gets the previous
 // option's value there (#3146).
 func TestGetoptsUnsetsOptargAtEndOfOptionsIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -517,6 +537,7 @@ func TestGetoptsUnsetsOptargAtEndOfOptionsIsAnAxis(t *testing.T) {
 // And it happens on every call that runs out, not only the first: a second
 // `getopts` after the loop has ended finds nothing to report and clears again.
 func TestGetoptsClearsOptargEveryTimeItRunsOut(t *testing.T) {
+	t.Parallel()
 	sem := getoptsSem()
 	sem.GetoptsUnsetsOptargAtEndOfOptions = Yes
 	out, _ := run(t, `set -- -a val x
@@ -537,6 +558,7 @@ echo "st=$? OPTARG=[${OPTARG-gone}]"`, func(r *Runner) { r.Semantics = &sem })
 // it — so an assignment made after the loop is taken where it was refused
 // before.
 func TestGetoptsClearingOptargIsARealUnsetIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer
@@ -569,6 +591,7 @@ echo "after OPTARG=[${OPTARG-gone}]"`, func(r *Runner) { r.Semantics, r.Diagnost
 // there, reports it and leaves the value standing, where the same shell is
 // silent on the three rows above.
 func TestGetoptsRealUnsetDoesNotReachTheArgumentlessClearing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a bad option", `set -- -z; getopts "a:b" o`, "sh: bad -z\nOPTARG=[gone]\n"},
 		{"a missing argument", `set -- -a; getopts "a:b" o`, "sh: need -a\nOPTARG=[gone]\n"},
@@ -597,6 +620,7 @@ func TestGetoptsRealUnsetDoesNotReachTheArgumentlessClearing(t *testing.T) {
 // a frozen OPTARG with OPTIND still at its old value, so neither had counted
 // past the word.
 func TestGetoptsClearingComesBeforeTheWordCount(t *testing.T) {
+	t.Parallel()
 	sem := getoptsFrozenSem()
 	sem.GetoptsRefusedWriteEndsTheBuiltin = Yes
 	dg := Diagnostics{ReadonlyVariable: "%s: frozen", GetoptsBadOption: "bad -%[1]s"}
@@ -613,6 +637,7 @@ func TestGetoptsClearingComesBeforeTheWordCount(t *testing.T) {
 // builtin never counted past the word. Each of the four paths writes OPTARG
 // its own way, so each is its own row.
 func TestGetoptsWritesOptargBeforeTheWordCount(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"an option that takes one",

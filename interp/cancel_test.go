@@ -192,6 +192,7 @@ func BenchmarkCancelCheck(b *testing.B) {
 // are still there, and the next chunk runs. driver's own session test pins the
 // same rule from the outside; this is it at the library's own boundary.
 func TestACanceledChunkLeavesTheShellUsable(t *testing.T) {
+	t.Parallel()
 	sem := testSemantics()
 	var out strings.Builder
 	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Semantics: &sem, Env: testPATH()})

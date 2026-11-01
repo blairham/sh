@@ -14,6 +14,7 @@ import (
 )
 
 func TestLocationStylesAreMeasured(t *testing.T) {
+	t.Parallel()
 	// Each LocationStyle is one measured way of prefixing a diagnostic, and
 	// one of them names the line only once there is one worth naming. Which
 	// preset uses which style is asserted in the dialect packages.
@@ -49,6 +50,7 @@ func TestLocationStylesAreMeasured(t *testing.T) {
 // TestDiagnosticsCarryTheFailingLine is the reason the Runner tracks a line
 // at all: shells report where it went wrong, not where the script began.
 func TestDiagnosticsCarryTheFailingLine(t *testing.T) {
+	t.Parallel()
 	src := "echo one\necho two\nshift 5\n"
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
@@ -72,6 +74,7 @@ func TestDiagnosticsCarryTheFailingLine(t *testing.T) {
 // bypass is invisible until someone measures a dialect that formats
 // differently.
 func TestEveryDiagnosticGoesThroughTheDialect(t *testing.T) {
+	t.Parallel()
 	src := "shift 5"
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {

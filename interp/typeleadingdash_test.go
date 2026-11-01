@@ -27,6 +27,7 @@ func typeNoOptionsRun(t *testing.T, src string, bare Answer) (string, string, in
 // TestALeadingDashWordIsDroppedOrLookedUp: one answer drops the word and
 // writes the rest in `command -v`'s shape, the other looks it up as a name.
 func TestALeadingDashWordIsDroppedOrLookedUp(t *testing.T) {
+	t.Parallel()
 	src := "f(){ :; }\ntype -t f\necho st=$?"
 	out, _, _ := typeNoOptionsRun(t, src, Yes)
 	if out != "f\nst=0\n" {
@@ -47,6 +48,7 @@ func TestALeadingDashWordIsDroppedOrLookedUp(t *testing.T) {
 // TestAnOrdinaryTypeAsksNothingAboutALeadingDash: a first operand with no
 // dash reaches no question, so the axis left unanswered refuses nothing.
 func TestAnOrdinaryTypeAsksNothingAboutALeadingDash(t *testing.T) {
+	t.Parallel()
 	out, errs, _ := typeNoOptionsRun(t, "type cd\necho st=$?", Unspecified)
 	if out != "cd is a shell builtin\nst=0\n" || errs != "" {
 		t.Errorf("stdout %q stderr %q, want the sentence and nothing asked", out, errs)

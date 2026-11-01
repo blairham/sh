@@ -53,6 +53,7 @@ const storeOpPrintfSrc = "r=(1 2 3)\n" +
 //
 // `r[*]` answers identically in each, so there is one field and not two.
 func TestAWholeArraySubscriptOnAStoreOperandIsNotAnExpression(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		p     StoreOperandWholeArraySubscriptPolicy
@@ -96,6 +97,7 @@ func TestAWholeArraySubscriptOnAStoreOperandIsNotAnExpression(t *testing.T) {
 // bash 5.3.20 answers `r[@]: bad array subscript` where this sent `@` to the
 // evaluator and reported `operand expected (error token is "@")`.
 func TestAWholeArraySubscriptRefusalNamesTheOperandAndNotTheArithmetic(t *testing.T) {
+	t.Parallel()
 	out, _ := storeOpRun(t, func(s *Semantics) {
 		s.StoreOperandWholeArraySubscript = StoreOperandWholeArraySubscriptIsBad
 	}, Diagnostics{BadArraySubscript: "SUB %[1]s %[2]s"}, storeOpReadSrc)
@@ -112,6 +114,7 @@ func TestAWholeArraySubscriptRefusalNamesTheOperandAndNotTheArithmetic(t *testin
 // of the bad-*name* refusal one branch over, where `printf` counts 2 and
 // `read` counts 1. Measured 2026-09-17 on bash 5.3.20 at both builtins.
 func TestAWholeArraySubscriptAnswersTheSameAtBothStoreBuiltins(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name  string
 		p     StoreOperandWholeArraySubscriptPolicy
@@ -139,6 +142,7 @@ func TestAWholeArraySubscriptAnswersTheSameAtBothStoreBuiltins(t *testing.T) {
 // zsh 5.9.2 refuses `m: attempt to set slice of associative array` and ends
 // the input.
 func TestAWholeArraySubscriptOverATableIsItsOwnAnswer(t *testing.T) {
+	t.Parallel()
 	const src = "typeset -A m; m[k]=v\n" +
 		`{ read 'm[@]'; echo "same=$?"; } <<EOF` + "\n" +
 		"Z\nEOF\n" +
@@ -170,6 +174,7 @@ func TestAWholeArraySubscriptOverATableIsItsOwnAnswer(t *testing.T) {
 // the same brackets on an operand with the key at 0. So the assignment's own
 // answer must not reach here.
 func TestAWholeArraySubscriptOperandDoesNotReadTheAssignmentsField(t *testing.T) {
+	t.Parallel()
 	const src = "typeset -A m; m[k]=v\n" +
 		`{ read 'm[@]'; echo "same=$?"; } <<EOF` + "\n" +
 		"Z\nEOF\n" +
@@ -197,6 +202,7 @@ func TestAWholeArraySubscriptOperandDoesNotReadTheAssignmentsField(t *testing.T)
 // Before this the operand walked into the array machinery and refused array
 // axes by name there, after reporting 0 (#3516).
 func TestABracketedStoreOperandIsABadNameWithoutArrays(t *testing.T) {
+	t.Parallel()
 	const src = `{ read 'r[2]'; echo "same=$?"; } <<EOF` + "\n" +
 		"Y\nEOF\n" +
 		`echo "next=$? r=[$r]"`
@@ -230,6 +236,7 @@ func TestABracketedStoreOperandIsABadNameWithoutArrays(t *testing.T) {
 // in the core and reaching them is what the path already did, so the fallback
 // is a correct answer rather than a missing one.
 func TestAnUnansweredStoreOperandSubscriptAxisKeepsTheElement(t *testing.T) {
+	t.Parallel()
 	// A group with a here-document and not a pipeline: a pipeline's element
 	// runs in a subshell, so the parent's array is untouched however the
 	// element was filled and the row could not see the difference.
@@ -258,6 +265,7 @@ func TestAnUnansweredStoreOperandSubscriptAxisKeepsTheElement(t *testing.T) {
 // ends. `a-b` is the same sentence as `1x` in both, so the leading-digit
 // wording is not a split here.
 func TestPrintfRefusesAnOperandThatIsNotAName(t *testing.T) {
+	t.Parallel()
 	for _, operand := range []string{"1x", "a-b", "a b", "a.b"} {
 		src := `printf -v '` + operand + `' %s Q; echo "same=$?"` + "\n" +
 			`echo "next=$?"`
@@ -284,6 +292,7 @@ func TestPrintfRefusesAnOperandThatIsNotAName(t *testing.T) {
 // status in the column that carries on, which is the same evidence that
 // separated `read`'s fatality from `unset`'s.
 func TestPrintfsBadNameRefusalEndsTheScriptWhereTheDialectSaysSo(t *testing.T) {
+	t.Parallel()
 	const src = `printf -v '1x' %s Q; echo "same=$?"` + "\n" + `echo "next=$?"`
 	for _, c := range []struct {
 		name  string
@@ -312,6 +321,7 @@ func TestPrintfsBadNameRefusalEndsTheScriptWhereTheDialectSaysSo(t *testing.T) {
 // wrong: measured, bash 5.3.20 fills the element for `printf -v 'r[1]'` and
 // refuses `printf -v '1x'` in the same run.
 func TestPrintfTakesASubscriptedOperandWhereTheDialectHasSubscripts(t *testing.T) {
+	t.Parallel()
 	const src = "r=(1 2 3)\n" +
 		`printf -v 'r[1]' %s Q; echo "same=$? r=[${r[*]}]"`
 	out, _ := storeOpRun(t, nil, Diagnostics{}, src)
@@ -324,6 +334,7 @@ func TestPrintfTakesASubscriptedOperandWhereTheDialectHasSubscripts(t *testing.T
 // column refuses the brackets, one evaluates them and one fills the array, and
 // no two of those stand in for each other.
 func TestAWholeArraySubscriptOperandRefusesAnUnspecifiedAxis(t *testing.T) {
+	t.Parallel()
 	out, _ := storeOpRun(t, func(s *Semantics) {
 		s.StoreOperandWholeArraySubscript = StoreOperandWholeArraySubscriptUnspecified
 	}, Diagnostics{}, storeOpReadSrc)

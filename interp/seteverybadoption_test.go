@@ -73,6 +73,7 @@ func setEveryRun(t *testing.T, src string, every, fatal Answer) (string, int) {
 }
 
 func TestSetReportsEveryBadOptionWordOrStopsAtTheFirst(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		why, src string
 		every    string
@@ -135,6 +136,7 @@ func TestSetReportsEveryBadOptionWordOrStopsAtTheFirst(t *testing.T) {
 // "keep looping": the block is written by the same helper that writes each
 // sentence, so a loop alone would repeat it.
 func TestTheUsageBlockIsPrintedOnceAfterEveryRefusal(t *testing.T) {
+	t.Parallel()
 	got, _ := setEveryRun(t, "set -q -z -y\n", Yes, No)
 	if n := strings.Count(got, "Usage:"); n != 1 {
 		t.Errorf("printed %d usage blocks, want exactly 1: %q", n, got)
@@ -150,6 +152,7 @@ func TestTheUsageBlockIsPrintedOnceAfterEveryRefusal(t *testing.T) {
 // reaches the second, and the shell that answers yes here is fatal too and
 // still prints them all.
 func TestTheFatalityIsAppliedAfterEveryWordIsReported(t *testing.T) {
+	t.Parallel()
 	const want = "sh: set: q: unknown option\nsh: set: z: unknown option\nUsage: set [-abc]\n"
 	got, st := setEveryRun(t, "set -q -z\necho after\n", Yes, Yes)
 	if got != want {
@@ -172,6 +175,7 @@ func TestTheFatalityIsAppliedAfterEveryWordIsReported(t *testing.T) {
 // answers and is what keeps "carry on reading the words" from becoming
 // "carry on applying them".
 func TestASetThatRefusedAWordChangesNothing(t *testing.T) {
+	t.Parallel()
 	for _, every := range []Answer{Yes, No} {
 		out, _ := setEveryRun(t, "set -q -z one two\necho \"n=$#\"\n", every, No)
 		if !strings.HasSuffix(out, "n=0\n") {
@@ -185,6 +189,7 @@ func TestASetThatRefusedAWordChangesNothing(t *testing.T) {
 // name gets none, even when it reports every word — which the one shell
 // answering this axis cannot show, because it prints one under both.
 func TestOnlyARefusalThatWantsAUsageBlockGetsOne(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	sem.SetReportsEveryBadOption = Yes
 	sem.BadSetOptionNameFatal = No
@@ -244,6 +249,7 @@ func TestOnlyARefusalThatWantsAUsageBlockGetsOne(t *testing.T) {
 // the invocation and environment routes for that reason, and dropping either
 // exclusion survived every test in the tree until this one.
 func TestReportingEveryBadOptionDoesNotReachTheInvocationRoute(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	sem.SetReportsEveryBadOption = Yes
 	sem.BadSetOptionNameFatal = No
@@ -299,6 +305,7 @@ func TestReportingEveryBadOptionDoesNotReachTheInvocationRoute(t *testing.T) {
 // errexit, because errexit would end the script over the refusal's own status
 // and take the line that reports the state with it.
 func TestReportingEveryBadOptionAppliesNoneOfThem(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		why, src     string
 		every, first string
@@ -386,6 +393,7 @@ func setAppliedRun(t *testing.T, src string, every Answer) (string, int) {
 // table at all, and `set -e -Z -o` draws the same. Ours listed the whole table
 // with `errexit on` in it, which is the partial application in plain sight.
 func TestReportingEveryBadOptionListsNothingEither(t *testing.T) {
+	t.Parallel()
 	got, _ := setEveryRun(t, "set -u -Z -o\n", Yes, No)
 	if strings.Contains(got, "nounset") {
 		t.Errorf("output %q, want no option table under a refused word", got)
@@ -408,6 +416,7 @@ func TestReportingEveryBadOptionListsNothingEither(t *testing.T) {
 // why the second half went to the axis only one dialect answers yes to rather
 // than to SetValidatesOptionLettersFirst (#2670).
 func TestValidatingTheLettersFirstStillDoesNotReachTheNames(t *testing.T) {
+	t.Parallel()
 	sem := PosixSemantics()
 	sem.SetReportsEveryBadOption = No
 	sem.SetValidatesOptionLettersFirst = Yes

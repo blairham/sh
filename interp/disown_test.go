@@ -29,6 +29,7 @@ func runDisowning(t *testing.T, src string) (out string, status int, r *Runner) 
 // because what a listing looks like is four other tests' question and this
 // one is about whether the job is in it at all.
 func TestADisownedJobIsNotInTheTable(t *testing.T) {
+	t.Parallel()
 	out, st, r := runDisowning(t, "true &!")
 	if st != 0 || out != "" {
 		t.Errorf("out %q status %d, want a silent 0 — starting a job succeeds", out, st)

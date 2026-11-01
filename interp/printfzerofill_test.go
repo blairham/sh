@@ -20,6 +20,7 @@ import (
 // already right (#3066). Both readings are asserted here so that moving the
 // axis moves the answer rather than only one of them being checked.
 func TestTheZeroFillAgainstAnAlternatePrefixIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name               string
 		src                string
@@ -97,6 +98,7 @@ func TestTheZeroFillAgainstAnAlternatePrefixIsAnAxis(t *testing.T) {
 // columns write identically, and a conversion that asked anyway would refuse
 // a script nobody disagrees about.
 func TestTheZeroFillAxisIsAskedOnlyWhereTheReadingsPart(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		src     string
@@ -151,6 +153,7 @@ func TestTheZeroFillAxisIsAskedOnlyWhereTheReadingsPart(t *testing.T) {
 // axis carries. The two are never both live, because the column that keeps a
 // prefix at a nought is the column that writes it past the width.
 func TestANoughtIsDecidedByTheOtherAxisAlone(t *testing.T) {
+	t.Parallel()
 	for _, form := range []struct {
 		name string
 		a    Answer

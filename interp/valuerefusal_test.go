@@ -18,6 +18,7 @@ import (
 // swapped. Every door a store comes through is a row, because a door that
 // forgets to ask stores the value and the transcripts part.
 func TestARefusedValueTakesTheFreezesRoute(t *testing.T) {
+	t.Parallel()
 	const frozen = "N: readonly variable"
 	const refused = "no: x"
 	for _, src := range []string{
@@ -62,6 +63,7 @@ func TestARefusedValueTakesTheFreezesRoute(t *testing.T) {
 // TestAValueTheNameTakesIsStored is the control: a value the check passes is
 // stored on every one of those routes.
 func TestAValueTheNameTakesIsStored(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `N=5; echo "[$N]"; export N=6; echo "[$N]"; read N <<E
 7
 E

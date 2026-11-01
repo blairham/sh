@@ -41,6 +41,7 @@ func printfRun(t *testing.T, tweak func(*Semantics), src string) (out, errs stri
 // `printf -v name` collects the text instead of printing it. It did neither:
 // `-v` was taken as the format and printed, and the variable stayed empty.
 func TestPrintfAssignsWithV(t *testing.T) {
+	t.Parallel()
 	out, _, st := printfRun(t, nil, `printf -v out "%05d" 42; echo "[$out]"`)
 	if strings.TrimSpace(out) != "[00042]" {
 		t.Errorf("got %q status %d, want the text assigned and nothing printed", out, st)
@@ -69,6 +70,7 @@ func TestPrintfAssignsWithV(t *testing.T) {
 // `--` ends the options. Unanimous, and the reason a dash-initial format can
 // be written at all.
 func TestPrintfDoubleDashEndsTheOptions(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`printf -- "x\n"`, "x"},
 		{`printf -- "-v\n"`, "-v"},
@@ -88,6 +90,7 @@ func TestPrintfDoubleDashEndsTheOptions(t *testing.T) {
 // An unrecognized leading `-` word is an option in three of the four and the
 // format in zsh — and where it is refused, it is refused by its first letter.
 func TestPrintfUnknownOption(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{PrintfBadOption: "printf: %[1]s: invalid option"}
 	f, err := syntax.Parse(`printf "-%s\n" x`, syntax.Core())
 	if err != nil {
@@ -117,6 +120,7 @@ func TestPrintfUnknownOption(t *testing.T) {
 // Unanswered is refused once, and does not print the option as if it were a
 // format on the way out.
 func TestPrintfUnansweredOptionIsRefused(t *testing.T) {
+	t.Parallel()
 	out, errs, _ := printfRun(t, func(s *Semantics) { s.PrintfAssignsWithV = Unspecified }, `printf -v o "x"`)
 	if !strings.Contains(errs, "no dialect was chosen") {
 		t.Errorf("stderr %q, want a refusal", errs)
@@ -129,6 +133,7 @@ func TestPrintfUnansweredOptionIsRefused(t *testing.T) {
 // A lone `-` is an operand, not an option, in all four — which is what keeps
 // the leading-dash rule from swallowing it. As a format it prints itself.
 func TestPrintfALoneDashIsAFormat(t *testing.T) {
+	t.Parallel()
 	out, errs, _ := printfRun(t, nil, `printf -`)
 	if out != "-" {
 		t.Errorf("stdout %q (stderr %q), want the dash printed as the format", out, errs)

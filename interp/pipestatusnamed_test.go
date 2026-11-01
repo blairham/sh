@@ -42,6 +42,7 @@ func recordedRunner(t *testing.T, src, name string, tune func(*Semantics)) *Runn
 }
 
 func TestTheProducedPipelineStatusIsAParameterTheShellHas(t *testing.T) {
+	t.Parallel()
 	r := recordedRunner(t, `false | true`, "P", nil)
 
 	if !r.ParameterIsNamed("P") {
@@ -81,6 +82,7 @@ func TestTheProducedPipelineStatusIsAParameterTheShellHas(t *testing.T) {
 // Without a dialect to name the record there is no parameter, which is what
 // keeps the answer above from being "any name at all".
 func TestAnUnnamedPipelineStatusIsNotAParameter(t *testing.T) {
+	t.Parallel()
 	r := recordedRunner(t, `false | true`, "", nil)
 	for _, name := range []string{"P", "PIPESTATUS", "pipestatus"} {
 		if r.ParameterIsNamed(name) || r.DynamicParameter(name) {
@@ -100,6 +102,7 @@ func TestAnUnnamedPipelineStatusIsNotAParameter(t *testing.T) {
 // here — the rows below assert it in the same runner — and wrong for this one
 // under the answer that keeps it.
 func TestTheRemovalAxisReachesTheDescriptionOfTheRecord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		a    Answer
 		want bool

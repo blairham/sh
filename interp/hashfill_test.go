@@ -18,6 +18,7 @@ import (
 // **A fill puts what PATH holds into the table once, keeps what was there,
 // and is undone by emptying the table.** See Runner.FillCommandHashFromPath.
 func TestFillingTheCommandTableFromPath(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, f := range []string{"zexe", "zkept"} {
 		if err := os.WriteFile(filepath.Join(dir, f), []byte("#!/bin/sh\n"), 0o755); err != nil {

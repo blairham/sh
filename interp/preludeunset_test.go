@@ -34,6 +34,7 @@ func reportsMissing(s *Semantics) { s.UnsetFunctionReportsMissing = Yes }
 // on both dialect answers. The name still runs afterwards, which is the half
 // the panel agrees on.
 func TestUnsettingAPreludeFunctionLeavesTheShellItsName(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name   string
 		set    func(*Semantics)
@@ -74,6 +75,7 @@ func TestUnsettingAPreludeFunctionLeavesTheShellItsName(t *testing.T) {
 // one a capture leaked, and it is the shell's by the same rule. `p` calling
 // it still works.
 func TestUnsettingAPreludeHelperLeavesItToo(t *testing.T) {
+	t.Parallel()
 	out, errs, st := preludeListingRun(t, listingPrelude, "unset -f __helper\np\n", nil)
 	if out != "helper\n" || errs != "" || st != 0 {
 		t.Errorf("stdout %q stderr %q status %d, want %q silently at 0", out, errs, st, "helper\n")
@@ -87,6 +89,7 @@ func TestUnsettingAPreludeHelperLeavesItToo(t *testing.T) {
 // `pushd() { echo mine; }; unset -f pushd; pushd /tmp` pushes in both shells
 // with the builtin, because removing the function uncovers it.
 func TestUnsettingARedefinitionGivesTheNameBackToTheShell(t *testing.T) {
+	t.Parallel()
 	out, errs, st := preludeListingRun(t, listingPrelude,
 		"p() { echo mine; }\nunset -f p\np\n", reportsMissing)
 	if out != "helper\n" {
@@ -117,6 +120,7 @@ func TestUnsettingARedefinitionGivesTheNameBackToTheShell(t *testing.T) {
 // none of this may weaken. A name the prelude never declared goes for good,
 // and the second `unset -f` says so.
 func TestUnsettingTheScriptsOwnFunctionStillRemovesIt(t *testing.T) {
+	t.Parallel()
 	out, errs, st := preludeListingRun(t, listingPrelude, "f() { echo f; }\nunset -f f\nunset -f f\n", reportsMissing)
 	if out != "" {
 		t.Errorf("stdout = %q, want nothing written", out)
@@ -134,6 +138,7 @@ func TestUnsettingTheScriptsOwnFunctionStillRemovesIt(t *testing.T) {
 // the script's, so it is absent before and absent after, and `f` is there
 // both times.
 func TestUnsettingAPreludeFunctionChangesNoListing(t *testing.T) {
+	t.Parallel()
 	out, errs, st := preludeListingRun(t, listingPrelude, "f() { echo f; }\nunset -f p\ntypeset -F\n", nil)
 	if want := "declare -f f\n"; out != want {
 		t.Errorf("stdout = %q, want exactly %q", out, want)
@@ -150,6 +155,7 @@ func TestUnsettingAPreludeFunctionChangesNoListing(t *testing.T) {
 // `declare -f pushd` both before and after an `unset -f pushd` it treats as a
 // no-op. The name still runs, which the case above this one asserts.
 func TestAPreludeFunctionAnswersTheSameByNameAfterUnset(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"typeset -f p\n", "unset -f p\ntypeset -f p\n"} {
 		out, errs, st := preludeListingRun(t, listingPrelude, src, nil)
 		if out != "" || errs != "" {

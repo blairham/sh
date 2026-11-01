@@ -38,6 +38,7 @@ import (
 // reason: a boundary that was lost reads back through `"$@"` as the same
 // characters, and nothing shorter than the count sees it.
 func TestAnElementThatSplitsAwayToNothingKeepsItsFieldBoundary(t *testing.T) {
+	t.Parallel()
 	// A literal tab, to say that the rule is about IFS whitespace and not
 	// about the space character.
 	const tab = "\t"
@@ -150,6 +151,7 @@ func blankEdgeRun(t *testing.T, src string, join, trailing Answer) (string, int)
 }
 
 func TestABlankElementsBoundaryUnderANonWhitespaceIFS(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, setup, word string
 		join, trailing    Answer
@@ -193,6 +195,7 @@ func TestABlankElementsBoundaryUnderANonWhitespaceIFS(t *testing.T) {
 // element is text rather than a boundary — the reading the unsplit path
 // already held, which the edges must not disturb.
 func TestABlankElementIsTextWhereNoFieldsAreKept(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"an assignment's value", `set -- a ' ' b; v=$@; printf "[%s]" "$v"`, `[a   b]`},
 		{"with text around it", `a=(' ' 2); v=q${a[@]}z; printf "[%s]" "$v"`, `[q  2z]`},
@@ -220,6 +223,7 @@ func TestABlankElementIsTextWhereNoFieldsAreKept(t *testing.T) {
 // Runner.expandRedirectTargetViews — and a second walk that did not get the
 // change is the shape this repository keeps finding.
 func TestABlankElementsBoundaryReachesARedirectionsTarget(t *testing.T) {
+	t.Parallel()
 	t.Run("each word is a redirection", func(t *testing.T) {
 		dir := t.TempDir()
 		sem := permissive()

@@ -15,6 +15,7 @@ import "testing"
 // which is the way to put a byte in a variable that no source line can hold.
 
 func TestNulSplitFlagFields(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ name, src, want string }{
 		{
 			"a value split at its NULs",

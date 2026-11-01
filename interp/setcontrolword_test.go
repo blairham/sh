@@ -18,6 +18,7 @@ import (
 // the abbreviation belongs to this pair and is not a property of the
 // namespace.
 func TestSetTakesTwoWordsThatAreNotOptionNames(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		word, want string
 	}{

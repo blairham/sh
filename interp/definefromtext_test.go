@@ -69,6 +69,7 @@ func TestABodyFromTextIsReadWithOrWithoutTheAliasTable(t *testing.T) {
 // a body that reads one way through `DefineFunction` reads the same way
 // through `DefineFunctionFromText`, down to a text the grammar refuses.
 func TestTheWaysIntoABodyFromTextAgree(t *testing.T) {
+	t.Parallel()
 	for _, body := range []string{`echo ok`, `if true; then echo ok; fi`, `; ;`, ``} {
 		var byDefine, byText, byAliases bool
 		run(t, `zzdefine`, func(r *Runner) {
@@ -104,6 +105,7 @@ func TestTheWaysIntoABodyFromTextAgree(t *testing.T) {
 // body's own offset, carried on a declaration the body holds. A function
 // defined inside text-read text needs both at once.
 func TestABodyReadFromTextIsNumberedFromItsOwnFirstLine(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, body, want string
 	}{
@@ -142,6 +144,7 @@ func TestABodyReadFromTextIsNumberedFromItsOwnFirstLine(t *testing.T) {
 // are the script's and a correction applied to every definition alike would
 // take them one too low.
 func TestADeclarationTheParserReadIsNotCorrected(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, ":\nf() {\n  echo L=$LINENO\n}\nf\n", nil)
 	if want := "L=3\n"; out != want {
 		t.Errorf("got %q, want %q", out, want)

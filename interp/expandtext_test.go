@@ -15,6 +15,7 @@ import (
 // For a caller holding `ENV=$HOME/.shrc` and having to open it: without this
 // it would have to parse and expand, which is the whole of this package.
 func TestExpandASetting(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	r := newTestRunner(t, &Runner{Semantics: &sem}).SeedVars(map[string]string{
 		"HOME": "/home/someone",
@@ -42,6 +43,7 @@ func TestExpandASetting(t *testing.T) {
 // turns it off, a user name is left for a database this package does not
 // carry, and a segment that runs into an expansion keeps its tilde.
 func TestATildeAfterAColonInAnAssignment(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"expands after each colon", `v=a:~/b:~; echo "$v"`, "a:/home/who/b:/home/who"},
 		{"leading and colon together", `v=~/x:~/y; echo "$v"`, "/home/who/x:/home/who/y"},
@@ -63,6 +65,7 @@ func TestATildeAfterAColonInAnAssignment(t *testing.T) {
 // TestTildePlusAndMinusAreAnAxis — `~+` and `~-` name the directories in the
 // dialects that have the pair, only while the variable is set.
 func TestTildePlusAndMinusAreAnAxis(t *testing.T) {
+	t.Parallel()
 	set := func(answer Answer) func(*Runner) {
 		return func(r *Runner) {
 			sem := CoreSemantics()

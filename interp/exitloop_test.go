@@ -64,6 +64,7 @@ func TestExitLeavesALoop(t *testing.T) {
 // as many loops as it was asked to and no more, `continue` starts the next
 // round, and a loop that ends on its own reports 0.
 func TestTheOtherLoopControlsAreUnchanged(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src    string
 		out    string
@@ -94,6 +95,7 @@ func TestTheOtherLoopControlsAreUnchanged(t *testing.T) {
 // from a failed condition is overwritten by the next command. Counting the
 // rounds and reading `$?` straight away is what makes them visible.
 func TestContinueGoesRoundAgainAndAnEmptyLoopReportsZero(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`i=0; for x in 1 2 3; do i=$((i+1)); continue; done; echo $i`, "3"},
 		{`i=0; while [ $i -lt 3 ]; do i=$((i+1)); continue; done; echo $i`, "3"},
@@ -118,6 +120,7 @@ func TestContinueGoesRoundAgainAndAnEmptyLoopReportsZero(t *testing.T) {
 // and then the outer body runs anyway, so the only visible difference is what
 // the outer body did.
 func TestContinueCountsItsLoops(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`i=0; for a in 1 2; do for b in 1 2 3; do continue 2; done; i=$((i+1)); done; echo $i`, "0"},
 		{`i=0; for a in 1 2; do for b in 1 2 3; do continue; done; i=$((i+1)); done; echo $i`, "2"},

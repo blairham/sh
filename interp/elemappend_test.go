@@ -15,6 +15,7 @@ import (
 // accumulate loop ends holding only its last iteration. The subscript is
 // `-1` so nothing here depends on the array base.
 func TestAppendingToAnArrayElement(t *testing.T) {
+	t.Parallel()
 	out, st := runArray(t, `a=(x y); a[-1]+=Q; printf "[%s]" "${a[@]}"`)
 	if out != "[x][yQ]" {
 		t.Errorf("got %q, want the value joined to the element", out)
@@ -28,6 +29,7 @@ func TestAppendingToAnArrayElement(t *testing.T) {
 // adds an element after the last; with one, it appends to that element — and
 // a fix that confused them would pass a test that only looked at one.
 func TestASubscriptDecidesWhichAppend(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `a=(x y); a+=(z); printf "[%s]" "${a[@]}"`)
 	if out != "[x][y][z]" {
 		t.Errorf("array append gave %q, want an element added at the end", out)
@@ -42,6 +44,7 @@ func TestASubscriptDecidesWhichAppend(t *testing.T) {
 // spelling stores the value as it stands rather than refusing or leaving the
 // element empty.
 func TestAppendingToAnUnsetElement(t *testing.T) {
+	t.Parallel()
 	out, st := runArray(t, `a[3]+=Q; printf "[%s]" "${a[3]}"; echo " n=${#a[@]}"`)
 	if strings.TrimSpace(out) != "[Q] n=1" {
 		t.Errorf("got %q, want the value placed at the subscript alone", strings.TrimSpace(out))
@@ -60,6 +63,7 @@ func TestAppendingToAnUnsetElement(t *testing.T) {
 // assignment: the same numeral names a different element under each answer,
 // and appending is not a form with a subscript rule of its own.
 func TestAppendingToAnElementInheritsTheBase(t *testing.T) {
+	t.Parallel()
 	src := `a=(x y); a[1]+=Q; printf "[%s]" "${a[@]}"`
 	if out, _ := run(t, src, withSem(baseVectors()[0])); out != "[x][yQ]" {
 		t.Errorf("zero-based gave %q, want the second element joined", out)
@@ -73,6 +77,7 @@ func TestAppendingToAnElementInheritsTheBase(t *testing.T) {
 // nothing appends to a position that does not exist, and nothing after the
 // assignment reads the array as though something had.
 func TestAppendingThroughASubscriptOutOfRange(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, `a=(x y); a[0]+=Q; printf "[%s]" "${a[@]}"`, withSem(baseVectors()[1]))
 	if !strings.Contains(out, "a[0]") {
 		t.Errorf("said %q, want the subscript named", out)
@@ -88,6 +93,7 @@ func TestAppendingThroughASubscriptOutOfRange(t *testing.T) {
 // The declared form appends by key just as the indexed form appends by
 // subscript, and an absent key is the plain assignment again.
 func TestAppendingToAnAssociativeElement(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `typeset -A m; m[k]+=x; m[k]+=Q; printf "[%s]" "${m[k]}"`)
 	if out != "[xQ]" {
 		t.Errorf("got %q, want the first append to place and the second to join", out)
@@ -102,6 +108,7 @@ func TestAppendingToAnAssociativeElement(t *testing.T) {
 // A scalar `+=` still appends, and an element append must not have been
 // bought by breaking it.
 func TestAppendingToAScalarStillAppends(t *testing.T) {
+	t.Parallel()
 	out, _ := runArray(t, `s=x; s+=Q; printf "[%s]" "$s"`)
 	if out != "[xQ]" {
 		t.Errorf("got %q, want the scalar joined", out)

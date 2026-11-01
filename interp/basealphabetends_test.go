@@ -36,6 +36,7 @@ func baseRun(t *testing.T, src string) (string, int) {
 // mark still on — so the listing carries the base and the value does not
 // carry its digits.
 func TestABasePastTheAlphabetRendersInTenWithTheMark(t *testing.T) {
+	t.Parallel()
 	// The base is *stored*, which the second assignment is what shows: a
 	// fallback that forgot it would print a plain 200. The listing's spelling
 	// of the base word is the dialect's and is pinned in dialect/ksh.
@@ -55,6 +56,7 @@ func TestABasePastTheAlphabetRendersInTenWithTheMark(t *testing.T) {
 
 // A base below two records nothing — and one and zero are not one rule.
 func TestABaseBelowTwoRecordsNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a fresh name",

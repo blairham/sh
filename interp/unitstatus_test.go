@@ -34,6 +34,7 @@ func runUnitStatus(t *testing.T, own Answer, src string) (string, int) {
 // and it starts at a subshell, a command substitution, a `${ …;}` body, a
 // function call, an `eval` and a sourced text — so all six read alike.
 func TestABareExitReportsTheUnitsOwnStatusWhereTheDialectKeepsOne(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, own, inherited string }{
 		{"a command substitution", `false; a=$( exit ); echo "s=$?"`, "s=0", "s=1"},
 		{"a subshell", `false; ( exit ); echo "s=$?"`, "s=0", "s=1"},
@@ -54,6 +55,7 @@ func TestABareExitReportsTheUnitsOwnStatusWhereTheDialectKeepsOne(t *testing.T) 
 // `eval` starts a unit too, read off the status the script ends at: a bare
 // `exit` in the text leaves nothing behind to print.
 func TestAnEvalStartsAUnitOfItsOwn(t *testing.T) {
+	t.Parallel()
 	if _, st := runUnitStatus(t, Yes, `false; eval 'exit'`); st != 0 {
 		t.Errorf("the unit's own: status %d, want 0", st)
 	}
@@ -69,6 +71,7 @@ func TestAnEvalStartsAUnitOfItsOwn(t *testing.T) {
 // Once the unit has run a command of its own, that command's status is the
 // one reported — which is what rules out "a bare word in a unit is always 0".
 func TestAUnitThatHasRunACommandReportsThatCommandsStatus(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`false; a=$( true; exit ); echo "s=$?"`, "s=0"},
 		{`false; a=$( false; exit ); echo "s=$?"`, "s=1"},
@@ -86,6 +89,7 @@ func TestAUnitThatHasRunACommandReportsThatCommandsStatus(t *testing.T) {
 // value the shell was already holding under either answer — read off the
 // status the script ends at, since `exit` is what these rows are about.
 func TestABraceGroupAndTheTopOfTheScriptStartNoUnit(t *testing.T) {
+	t.Parallel()
 	for _, own := range []Answer{Yes, No} {
 		if _, st := runUnitStatus(t, own, `false; { exit; }`); st != 1 {
 			t.Errorf("brace group, own=%v: status %d, want 1", own, st)
@@ -100,6 +104,7 @@ func TestABraceGroupAndTheTopOfTheScriptStartNoUnit(t *testing.T) {
 // the value the shell came in with, which is what says the two are not one
 // field read twice.
 func TestTheUnitsRegisterIsNotTheOneQuestionMarkReads(t *testing.T) {
+	t.Parallel()
 	out, _ := runUnitStatus(t, Yes, `(exit 3); j=${ echo "saw=$?"; }; echo "j=[$j]"`)
 	if !strings.Contains(out, "j=[saw=3]") {
 		t.Errorf("got %q, want the body to read the inherited 3 out of $?", out)
@@ -109,6 +114,7 @@ func TestTheUnitsRegisterIsNotTheOneQuestionMarkReads(t *testing.T) {
 // An operand wins over the register, which is the only spelling both readings
 // agree on and the reason the axis is asked where no operand was written.
 func TestAWrittenOperandIsUnaffectedByTheUnitsRegister(t *testing.T) {
+	t.Parallel()
 	for _, own := range []Answer{Yes, No} {
 		if out, _ := runUnitStatus(t, own, `false; a=${ exit 7; }; echo "s=$?"`); !strings.Contains(out, "s=7") {
 			t.Errorf("own=%v: got %q, want s=7", own, out)

@@ -20,6 +20,7 @@ import (
 // every dialect, and a hundred-row grid said bash was unmoved. The
 // discriminating shape is to turn the option **on** and ask again (#4436).
 func TestAConditionOptionMayBeALetter(t *testing.T) {
+	t.Parallel()
 	withLetters := func(yes bool) func(*Runner) {
 		return func(r *Runner) {
 			if yes {

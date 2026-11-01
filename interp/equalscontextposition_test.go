@@ -30,6 +30,7 @@ func equalsContextSem(narrow, wide Answer) func(*Runner) {
 // the narrow rule: `a=(FOO=~/x); echo "${a[0]}"` is `FOO=~/x` while `echo
 // FOO=~/x` on the same line is a path.
 func TestAnArrayLiteralsElementIsNotATildeContext(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 		narrow, wide    Answer
@@ -66,6 +67,7 @@ func TestAnArrayLiteralsElementIsNotATildeContext(t *testing.T) {
 // which is why every row runs a name nothing can resolve: what the shell
 // reports is the word it was going to run.
 func TestTheWordNamingTheCommandIsNotATildeContext(t *testing.T) {
+	t.Parallel()
 	// `mod` is a word this runner is told the next written word still names
 	// the command behind, and it is also a function that writes its operands
 	// back — so a row can see which word the position reached without the
@@ -106,6 +108,7 @@ func TestTheWordNamingTheCommandIsNotATildeContext(t *testing.T) {
 // command name expands in the reference, because the substitution's body is a
 // command line of its own.
 func TestTheCommandWordsPositionDoesNotReachInsideIt(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, "v=$(echo --opt=~/x)\necho \"$v\"\n", equalsContextSem(No, Yes))
 	if st != 0 {
 		t.Fatalf("status %d, out %q", st, out)

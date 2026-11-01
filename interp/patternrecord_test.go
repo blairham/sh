@@ -61,6 +61,7 @@ func quantifiedGroupDialect() *syntax.Dialect {
 }
 
 func TestWhatAPatternMatchLeavesInTheRecord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, yes, no string }{
 		{
 			// The row the issue is named for: a comparison against a pattern
@@ -174,6 +175,7 @@ func TestWhatAPatternMatchLeavesInTheRecord(t *testing.T) {
 // `$((++i))` is the discriminator, because a replacement read once leaves the
 // same text in every position and one read per match counts.
 func TestAPatternRecordDoesNotMakeAReplacementReport(t *testing.T) {
+	t.Parallel()
 	for _, writes := range []Answer{Yes, No} {
 		sem := permissive()
 		sem.RegexMatchSurvivesAFailedMatch = Yes
@@ -195,6 +197,7 @@ func TestAPatternRecordDoesNotMakeAReplacementReport(t *testing.T) {
 // reached — which is what lets a shell keeping its captures under another
 // shape leave it unanswered while every pattern in it still matches.
 func TestNoRecordNameAsksNothingOfAPatternMatch(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.PatternMatchWritesTheMatchRecord = Unspecified
 	out, st := runGrammar(t, `[[ abcd == a*d ]]; v=hello; echo "${v#he}$?"`,
@@ -226,6 +229,7 @@ func TestNoRecordNameAsksNothingOfAPatternMatch(t *testing.T) {
 // would be inventing parameters for it — and the report carries the whole
 // match and every group, which is exactly what would fill them.
 func TestAPatternRecordFillsNoReportingParameter(t *testing.T) {
+	t.Parallel()
 	sem := permissive()
 	sem.RegexMatchSurvivesAFailedMatch = Yes
 	sem.RegexMatchOmitsGroupsThatDidNotMatch = Yes

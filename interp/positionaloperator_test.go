@@ -44,6 +44,7 @@ import (
 // trim are the pair that tells the readings apart, and a probe built on
 // `${@%x}` unquoted confirms a shell that has the rule backwards.
 func TestAnOperatorDistributesOverThePositionalParameters(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		// The trims, each in both lengths.
 		{`set -- ax bx cx; printf '[%s]' ${@#a}`, "[x][bx][cx]"},
@@ -79,6 +80,7 @@ func TestAnOperatorDistributesOverThePositionalParameters(t *testing.T) {
 // `"${*#a}"` is the single field `[x bx cx]`. A rewrite that sent both to
 // `[@]` answers the first row right and the second with three fields.
 func TestQuotingTellsTheTwoSpellingsApartUnderAnOperator(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`set -- ax bx cx; printf '[%s]' "${@#a}"`, "[x][bx][cx]"},
 		{`set -- ax bx cx; printf '[%s]' "${*#a}"`, "[x bx cx]"},
@@ -100,6 +102,7 @@ func TestQuotingTellsTheTwoSpellingsApartUnderAnOperator(t *testing.T) {
 // empty list in every shell in the panel and in a shell that answered with
 // one empty field, so it cannot tell the two apart.
 func TestAnOperatorOverNoPositionalParametersIsNoField(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`set --; set -- "${@#a}"; echo $#`, "0"},
 		{`set --; set -- ${@#a}; echo $#`, "0"},
@@ -122,6 +125,7 @@ func TestAnOperatorOverNoPositionalParametersIsNoField(t *testing.T) {
 //
 // zsh's grammar alone has the operators, so the rows are enabled by name.
 func TestTheElementSelectorsChooseAmongThePositionalParameters(t *testing.T) {
+	t.Parallel()
 	sel := func(t *testing.T, src string) (string, int) {
 		t.Helper()
 		return runGrammar(t, src, func(d *syntax.Dialect) {
@@ -152,6 +156,7 @@ func TestTheElementSelectorsChooseAmongThePositionalParameters(t *testing.T) {
 // be routed through bareArrayAsList's axis — measured, dash has no arrays to
 // answer that axis with and distributes over `$@` regardless.
 func TestThePositionalsDistributeWithoutAskingTheArrayNameAxis(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `a=x; set -- ax bx; printf '[%s]' ${@#a}; printf '[%s]' ${a}`, nil)
 	if got := strings.TrimSpace(out); got != "[x][bx][x]" {
 		t.Errorf("got %q, want the parameters distributed and the scalar left alone", got)
@@ -163,6 +168,7 @@ func TestThePositionalsDistributeWithoutAskingTheArrayNameAxis(t *testing.T) {
 // an operator is read, and giving it a subscript would send it to the array
 // path.
 func TestTheLengthOfThePositionalsIsStillTheirCount(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `set -- ax bx cx; echo "${#@} ${#*} ${#1}"`, nil)
 	if got := strings.TrimSpace(out); got != "3 3 2" {
 		t.Errorf("got %q, want the two counts and one width", got)

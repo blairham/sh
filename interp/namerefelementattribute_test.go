@@ -41,6 +41,7 @@ func namerefElementSemantics(answer Answer) Semantics {
 // operand's name had already been replaced with the array's for the attribute
 // and the value went along with it (#3881).
 func TestExportOverAReferenceToAnElement(t *testing.T) {
+	t.Parallel()
 	const src = `a=(p q r)
 typeset -n b='a[1]'
 export b=Z
@@ -91,6 +92,7 @@ typeset -p a`
 // array is frozen and the next ordinary write to any element is refused,
 // under the refusing one the array is never frozen at all.
 func TestReadonlyOverAReferenceToAnElement(t *testing.T) {
+	t.Parallel()
 	const src = `a=(p q r)
 typeset -n b='a[1]'
 readonly b=Y
@@ -130,6 +132,7 @@ echo "after=$? [${a[*]}]"`
 // is the empty string: the right cell was written with the wrong text, at
 // status 0, with nothing said (#3880). See Runner.storedVar.
 func TestAnAppendThroughAReferenceToAnElementJoinsIt(t *testing.T) {
+	t.Parallel()
 	sem := namerefElementSemantics(Yes)
 	sem.DeclarationTakesAnAppendOperand = Yes
 	for _, tc := range []struct{ name, src, want string }{

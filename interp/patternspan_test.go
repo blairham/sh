@@ -111,6 +111,7 @@ func spanReadings() []struct {
 // Every span rather than a chosen few, because the failure this guards
 // against is precisely the span nobody thought to write down.
 func TestTheSpanBoundNeverExcludesASpanThatMatches(t *testing.T) {
+	t.Parallel()
 	for _, rd := range spanReadings() {
 		t.Run(rd.name, func(t *testing.T) {
 			for _, tc := range spanCases {
@@ -144,6 +145,7 @@ func TestTheSpanBoundNeverExcludesASpanThatMatches(t *testing.T) {
 // Both readings, because the two differ: a unit is one byte where the
 // matcher counts bytes and one to four where it counts characters.
 func TestTheSpanBoundReadsOneUnitAsOneUnit(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		pattern            string
 		lo, byteHi, charHi int
@@ -177,6 +179,7 @@ func TestTheSpanBoundReadsOneUnitAsOneUnit(t *testing.T) {
 // bounded, and at exactly its own length, since every byte of them is
 // ordinary.
 func TestTheSpanBoundIsTightOnTheLiteralsThatCostTheTime(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		pattern string
 		want    int
@@ -204,6 +207,7 @@ func TestTheSpanBoundIsTightOnTheLiteralsThatCostTheTime(t *testing.T) {
 // that only checked a couple would pass for a version that had quietly
 // started reasoning past one of the others.
 func TestTheSpanBoundGivesUpOnEveryConstructItCannotRead(t *testing.T) {
+	t.Parallel()
 	for _, p := range []string{
 		"*", "a*c", "(a|b)", "a#", "a##",
 		"^a", "a~b", "<1-9>", "(#i)ab", "a)", "a|b", "a>b", "a@b", "a+b", "a!b",
@@ -257,6 +261,7 @@ func replaceForTest(o patternOpts, pattern, subject string, anchor byte, all, bo
 }
 
 func TestSpanStoppersCoversEveryMetacharacterTheMatcherKnows(t *testing.T) {
+	t.Parallel()
 	// The two sets the matcher itself uses. If either grows, this fails
 	// until the stopper list grows with it — which is the coupling that
 	// keeps the analysis honest as the grammar moves.

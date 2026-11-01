@@ -23,6 +23,7 @@ import (
 // Unanimous across the panel for `$( … )`, so it is the core's behavior. The
 // one shape the panel splits on has a test of its own below.
 func TestASubstitutionsBodyIsPlacedInTheScript(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		src  string
@@ -58,6 +59,7 @@ func TestASubstitutionsBodyIsPlacedInTheScript(t *testing.T) {
 // One dialect counts a backquoted body from one and its `$( … )` body from
 // the file — two answers for the two spellings of one construct.
 func TestABackquotedBodyMayCountFromOne(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{Location: LocationTightLine, BackquotedSubstitutionRestartsLines: true}
 	for _, c := range []struct {
 		name string
@@ -83,6 +85,7 @@ func TestABackquotedBodyMayCountFromOne(t *testing.T) {
 // position rather than from the command's, and that position needs placing in
 // the script too.
 func TestARedirectInsideASubstitutionIsPlacedInTheScript(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{Location: LocationTightLine, RedirectFailureLine: LineOfRedirect}
 	// `} < missing` is on line 4 of the file and line 3 of the body.
 	src := "true\nx=$(\n{ :\n} < missing\n)\n"
@@ -118,6 +121,7 @@ func substLine(t *testing.T, src string, dg Diagnostics) string {
 // readings of it, and only one row of any corpus could see the difference
 // (#2471).
 func TestABackquotedBodysRefusalIsPlacedWhereItsFailuresAre(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		Location:                            LocationTightLine,
 		BackquotedSubstitutionRestartsLines: true,
@@ -149,6 +153,7 @@ func TestABackquotedBodysRefusalIsPlacedWhereItsFailuresAre(t *testing.T) {
 // Diagnostics.BackquotedSubstitutionFailureAddsItsBodysNewlines for the sweep
 // it was read off.
 func TestABackquotedBodysRefusalMayCountTheBodyAgain(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{
 		Location:    LocationTightLine,
 		SyntaxError: "syntax error: unexpected %[1]s",
@@ -233,6 +238,7 @@ func TestABackquotedBodysRefusalMayCountTheBodyAgain(t *testing.T) {
 // reaches the line through the body's own runner; the refusal route is the
 // test under it.
 func TestASubstitutionInAFragmentIsPlacedInTheScript(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		src  string
@@ -270,6 +276,7 @@ func TestASubstitutionInAFragmentIsPlacedInTheScript(t *testing.T) {
 // from: the body never parses, so nothing of it runs and the line comes from
 // the refusal rather than from the body's runner.
 func TestARefusedBodyInAFragmentIsPlacedInTheScript(t *testing.T) {
+	t.Parallel()
 	dg := Diagnostics{Location: LocationTightLine, SyntaxError: "syntax error: unexpected %[1]s"}
 	for _, c := range []struct {
 		name string

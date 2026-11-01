@@ -32,6 +32,7 @@ func runOutputFormat(t *testing.T, src string) (string, int) {
 // What the specifier writes the answer as: the base, whether the `base#` is in
 // front of it, and where the `_` separators fall.
 func TestTheOutputFormatWritesTheAnswer(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a base with its mark", `printf "%s" $(( [#16] 255 ))`, "16#FF"},
 		{"a base without it", `printf "%s" $(( [##16] 255 ))`, "FF"},
@@ -64,6 +65,7 @@ func TestTheOutputFormatWritesTheAnswer(t *testing.T) {
 // is what makes it a side-channel rather than arithmetic. The control is the
 // same expression read back: `16#FF` is 255 wherever it stands.
 func TestTheOutputFormatChangesNoValue(t *testing.T) {
+	t.Parallel()
 	out, st := runOutputFormat(t, `printf "%s %s" $(( [#16] 255 )) $(( 16#FF ))`)
 	if out != "16#FF 255" || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, "16#FF 255")
@@ -74,6 +76,7 @@ func TestTheOutputFormatChangesNoValue(t *testing.T) {
 // text the expansion produces — which is what makes the value read back as the
 // base it was written in.
 func TestTheOutputFormatReachesAnAssignment(t *testing.T) {
+	t.Parallel()
 	out, st := runOutputFormat(t, `x=5; (( x = [#16] 255 )); printf "[%s][%s]" "$x" "$(( x ))"`)
 	if out != "[16#FF][255]" || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, "[16#FF][255]")
@@ -83,6 +86,7 @@ func TestTheOutputFormatReachesAnAssignment(t *testing.T) {
 // And it does not reach a subscript, which is the other text an assignment
 // writes. The two are told apart by the same expression touching both.
 func TestTheOutputFormatDoesNotReachASubscript(t *testing.T) {
+	t.Parallel()
 	out, st := runOutputFormat(t, `a=(1 2 3); (( [#16] a[2] = 9 )); printf "[%s]" "${a[*]}"`)
 	if out != "[1 2 16#9]" || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, "[1 2 16#9]")
@@ -92,6 +96,7 @@ func TestTheOutputFormatDoesNotReachASubscript(t *testing.T) {
 // Nothing survives into the next expression: the format belongs to the
 // evaluation that carried it.
 func TestTheOutputFormatDoesNotLeak(t *testing.T) {
+	t.Parallel()
 	out, st := runOutputFormat(t, `printf "%s %s %s" $(( [#16] 255 )) $(( 255 )) $(( [#2] 5 ))`)
 	if out != "16#FF 255 2#101" || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, "16#FF 255 2#101")
@@ -109,6 +114,7 @@ func TestTheOutputFormatDoesNotLeak(t *testing.T) {
 // it, "the format never teaches a base" would be indistinguishable from the
 // axis being off.
 func TestTheOutputFormatTeachesAnIntegerNameNothing(t *testing.T) {
+	t.Parallel()
 	out, st := runGrammar(t,
 		`typeset -i i; (( i = [#16] 255 )); echo "[$i]"; typeset -i j; j=$(( [#16] 255 )); echo "[$j]"`,
 		func(d *syntax.Dialect) { d.ArithOutputFormat = true },
@@ -130,6 +136,7 @@ func TestTheOutputFormatTeachesAnIntegerNameNothing(t *testing.T) {
 // than a constant here, which is why this is an interpreter question and the
 // parser takes any number it is given.
 func TestABaseOutsideTheAlphabetIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`printf "[%s]" $(( [#37] 5 ))`,
 		`printf "[%s]" $(( [#1] 5 ))`,
@@ -150,6 +157,7 @@ func TestABaseOutsideTheAlphabetIsRefused(t *testing.T) {
 // beside it is the same expression under a base that is fine, which reports
 // the division — without it, a check that never ran would pass this too.
 func TestTheBaseIsCheckedBeforeTheExpression(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`printf "[%s]" $(( [#37] 1/0 ))`, "invalid base"},
 		{`printf "[%s]" $(( [#2] 1/0 ))`, "division by zero"},

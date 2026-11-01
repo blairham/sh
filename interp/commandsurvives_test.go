@@ -57,6 +57,7 @@ func runSurvivableWith(t *testing.T, a Answer, src string) (string, int) {
 // places — `set`'s own axis per spelling, the shared bad-option route, and
 // `shift` past the end. A fix at one of them would leave the other two.
 func TestCommandMakesASpecialBuiltinsFailureSurvivable(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		failure string
@@ -93,6 +94,7 @@ func TestCommandMakesASpecialBuiltinsFailureSurvivable(t *testing.T) {
 // nothing else. A `command` that swallowed the diagnostic as well would pass
 // every assertion above.
 func TestCommandLeavesTheRefusalItself(t *testing.T) {
+	t.Parallel()
 	bare, _ := runSurvivable(t, "set -Z\n")
 	behind, _ := runSurvivable(t, "command set -Z\n")
 	if bare == "" {
@@ -107,6 +109,7 @@ func TestCommandLeavesTheRefusalItself(t *testing.T) {
 // already draws for `.` and `eval`. Measured in the same run and unanimous:
 // `command eval 'exit 5'` exits 5 and `set -e; command eval false` stops.
 func TestCommandDoesNotSwallowARequestToStop(t *testing.T) {
+	t.Parallel()
 	out, st := runSurvivable(t, "command eval 'exit 5'\necho after\n")
 	if strings.Contains(out, "after") || st != 5 {
 		t.Errorf("`command eval 'exit 5'` gave %q at %d, want the shell to exit 5", out, st)
@@ -127,6 +130,7 @@ func TestCommandDoesNotSwallowARequestToStop(t *testing.T) {
 // (FatalErrorEndsBorrowedTextOnly is No in PosixSemantics), so the only thing
 // between the error and the end of the script is the `command`.
 func TestFatalErrorEndsAtTheCommandWordOrDoesNot(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		setup string
@@ -176,6 +180,7 @@ func TestFatalErrorEndsAtTheCommandWordOrDoesNot(t *testing.T) {
 // answer; a boundary that caught an `exit` would make `command eval 'exit 5'`
 // unreachable in three dialects.
 func TestTheCommandWordBoundaryStillLetsARequestToStopThrough(t *testing.T) {
+	t.Parallel()
 	out, st := runSurvivableWith(t, Yes, "command eval 'exit 5'\necho after\n")
 	if strings.Contains(out, "after") || st != 5 {
 		t.Errorf("`command eval 'exit 5'` gave %q at %d, want the shell to exit 5", out, st)

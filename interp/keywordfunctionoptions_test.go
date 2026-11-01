@@ -52,6 +52,7 @@ const reportNoglob = `case $- in (*f*) echo on;; (*) echo off;; esac`
 
 // The pairing, on the option the letter and the name both reach.
 func TestKeywordFunctionOptionsAreScopedAndPosixOnesAreNot(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, def, want string }{
 		{"the keyword form", `function g { set -o noglob; }`, "off\n"},
 		{"the POSIX form", `g() { set -o noglob; }`, "on\n"},
@@ -68,6 +69,7 @@ func TestKeywordFunctionOptionsAreScopedAndPosixOnesAreNot(t *testing.T) {
 // The letter spelling is the same state and the same scope. Two spellings of
 // one question are not allowed to answer differently.
 func TestKeywordFunctionOptionsScopeTheLetterSpelling(t *testing.T) {
+	t.Parallel()
 	out, _ := keywordOptionsRun(t, `function g { set -f; }; g; `+reportNoglob)
 	if out != "off\n" {
 		t.Errorf("got %q, want the letter scoped too", out)
@@ -81,6 +83,7 @@ func TestKeywordFunctionOptionsScopeTheLetterSpelling(t *testing.T) {
 // This is the row the trap answer beside it fails. A `function` call is
 // handed an *empty* trap table; it is handed the caller's *live* options.
 func TestKeywordFunctionSeesTheCallersOptions(t *testing.T) {
+	t.Parallel()
 	out, _ := keywordOptionsRun(t, `set -o noglob; function g { `+reportNoglob+`; }; g`)
 	if out != "on\n" {
 		t.Errorf("got %q, want the body to see the caller's table; a reset would say off", out)
@@ -98,6 +101,7 @@ func TestKeywordFunctionSeesTheCallersOptions(t *testing.T) {
 // those is what says the walk is the whole roster and not the names the
 // substrate happens to own.
 func TestKeywordFunctionSeesACallersOptionTurnedOff(t *testing.T) {
+	t.Parallel()
 	const src = `set +o braceexpand
 function g { echo {a,b}; set -o braceexpand; echo {a,b}; }
 g
@@ -121,6 +125,7 @@ echo {a,b}`
 // was filed with: the caller had it on, the body turned it off, and it is on
 // again afterwards.
 func TestKeywordFunctionPutsBackWhatTheCallerHad(t *testing.T) {
+	t.Parallel()
 	out, _ := keywordOptionsRun(t, `set -o noglob; function g { set +o noglob; }; g; `+reportNoglob)
 	if out != "on\n" {
 		t.Errorf("got %q, want the caller's state back; a reset to defaults would say off", out)
@@ -130,6 +135,7 @@ func TestKeywordFunctionPutsBackWhatTheCallerHad(t *testing.T) {
 // And an option the body raised that the caller never had goes back off, which
 // is the same restore read from the other end.
 func TestKeywordFunctionClearsWhatItRaised(t *testing.T) {
+	t.Parallel()
 	out, _ := keywordOptionsRun(t, `function g { set -o noglob; }; g; `+reportNoglob)
 	if out != "off\n" {
 		t.Errorf("got %q, want the option cleared at the return", out)
@@ -140,6 +146,7 @@ func TestKeywordFunctionClearsWhatItRaised(t *testing.T) {
 // move: three more options, each moved by the body and each back at the
 // return, and one of them is a name this shell records rather than acts on.
 func TestKeywordFunctionRestoresTheWholeTable(t *testing.T) {
+	t.Parallel()
 	const src = `set -o noclobber; set -o allexport; set -o notify
 function g { set +o noclobber; set +o allexport; set +o notify; }
 g
@@ -154,6 +161,7 @@ set -o | grep -E '^(noclobber|allexport|notify)'`
 // `set -o errexit` is the same scope, and the row says so where a script can
 // feel it: the caller carries on past a failure the body asked it to die on.
 func TestKeywordFunctionScopesErrexit(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, def, want string }{
 		{"the keyword form", `function g { set -o errexit; }`, "alive\n"},
 		{"the POSIX form", `g() { set -o errexit; }`, ""},
@@ -170,6 +178,7 @@ func TestKeywordFunctionScopesErrexit(t *testing.T) {
 // And `set -u`, which is the same scope reaching a *reader* rather than a
 // status: the caller expands an unset name and is not refused.
 func TestKeywordFunctionScopesNounset(t *testing.T) {
+	t.Parallel()
 	out, st := keywordOptionsRun(t, `function g { set -u; }; g; echo "[$nope]"`)
 	if out != "[]\n" || st != 0 {
 		t.Errorf("got %q/%d, want the caller's nounset back off", out, st)
@@ -180,6 +189,7 @@ func TestKeywordFunctionScopesNounset(t *testing.T) {
 // called from inside another has a table of its own, so what it moved is back
 // while the outer one is still running.
 func TestKeywordFunctionNestsAScopeOfItsOwn(t *testing.T) {
+	t.Parallel()
 	const src = `function o { set -o noglob; function i { set +o noglob; }; i; ` + reportNoglob + `; }
 o
 ` + reportNoglob
@@ -193,6 +203,7 @@ o
 // which is the other half of the same rule: what it moves stands until the
 // enclosing `function` returns.
 func TestPosixFunctionInsideAKeywordOneMovesTheCallersTable(t *testing.T) {
+	t.Parallel()
 	const src = `function o { p() { set -o noglob; }; p; ` + reportNoglob + `; }
 o
 ` + reportNoglob
@@ -204,6 +215,7 @@ o
 
 // An early `return` is still a return, so the table goes back there too.
 func TestKeywordFunctionRestoresOptionsOnAnEarlyReturn(t *testing.T) {
+	t.Parallel()
 	out, st := keywordOptionsRun(t, `function g { set -o noglob; return 3; }; g; echo "st=$?"; `+reportNoglob)
 	if out != "st=3\noff\n" || st != 0 {
 		t.Errorf("got %q/%d, want the table back after an early return", out, st)
@@ -213,6 +225,7 @@ func TestKeywordFunctionRestoresOptionsOnAnEarlyReturn(t *testing.T) {
 // And the other answer leaves both forms alone, which is what makes this a
 // value of its own rather than a reading of the default.
 func TestOptionsSurviveTheFunctionScopesNeitherForm(t *testing.T) {
+	t.Parallel()
 	for _, def := range []string{`function g { set -o noglob; }`, `g() { set -o noglob; }`} {
 		s := permissive()
 		s.FunctionLocalOptions = OptionsSurviveTheFunction
@@ -229,6 +242,7 @@ func TestOptionsSurviveTheFunctionScopesNeitherForm(t *testing.T) {
 // nothing else here notices, because every other name this walk touches has
 // a writer in the table.
 func TestKeywordFunctionRestoresPipefail(t *testing.T) {
+	t.Parallel()
 	const src = `set -o pipefail; function g { set +o pipefail; }; g; false | true; echo "st=$?"`
 	s := keywordOptionsSem()
 	s.PipefailOption = Yes
@@ -247,6 +261,7 @@ func TestKeywordFunctionRestoresPipefail(t *testing.T) {
 // decide the answer. Both directions, because a pair that works one way round
 // and not the other is the failure this row is for.
 func TestKeywordFunctionRestoresTheEditingMode(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, outer, inner, want string }{
 		{"emacs displaced by vi", "emacs", "vi", "emacs          on\nvi             off\n"},
 		{"vi displaced by emacs", "vi", "emacs", "emacs          off\nvi             on\n"},
@@ -290,6 +305,7 @@ func suspendRun(t *testing.T, on bool, src string) (string, int) {
 
 // `-e` is the row that decides whether a script survives, so it is first.
 func TestAKeywordFunctionBodyRunsWithoutErrexit(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src   string
 		on, off     string
@@ -345,6 +361,7 @@ func TestAKeywordFunctionBodyRunsWithoutErrexit(t *testing.T) {
 // `-x` is the second of the two, and the one the shell with this rule gives
 // back through a mark on the name instead.
 func TestAKeywordFunctionBodyRunsWithoutXtrace(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, on, off string }{
 		{
 			name: "the keyword form",
@@ -395,6 +412,7 @@ func TestAKeywordFunctionBodyRunsWithoutXtrace(t *testing.T) {
 // A suspension that took the whole option table — or one name too many —
 // passes both suites above and fails here.
 func TestAKeywordFunctionBodyKeepsEveryOtherOption(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			// `-u` is on inside, so reading an unset name is still fatal.

@@ -18,6 +18,7 @@ import (
 // condition surface. Nothing here names a shell: the construct is the
 // `TildeGroup` grammar flag and the letters are that construct's.
 func TestATildeFlavorGroupInTheMiddleOfAPattern(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The controls, and they are the reason the rest is readable. The
 		// first says a flavor at the head is read at all; the second that
@@ -127,6 +128,7 @@ func TestATildeFlavorGroupInTheMiddleOfAPattern(t *testing.T) {
 // all, and a trim, which is where the flavor's substring search is visible as
 // a span rather than as a yes.
 func TestATildeFlavorGroupOnTheOtherSurfaces(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, n := range []string{"za", "zb", "zab"} {
 		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {
@@ -176,6 +178,7 @@ func TestATildeFlavorGroupOnTheOtherSurfaces(t *testing.T) {
 // search**, so what these measure is a subject that carries the expression
 // somewhere other than at the position the group's match stopped.
 func TestAPatternGroupInFrontOfATildeFlavorGroup(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The controls. The first says a flavor at the head searches, and
 		// the second that the group in front is really read rather than
@@ -243,6 +246,7 @@ func TestAPatternGroupInFrontOfATildeFlavorGroup(t *testing.T) {
 // changing this position's answer, on a row that is non-discriminating on
 // purpose. See globTildeFlags.
 func TestASecondTildeGroupInFrontOfAFlavorGroup(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The controls: the group is read at all, and without it nothing
 		// folds.

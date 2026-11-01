@@ -38,6 +38,7 @@ func attributeWordRun(t *testing.T, src string, empty Answer) (string, int) {
 }
 
 func TestAnAttributeWordWithNoValueBringsTheNameIntoBeing(t *testing.T) {
+	t.Parallel()
 	for _, word := range []string{"export", "readonly"} {
 		t.Run(word, func(t *testing.T) {
 			src := word + ` v; printf '[%s]' "${v-UNSET}" "${v:-COLON}"`
@@ -56,6 +57,7 @@ func TestAnAttributeWordWithNoValueBringsTheNameIntoBeing(t *testing.T) {
 // declaration and not a store: emptying here would make a line that only meant
 // to add an attribute destroy what it was adding it to.
 func TestAnAttributeWordWithNoValueLeavesAHeldValueAlone(t *testing.T) {
+	t.Parallel()
 	for _, word := range []string{"export", "readonly"} {
 		t.Run(word, func(t *testing.T) {
 			src := `v=kept; ` + word + ` v; printf '[%s]' "$v"`
@@ -78,6 +80,7 @@ func TestAnAttributeWordWithNoValueLeavesAHeldValueAlone(t *testing.T) {
 // the fix been a plain store. A `make`-style wrapper that exports the names it
 // means to fill in later is exactly this shape.
 func TestAnExportedNameADeclarationEmptiedReachesNoChild(t *testing.T) {
+	t.Parallel()
 	const child = `; /usr/bin/env | /usr/bin/grep '^V' || printf '(none)'`
 	if got, st := attributeWordRun(t, `export V`+child, Yes); got != "(none)" || st != 0 {
 		t.Errorf("the declaration's own empty: got %q/%d, want %q/0", got, st, "(none)")
@@ -97,6 +100,7 @@ func TestAnExportedNameADeclarationEmptiedReachesNoChild(t *testing.T) {
 // later write is refused either way, so only the expansion that separates set
 // from unset could see it.
 func TestAFrozenNameWithNoValueIsStillFrozen(t *testing.T) {
+	t.Parallel()
 	for _, empty := range []Answer{Yes, No} {
 		got, _ := attributeWordRun(t, `readonly v; v=late; printf '[%s]' "${v-UNSET}"`, empty)
 		if got == "[late]" {
@@ -115,6 +119,7 @@ func TestAFrozenNameWithNoValueIsStillFrozen(t *testing.T) {
 // reading it takes is the one four of the five columns give: the name is left
 // unset. `typeset` is nobody's standard and asks.
 func TestOnlyTheStandardAttributeWordsReadAnUnansweredVector(t *testing.T) {
+	t.Parallel()
 	unanswered := func(s *Semantics) { s.DeclaredNameWithoutValueIsEmpty = Unspecified }
 	for _, word := range []string{"export", "readonly"} {
 		t.Run(word, func(t *testing.T) {

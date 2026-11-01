@@ -20,6 +20,7 @@ import (
 // reads every call to the writers that route through it and refuses a
 // format literal with a newline anywhere but at its end.
 func TestNoDiagnosticWritesTwoLinesInOneCall(t *testing.T) {
+	t.Parallel()
 	writers := map[string]bool{
 		"diagf": true, "Diagnosef": true, "DiagnoseAsTheShellf": true,
 		"diagLine": true, "diagLineNamed": true, "fatal": true,

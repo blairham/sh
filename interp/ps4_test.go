@@ -54,6 +54,7 @@ func tracedSem(t *testing.T, src string, sem Semantics, diag Diagnostics, st Pro
 }
 
 func TestTheTracePrefixIsTheParameter(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"a value set in the shell", `PS4="XX "; set -x; :`, "XX :\n"},
 		{"an empty value draws nothing before the command", `PS4=; set -x; :`, ":\n"},
@@ -96,6 +97,7 @@ func TestTheTracePrefixIsTheParameter(t *testing.T) {
 // Recorded rather than modeled — a dialect knob for one column — and it is
 // visible only through a prefix that reads a name the line assigns.
 func TestWhenTheTracePrefixIsDrawnFollowsTheLineCount(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name       string
 		separately Answer
@@ -117,6 +119,7 @@ func TestWhenTheTracePrefixIsDrawnFollowsTheLineCount(t *testing.T) {
 }
 
 func TestTheTracePrefixReadsTheDialectsPromptLanguage(t *testing.T) {
+	t.Parallel()
 	style := PromptStyle{
 		Escape:  '%',
 		Codes:   map[rune]PromptField{'%': FieldEscape, 'n': FieldUser},
@@ -159,6 +162,7 @@ func TestTheTracePrefixReadsTheDialectsPromptLanguage(t *testing.T) {
 
 // TracePrefixRepeatsAtIndirection, both answers.
 func TestTheTracePrefixCountsIndirection(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, on, off string }{
 		{"an eval", `PS4="XY "; set -x; eval :`, "XY eval :\nXXY :\n", "XY eval :\nXY :\n"},
 		{

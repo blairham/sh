@@ -29,6 +29,7 @@ func printOperand(v DeclarePrintOperandPolicy) func(*Semantics) {
 // listing shows what was stored, and the store carries none of the line's
 // letters.
 func TestDeclarePrintPerformsItsOperandPlainly(t *testing.T) {
+	t.Parallel()
 	// The scope the operand takes is the one a plain `typeset` takes, so the
 	// dialect's answer about that is part of the reading (#5647).
 	plain := func(s *Semantics) {
@@ -78,6 +79,7 @@ func TestDeclarePrintPerformsItsOperandPlainly(t *testing.T) {
 // frozen name earns says — the sentence carries no builtin name, where
 // `typeset rr=2` on the same name carries one.
 func TestDeclarePrintPlainOperandIsRefusedAsABareAssignment(t *testing.T) {
+	t.Parallel()
 	plain := printOperand(DeclarePrintOperandIsDeclaredWithoutLetters)
 	dg := Diagnostics{
 		ReadonlyVariable:              "%[1]s: is read only",
@@ -97,6 +99,7 @@ func TestDeclarePrintPlainOperandIsRefusedAsABareAssignment(t *testing.T) {
 // apart as an array literal is performed, and it is performed as a
 // declaration rather than as a bare store.
 func TestDeclarePrintDeclaresALiteralOperand(t *testing.T) {
+	t.Parallel()
 	literal := printOperand(DeclarePrintOperandIsDeclaredWhereItIsALiteral)
 	for _, tc := range []struct{ src, want string }{
 		{`typeset -p e=(1 2); echo "[${e[@]}]"`, "typeset -a e=(1 2)\n[1 2]"},
@@ -126,6 +129,7 @@ func TestDeclarePrintDeclaresALiteralOperand(t *testing.T) {
 // do not shape the value are dropped, so the array is writable afterwards and
 // carries no export attribute.
 func TestDeclarePrintLiteralOperandTakesNoFreezeOrExport(t *testing.T) {
+	t.Parallel()
 	literal := printOperand(DeclarePrintOperandIsDeclaredWhereItIsALiteral)
 	out, errs, st := declareRun(t,
 		`typeset -rp a=(1 2); a[0]=9; echo "[${a[@]}]"`, literal, Diagnostics{})
@@ -142,6 +146,7 @@ func TestDeclarePrintLiteralOperandTakesNoFreezeOrExport(t *testing.T) {
 // TestDeclarePrintOperandIsANameAlone: nothing is performed, and the operand
 // is a name the listing has nothing for.
 func TestDeclarePrintOperandIsANameAlone(t *testing.T) {
+	t.Parallel()
 	name := func(s *Semantics) {
 		s.DeclareListing = DeclareListingBareAssignments
 		s.DeclareValueQuoting = ListingQuoteWhenNeededDollar
@@ -175,6 +180,7 @@ func TestDeclarePrintOperandIsANameAlone(t *testing.T) {
 // -p s=5`, and the row that costs something is `s=5; typeset -p s=7`, which
 // is a *listing* there because the name is `s`.
 func TestDeclarePrintOperandReportsTheNameItDidNotPerform(t *testing.T) {
+	t.Parallel()
 	reports := func(s *Semantics) {
 		s.DeclareListing = DeclareListingBareAssignments
 		s.DeclareValueQuoting = ListingQuoteWhenNeededDollar
@@ -200,6 +206,7 @@ func TestDeclarePrintOperandReportsTheNameItDidNotPerform(t *testing.T) {
 //	typeset -p s+=5          no such variable: s+   ← and so does the `+`
 //	typeset -p a=b=c         no such variable: a    ← the *first* `=` cuts
 func TestDeclarePrintWalksTheOperandsNameNotTheWholeWord(t *testing.T) {
+	t.Parallel()
 	name := func(s *Semantics) {
 		s.DeclareListing = DeclareListingBareAssignments
 		s.DeclareValueQuoting = ListingQuoteWhenNeededDollar
@@ -242,6 +249,7 @@ func TestDeclarePrintWalksTheOperandsNameNotTheWholeWord(t *testing.T) {
 // still reported, and it is reported *beside* the row the performed one
 // produced rather than instead of it.
 func TestAHeldListingReportsAfterItsOperandLanded(t *testing.T) {
+	t.Parallel()
 	reports := func(s *Semantics) {
 		s.DeclareListing = DeclareListingBareAssignments
 		s.DeclareValueQuoting = ListingQuoteWhenNeededDollar
@@ -261,6 +269,7 @@ func TestAHeldListingReportsAfterItsOperandLanded(t *testing.T) {
 // said which of the three it means declares nothing and refuses by name,
 // rather than being given one shell's reading.
 func TestAnUnansweredDeclarePrintOperandAxisIsRefused(t *testing.T) {
+	t.Parallel()
 	unanswered := func(s *Semantics) {
 		s.DeclareListing = DeclareListingBareAssignments
 		s.DeclareValueQuoting = ListingQuoteWhenNeededDollar

@@ -20,6 +20,7 @@ import (
 // four have no `[[ -prefix ]]` to answer about. Measured against zsh 5.9.2 on
 // 2026-09-12 and the end-to-end half lives in dialect/zsh (#1879).
 func TestACompletionConditionIsRefusedWhereItCannotRun(t *testing.T) {
+	t.Parallel()
 	completion := func(d *syntax.Dialect) {
 		d.CompletionConditions = true
 		d.PatternAlternation = true

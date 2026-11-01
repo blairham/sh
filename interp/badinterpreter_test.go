@@ -28,6 +28,7 @@ import (
 // directory` — Go's own wrapper, with a path nobody wrote and a sentence no
 // shell prints.
 func TestAShebangNamingNothing(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "x")
 	if err := os.WriteFile(path, []byte("#!nosuchfile\necho hi\n"), 0o700); err != nil {
 		t.Fatal(err)
@@ -56,6 +57,7 @@ func TestAShebangNamingNothing(t *testing.T) {
 // the same script reports a command that is not there as `./s.sh: line 2:
 // ./nosuch: No such file or directory` and this one with no line at all.
 func TestTheBadInterpreterLineIsLocatedByNameAlone(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "x")
 	if err := os.WriteFile(path, []byte("#!nosuchfile\n"), 0o700); err != nil {
 		t.Fatal(err)
@@ -80,6 +82,7 @@ func TestTheBadInterpreterLineIsLocatedByNameAlone(t *testing.T) {
 // numbered so that a script testing `$? -eq 127` for "not found" is told 126
 // (#4454).
 func TestADialectThatNamesNoBadInterpreterWordingSaysNotFound(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "x")
 	if err := os.WriteFile(path, []byte("#!nosuchfile\n"), 0o700); err != nil {
 		t.Fatal(err)

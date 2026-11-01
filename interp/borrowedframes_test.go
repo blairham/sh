@@ -46,6 +46,7 @@ func errLine(t *testing.T, out string) string {
 // inside a sourced file carries the name of the text it is inside and the line
 // the shell was on when it borrowed it.
 func TestTheBorrowedStackIsRenderedIntoALocation(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "inc.sh", "nosuchcmd-xyz\n")
 	out, _ := sourceRun(t, dir, "echo pad\n. "+dir+"/inc.sh\n", permissive(), framed(true))
@@ -58,6 +59,7 @@ func TestTheBorrowedStackIsRenderedIntoALocation(t *testing.T) {
 // off, which is what says the rendering is the axis's and not something the
 // stack does on its own.
 func TestWithoutTheAxisOnlyTheInnermostLineIsNamed(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "inc.sh", "nosuchcmd-xyz\n")
 	out, _ := sourceRun(t, dir, "echo pad\n. "+dir+"/inc.sh\n", permissive(), framed(false))
@@ -70,6 +72,7 @@ func TestWithoutTheAxisOnlyTheInnermostLineIsNamed(t *testing.T) {
 // file is two frames, and the number in each is read from that frame rather
 // than from the failure.
 func TestEachFrameCarriesTheLineItEnteredTheNextFrom(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "inner.sh", "nosuchcmd-xyz\n")
 	write(t, dir, "mid.sh", "echo mid\necho mid\n. "+dir+"/inner.sh\n")
@@ -85,6 +88,7 @@ func TestEachFrameCarriesTheLineItEnteredTheNextFrom(t *testing.T) {
 // suppressed in every frame, or in none, passes one of these two and fails the
 // other.
 func TestOnlyTheFirstFrameLeavesLineOneUnwritten(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, _ := sourceRun(t, dir, `eval 'eval "nosuchcmd-xyz"'`, permissive(), framed(true))
 	if got, want := errLine(t, out), "testsh: eval[1]: eval: line 1: "; !strings.HasPrefix(got, want) {
@@ -96,6 +100,7 @@ func TestOnlyTheFirstFrameLeavesLineOneUnwritten(t *testing.T) {
 // the way an ordinary diagnostic is, so a builtin's complaint takes the
 // builtin style there while a message the shell speaks takes the word style.
 func TestABuiltinsComplaintEndsTheChainItsOwnWay(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "inc.sh", "echo one\ncd /nonexistent-xyz\n")
 	out, _ := sourceRun(t, dir, "echo pad\n. "+dir+"/inc.sh\n", permissive(), framed(true))
@@ -108,6 +113,7 @@ func TestABuiltinsComplaintEndsTheChainItsOwnWay(t *testing.T) {
 // with no test that the failing line came from it — the same rule
 // Runner.borrowedAtLocation already holds for naming one.
 func TestAFunctionAddsNothingToTheChain(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, _ := sourceRun(t, dir, "echo pad\neval 'f() { nosuchcmd-xyz; }; f'\n", permissive(), framed(true))
 	if got, want := errLine(t, out), "testsh[2]: eval: line 1: "; !strings.HasPrefix(got, want) {
@@ -118,6 +124,7 @@ func TestAFunctionAddsNothingToTheChain(t *testing.T) {
 // TestNothingBorrowedRendersNoChain is the control the rest are read against:
 // the axis changes nothing at the top level, where there is no frame.
 func TestNothingBorrowedRendersNoChain(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	on, _ := sourceRun(t, dir, "echo pad\nnosuchcmd-xyz\n", permissive(), framed(true))
 	off, _ := sourceRun(t, dir, "echo pad\nnosuchcmd-xyz\n", permissive(), framed(false))

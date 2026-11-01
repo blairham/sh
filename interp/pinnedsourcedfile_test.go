@@ -51,6 +51,7 @@ func TestAFileSourcedFromAPinnedBodyIsNumberedOnFromItsOwnFirstLine(t *testing.T
 // The control the row rests on, and the one a fix that simply added one
 // everywhere would fail: the same file at the top level is unmoved.
 func TestTheSameFileAtTheTopLevelKeepsItsOwnLines(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, dir, "inc.sh", threeLinesReadingTheLine)
 	out, _ := sourceRunWith(t, dir, "echo pad\n. ./inc.sh\n", pinnedSourceSem(), Diagnostics{}, nil)

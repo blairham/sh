@@ -31,6 +31,7 @@ func withUniqueness(s *Semantics) {
 // would pass the first two lines and fail the third, because `+U` leaves the
 // elements alone.
 func TestTheUniqueAttributeKeepsTheFirstOfEachElement(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -U a=(1 1 2 2 3 1)
 echo "decl=[${a[@]}]"
 a+=(2 4 4)
@@ -48,6 +49,7 @@ echo "removed=[${a[@]}]"`, withUniqueness, Diagnostics{})
 // last-wins dedupe answers `1 2 3` to the same line, which is why the
 // duplicate is put in *front* here rather than at the end.
 func TestTheUniqueAttributeKeepsTheEarlierPlaceOfADuplicate(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -U b=(1 2 3)
 b=(3 "${b[@]}")
 echo "prepended=[${b[@]}]"`, withUniqueness, Diagnostics{})
@@ -62,6 +64,7 @@ echo "prepended=[${b[@]}]"`, withUniqueness, Diagnostics{})
 // that was built without it dedupes on the spot rather than waiting for the
 // next assignment.
 func TestTheUniqueAttributeDedupesWhatTheNameAlreadyHolds(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `c=(1 1 2)
 typeset -U c
 echo "applied=[${c[@]}]"`, withUniqueness, Diagnostics{})
@@ -76,6 +79,7 @@ echo "applied=[${c[@]}]"`, withUniqueness, Diagnostics{})
 // write that collides with an earlier one loses, and one that collides with
 // a *later* one takes its place and the later one goes.
 func TestTheUniqueAttributeDedupesAnElementWrite(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -U d=(a b c)
 d[2]=a
 echo "collides-earlier=[${d[@]}]"
@@ -95,6 +99,7 @@ echo "collides-later=[${e[@]}]"`, withUniqueness, Diagnostics{})
 // with the trailing duplicate gone. Deduping the store's subscripts instead
 // answers two elements and no empty at all.
 func TestTheUniqueAttributeDedupesTheGapItIsRead(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -U f=(1 2)
 f[5]=1
 echo "count=[${#f[@]}] elems=[${f[@]}]"`, withUniqueness, Diagnostics{})
@@ -108,6 +113,7 @@ echo "count=[${#f[@]}] elems=[${f[@]}]"`, withUniqueness, Diagnostics{})
 // an array's elements, and a colon-joined string is not elements. Measured —
 // the shell with the letter leaves `a:b:a` exactly as written.
 func TestTheUniqueAttributeLeavesAScalarAlone(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -U s=abcabc
 echo "scalar=[$s]"
 typeset -U p=a:b:a
@@ -124,6 +130,7 @@ echo "colons=[$p]"`, withUniqueness, Diagnostics{})
 // substring assertion cannot see a letter added in front of the ones it
 // looked for.
 func TestTheUniqueAttributeListsBackAfterEveryOtherLetter(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -aUxr A1=(1 2)
 typeset -p A1
 typeset -Uxi n1=5
@@ -154,6 +161,7 @@ typeset -p m1`, func(s *Semantics) {
 // way every other attribute does — otherwise `typeset -U u` followed by a
 // bare listing loses the only thing that line did.
 func TestAUniqueNameWithNoValueStillLists(t *testing.T) {
+	t.Parallel()
 	out, errs, st := declRun(t, `typeset -U u
 typeset -p`, withUniqueness, Diagnostics{})
 	if st != 0 || errs != "" {
@@ -171,6 +179,7 @@ typeset -p`, withUniqueness, Diagnostics{})
 // keeps the attribute a dialect's to have rather than the substrate's to
 // assume.
 func TestTheUniqueLetterIsTheDialectsToGive(t *testing.T) {
+	t.Parallel()
 	_, errs, st := declRun(t, `typeset -U a=(1 1)`, nil,
 		Diagnostics{UnimplementedOptionLetters: map[string]string{"typeset": "U"}})
 	want := "testsh: typeset: -U is not implemented yet\n"

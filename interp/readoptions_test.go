@@ -25,6 +25,7 @@ import (
 // continues, with it the backslash survives and the line ends. The backslash
 // *inside* a line is TestReadWithoutRawRemovesTheBackslash.
 func TestReadKeepsItsOwnOption(t *testing.T) {
+	t.Parallel()
 	joined, _ := run(t, "printf 'a\\\\\nb\n' | { read v; echo \"[$v]\"; }", nil)
 	if !strings.Contains(joined, "[ab]") {
 		t.Errorf("read: got %q, want the line continued", joined)
@@ -43,6 +44,7 @@ func TestReadKeepsItsOwnOption(t *testing.T) {
 // a pre-pass over the string — after the pre-pass, an escaped space and a
 // separating one would be the same byte.
 func TestReadWithoutRawRemovesTheBackslash(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"an ordinary character keeps only itself",
@@ -98,6 +100,7 @@ func TestReadWithoutRawRemovesTheBackslash(t *testing.T) {
 // makes the difference between a shell that says it cannot do something and
 // one that quietly does something else.
 func TestReadRefusesAnOptionItDoesNotHave(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `read -q v </dev/null`, func(r *Runner) {
 		s := *r.Semantics
 		s.BadOptionToSpecialBuiltinFatal = No
@@ -114,6 +117,7 @@ func TestReadRefusesAnOptionItDoesNotHave(t *testing.T) {
 // the dialect really has — the -e line editing, now that the letters this
 // shell does implement are read rather than refused.
 func TestReadSaysWhenAnOptionIsMerelyMissing(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `read -e v </dev/null`, func(r *Runner) {
 		s := *r.Semantics
 		s.BadOptionToSpecialBuiltinFatal = No
@@ -134,6 +138,7 @@ func TestReadSaysWhenAnOptionIsMerelyMissing(t *testing.T) {
 // the bundle was not `-r`, so it went to the refusal path with an option the
 // builtin has inside it (#347).
 func TestReadSplitsAClusteredBundle(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, "printf 'x\\\\\ny\n' | { read -rr v; echo \"[$v]\"; }", nil)
 	if !strings.Contains(out, `[x\]`) {
 		t.Errorf("read -rr: got %q, want the bundle read as two -r flags", out)
@@ -145,6 +150,7 @@ func TestReadSplitsAClusteredBundle(t *testing.T) {
 // rest in. `read -re` is `-r -e`, and the complaint is about `-e` — the
 // missing letter — not about a word `-re` that no shell would refuse.
 func TestAMissingOptionInABundleIsNamedAlone(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `read -re v </dev/null`, func(r *Runner) {
 		s := *r.Semantics
 		s.BadOptionToSpecialBuiltinFatal = No
@@ -167,6 +173,7 @@ func TestAMissingOptionInABundleIsNamedAlone(t *testing.T) {
 // path: the shells walk the bundle and stop at the letter they cannot use, so
 // the complaint names that letter and not the word it rode in on.
 func TestAnUnknownOptionInABundleIsNamedAlone(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `read -rq v </dev/null`, func(r *Runner) {
 		s := *r.Semantics
 		s.BadOptionToSpecialBuiltinFatal = No
@@ -182,6 +189,7 @@ func TestAnUnknownOptionInABundleIsNamedAlone(t *testing.T) {
 // TestDashDashEndsReadsOptions, so a variable named like an option can still
 // be read into.
 func TestDashDashEndsReadsOptions(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `printf 'x\n' | { read -- v; echo "[$v]"; }`, nil)
 	if !strings.Contains(out, "[x]") {
 		t.Errorf("got %q, want -- taken as the end of the options", out)
@@ -198,6 +206,7 @@ func TestDashDashEndsReadsOptions(t *testing.T) {
 // operands after it are left untouched — measured, `x=keep` survives
 // `read -a arr x`.
 func TestReadArrayOptionSplitsIntoTheNamedArray(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `arr=(1 2 3 4); printf 'a b c\n' | { read -a arr; echo "[${arr[0]}][${arr[2]}][${#arr[@]}]"; }`, nil)
 	if !strings.Contains(out, "[a][c][3]") {
 		t.Errorf("got %q, want the three fields and nothing of the old array", out)
@@ -212,6 +221,7 @@ func TestReadArrayOptionSplitsIntoTheNamedArray(t *testing.T) {
 // in ReadOptions, the array named by the first operand — and the names after
 // it cleared, which is the measured difference from the `a:` form.
 func TestReadArrayFlagTakesTheFirstOperand(t *testing.T) {
+	t.Parallel()
 	withA := func(r *Runner) {
 		s := *r.Semantics
 		s.ReadOptions = "rsAd:n:N:t:u:"
@@ -236,6 +246,7 @@ func TestReadArrayFlagTakesTheFirstOperand(t *testing.T) {
 // An input that ends without the delimiter is the same failure-with-a-value
 // as a last line without its newline.
 func TestReadDelimiterEndsTheRead(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"stops at the delimiter", `printf 'a:b c\n' | { read -d : v; echo "[$v]"; }`, "[a]"},
 		{"first character speaks", `printf 'axyb' | { read -d xy v; echo "[$v]"; }`, "[a]"},
@@ -256,6 +267,7 @@ func TestReadDelimiterEndsTheRead(t *testing.T) {
 // data with the backslash dropped, and an escaped newline is still the line
 // continuation even when the newline is no longer the delimiter.
 func TestReadDelimiterHonorsTheBackslash(t *testing.T) {
+	t.Parallel()
 	kept, _ := run(t, `printf 'a\\:b:c' | { read -d : v; echo "[$v]"; }`, nil)
 	if !strings.Contains(kept, "[a:b]") {
 		t.Errorf("got %q, want the escaped delimiter kept as data", kept)
@@ -273,6 +285,7 @@ func TestReadDelimiterHonorsTheBackslash(t *testing.T) {
 // TestReadCountStopsAtTheCount: -n reads at most that many characters, the
 // delimiter still ends it early, and what arrived splits as any read does.
 func TestReadCountStopsAtTheCount(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the count", `printf 'abcdef' | { read -n 3 v; echo "st=$? [$v]"; }`, "st=0 [abc]"},
 		{"bundled count", `printf 'abcdef' | { read -n3 v; echo "[$v]"; }`, "[abc]"},
@@ -294,6 +307,7 @@ func TestReadCountStopsAtTheCount(t *testing.T) {
 // characters is the one -n case the shells answer differently, so it is the
 // one that asks ReadPartialCountSucceeds. Both answers keep the text.
 func TestAShortCountAsksTheDialect(t *testing.T) {
+	t.Parallel()
 	src := `printf 'ab' | { read -n 3 v; echo "st=$? [$v]"; }`
 	failed, _ := run(t, src, nil)
 	if !strings.Contains(failed, "st=1 [ab]") {
@@ -316,6 +330,7 @@ func TestAShortCountAsksTheDialect(t *testing.T) {
 // anything. The controls hold the count away from zero, or make it `-N 0`, and
 // answer the same under every value — so it is the zero of `-n` that asks.
 func TestACountOfZeroAsksTheDialect(t *testing.T) {
+	t.Parallel()
 	answering := func(a Answer) func(*Runner) {
 		return func(r *Runner) {
 			s := *r.Semantics
@@ -355,6 +370,7 @@ func TestACountOfZeroAsksTheDialect(t *testing.T) {
 // backslash ordinary and hands the text over unsplit — the second name gets
 // nothing rather than a field.
 func TestReadExactCountTakesTheTextWhole(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, "printf 'ab\ncd\n' | { read -N 4 v; printf '<%s>' \"$v\"; }", nil)
 	if !strings.Contains(out, "<ab\nc>") {
 		t.Errorf("got %q, want the newline read as ordinary input", out)
@@ -373,6 +389,7 @@ func TestReadExactCountTakesTheTextWhole(t *testing.T) {
 // failure in both shells with the letter; whether the partial text reaches
 // the variable is ReadExactCountKeepsPartial.
 func TestAShortExactCountAsksWhatSurvives(t *testing.T) {
+	t.Parallel()
 	src := `printf 'ab' | { read -N 5 v; echo "st=$? [$v]"; }`
 	kept, _ := run(t, src, nil)
 	if !strings.Contains(kept, "st=1 [ab]") {
@@ -393,6 +410,7 @@ func TestAShortExactCountAsksWhatSurvives(t *testing.T) {
 // nothing is said — the exact opposite of skipping the word, which is how a
 // password once echoed (#321).
 func TestReadSilentIsANoOpAwayFromATerminal(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `printf 'secret\n' | { read -s v; echo "st=$? v=$v"; }`, nil)
 	if want := "st=0 v=secret\n"; out != want {
 		t.Errorf("got %q, want %q — read, quietly, with nothing extra said", out, want)
@@ -403,6 +421,7 @@ func TestReadSilentIsANoOpAwayFromATerminal(t *testing.T) {
 // own table — standard input by its number, and what `exec 5<file` recorded
 // for anything past the named three.
 func TestReadFromANamedDescriptor(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `printf 'x y\n' | { read -u 0 v; echo "[$v]"; }`, nil)
 	if !strings.Contains(out, "[x y]") {
 		t.Errorf("got %q, want -u 0 to be standard input", out)
@@ -423,6 +442,7 @@ func TestReadFromANamedDescriptor(t *testing.T) {
 // dialect has words — one shell in the panel reports this in silence, so an
 // empty wording is an answer and there is no fallback.
 func TestReadRefusesADeadDescriptor(t *testing.T) {
+	t.Parallel()
 	quiet, st := run(t, `read -u 7 v; echo "st=$?"`, nil)
 	if !strings.Contains(quiet, "st=1") || strings.Contains(quiet, "descriptor") {
 		t.Errorf("got %q (status %d), want a silent failure by default", quiet, st)
@@ -565,6 +585,7 @@ func TestAnExpiredTimeoutReportsTheSameStatusEitherWay(t *testing.T) {
 // ReadOptions carries a bare `n` reads it, takes no count, and changes
 // nothing — the word after it is an ordinary operand.
 func TestReadCountLetterAsAFlag(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `printf 'abc\n' | { read -n v; echo "[$v]"; }`, func(r *Runner) {
 		s := *r.Semantics
 		s.ReadOptions = "rsnAd:t:u:"
@@ -584,6 +605,7 @@ func TestReadCountLetterAsAFlag(t *testing.T) {
 // unchanged. Measured in both shells with the shape: a piped `read -p` prints
 // nothing anywhere and still reads.
 func TestReadPromptIsSilentOffATerminal(t *testing.T) {
+	t.Parallel()
 	var stderr strings.Builder
 	out, _ := run(t, `printf 'data\n' | { read -p "PR> " v; echo "st=$? [$v]"; }`, func(r *Runner) {
 		r.Stderr = &stderr
@@ -635,6 +657,7 @@ func TestReadPromptGoesToTheTerminalsStderr(t *testing.T) {
 // being read, not on standard input — measured from both sides in bash, a
 // terminal on stdin printing nothing while -u reads a file.
 func TestReadPromptFollowsTheDescriptor(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "in.txt")
 	if err := os.WriteFile(path, []byte("filed\n"), 0o644); err != nil {
@@ -656,6 +679,7 @@ func TestReadPromptFollowsTheDescriptor(t *testing.T) {
 // and it is nobody's terminal — the harness shape every corpus case runs
 // under. Measured: bash prints no prompt through it.
 func TestReadPromptSeesThroughTheNullDevice(t *testing.T) {
+	t.Parallel()
 	null, err := os.Open(os.DevNull)
 	if err != nil {
 		t.Fatal(err)
@@ -677,6 +701,7 @@ func TestReadPromptSeesThroughTheNullDevice(t *testing.T) {
 // that separates this from a read that failed at its input — the variables
 // left exactly as they were.
 func TestReadCoprocessLetterRefusesWithoutOne(t *testing.T) {
+	t.Parallel()
 	var stderr strings.Builder
 	out, st := run(t, `v=keep; printf 'x\n' | read -p v; echo "st=$? v=[$v]"`, func(r *Runner) {
 		r.Stderr = &stderr
@@ -702,6 +727,7 @@ func TestReadCoprocessLetterRefusesWithoutOne(t *testing.T) {
 // followed by the same usage line a bad option gets — measured with `read -p`
 // in the two shells whose -p takes one, and with `read -d` around the panel.
 func TestOptionNeedsArgumentSpeaksTheDialect(t *testing.T) {
+	t.Parallel()
 	var stderr strings.Builder
 	out, _ := run(t, `read -p </dev/null; echo "st=$?"`, func(r *Runner) {
 		r.Stderr = &stderr

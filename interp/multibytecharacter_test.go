@@ -69,6 +69,7 @@ func TestReadTakesAMultibyteCharacterWhole(t *testing.T) {
 // as they came, and a change that made the reading depend on the encoding
 // everywhere would show up here.
 func TestARawReadIsUnmovedByTheAxis(t *testing.T) {
+	t.Parallel()
 	const src = "read -r a b <<EOF\n" + big5Alpha + " b\nEOF\n" +
 		`printf '[%s][%s]' "$a" "$b"`
 	for _, answer := range []Answer{Yes, No} {
@@ -87,6 +88,7 @@ func TestARawReadIsUnmovedByTheAxis(t *testing.T) {
 // the strength of the lead alone would swallow the line ending and read on into
 // the next line.
 func TestALeadByteAtTheEndOfALineIsAByte(t *testing.T) {
+	t.Parallel()
 	const src = "read a\nread b\n" + `printf '[%s][%s]' "$a" "$b"` + "\n"
 	out, st := run(t, "{ "+src+" } <<EOF\n\xa3\nsecond\nEOF\n", func(r *Runner) {
 		sem := *r.Semantics
@@ -146,6 +148,7 @@ func TestTheTextOfAProgramIsReadWhole(t *testing.T) {
 // question away is the bytes. ASCII is one character in every encoding there
 // is, and a UTF-8 locale cannot hide a metacharacter inside a character at all.
 func TestTheEncodingIsAskedAboutOnlyWhereItDecides(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, env, src, want string
 	}{

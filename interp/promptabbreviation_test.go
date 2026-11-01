@@ -24,6 +24,7 @@ import "testing"
 // in front of it, so a home of `/` abbreviated all of them — `~usr` for
 // `/usr`, and `~` for `/` itself, neither of which any reference writes.
 func TestAValueEndingInASeparatorAbbreviatesNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ dir, against, want string }{
 		{"/usr/local", "/", "/usr/local"},
 		{"/", "/", "/"},
@@ -56,6 +57,7 @@ func TestAValueEndingInASeparatorAbbreviatesNothing(t *testing.T) {
 // reading of "the longest matching value" passes every other row here and
 // fails those two.
 func TestTheShortestDrawnCandidateWins(t *testing.T) {
+	t.Parallel()
 	const nd = "/n/d"
 	for _, tc := range []struct {
 		name  string
@@ -110,6 +112,7 @@ func TestTheShortestDrawnCandidateWins(t *testing.T) {
 // answers `~/a/b` gives. Reading only the tilde made `%-1~` draw `~` and `%c`
 // at a named root draw `jd`, neither of which names a directory.
 func TestANamedDirectorysWholeMarkerIsOneUnit(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		path       string
 		lead, rest string
@@ -157,6 +160,7 @@ func TestANamedDirectorysWholeMarkerIsOneUnit(t *testing.T) {
 // Which dialect holds which is measured in the dialect packages — see
 // PromptStyle.CwdIsTheShellsOwnDirectory for the panel.
 func TestAPromptReadsItsDirectoryFromWhereTheStyleSaysItDoes(t *testing.T) {
+	t.Parallel()
 	// testrunner:bare — Dir *is* the subject here, so it has to be a string
 	// the test chose rather than one a helper handed over, and nothing in
 	// this test reaches the filesystem.

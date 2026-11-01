@@ -34,6 +34,7 @@ func readsKeys(r *Runner) {
 // A `#` letter is a bare flag when nothing that could be its number follows
 // it, and the word after it is still an operand.
 func TestANumericOptionalOptionIsAFlagWithoutANumber(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "in.txt")
 	if err := os.WriteFile(path, []byte("abcdef"), 0o644); err != nil {
@@ -78,6 +79,7 @@ func TestANumericOptionalOptionIsAFlagWithoutANumber(t *testing.T) {
 // where the measured answer is that the letter took none and the bundle
 // carried on to a letter that is not there.
 func TestANumericOptionalOptionDoesNotEatALetter(t *testing.T) {
+	t.Parallel()
 	out, status := run(t, `read -kv x`, readsKeys)
 	if status == 0 {
 		t.Errorf("got %q at 0, want the unknown letter refused", out)
@@ -98,6 +100,7 @@ func TestANumericOptionalOptionDoesNotEatALetter(t *testing.T) {
 // But a digit attached to it commits the whole rest of the word to being the
 // number, so a number with a letter stuck on the end is refused as a number.
 func TestANumericOptionalOptionTakesTheWholeAttachedWord(t *testing.T) {
+	t.Parallel()
 	out, status := run(t, `read -k2v x`, readsKeys)
 	if status == 0 {
 		t.Errorf("got %q at 0, want the bad number refused", out)
@@ -117,6 +120,7 @@ func TestANumericOptionalOptionTakesTheWholeAttachedWord(t *testing.T) {
 // read had taken two bytes under a UTF-8 locale, the second would start inside
 // the accented letter and answer with its tail.
 func TestKeysAreCountedTheLocalesWay(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "in.txt")
 	if err := os.WriteFile(path, []byte("h\u00e9llo"), 0o644); err != nil {
@@ -144,6 +148,7 @@ func TestKeysAreCountedTheLocalesWay(t *testing.T) {
 // Nothing is a terminator, a newline included, and the text goes into one name
 // with no splitting and no trimming.
 func TestKeysStopAtNothingAndFillOneName(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "in.txt")
 	if err := os.WriteFile(path, []byte("a b\nc d"), 0o644); err != nil {
@@ -162,6 +167,7 @@ func TestKeysStopAtNothingAndFillOneName(t *testing.T) {
 // A short read assigns what came and reports a failure, which is the shape
 // this builtin's ordinary end of input has.
 func TestAShortKeyReadKeepsWhatArrived(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "in.txt")
 	if err := os.WriteFile(path, []byte("ab"), 0o644); err != nil {
@@ -227,6 +233,7 @@ func TestKeysComeFromTheTerminalAndNotTheStream(t *testing.T) {
 // mutation run is what asked, and the first version of this test passed with
 // the refusal removed.
 func TestKeysWithNoTerminalRefuse(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t,
 		`printf 'abcdef' | { v=keep; read -k 2 v; echo "st=$? [$v]"; }`, readsKeys)
 	if !strings.Contains(out, "not interactive and can't open terminal") {
@@ -243,6 +250,7 @@ func TestKeysWithNoTerminalRefuse(t *testing.T) {
 // And a descriptor named with -u is read as itself, with no terminal looked
 // for and none needed.
 func TestANamedDescriptorOverridesTheTerminal(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "in.txt")
 	if err := os.WriteFile(path, []byte("filed"), 0o644); err != nil {

@@ -19,6 +19,7 @@ import (
 // takes the last field as a key with nothing under it, which is two keys and
 // status 0.
 func TestAnOddKeyedLiteralFollowsTheAxis(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m=(a 1 b); printf '[%s][%s][%s]' "$?" "${#m[@]}" "${m[b]-ABSENT}"; printf reached`
 	t.Run("refused", func(t *testing.T) {
 		out, st := runPairedLiteral(t, Yes, src)
@@ -46,6 +47,7 @@ func TestAnOddKeyedLiteralFollowsTheAxis(t *testing.T) {
 // value wins and the table holds one element, so a check counting *keys*
 // rather than *fields* would see one key from two pairs and refuse.
 func TestAnEvenKeyedLiteralIsTakenUnderEitherAnswer(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an even list", `typeset -A m=(a 1 b 2); printf '[%s][%s]' "$?" "${#m[@]}"`, "[0][2]"},
 		{"an empty literal", `typeset -A m=(); printf '[%s][%s]' "$?" "${#m[@]}"`, "[0][0]"},
@@ -79,6 +81,7 @@ func TestAnEvenKeyedLiteralIsTakenUnderEitherAnswer(t *testing.T) {
 // many words are in it — which is a third answer to "how many fields", and
 // the reason this test sets the field count rather than assuming it.
 func TestTheOddCountIsOverFieldsAndNotWrittenWords(t *testing.T) {
+	t.Parallel()
 	const odd = `w='a 1 b'; typeset -A m=($w); printf '[%s]' "$?"; printf reached`
 	const even = `w='a 1 b 2'; typeset -A m=($w); printf '[%s][%s]' "$?" "${#m[@]}"; printf reached`
 	out, st := runSplitPairedLiteral(t, odd)
@@ -96,6 +99,7 @@ func TestTheOddCountIsOverFieldsAndNotWrittenWords(t *testing.T) {
 // under either answer, so the axis is about a keyed literal and not about
 // literals.
 func TestAnIndexedLiteralNeverAsksThePairingQuestion(t *testing.T) {
+	t.Parallel()
 	for _, axis := range []Answer{Yes, No} {
 		out, st := runPairedLiteral(t, axis, `a=(a 1 b); printf '[%s][%s]' "$?" "${#a[@]}"`)
 		if want := "[0][3]"; out != want || st != 0 {
@@ -108,6 +112,7 @@ func TestAnIndexedLiteralNeverAsksThePairingQuestion(t *testing.T) {
 // substrate's rule for every axis and is what `cmd/sh` with no dialect does
 // here.
 func TestAnUnansweredPairingRefusesByName(t *testing.T) {
+	t.Parallel()
 	out, _ := runPairedLiteral(t, Unspecified, `typeset -A m=(a 1 b); printf reached`)
 	if !strings.Contains(out, "odd number of fields") {
 		t.Errorf("= %q, want the axis named", out)

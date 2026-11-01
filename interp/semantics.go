@@ -6102,6 +6102,21 @@ type Semantics struct {
 	// Asked only where it decides something: at the first turn of a waiting
 	// condition that had a handler as the batch was taken and has none now.
 	WaitingSignalWithoutItsTrapIsResent Answer
+	// WaitingSignalArrivingAgainRunsOnce runs the handler of a signal that
+	// arrived again while it was already waiting — before its handler had
+	// run — once for all of those arrivals. No runs it once per arrival.
+	// See waitingsignalagain.go for the measurements (#7166).
+	//
+	// bash 5.3.20 and 3.2.57, ksh93u+, dash and BusyBox ash 1.38.0 run it
+	// once: `kill -USR1 $$ $$` is `T after`, and so are two USR1s sent by
+	// `/bin/kill` 0.2 s apart during one `/bin/sleep`. zsh 5.9.2 runs it
+	// twice for both. A turn between the arrivals makes them two in every
+	// column, and two different signals waiting both run everywhere.
+	//
+	// Asked only where it decides something: a batch of waiting arrivals
+	// that holds one condition with a handler more than once. Not a child's
+	// state change, which is counted per child (Runner.childReaped).
+	WaitingSignalArrivingAgainRunsOnce Answer
 	// ArithInfAndNaNAreConstants reads the names `inf` and `nan`, in any
 	// case, as the two floating constants rather than as parameters — before
 	// any parameter of that name. Measured 2026-10-02: with `Inf=4`, zsh
@@ -39349,8 +39364,8 @@ const (
 //
 // What this does not answer is how many times a condition that arrived twice
 // runs: the three columns that sort run it once, and zsh once per arrival.
-// That is its own question (#7166); here a repeated condition keeps every
-// arrival, side by side in the order they came.
+// That is Semantics.WaitingSignalArrivingAgainRunsOnce (#7166); the sort is
+// stable, so a repeated condition's arrivals stay side by side for it.
 type WaitingHandlerOrder uint8
 
 const (

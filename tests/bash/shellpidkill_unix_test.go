@@ -128,6 +128,16 @@ echo "outer $?"`)
 	}
 }
 
+// A body's own signal that arrives again while it waits runs its handler once,
+// as the shell's does: interp.Semantics' WaitingSignalArrivingAgainRunsOnce
+// (#7166). Measured 2026-11-01 on bash 5.3.20 under `-c`, `T after`.
+func TestABodysOwnSignalArrivingAgainRunsItsHandlerOnce(t *testing.T) {
+	got := runBashAnchored(t, `( trap 'echo T' USR1; kill -USR1 $BASHPID $BASHPID; echo after )`)
+	if want := "T\nafter\n"; got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
 // runBashAnchored runs a script with a placeholder program supplied, which is
 // what a shell binary does for itself — see driver/procanchor.go. Without one
 // `$BASHPID` in a forked body is empty and none of the cases above has a

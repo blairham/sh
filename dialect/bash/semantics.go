@@ -2896,6 +2896,11 @@ func Semantics() interp.Semantics {
 	// two warnings. Measured 2026-11-01 on 5.3.20, 3.2.57 and 5.3 under the
 	// name `sh`; see interp/waitingtrapgone.go (#7170).
 	s.WaitingSignalWithoutItsTrapIsResent = interp.Yes
+	// And one that arrived again while it waited runs once: `kill -USR1 $$
+	// $$` is `T after`, as are two `/bin/kill`s 0.2 s apart during one
+	// `/bin/sleep`. Measured 2026-11-01 on 5.3.20 and 3.2.57; see
+	// interp/waitingsignalagain.go (#7166).
+	s.WaitingSignalArrivingAgainRunsOnce = interp.Yes
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
 	// `read -d £` stops at the first byte of the `£`, under a UTF-8 locale
 	// too, and the second begins the next record. Measured 2026-10-02 on

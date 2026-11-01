@@ -28,6 +28,9 @@ func waitingSem(order WaitingHandlerOrder) Semantics {
 	sem := killSem()
 	sem.SignalHandlerSeesEarlierStatus = No
 	sem.WaitingHandlersRun = order
+	// Every arrival runs, so a case about the order sees each of them. How
+	// many run has cases of its own in waitingsignalagain_test.go.
+	sem.WaitingSignalArrivingAgainRunsOnce = No
 	return sem
 }
 
@@ -51,7 +54,8 @@ func TestSeveralWaitingHandlersRunInTheOrderTheDialectNames(t *testing.T) {
 
 // A condition that arrived twice keeps both arrivals, side by side: the sort
 // is stable and says nothing about how many times one condition runs, which is
-// a question of its own.
+// Semantics.WaitingSignalArrivingAgainRunsOnce — answered No here, so both
+// arrivals are seen.
 func TestASortedBatchKeepsARepeatedConditionsArrivalsTogether(t *testing.T) {
 	src := "for s in HUP USR1; do trap \"echo $s\" $s; done\n" +
 		"(kill -USR1 $$; kill -HUP $$; kill -USR1 $$)\n" +

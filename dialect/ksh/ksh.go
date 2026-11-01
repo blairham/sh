@@ -3649,6 +3649,11 @@ func Semantics() interp.Semantics {
 	// on with no HUP. Measured 2026-11-01 on ksh93u+; see
 	// interp/waitingtrapgone.go (#7170).
 	s.WaitingSignalWithoutItsTrapIsResent = interp.No
+	// And one that arrived again while it waited runs once: `kill -USR1 $$
+	// $$` is `T after`, as are two `/bin/kill`s 0.2 s apart during one
+	// `/bin/sleep`. Measured 2026-11-01 on ksh93u+; see
+	// interp/waitingsignalagain.go (#7166).
+	s.WaitingSignalArrivingAgainRunsOnce = interp.Yes
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
 	// `printf '[%q]'` with no operand is `[]`, measured 2026-10-02 on 93u+
 	// 2012-08-01 (#5153).

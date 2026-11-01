@@ -1519,11 +1519,8 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 		named.Name = member
 		c = &named
 	}
-	if r.funcs == nil {
-		r.funcs = map[string]*syntax.FuncDecl{}
-	}
 	displaced := r.funcs[c.Name]
-	r.funcs[c.Name] = c
+	r.setFunc(c.Name, c)
 	r.definedOverAWithdrawal(c.Name)
 	// A definition replaces the body, and the trace mark belonged to the
 	// body: measured on zsh 5.9.2, `functions -t f; f() { print B }; f`
@@ -2221,7 +2218,7 @@ func (r *Runner) callFuncInPlace(ctx context.Context, fn *syntax.FuncDecl, name 
 		r.exitTrap, r.trapDepth = nil, 0
 		if outerTrapFn != "" {
 			delete(r.trapFuncs, "EXIT")
-			delete(r.funcs, outerTrapFn)
+			r.dropFunc(outerTrapFn)
 		}
 	}
 	// And, in that same shell, the option table — which the same word

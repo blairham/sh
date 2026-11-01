@@ -73,6 +73,10 @@ type Runner struct {
 	// cellProbes counts the lookups Runner.cell made in the index, so a test
 	// can say how many a construct costs.
 	cellProbes int
+	// cellsMade counts the names Runner.cellFor added to the index, which is
+	// the only way a name enters it, so a name found absent stays absent
+	// while the count stands.
+	cellsMade uint64
 	// Params holds the positional parameters, $1 first. `$0` is not one of
 	// them and is kept separate, because `shift` moves these and never
 	// touches that.
@@ -5073,6 +5077,9 @@ type Runner struct {
 	// once rather than between every two statements. See
 	// Runner.exitHookStandsForAHangup.
 	exitHookList string
+	// exitHookAbsent is the last time that question found neither the hook
+	// nor its list, and what it was asked under. See exitHookAbsence.
+	exitHookAbsent exitHookAbsence
 	// selfAimedDeath is a fatal signal the shell at the top sent itself with
 	// an EXIT trap standing to run for it, held until the shell takes it, and
 	// statusAtTheCopy is `$?` as the shell at the top held it when it made
@@ -5908,8 +5915,10 @@ type Runner struct {
 	// subshell gets its own copy of it with the parent's contents the way
 	// every other scalar on this struct does.
 	lastSubst lastSubstitution
-	// funcs holds defined functions.
-	funcs map[string]*syntax.FuncDecl
+	// funcs holds defined functions, and funcsGen counts the writes to it:
+	// every one goes through setFunc or dropFunc. A clone copies both.
+	funcs    map[string]*syntax.FuncDecl
+	funcsGen uint64
 	// disciplined names every variable a discipline function has ever been
 	// defined for, so that the read path can find out there is nothing to
 	// run with one map lookup instead of building `name.get` and asking the

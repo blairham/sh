@@ -55,10 +55,7 @@ func (r *Runner) SetFunctionWithdrawn(name string, withdrawn bool) bool {
 			return live && !r.speaksForTheShell(fn)
 		}
 		delete(r.withdrawnFuncs, name)
-		if r.funcs == nil {
-			r.funcs = map[string]*syntax.FuncDecl{}
-		}
-		r.funcs[name] = w.decl
+		r.setFunc(name, w.decl)
 		if w.hasOrigin {
 			r.recordFunctionOrigin(name, w.origin)
 		}

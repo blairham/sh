@@ -171,6 +171,26 @@ func TestAFatalSignalFromOutsideIsTakenOnlyWhereThereIsSomethingToRun(t *testing
 			src: "zshexit_functions=(h); offer; echo after",
 			sig: syscall.SIGHUP, out: "after\n",
 		},
+		// Found absent between two statements and remembered as absent, so
+		// a hook or a list that arrives after that has to be seen arriving:
+		// a definition, a name the store had never made, and a name it had
+		// made and still holds a record for, with no value in it (#6496).
+		{
+			name: "an exit hook defined after a statement found none", sem: hookOnAHangup,
+			src: "a=(x); :; " + hook + "offer; echo after",
+			sig: syscall.SIGHUP, taken: true, out: "hook 1\n", status: 1,
+		},
+		{
+			name: "an exit hook's list made after a statement found none", sem: hookOnAHangup,
+			src: `h() { echo "hook $?"; }; a=(x); :; zshexit_functions=(h); offer; echo after`,
+			sig: syscall.SIGHUP, taken: true, out: "hook 1\n", status: 1,
+		},
+		{
+			name: "an exit hook's list given to a name that had a record", sem: hookOnAHangup,
+			src: `h() { echo "hook $?"; }; a=(x); zshexit_functions=; unset zshexit_functions; :; ` +
+				`zshexit_functions=(h); offer; echo after`,
+			sig: syscall.SIGHUP, taken: true, out: "hook 1\n", status: 1,
+		},
 		{
 			name: "an exit hook, at a hangup that is not an exit", src: hook + "offer; echo after", sem: hookNoHangup,
 			sig: syscall.SIGHUP, out: "after\nhook 0\n",

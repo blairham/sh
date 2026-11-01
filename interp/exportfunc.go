@@ -178,10 +178,7 @@ func (r *Runner) importFunctions() {
 			continue
 		}
 		if decl, ok := pipe.Cmds[0].(*syntax.FuncDecl); ok {
-			if r.funcs == nil {
-				r.funcs = map[string]*syntax.FuncDecl{}
-			}
-			r.funcs[name] = decl
+			r.setFunc(name, decl)
 			r.definedOverAWithdrawal(name)
 		}
 	}

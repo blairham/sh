@@ -144,6 +144,22 @@ type builtinMemo struct {
 // reads, so that its memo never answers from before the write.
 func (r *Runner) builtinTablesChanged() { r.builtinTablesGen++ }
 
+// setFunc stores decl as the function name, and dropFunc takes name away.
+// They are the only writers of the function table, so funcsGen counts every
+// write and an answer read from the table is current while the count stands.
+func (r *Runner) setFunc(name string, decl *syntax.FuncDecl) {
+	if r.funcs == nil {
+		r.funcs = map[string]*syntax.FuncDecl{}
+	}
+	r.funcs[name] = decl
+	r.funcsGen++
+}
+
+func (r *Runner) dropFunc(name string) {
+	delete(r.funcs, name)
+	r.funcsGen++
+}
+
 // resolveBuiltin is lookupBuiltin without the memo.
 func (r *Runner) resolveBuiltin(name string) (Builtin, bool) {
 	if r.withdrawnBuiltins[name] {
@@ -1174,11 +1190,8 @@ func (r *Runner) defineParsed(name string, f *syntax.File, err error) bool {
 // every definition through it gets. See defineParsed, and FunctionBatch,
 // which reaches it with a declaration it did not parse.
 func (r *Runner) defineDecl(name string, decl *syntax.FuncDecl) {
-	if r.funcs == nil {
-		r.funcs = map[string]*syntax.FuncDecl{}
-	}
 	displaced := r.funcs[name]
-	r.funcs[name] = decl
+	r.setFunc(name, decl)
 	r.definedOverAWithdrawal(name)
 	// The same bookkeeping a definition the parser read gets. Without it a
 	// function defined through this seam had no origin at all, so the one
@@ -1263,10 +1276,7 @@ func (r *Runner) CopyFunction(from, to string) bool {
 	}
 	cp := *fn
 	cp.Name = to
-	if r.funcs == nil {
-		r.funcs = map[string]*syntax.FuncDecl{}
-	}
-	r.funcs[to] = &cp
+	r.setFunc(to, &cp)
 	if o, ok := r.funcOrigins[from]; ok {
 		r.recordFunctionOrigin(to, o)
 	}

@@ -5,9 +5,11 @@ package interp
 
 import "slices"
 
-// A `local` operand over a name that has nothing to shadow.
+// A declaration operand that makes a local over a name that has nothing to
+// shadow.
 //
-// `local a b c`, `local a=$1`: most of what a function declares is an ordinary
+// `local a b c`, `local a=$1`, and `typeset a b c` or `declare a=$1` wherever
+// those declare a local: most of what a function declares is an ordinary
 // name with no letters on the line and nothing standing under it — no value,
 // no attribute, no entry in any table of the shell's. The full road asks about
 // twenty-five questions of every operand anyway — a kind fixed on the name, a
@@ -21,21 +23,29 @@ import "slices"
 // shadowsNothing settles every one of those questions before anything is
 // written, and takeAnEmptyShadow then writes what Runner.shadow writes when
 // each of its reads finds nothing: the same records, each saying "there was
-// none". The store is the full road's own — setVar for a value, declareEmpty
-// for none — so what a declaration stores is not decided here at all. The
-// scope's return is untouched: restoreShadowedName reads the records as it
-// reads any others.
+// none". The store is the full road's own — setVarAs for a value, under the
+// form that road's store uses, and declareEmpty for none — so what a
+// declaration stores is not decided here at all. The scope's return is
+// untouched: restoreShadowedName reads the records as it reads any others.
+//
+// Two roads reach it, and the route is one for both: biLocal, and
+// declareNames where typesetDeclaresALocalHere says the line makes locals —
+// a `function`-form body in ksh93, any function in bash and zsh. A second
+// copy of these conditions for the second road is exactly what would drift,
+// so each road asks only its own line-level question (plainLocalLine,
+// plainTypesetLine) and the per-operand one is shared.
 //
 // The conditions are the full road's own facts, asked through the helpers that
 // road asks them through where one exists: storesPlainly for every question
 // the store asks, Runner.shadowIsHidden for the hidden shadow, bornWith for
 // the environment, the payload tables captureAttributes reads. That is also
 // the hazard: a question added to the full road tomorrow is not asked here.
-// Two tests stand against it. TestAnEmptyShadowAnswersAsTheFullRoadDoes runs
+// TestAnEmptyShadowAnswersAsTheFullRoadDoes and
+// TestAnEmptyTypesetShadowAnswersAsTheFullRoadDoes stand against it: each runs
 // declarations over every state the route must either answer as the full road
 // does or leave to it, with the route on and off, and requires the same
-// output; TestAnEmptyShadowIsTheRecordShadowWrites requires the records this
-// writes to be the records shadow writes for the same name.
+// output. The records written are shadow's own by construction, since both
+// write the named sets freshShadowRecords and compoundShadowRecords.
 
 // emptyShadowShortcut switches the route on. A variable so a test can run the
 // same script with the full road answering every operand.
@@ -51,6 +61,21 @@ func (r *Runner) plainLocalLine(f declareFlags) bool {
 	// from what stands outside — see localinherit.go.
 	return emptyShadowShortcut && f == (declareFlags{}) && len(r.scopes) > 0 &&
 		!r.declaringPrivate && !r.LocalInheritsTheOuterValue()
+}
+
+// plainTypesetLine is plainLocalLine for a line declareNames runs — `typeset`,
+// `declare` — which makes locals only where typesetDeclaresALocalHere says it
+// does: never at the top level, never under `-g` (a letter, which
+// plainLocalLine already refuses), and in ksh93 only in a `function`-form
+// body, where a POSIX-form `f()` assigns the caller's name instead.
+//
+// Asked only where the dialect has answered the axis that question may ask.
+// The full road asks it per operand, at the shadow; asked here for a dialect
+// that left it open, the report would come out ahead of the line's own
+// refusals and then a second time beside the full road's.
+func (r *Runner) plainTypesetLine(f declareFlags) bool {
+	return r.plainLocalLine(f) && r.sem().TypesetLocalNeedsKeywordFunction != Unspecified &&
+		r.typesetDeclaresALocalHere()
 }
 
 // shadowsNothing reports whether a declaration of name in sc on a line
@@ -128,12 +153,16 @@ func (sc *scope) takeAnEmptyShadow(name string) {
 
 // declareOverNothing is the rest of the full road for an operand
 // shadowsNothing accepted: the shadow, and the store the road makes once every
-// question has answered no. The store is the road's own call in both cases.
-func (r *Runner) declareOverNothing(sc *scope, name, value string, hasValue bool, f declareFlags, asked lettersAsked) {
+// question has answered no. The store is the road's own call in both cases,
+// and form is the one that road's store passes: biLocal's is setVar's,
+// declareNames' is assignedByDeclaration.
+func (r *Runner) declareOverNothing(sc *scope, name, value string, hasValue bool, f declareFlags, asked lettersAsked,
+	form assignForm,
+) {
 	r.emptyShadows++
 	sc.takeAnEmptyShadow(name)
 	if hasValue {
-		r.setVar(name, value)
+		r.setVarAs(name, value, form)
 		return
 	}
 	r.declareEmpty(name, true, f.export || f.readonly, asked.any, f.leavesAnAttribute(),

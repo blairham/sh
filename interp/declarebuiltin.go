@@ -2037,6 +2037,14 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 		r.caseFoldMayBeHeld, r.caseFoldHeld = was, ""
 	}(r.caseFoldMayBeHeld)
 	r.caseFoldMayBeHeld = true
+	// A line with no letters that makes locals may take an operand over a
+	// name with nothing standing under it without the questions below, as
+	// `local` does — see emptyshadow.go.
+	var plainScope *scope
+	var plainAsked lettersAsked
+	if r.plainTypesetLine(f) {
+		plainScope, plainAsked = r.scopes[len(r.scopes)-1], askLetters(f)
+	}
 	for _, a := range args {
 		r.caseFoldHeld = ""
 		name, value, hasValue, appends := r.declarationOperand(a)
@@ -2069,6 +2077,16 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 			}
 		}
 		r.rereadingAQuotedLiteral = hasValue && r.operandHidesALiteral(name, value, f, false)
+		if plainScope != nil && !appends && r.shadowsNothing(plainScope, name) {
+			// The first thing shadowTypeset does for a name it shadows, kept
+			// so the operand leaves no OPTIND mark standing for the next.
+			r.optindCursorMadeHere = false
+			r.declareOverNothing(plainScope, name, value, hasValue, f, plainAsked, assignedByDeclaration)
+			if hasValue && r.ctl == controlExit {
+				return r.status
+			}
+			continue
+		}
 		// A **member path** whose base is a reference is a member of the name
 		// the reference points at, and the whole operand is about that cell.
 		// Here rather than beside attributeFollowsTheReference below, which

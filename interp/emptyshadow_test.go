@@ -5,6 +5,7 @@ package interp_test
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -94,6 +95,74 @@ func emptyShadowVectors() map[string]Semantics {
 	}
 }
 
+// emptyShadowRun runs prog under sem with the route on or off, and gives back
+// the output, the status and how many operands took the route. Both runs share
+// one directory and one TMPDIR, which `export -p` lists.
+func emptyShadowRun(
+	t *testing.T, prog *syntax.File, sem Semantics, inheritsOuter bool,
+) func(on bool) (string, int, int) {
+	t.Helper()
+	dir, tmp := t.TempDir(), t.TempDir()
+	return func(on bool) (string, int, int) {
+		was := SetEmptyShadowShortcutForTest(on)
+		defer SetEmptyShadowShortcutForTest(was)
+		var out strings.Builder
+		dg := PosixDiagnostics()
+		r := newTestRunner(t, &Runner{
+			Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &dg, Name: "testsh", Dir: dir,
+			Env: []string{"BORN=env", "PATH=/usr/bin:/bin", "TMPDIR=" + tmp},
+		})
+		count := 0
+		r.SetDynamic("COUNT", func(*Runner) string { count++; return strings.Repeat("1", count) })
+		r.SetDynamicArray("LIST", func(*Runner) []string { return []string{"l1", "l2"} })
+		r.Tie("TIED", "tied", ":")
+		r.RefuseValues("REFUSED", func(v string) (string, bool) { return "refused " + v, v == "bad" })
+		// `declare` as `typeset` under a second name, which is how the
+		// dialect that has the word gets it.
+		if typeset, ok := r.Builtin("typeset"); ok {
+			r.Register("declare", typeset)
+			r.SetDeclaring("declare")
+		}
+		// A local starting as the outer binding, which the route leaves to
+		// the full road.
+		r.SetLocalInheritsTheOuterValue(inheritsOuter)
+		st, err := r.Run(context.Background(), prog)
+		if err != nil {
+			t.Fatalf("route %v: %v", on, err)
+		}
+		return out.String(), st, EmptyShadowsForTest(r)
+	}
+}
+
+// emptyShadowCompare runs prog both ways and requires the same output and
+// status, the route to have taken at least atLeast operands with it on (none
+// where atLeast is 0) and none with it off, and the full road's output to hold
+// every row, so a script that stopped early compares nothing.
+func emptyShadowCompare(
+	t *testing.T, prog *syntax.File, sem Semantics, inheritsOuter bool, atLeast int, rows []string,
+) {
+	t.Helper()
+	run := emptyShadowRun(t, prog, sem, inheritsOuter)
+	full, fullStatus, fullTaken := run(false)
+	short, shortStatus, taken := run(true)
+	if short != full || shortStatus != fullStatus {
+		t.Errorf("with the route:\n%s(status %d)\nwithout it:\n%s(status %d)", short, shortStatus, full, fullStatus)
+	}
+	switch {
+	case fullTaken != 0:
+		t.Errorf("the route took %d operands with it off; want none", fullTaken)
+	case atLeast == 0 && taken != 0:
+		t.Errorf("the route took %d operands; want none", taken)
+	case taken < atLeast:
+		t.Errorf("the route took %d operands; want at least %d", taken, atLeast)
+	}
+	for _, row := range rows {
+		if !strings.Contains(full, row) {
+			t.Errorf("the script did not reach %q:\n%s", row, full)
+		}
+	}
+}
+
 // TestAnEmptyShadowAnswersAsTheFullRoadDoes runs emptyShadowScript with the
 // route for a `local` operand over a name with nothing to shadow on and off,
 // and requires the same output and status (#6373).
@@ -104,53 +173,98 @@ func TestAnEmptyShadowAnswersAsTheFullRoadDoes(t *testing.T) {
 	}
 	for name, sem := range emptyShadowVectors() {
 		t.Run(name, func(t *testing.T) {
-			// One directory and one TMPDIR for both runs, which `export -p`
-			// lists.
-			dir, tmp := t.TempDir(), t.TempDir()
-			run := func(on bool) (string, int, int) {
-				was := SetEmptyShadowShortcutForTest(on)
-				defer SetEmptyShadowShortcutForTest(was)
-				var out strings.Builder
-				dg := PosixDiagnostics()
-				r := newTestRunner(t, &Runner{
-					Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &dg, Name: "testsh", Dir: dir,
-					Env: []string{"BORN=env", "PATH=/usr/bin:/bin", "TMPDIR=" + tmp},
-				})
-				count := 0
-				r.SetDynamic("COUNT", func(*Runner) string { count++; return strings.Repeat("1", count) })
-				r.SetDynamicArray("LIST", func(*Runner) []string { return []string{"l1", "l2"} })
-				r.Tie("TIED", "tied", ":")
-				r.RefuseValues("REFUSED", func(v string) (string, bool) { return "refused " + v, v == "bad" })
-				// A local starting as the outer binding, which the route
-				// leaves to the full road.
-				r.SetLocalInheritsTheOuterValue(name == "inherits outer")
-				st, err := r.Run(context.Background(), f)
-				if err != nil {
-					t.Fatalf("route %v: %v", on, err)
-				}
-				return out.String(), st, EmptyShadowsForTest(r)
-			}
-			full, fullStatus, fullTaken := run(false)
-			short, shortStatus, taken := run(true)
-			if short != full || shortStatus != fullStatus {
-				t.Errorf("with the route:\n%s(status %d)\nwithout it:\n%s(status %d)", short, shortStatus, full, fullStatus)
-			}
-			// The comparison compares something: the route answered operands
-			// with it on and none with it off.
+			atLeast := 20
 			if name == "inherits outer" {
-				if taken != 0 {
-					t.Errorf("the route took %d operands where locals inherit the outer value; want none", taken)
-				}
-			} else if fullTaken != 0 || taken < 20 {
-				t.Errorf("the route took %d operands with it on and %d with it off; want at least 20 and 0", taken, fullTaken)
+				atLeast = 0
 			}
-			// And the rows it leans on, so a script that stopped early
-			// compares nothing.
-			for _, row := range []string{"[<one>][<lit>]", "[<two>][<lit>]", "[deep]\n", "[after][after]\n", "[1]\n[1]\n"} {
-				if !strings.Contains(full, row) {
-					t.Errorf("the script did not reach %q:\n%s", row, full)
-				}
-			}
+			emptyShadowCompare(t, f, sem, name == "inherits outer", atLeast,
+				[]string{"[<one>][<lit>]", "[<two>][<lit>]", "[deep]\n", "[after][after]\n", "[1]\n[1]\n"})
 		})
+	}
+}
+
+// emptyShadowGlobalLines are the lines only the other spellings ask about:
+// `-g`, which makes no binding, beside a plain operand on a line of its own;
+// and a POSIX-form function called from a `function`-form one — written `pc
+// ()` so emptyShadowSpelled leaves it in that form — which in the dialect
+// whose POSIX-form bodies have no scope declares into the caller's.
+const emptyShadowGlobalLines = `gl() { local -g ga gb=1; local gc=2; show ga gb gc; }; gl; show ga gb gc
+function kc { local kz; pc; show kz kq; }; pc () { local kz kq=in; show kz kq; }; kc; show kz kq
+`
+
+// emptyShadowSpelled is emptyShadowScript with every `local` written as word,
+// and every function defined with the `function` word where keyword is set.
+func emptyShadowSpelled(t *testing.T, word string, keyword bool) *syntax.File {
+	t.Helper()
+	src := strings.ReplaceAll(emptyShadowScript+emptyShadowGlobalLines, "local ", word+" ")
+	if keyword {
+		src = posixFunctionHead.ReplaceAllString(src, "${1}function $2 {")
+	}
+	f, err := syntax.Parse(src, syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
+
+// posixFunctionHead is a `name() {` at the start of a line or after a `;` or
+// a `(`, which is every definition emptyShadowScript writes.
+var posixFunctionHead = regexp.MustCompile(`(^|[;(]\s*|\n)([a-z][a-z0-9]*)\(\) \{`)
+
+// TestAnEmptyTypesetShadowAnswersAsTheFullRoadDoes runs the same declarations
+// written `typeset` and `declare` — declareNames, not biLocal — with the route
+// on and off, under every vector the route's line question reads: a dialect
+// where a function of either form makes locals, one where only a
+// `function`-form body does (so a POSIX-form `f()` assigns the caller's names
+// and must not take it), one that has not answered that question, and locals
+// that inherit the outer value. Byte-identical output and status, and the
+// route taken where the line makes locals and nowhere else (#6373).
+func TestAnEmptyTypesetShadowAnswersAsTheFullRoadDoes(t *testing.T) {
+	type form struct {
+		keyword bool
+		name    string
+	}
+	forms := []form{{false, "f()"}, {true, "function f"}}
+	for _, word := range []string{"typeset", "declare"} {
+		for _, fm := range forms {
+			prog := emptyShadowSpelled(t, word, fm.keyword)
+			for vname, sem := range emptyShadowVectors() {
+				// `-g` is a letter of the word here, as it is of `typeset` in
+				// every shell that has it.
+				sem.DeclareOptions = "aAgilnprux"
+				sem.TypesetLocalNeedsKeywordFunction = No
+				t.Run(word+"/"+fm.name+"/"+vname, func(t *testing.T) {
+					atLeast := 20
+					if vname == "inherits outer" {
+						atLeast = 0
+					}
+					emptyShadowCompare(t, prog, sem, vname == "inherits outer", atLeast,
+						[]string{"[<one>][<lit>]", "[<two>][<lit>]", "[deep]\n", "[after][after]\n", "[1]\n[1]\n"})
+				})
+			}
+			for _, kw := range []struct {
+				name   string
+				answer Answer
+			}{{"keyword functions only", Yes}, {"keyword axis open", Unspecified}} {
+				sem := emptyShadowVectors()["base"]
+				sem.DeclareOptions = "aAgilnprux"
+				sem.TypesetLocalNeedsKeywordFunction = kw.answer
+				t.Run(word+"/"+fm.name+"/"+kw.name, func(t *testing.T) {
+					// Only a `function`-form body makes locals here, and an
+					// open axis is left to the full road whichever form asks.
+					atLeast := 0
+					if fm.keyword && kw.answer == Yes {
+						atLeast = 20
+					}
+					rows := []string{"[<one>][<lit>]", "[deep]\n"}
+					if !fm.keyword && kw.answer == Unspecified {
+						// The full road refuses each declaration here, and
+						// the report is what both runs must write alike.
+						rows = []string{"needing a keyword-defined function to declare a local", "[deep]\n"}
+					}
+					emptyShadowCompare(t, prog, sem, false, atLeast, rows)
+				})
+			}
+		}
 	}
 }

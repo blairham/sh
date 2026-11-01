@@ -92,16 +92,31 @@ func TestLocalCostsFewAllocations(t *testing.T) {
 }
 
 // BenchmarkLocal reports what one declaration allocates, averaged over the
-// three in the body; the baseline on main at 26b573707 was 25.3 a
-// declaration.
+// names the body declares; the baseline for three on main at 26b573707 was
+// 25.3 a declaration. "five" and "integer" are the shapes a real-config
+// start makes most (#6373): valueless names, five to a line.
 func BenchmarkLocal(b *testing.B) {
-	call := localCostRunner(b, localCostDefs, "declaring x y")
-	plain := localCostRunner(b, localCostDefs, "plain x y")
-	extra := testing.AllocsPerRun(100, call) - testing.AllocsPerRun(100, plain)
-	b.ReportAllocs()
-	b.ResetTimer()
-	for range b.N {
-		call()
+	defs := localCostDefs + `five() { local a b c d e; }
+integer5() { integer a b c d e; }
+`
+	for _, c := range []struct {
+		name, call string
+		names      float64
+	}{
+		{"three", "declaring", 3},
+		{"five", "five", 5},
+		{"integer", "integer5", 5},
+	} {
+		b.Run(c.name, func(b *testing.B) {
+			call := localCostRunner(b, defs, c.call+" x y")
+			plain := localCostRunner(b, defs, "plain x y")
+			extra := testing.AllocsPerRun(100, call) - testing.AllocsPerRun(100, plain)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for range b.N {
+				call()
+			}
+			b.ReportMetric(extra/c.names, "allocs/decl")
+		})
 	}
-	b.ReportMetric(extra/3, "allocs/decl")
 }

@@ -10,6 +10,7 @@ import "testing"
 // read as the arithmetic comma (#5151, a chunk of D04parameter.ztst).
 // Measured 2026-10-02 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f`, `LC_ALL=C`).
 func TestAPairOnAParameterReferenceIsARange(t *testing.T) {
+	t.Parallel()
 	const setup = "abc=quick; foo=abc; bar=abcdef; a=(p q r s); v=a; w='a[@]'\n"
 	for _, tc := range []struct{ src, want string }{
 		{`print -r -- ${${(P)foo}[1,3]} ${${(P)bar[1,3]}[1,3]}`, "qui qui\n"},

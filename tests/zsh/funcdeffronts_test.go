@@ -13,6 +13,7 @@ import (
 // (#5148). Every row measured 2026-10-02 on zsh 5.9.2
 // (`/opt/homebrew/bin/zsh -f`).
 func TestC04FuncdefFronts(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, f := range []string{"yes", "no", "nox"} {
 		if err := os.WriteFile(filepath.Join(dir, f), nil, 0o600); err != nil {

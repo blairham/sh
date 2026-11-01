@@ -16,6 +16,7 @@ import (
 // that defined one function and aliased the rest to it would parse perfectly
 // and answer every call with the same name (#1680).
 func TestOneBodyDefinesEveryNameAndKnowsWhichOneRan(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`function a b { echo "$0"; }; a; b`, "a\nb"},
 		{`function f1 f2 f3 { echo "$0"; }; f3; f1; f2`, "f3\nf1\nf2"},
@@ -67,6 +68,7 @@ func TestOneBodyDefinesEveryNameAndKnowsWhichOneRan(t *testing.T) {
 // ends with two names over one body, and `$0` is how the body knows which of
 // them the script called. Refused before, taking the file with it.
 func TestTheClipboardShapeDefinesBothAndDispatchesOnDollarZero(t *testing.T) {
+	t.Parallel()
 	src := `detect-clipboard() { echo detected; }
 function clipcopy clippaste {
   unfunction clipcopy clippaste

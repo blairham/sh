@@ -53,6 +53,7 @@ func badPatternDir(t *testing.T) string {
 // generation moves with the option and a `case` arm, a `[[ ]]` operand and a
 // parameter expansion's pattern do not.
 func TestBadPatternSparesAGlobAndNothingElse(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src        string
 		on, off          string
@@ -209,6 +210,7 @@ func TestBadPatternSparesAGlobAndNothingElse(t *testing.T) {
 // because it is the property a diagnostic written to the wrong stream would
 // pass every row above while breaking every script that reads the shell.
 func TestABadPatternRefusalGoesToStandardError(t *testing.T) {
+	t.Parallel()
 	dir := badPatternDir(t)
 	out, st, errs := runZshSplit(t, dir, "setopt badpattern\nprint -r -- [a\n")
 	if out != "" {
@@ -231,6 +233,7 @@ func TestABadPatternRefusalGoesToStandardError(t *testing.T) {
 // same `nullglob` that leaves `[a` standing *does* delete a well-formed
 // pattern that matched nothing, so the option is not simply being ignored.
 func TestNoMatchAndNullGlobDoNotReachAWordBadPatternSpared(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 		status          int
@@ -274,6 +277,7 @@ func TestNoMatchAndNullGlobDoNotReachAWordBadPatternSpared(t *testing.T) {
 // emulateoptions.go carried the right answer for this name before #4630 and
 // moved nothing, because the name it moved was recorded.
 func TestEmulationReachesBadPattern(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		emulate, want string
 		status        int
@@ -308,6 +312,7 @@ func TestEmulationReachesBadPattern(t *testing.T) {
 // and the one a switch stored on the Runner could plausibly have broken by
 // being shared rather than copied.
 func TestBadPatternFollowsASubshell(t *testing.T) {
+	t.Parallel()
 	dir := badPatternDir(t)
 	src := "unsetopt badpattern\n" +
 		"(print -r -- [a)\n" +

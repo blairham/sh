@@ -20,6 +20,7 @@ import "testing"
 // See TestAChildWritesTheTextItWasHandedOnItsOwn for where the text goes out
 // by itself.
 func TestASubstitutionCarriesItsParentsOpenLine(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"a prefix", `set -x; x=$( a=1 true )`, "+zsh:1> x=+zsh:1> a=1 +zsh:1> true\n+zsh:1> x='' \n"},
 		{
@@ -192,6 +193,7 @@ func TestAChildWritesTheTextItWasHandedOnItsOwn(t *testing.T) {
 // leaves, has the value on it. Measured 2026-10-30 against zsh 5.9.2 under
 // `-f -c`, both streams on one pipe (#6711).
 func TestASubscriptIsReadBehindItsEntrysValue(t *testing.T) {
+	t.Parallel()
 	const fn = `f() { echo "f y=$y"; }; b=(x y z); set -x; `
 	for _, c := range []struct{ name, src, want string }{
 		{

@@ -33,6 +33,7 @@ shwordsplit typesetsilent typesettounset unset nowarncreateglobal
 nowarnnestedvar`
 
 func TestEmulateListPrintsTheEmulationsOwnValues(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "emulate -l sh")
 	want := strings.Join(strings.Fields(emulateListSh), "\n") + "\n"
 	if st != 0 || out != want {
@@ -41,6 +42,7 @@ func TestEmulateListPrintsTheEmulationsOwnValues(t *testing.T) {
 }
 
 func TestEmulateListForms(t *testing.T) {
+	t.Parallel()
 	// A summary of one listing: its length, its ends, and the rows the forms
 	// move.
 	sum := func(c string) string {

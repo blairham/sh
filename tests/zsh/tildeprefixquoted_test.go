@@ -28,6 +28,7 @@ import (
 // of a user database. What is asserted is the half that separates the two
 // answers without needing one.
 func TestAQuotedTildePrefixStillExpands(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a backslash on the closing slash", `echo ~\/bar`, "/h/bar"},
 		{"a quoted span where the slash would be", `echo ~"/bar"`, "/h/bar"},

@@ -17,6 +17,7 @@ import (
 // is read. Measured on zsh 5.9.2, 2026-10-11, from script files under
 // `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME and ZDOTDIR.
 func TestASubstitutionPublishesWhatItsReplacementCanSee(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		// Inert replacements: the last match is what is left behind.
 		{`x=abc; print -r -- ${x//(#b)([a-c])/X}; print -r -- $match $mbegin $mend`, "XXX\nc 3 3\n"},
@@ -46,6 +47,7 @@ func TestASubstitutionPublishesWhatItsReplacementCanSee(t *testing.T) {
 // `(#m)` and `MATCH`. This shell printed it three times while it published
 // every match.
 func TestAReadOnlyReportIsRefusedOnce(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, name string }{
 		{`readonly match; x=aaa; print -r -- ${x//(#b)(a)/X}; print after`, "match"},
 		{`readonly MATCH; x=aaa; print -r -- ${x//(#m)a/X}; print after`, "MATCH"},
@@ -61,6 +63,7 @@ func TestAReadOnlyReportIsRefusedOnce(t *testing.T) {
 // facts kept per pattern must keep apart: `@(a)` is a group under `kshglob`
 // and an `@` before one without it. Measured on zsh 5.9.2.
 func TestOnePatternReadTwoWaysReportsEachReading(t *testing.T) {
+	t.Parallel()
 	src := `setopt extendedglob; x=ab; y=@ab
 f() { print -r -- "${x/(#b)@(a)(b)/<$match>}" "${y/(#b)@(a)(b)/<$match>}"; }
 f; setopt kshglob; f; unsetopt kshglob; f`

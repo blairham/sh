@@ -16,6 +16,7 @@ import "testing"
 //
 // Measured on zsh 5.9.2, 2026-09-09.
 func TestTheReevalFlagUnderThisShellsAxes(t *testing.T) {
+	t.Parallel()
 	const count = `f(){ printf "%d:" "$#"; printf "[%s]" "$@"; }; `
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -61,6 +62,7 @@ func TestTheReevalFlagUnderThisShellsAxes(t *testing.T) {
 // ran to a fixed point would compare a resolved prompt against a pattern of
 // references and never match.
 func TestTheReevalFlagDoesNotLoop(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`inner='$deeper'; deeper=bottom; v='$inner'; print -rn -- "${(e)v}"`)
 	if out != `$deeper` || st != 0 {

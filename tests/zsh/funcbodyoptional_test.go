@@ -19,6 +19,7 @@ import (
 // with an empty body, and a test that only asked "did it parse" could not
 // tell the two apart.
 func TestABodylessDeclarationDefinesEachNameWithAnEmptyBody(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The declaration is inside an `eval` because at the top level the
 		// command after it would be the *body* — which is the other half of
@@ -44,6 +45,7 @@ func TestABodylessDeclarationDefinesEachNameWithAnEmptyBody(t *testing.T) {
 // the bodyless reading would silently turn it into. Both readings run `echo B`
 // exactly once, so only *when* it runs says which one happened.
 func TestTheCommandAfterTheSeparatorIsTheBody(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// Read as a body: nothing prints until `a` is called.
 		{`function a; echo B

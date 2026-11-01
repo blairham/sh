@@ -81,6 +81,7 @@ func TestAModuleBuiltinWaitsForItsModuleOrDoesNot(t *testing.T) {
 // And the load brings them, which is the other half: the gate opens by the
 // road the feature selection already used, so nothing new puts them back.
 func TestLoadingAModuleBringsItsGatedBuiltins(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ module, builtin string }{
 		{"zsh/datetime", "strftime"},
 		{"zsh/system", "zsystem"},
@@ -104,6 +105,7 @@ func TestLoadingAModuleBringsItsGatedBuiltins(t *testing.T) {
 // The sentence a script gets for one of them before the load, which is what
 // #4997 says the gate is worth: told by name at its own call site.
 func TestCallingAGatedBuiltinBeforeItsLoadIsCommandNotFound(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "strftime \"%Y\" 0\nprint -r -- \"st=$?\"")
 	const want = "zsh:1: command not found: strftime\nst=127\n"
 	if out != want || st != 0 {

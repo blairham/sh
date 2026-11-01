@@ -28,6 +28,7 @@ import (
 // baseline count, so a row that counts is measuring the harness rather than
 // the shell — which is the trap this whole family has to be written around.
 func TestFcPushRefusesASizeThatIsNotAnInteger(t *testing.T) {
+	t.Parallel()
 	// The history file lives in a scratch directory: the shell runs with the
 	// package directory as its working directory, so `$PWD/h` left a tracked
 	// `h` behind in the source tree on every run.

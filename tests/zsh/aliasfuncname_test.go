@@ -34,6 +34,7 @@ import (
 // definition, which is a legal shape here, so two functions called `typeset`
 // and `-n` were defined in silence at 0 (#3643).
 func TestAFunctionNamedByAnAliasIsRefused(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Dialect().AliasAtAFunctionName; got != syntax.AliasRefusesAFunctionName {
 		t.Fatalf("AliasAtAFunctionName is %v, want AliasRefusesAFunctionName", got)
 	}
@@ -106,6 +107,7 @@ func TestAFunctionNamedByAnAliasIsRefused(t *testing.T) {
 // behavior — what actually runs — and the runner rows are the wiring, which
 // is the half this change adds and the half a parser test cannot see.
 func TestPosixAliasesKeepsAReservedWordOutOfAliasExpansion(t *testing.T) {
+	t.Parallel()
 	table := func(name string) (string, bool) {
 		v, ok := map[string]string{"!": "print GOT", "myword": "print GOT"}[name]
 		return v, ok
@@ -148,6 +150,7 @@ func TestPosixAliasesKeepsAReservedWordOutOfAliasExpansion(t *testing.T) {
 // published count of recorded names drops by one with it, which a test in
 // this package enforces against `docs/spec/semantics.md`.
 func TestPosixAliasesMovesTheGrammarFlag(t *testing.T) {
+	t.Parallel()
 	d := zsh.Dialect()
 	sem, diag := zsh.Semantics(), zsh.Diagnostics()
 	dir := t.TempDir()

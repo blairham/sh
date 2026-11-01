@@ -15,6 +15,7 @@ import (
 // no name at all once the widget is done. Measured 2026-10-02 on zsh 5.9.2
 // through a pseudo-terminal; see widgetParameterDeclarations.
 func TestTypesetPrintsAWidgetsParameters(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `
 		g() { typeset -p BUFFER region_highlight; }
 		w() {

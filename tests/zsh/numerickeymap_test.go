@@ -13,6 +13,7 @@ import (
 // they set for the call. Every line is zsh 5.9.2's, measured 2026-10-02
 // through a pseudo-terminal (#5495).
 func TestAWidgetCallSetsNumericAndKeymap(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `
 		g() { print -r -- "G[$*] N=${NUMERIC-u} T=${(t)NUMERIC} K=$KEYMAP TK=${(t)KEYMAP}"; }
 		zle -N g
@@ -60,6 +61,7 @@ func TestAWidgetCallSetsNumericAndKeymap(t *testing.T) {
 // `-n 3` 3, and the widget's own is 5 again after. Measured 2026-10-02 on zsh
 // 5.9.2 through a pseudo-terminal (#5498).
 func TestACountTypedBeforeTheKeyIsNumeric(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `
 		g() { print -rn -- "${NUMERIC-u} "; }
 		zle -N g

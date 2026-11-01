@@ -17,6 +17,7 @@ import (
 // the function was entered, answers `[3][2][2][3]` here and passes any test
 // that reads the count only on the way in.
 func TestARGCCountsThePositionalParameters(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `set -- a b c
 print -r -- "[$ARGC]"
 f() { print -r -- "[$ARGC]"; shift; print -r -- "[$ARGC]" }
@@ -39,6 +40,7 @@ print -r -- "[$ARGC]"`)
 // pair is discriminating: a shell that answered `usage` to neither would have
 // broken the case the guard exists for.
 func TestARGCDecidesADispatch(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `f() { if (( !ARGC )); then print -r -- usage; return 1; fi; print -r -- "ran $1" }
 f reload
 print -r -- "st=$?"
@@ -59,6 +61,7 @@ print -r -- "st=$?"`)
 // silence and `$ARGC` would report nine for three parameters from then on,
 // which is exactly the reading the dispatch above turns on.
 func TestARGCRefusesAssignment(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `set -- a b c
 ARGC=9
 print -r -- "unreached [$ARGC][$#]"`)
@@ -75,6 +78,7 @@ print -r -- "unreached [$ARGC][$#]"`)
 // name unset would answer the empty string here and still pass the arithmetic
 // half of every case above, because arithmetic reads an unset name as zero.
 func TestARGCIsZeroWithNoParameters(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `print -r -- "[$ARGC]"`)
 	if out != "[0]\n" || st != 0 {
 		t.Errorf("got %q status %d, want %q at 0", out, st, "[0]\n")
@@ -109,6 +113,7 @@ func TestARGCIsZeroWithNoParameters(t *testing.T) {
 // name suppressed nowhere is the state this fixes — only both halves together
 // say which.
 func TestARGCIsSilentToDashPAndPresentToTheBareListings(t *testing.T) {
+	t.Parallel()
 	t.Run("every -p form writes no row and reports 0", func(t *testing.T) {
 		out, st := runZsh(t, t.TempDir(), `typeset -p ARGC
 print -r -- "named=$?"

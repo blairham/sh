@@ -15,6 +15,7 @@ import (
 // shell reading the system-wide files meets it before the first prompt. With
 // no `log` in the table that line was `no such hash table element` at 1.
 func TestTheNameIsInTheTableForDisableToReach(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "whence -w log\ndisable log\necho st=$?\nwhence -w log\n")
 	// Not `log: command` on the second line, which is what the machine this
 	// was measured on answers: a scratch PATH need hold no `log` at all, so
@@ -31,6 +32,7 @@ func TestTheNameIsInTheTableForDisableToReach(t *testing.T) {
 // Three of the measured shapes are a builtin that takes no operands and
 // reports nothing, which is what an unset `$watch` — the default — means.
 func TestLogWithNothingWatchedIsSilentAndZero(t *testing.T) {
+	t.Parallel()
 	for _, script := range []string{"log\n", "watch=()\nlog\n", "typeset -a watch\nlog\n"} {
 		out, st := runZsh(t, t.TempDir(), script+"echo st=$?\n")
 		if out != "st=0\n" || st != 0 {
@@ -43,6 +45,7 @@ func TestLogWithNothingWatchedIsSilentAndZero(t *testing.T) {
 // empty word are both `too many arguments`, which is the same sentence a
 // second name gets.
 func TestLogTakesNoOperandsAndNoOptions(t *testing.T) {
+	t.Parallel()
 	for _, word := range []string{"a b", "-x", `""`, "--"} {
 		out, st := runZsh(t, t.TempDir(), "log "+word+"\necho st=$?\n")
 		if !strings.Contains(out, ":log:1: too many arguments") || !strings.Contains(out, "st=1\n") {
@@ -57,6 +60,7 @@ func TestLogTakesNoOperandsAndNoOptions(t *testing.T) {
 // silent wrong answer dialect/zsh/enable.go already refuses to give for a
 // hash table this shell does not keep.
 func TestLogRefusesTheWatchedUsersByNameRatherThanAnsweringNothing(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "watch=(all)\nlog\necho st=$?\n")
 	if !strings.Contains(out, "reporting the users $watch names is not implemented yet") {
 		t.Errorf("output = %q (status %d), want the facility named as missing", out, st)

@@ -15,6 +15,7 @@ import (
 // PATH one directory holding `qq` and `r2`: each verb below leaves the
 // listing shown, and whence -a — the control — leaves nothing.
 func TestAWhenceLookupIsRemembered(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "b2")
 	if err := os.Mkdir(bin, 0o755); err != nil {

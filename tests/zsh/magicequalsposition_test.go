@@ -20,6 +20,7 @@ import (
 // `/opt/homebrew/bin/zsh`, `-f -c`, `HOME=/Users/testhome`, 2026-09-26. `go
 // version -m` on that path reports *not a Go executable*.
 func TestMagicEqualSubstDoesNotReachTheCommandWordOrAnArrayLiteral(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an array literal's element", `x=(a=~); print -r -- $x`, "a=~"},
 		{"the command word", `--opt=~`, "--opt=~"},

@@ -19,6 +19,7 @@ const elementPrefixSetup = `typeset -A a; b=(x y z); i=1; f() { echo "f y=$y"; }
 // splice leaves. The controls are the function's rows, a splice among them,
 // the substitutions' order and the element staying after a function.
 func TestAPrefixElementIsSeenByTheEntriesBehindIt(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"a key, to a program", `a[k]=2 y=${a[k]} /usr/bin/printenv y`, "2\n"},
 		{"an index, to a program", `b[1]=Q y=${b[1]} /usr/bin/printenv y`, "Q\n"},
@@ -59,6 +60,7 @@ func TestAPrefixElementIsSeenByTheEntriesBehindIt(t *testing.T) {
 // its own subscript placed, so `B` is the first element here. The ordinary
 // argument is the control.
 func TestADeclarationsOperandSeesItsPrefixsElement(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"typeset", `c=(p q r); c[1]=B typeset y=${c[1]}; echo "y=$y ${c[*]}"`, "y=B B q r\n"},
 		{"export", `c=(p q r); c[1]=B export y=${c[1]}; echo "y=$y ${c[*]}"`, "y=B B q r\n"},
@@ -95,6 +97,7 @@ func TestADeclarationsOperandSeesItsPrefixsElement(t *testing.T) {
 // shell showed the body `y=x`, and handed `read` the separator `x`. Measured
 // the same day and the same way.
 func TestATracedPrefixElementIsSeenByTheEntriesBehindIt(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"a function", `set -x; b[1]=Q y=${b[1]} f`, "+zsh:2> b[1]=Q y=Q +zsh:2> f\n+f:0> echo 'f y=Q'\nf y=Q\n"},
 		{"a key", `set -x; a[k]=1 y=${a[k]} f`, "+zsh:2> a[k]=1 y=1 +zsh:2> f\n+f:0> echo 'f y=1'\nf y=1\n"},

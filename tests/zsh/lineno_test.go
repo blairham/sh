@@ -22,6 +22,7 @@ import (
 // overwrite the name this shell is still counting into, and every later
 // `$LINENO` would answer from the stored value.
 func TestLinenoIsReadonly(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"unset", "print -r -- \"before=$LINENO\"\nunset LINENO\nprint -r -- 'unreached'"},
 		{"assignment", "LINENO=9\nprint -r -- 'unreached'"},
@@ -48,6 +49,7 @@ func TestLinenoIsReadonly(t *testing.T) {
 // *declaration* with no value; `local LINENO=5` is the assignment and that one
 // this shell does refuse.
 func TestLinenoStillTakesAValuelessLocalDeclaration(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `f() { typeset LINENO; print -r -- "in=$LINENO"; }
 f
 print -r -- "out=$LINENO"`)

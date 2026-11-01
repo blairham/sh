@@ -13,6 +13,7 @@ import "testing"
 // is the row that moved when this was first tried, before #5137 gave a line
 // of modifiers its own road.
 func TestPosixBuiltinsClearsThePrefixRoster(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ cmd, off, on string }{
 		{"alias foo=bar", "x=v", "x=43"},
 		{"hash -r", "x=v", "x=43"},

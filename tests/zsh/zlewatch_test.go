@@ -32,6 +32,7 @@ import (
 // answer for something unimplemented and still ended the session, because the
 // caller is the scheduler that runs at prompt time.
 func TestArmingAWatcherIsSilentAndSaidBack(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "h(){ :; }\nzle -F 3 h; echo st=$?\nzle -F\n")
 	if want := "st=0\nzle -F 3 h\n"; out != want || st != 0 {
 		t.Errorf("output = %q status %d, want %q at 0", out, st, want)
@@ -51,6 +52,7 @@ func TestArmingAWatcherIsSilentAndSaidBack(t *testing.T) {
 // A shell that refused any of them would fail a plugin that arms its callback
 // before defining the function, or on a descriptor it opens later.
 func TestAWatcherNeedsNeitherAFunctionNorALiveDescriptor(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"handler is nowhere", "zle -F 3 nosuchfn", "zle -F 3 nosuchfn\n"},
 		{"descriptor is not open", "h(){ :; }; zle -F 55 h", "zle -F 55 h\n"},
@@ -71,6 +73,7 @@ func TestAWatcherNeedsNeitherAFunctionNorALiveDescriptor(t *testing.T) {
 // which is the opposite of what `zle -l` does with widgets. Re-arming a
 // descriptor replaces it where it stands.
 func TestTheListingIsInArmingOrder(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"h(){ :; }; g(){ :; }\nzle -F 5 h; zle -F 2 g; zle -F 9 h\nzle -F\n")
 	if want := "zle -F 5 h\nzle -F 2 g\nzle -F 9 h\n"; out != want || st != 0 {
@@ -87,6 +90,7 @@ func TestTheListingIsInArmingOrder(t *testing.T) {
 // there was nothing there is the only one in this operation that is about
 // state rather than about the words used.
 func TestOmittingTheHandlerRemoves(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"h(){ :; }\nzle -F 3 h\nzle -F 3; echo gone=$?\nzle -F\nzle -F 3; echo again=$?\n")
 	want := "gone=0\nzsh:zle:5: No handler installed for fd 3\nagain=1\n"
@@ -100,6 +104,7 @@ func TestOmittingTheHandlerRemoves(t *testing.T) {
 // removal and is not one, so a plugin's `zle -F -$fd` would appear to work
 // against a shell that took it.
 func TestTheDescriptorIsANumberAndTheWholeWordMustBeOne(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 		status          int
@@ -133,6 +138,7 @@ func TestTheDescriptorIsANumberAndTheWholeWordMustBeOne(t *testing.T) {
 // row above, and it is visible without `-F` at all: `zle -0` is an attempt to
 // call a widget of that name rather than a bad option.
 func TestAWordThatIsMinusThenADigitIsAnOperand(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "zle -0\n")
 	if want := "zsh:zle:1: widgets can only be called when ZLE is active\n"; out != want || st != 1 {
 		t.Errorf("output = %q status %d, want %q at 1", out, st, want)
@@ -143,6 +149,7 @@ func TestAWordThatIsMinusThenADigitIsAnOperand(t *testing.T) {
 // makes no difference to `-N`. It changes only what `-F` arms, and the listing
 // says so.
 func TestMinusWIsAModifierAndNotAnOperation(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "zle -w\n")
 	if out != "" || st != 1 {
 		t.Errorf("bare -w = %q status %d, want nothing at 1", out, st)
@@ -166,6 +173,7 @@ func TestMinusWIsAModifierAndNotAnOperation(t *testing.T) {
 // own widgets: the table is the Runner's, so a watcher armed inside `( )` is
 // not armed outside it.
 func TestASubshellGetsItsOwnWatchers(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "h(){ :; }\n(zle -F 3 h; zle -F)\nzle -F; echo outer=$?\n")
 	if want := "zle -F 3 h\nouter=0\n"; out != want || st != 0 {
 		t.Errorf("output = %q status %d, want %q at 0", out, st, want)
@@ -232,6 +240,7 @@ func pipeAt(t *testing.T) (shellFd, systemFd int, write *os.File, inherited []*o
 // asserts is the *translation*: the shell's numbers go into the table and the
 // kernel's come out, in arming order, and a removal takes one out.
 func TestWhatIsArmedIsWhatIsWaitedOn(t *testing.T) {
+	t.Parallel()
 	shellFd, systemFd, _, inherited := pipeAt(t)
 	arm := "h(){ :; }; zle -F " + strconv.Itoa(shellFd) + " h"
 	r, _ := watchRunnerWith(t, arm, func(rr *interp.Runner) { rr.InheritedFiles = inherited })
@@ -255,6 +264,7 @@ func TestWhatIsArmedIsWhatIsWaitedOn(t *testing.T) {
 // TestSeveralWatchersAreWaitedOnInArmingOrder, because the order is the
 // listing's order and the translation must not quietly sort or dedupe them.
 func TestSeveralWatchersAreWaitedOnInArmingOrder(t *testing.T) {
+	t.Parallel()
 	firstShell, firstSystem, _, inherited := pipeAt(t)
 	second, secondWrite, err := os.Pipe()
 	if err != nil {
@@ -280,6 +290,7 @@ func TestSeveralWatchersAreWaitedOnInArmingOrder(t *testing.T) {
 // half, and every clause of it is measured: one argument, which is the
 // descriptor; no line parameters; nothing to redraw.
 func TestAPlainHandlerIsCalledWithTheDescriptorAndLeavesTheLineAlone(t *testing.T) {
+	t.Parallel()
 	r, out := watchRunner(t,
 		`h(){ print -r -- "called argc=$# one=$1 buffer=[${BUFFER-UNSET}] widget=[${WIDGET-UNSET}]"; }`+
 			"\nzle -F 7 h")
@@ -301,6 +312,7 @@ func TestAPlainHandlerIsCalledWithTheDescriptorAndLeavesTheLineAlone(t *testing.
 // `sched` already run under: a callback fires at a moment nobody chose, so
 // what it leaves behind must not be what the next `&&` reads.
 func TestACallbacksStatusGoesInAndDoesNotComeOut(t *testing.T) {
+	t.Parallel()
 	r, out := watchRunner(t, "h(){ print -r -- \"saw=$?\"; return 7; }\nzle -F 7 h\n(exit 4)")
 	if r.ExitStatus() != 4 {
 		t.Fatalf("status before = %d, want 4", r.ExitStatus())
@@ -319,6 +331,7 @@ func TestACallbacksStatusGoesInAndDoesNotComeOut(t *testing.T) {
 // handler whose function has not arrived and repl may ask about a descriptor
 // the handler removed a moment ago.
 func TestADescriptorNobodyArmedAndAHandlerThatIsNowhereDoNothing(t *testing.T) {
+	t.Parallel()
 	r, out := watchRunner(t, "h(){ print no; }\nzle -F 7 h")
 	line := repl.Line{Buffer: "x", Cursor: 1}
 	if got, changed := zsh.DescriptorReady(r, context.Background(), 8, line); changed || got != line {
@@ -341,6 +354,7 @@ func TestADescriptorNobodyArmedAndAHandlerThatIsNowhereDoNothing(t *testing.T) {
 // argument is still the descriptor, `$WIDGET` names the handler, and an
 // assignment to `BUFFER` comes back to be drawn.
 func TestMinusWHandsTheLineOverAndTakesItBack(t *testing.T) {
+	t.Parallel()
 	r, out := watchRunner(t,
 		`w(){ print -r -- "argc=$# one=$1 widget=$WIDGET buffer=$BUFFER cursor=$CURSOR"; BUFFER=rewritten; }`+
 			"\nzle -N w\nzle -F -w 7 w")
@@ -361,6 +375,7 @@ func TestMinusWHandsTheLineOverAndTakesItBack(t *testing.T) {
 // silence — so a plugin that armed one and waited waits forever, and this
 // shell has to wait with it rather than being helpfully different.
 func TestMinusWOnSomethingThatIsNotAWidgetNeverFires(t *testing.T) {
+	t.Parallel()
 	r, out := watchRunner(t, "h(){ print fired; }\nzle -F -w 7 h")
 	line := repl.Line{Buffer: "abc", Cursor: 3}
 	if got, changed := zsh.DescriptorReady(r, context.Background(), 7, line); changed || got != line {
@@ -380,6 +395,7 @@ func TestMinusWOnSomethingThatIsNotAWidgetNeverFires(t *testing.T) {
 // string still *exists*, so asking existence rather than the value made every
 // prompt after the first widget of a session look like a widget's own call.
 func TestTheEditorIsRunningInsideAHandlerButTheLineIsNot(t *testing.T) {
+	t.Parallel()
 	r, out := watchRunner(t,
 		"other(){ print -r -- ran-other; }\nzle -N other\n"+
 			"h(){ zle other; print -r -- \"nested=$?\"; }\nzle -F 7 h")
@@ -417,6 +433,7 @@ func TestTheEditorIsRunningInsideAHandlerButTheLineIsNot(t *testing.T) {
 // shell still says everything right to a script, and a real session never
 // fires a callback once.
 func TestARealPipeIsWokenByOneNumberAndReadThroughTheOther(t *testing.T) {
+	t.Parallel()
 	shellFd, systemFd, write, inherited := pipeAt(t)
 	if _, err := write.WriteString("payload\n"); err != nil {
 		t.Fatal(err)
@@ -446,6 +463,7 @@ func TestARealPipeIsWokenByOneNumberAndReadThroughTheOther(t *testing.T) {
 // "is there a file here" answers yes and asking the kernel for its number
 // answers -1.
 func TestADescriptorClosedUnderTheWatcherStopsBeingWaitedOn(t *testing.T) {
+	t.Parallel()
 	shellFd, _, _, inherited := pipeAt(t)
 	arm := "h(){ :; }; zle -F " + strconv.Itoa(shellFd) + " h"
 	r, _ := watchRunnerWith(t, arm, func(rr *interp.Runner) { rr.InheritedFiles = inherited })
@@ -475,6 +493,7 @@ func TestADescriptorClosedUnderTheWatcherStopsBeingWaitedOn(t *testing.T) {
 // spelling in the issue that opened this, and the one a shell cannot answer by
 // looking in its table of *extra* descriptors, because 0 is not in it.
 func TestTheShellsOwnStandardInputCanBeWatched(t *testing.T) {
+	t.Parallel()
 	read, write, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
@@ -493,6 +512,7 @@ func TestTheShellsOwnStandardInputCanBeWatched(t *testing.T) {
 // silent whatever is at the number — and it is not something the editor can
 // wait on, so it never fires. Which is what the real shell does with one.
 func TestAWatcherOnANumberNothingIsOpenAtIsNeverWaitedOn(t *testing.T) {
+	t.Parallel()
 	r, _ := watchRunner(t, "h(){ :; }; zle -F 55 h")
 	if got := zsh.WatchedDescriptors(r); len(got) != 0 {
 		t.Errorf("waited on %v, want none — nothing is open at 55", got)

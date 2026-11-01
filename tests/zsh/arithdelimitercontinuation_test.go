@@ -28,6 +28,7 @@ import (
 // A line continuation behind the `((` of an arithmetic *command* is a third
 // question and is not this one: `((\⏎x = 5 ))` is 5 here as it is in bash.
 func TestAContinuationPartsTheArithmeticCloserAndNotTheOpener(t *testing.T) {
+	t.Parallel()
 	d := zsh.Dialect()
 	if d.ContinuationPartsTheArithmeticOpener {
 		t.Error("zsh reads over a continuation between the two `(` of an opener")

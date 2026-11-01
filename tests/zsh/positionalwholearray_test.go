@@ -15,6 +15,7 @@ import (
 // against zsh 5.9.2 (`/opt/homebrew/bin/zsh -f` under `env -i
 // PATH=/usr/bin:/bin`, from `-c` and from a script file).
 func TestWholeArrayStoreIntoAPositionSplices(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`set -- a b; set -A 1 x y; echo $? "[$*]" $#`, "0 [x y b] 3\n"},
 		{`set -- a b c; set +A 2 x y; echo $? "[$*]" $#`, "0 [a x y c] 4\n"},
@@ -50,6 +51,7 @@ func TestWholeArrayStoreIntoAPositionSplices(t *testing.T) {
 // 1, as the same builtins' refusals over `HOME` do; the expansion flag ends
 // both at 1.
 func TestWholeArrayStoreIntoZeroOrATableIntoAPositionIsRefused(t *testing.T) {
+	t.Parallel()
 	array := func(loc string) string {
 		return loc + " 0: attempt to assign array value to non-array\n"
 	}
@@ -100,6 +102,7 @@ func TestWholeArrayStoreIntoZeroOrATableIntoAPositionIsRefused(t *testing.T) {
 // width (see Runner.warnATruncatedPosition) — so this asserts the warnings and
 // that the shell comes back with the list untouched.
 func TestAnOperandStoreAtAPositionPastTheBoundStoresNothing(t *testing.T) {
+	t.Parallel()
 	const src = `set -- a b; read 99999999999999999999 <<< x; printf -v 99999999999999999999 %s y; echo $? $#; read 01 <<< q; echo "[$*]"`
 	out, _ := runZshOnPath(t, t.TempDir(), src)
 	const warn = "zsh:1: number truncated after 19 digits: 99999999999999999999\n"

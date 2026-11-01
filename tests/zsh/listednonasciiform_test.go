@@ -20,6 +20,7 @@ import (
 // Without these the ksh93 rows would be a rule this engine applied everywhere
 // and nothing would say so.
 func TestANonAsciiCharacterIsWrittenAsItselfHere(t *testing.T) {
+	t.Parallel()
 	sem := zsh.Semantics()
 	if got := sem.ListedNonAsciiIsSpelledAsACodePoint; got != interp.No {
 		t.Errorf("ListedNonAsciiIsSpelledAsACodePoint = %v, want No", got)

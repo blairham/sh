@@ -11,6 +11,7 @@ import "testing"
 // Measured 2026-10-02 on zsh 5.9.2, `env -i PATH=/usr/bin:/bin
 // LC_ALL=en_US.UTF-8 zsh -fc` (#5153).
 func TestTheCapitalizeFlag(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"runs of letters and digits", "a=\"hELLO wORLD foo_bar 3abc a1b2 x-y\"; print ${(C)a}", "Hello World Foo_Bar 3abc A1b2 X-Y\n"},
 		{"an apostrophe separates", "a=\"l'état c'est moi\"; print ${(C)a}", "L'État C'Est Moi\n"},
@@ -32,6 +33,7 @@ func TestTheCapitalizeFlag(t *testing.T) {
 // Under the C locale a character past ASCII is not a letter, so it separates
 // a run and is left as it was: `éCOLE` is `éCole` there.
 func TestTheCapitalizeFlagUnderTheCLocale(t *testing.T) {
+	t.Parallel()
 	out, _, errs := runZshUTF8(t, "LC_ALL=C; a=éCOLE; print ${(C)a}")
 	if out != "éCole\n" || errs != "" {
 		t.Errorf("got %q, %q, want %q", out, errs, "éCole\n")
@@ -42,6 +44,7 @@ func TestTheCapitalizeFlagUnderTheCLocale(t *testing.T) {
 // byte for byte: measured, `a=$'\xff'abc; print -r ${(C)a}` writes 0377
 // and then `Abc`.
 func TestTheCapitalizeFlagKeepsAnUndecodedByte(t *testing.T) {
+	t.Parallel()
 	out, _, errs := runZshUTF8(t, `a=$'\xff'abc; print -r ${(C)a}`)
 	if out != "\xffAbc\n" || errs != "" {
 		t.Errorf("got %q, %q, want %q", out, errs, "\xffAbc\n")

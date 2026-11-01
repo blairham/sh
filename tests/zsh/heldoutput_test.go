@@ -12,6 +12,7 @@ import "testing"
 // writing theirs as they return, and the second hands a child the stream
 // with what was held already written. See interp.Semantics.BuiltinOutputHeldUntilItReturns.
 func TestABuiltinsOutputComesAfterItsComplaints(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `aliases[aa]=1 aliases[xx]=3; alias -m "a*" "[" "x*"
 eval "print a; print -u2 b; print c"
 eval 'print d; /bin/sh -c "echo e >&2"; print f'`)
@@ -25,6 +26,7 @@ eval 'print d; /bin/sh -c "echo e >&2"; print f'`)
 // is in zsh 5.9.2 (measured 2026-10-01, `notpipe`). Handed the hold, the
 // child would be given a pipe this shell copies from.
 func TestAChildInsideAHeldBuiltinWritesTheDescriptor(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(
 		t,
 		t.TempDir(),

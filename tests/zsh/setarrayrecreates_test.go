@@ -19,6 +19,7 @@ import "testing"
 // itself on two more. An attribute that merely moved with the form would
 // agree with a grid that varied only the letter.
 func TestSetArrayDropsTheAttributesAReCreationDrops(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the minus form over a scalar re-creates",
@@ -86,6 +87,7 @@ func TestSetArrayDropsTheAttributesAReCreationDrops(t *testing.T) {
 // rows the axes were measured on, so a change that answered `set -A` by
 // widening the clearing would show up here.
 func TestTheLiteralRoutesAreUnmovedBySetArray(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a literal over an exported scalar", `export a=1; a=(x y); typeset -p a`, "typeset -a a=( x y )\n"},
 		{"an append over an exported scalar", `export a=1; a+=(x y); typeset -p a`, "typeset -a a=( 1 x y )\n"},

@@ -20,6 +20,7 @@ import (
 // database's half is a hook the binary wires, and is pinned in driver and in
 // interp against a table written in the test.
 func TestANamedDirectoryIsWrittenByHashAndReadByATilde(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"written and read back", `hash -d a=/tmp; print -r -- ~a`, "/tmp\n"},
 		{"with a tail behind it", `hash -d a=/tmp; print -r -- ~a/x`, "/tmp/x\n"},

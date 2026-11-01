@@ -26,6 +26,7 @@ import (
 // See interp.Semantics.BracketHoldingASlashIsStillABracket, answered Yes here
 // and No in bash.
 func TestABracketHoldingASeparatorIsStillAPattern(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "keep"), nil, 0o600); err != nil {
 		t.Fatal(err)

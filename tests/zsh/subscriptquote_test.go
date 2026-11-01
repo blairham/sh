@@ -13,6 +13,7 @@ import "testing"
 // script's key or search operand mean what it wrote. Measured 2026-09-07 on
 // zsh 5.9.2 with a scratch HOME and ZDOTDIR.
 func TestASubscriptIsNotAQuotingContextInThisDialect(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{

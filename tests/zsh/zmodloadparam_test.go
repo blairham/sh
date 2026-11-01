@@ -16,6 +16,7 @@ import "testing"
 // it — under `-f` from a script file with `env -i PATH=/usr/bin:/bin
 // TERM=dumb` and a scratch `HOME`.
 func TestZmodloadFeatureParameter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		status          int
@@ -128,6 +129,7 @@ func TestZmodloadFeatureParameter(t *testing.T) {
 // assignment machinery, with no builtin name in it, where every complaint a
 // registered builtin makes in this engine is located at the builtin.
 func TestZmodloadFeatureParameterRefusesABadName(t *testing.T) {
+	t.Parallel()
 	out, st := runZshPrelude(t, t.TempDir(),
 		"zmodload zsh/zutil\nzmodload -F -l -P 1bad zsh/zutil\nprint -r -- unreached\n")
 	want := "zsh:zmodload:2: not an identifier: 1bad\n"

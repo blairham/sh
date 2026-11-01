@@ -16,6 +16,7 @@ import "testing"
 // Measured against zsh 5.9.2, 2026-09-10; the corpus row is
 // `param/expansion-flags-parameter-type`.
 func TestTheTypeFlagWordsWhatANameIs(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a scalar", `v=abc; print -r -- ${(t)v}`, "scalar\n"},
 		{"an array", `w=(a b); print -r -- ${(t)w}`, "array\n"},
@@ -111,6 +112,7 @@ func TestTheTypeFlagWordsWhatANameIs(t *testing.T) {
 // together (#4881). See interp.Semantics.KindLetterReplacesTheKind for the
 // measured grid and for bash's and ksh93's answers.
 func TestAKindLetterReplacesTheKind(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an array under the integer letter", `typeset -a q; typeset -i q; typeset -p q`, "typeset -i q=0\n"},
 		{"an array under a float letter", `typeset -a q; typeset -F q; typeset -p q`, "typeset -F q=0.0000000000\n"},
@@ -154,6 +156,7 @@ func TestAKindLetterReplacesTheKind(t *testing.T) {
 // rows, bash 3.2 has no `-A` and ksh93 refuses every plus form of either
 // (#4881). See declareFlags.containerLetterRemoved.
 func TestAPlusContainerLetterTakesOffOnlyItsOwn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the array letter over an array", `typeset -a q; typeset +a q; typeset -p q`, "typeset q=''\n"},
 		{"the table letter over a table", `typeset -A q; typeset +A q; typeset -p q`, "typeset q=''\n"},

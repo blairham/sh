@@ -43,6 +43,7 @@ func zshOptionMove(t *testing.T, name string) (out, errs string, code int) {
 // TestTheElevenNamesRealZshMovesNowMoveHere is the differential, written as
 // the measurement was taken.
 func TestTheElevenNamesRealZshMovesNowMoveHere(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{
 		"banghist", "chaselinks", "emacs", "functionargzero", "hashdirs",
 		"ignorebraces", "ignoreeof", "interactivecomments", "notify",
@@ -62,6 +63,7 @@ func TestTheElevenNamesRealZshMovesNowMoveHere(t *testing.T) {
 // sweep would have lost. These are the names zsh itself refuses a running
 // script, measured the same way and in the same run.
 func TestTheImmovableNamesAreStillImmovable(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"interactive", "shinstdin", "singlecommand", "zle"} {
 		t.Run(name, func(t *testing.T) {
 			var out, errs bytes.Buffer
@@ -86,6 +88,7 @@ func TestTheImmovableNamesAreStillImmovable(t *testing.T) {
 // core holds — the same state `set -o vi` writes — so selecting one
 // deselects the other, which is what a remembered pair could not do.
 func TestTheEditingModeNamesReachTheSubstrateSwitch(t *testing.T) {
+	t.Parallel()
 	var out, errs bytes.Buffer
 	code := driver.MainArgs(zshWriting(&out, &errs), []string{
 		"zsh", "-c",
@@ -106,6 +109,7 @@ func TestTheEditingModeNamesReachTheSubstrateSwitch(t *testing.T) {
 // nothing follows from it. Recording it was the bug in #1856; spelling
 // correction is a thing this shell genuinely does not do.
 func TestARecordedNameRemembersWhatItWasTold(t *testing.T) {
+	t.Parallel()
 	var out, errs bytes.Buffer
 	code := driver.MainArgs(zshWriting(&out, &errs), []string{
 		"zsh", "-c",

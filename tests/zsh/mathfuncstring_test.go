@@ -21,6 +21,7 @@ import (
 // without the letter, and an implementation reading `${#1}` can tell those
 // apart where one reading `$1` as a number cannot.
 func TestMathFunctionStringArgument(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `sf() { print -r -- "n=$# 1=[$1] 0=[$0]"; }
 functions -M -s sf
 : $(( sf(2+2) ))
@@ -46,6 +47,7 @@ functions -M nf
 // `REPLY` — and with nothing evaluated at all it is whatever the shell last
 // evaluated, which in a shell that has done no arithmetic is nought.
 func TestMathFunctionStringValue(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `sf() { REPLY=${#1}; }
 functions -M -s sf
 print -r -- "A=[$(( sf(2+2) ))]"
@@ -65,6 +67,7 @@ print -r -- "B=[$(( sv(2+2) ))]"`)
 // registration takes exactly one argument and anything else is refused with
 // nothing registered.
 func TestMathFunctionStringArity(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `functions -Ms a1 1;    print "A=$?"
 functions -Ms a2 1 1;  print "B=$?"
 functions -Ms a3 0;    print "C=$?"
@@ -85,6 +88,7 @@ functions -M`)
 // it, so the line still makes the registration it describes — and the arity
 // it prints is the one the letter implies even where none was written.
 func TestMathFunctionStringListing(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `functions -Ms sf
 functions -M nf
 functions -Ms n4 1 1 other
@@ -102,6 +106,7 @@ functions -M`)
 // on a line with no `-M` is a letter that decides nothing — the listing it
 // writes is the one a bare `functions` writes.
 func TestMathFunctionStringLetterSpellings(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `functions -sM c1
 functions -s -M c2
 functions -M
@@ -117,6 +122,7 @@ functions -s nosuch; print "A=$?"`)
 
 // And the letter is accepted rather than named as missing.
 func TestMathFunctionStringLetterIsNotAlsoCalledMissing(t *testing.T) {
+	t.Parallel()
 	if !strings.ContainsRune(zsh.Semantics().FunctionsOptions, 's') {
 		t.Error("FunctionsOptions does not spell -s")
 	}
@@ -135,6 +141,7 @@ func TestMathFunctionStringLetterIsNotAlsoCalledMissing(t *testing.T) {
 // and `sf()` all *are* expressions and agreed before this — so what these
 // rows add is the shape that is not one.
 func TestAStringMathFunctionTakesTextThatIsNotAnExpression(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `sf() { print -r -- "n=$# 1=[$1]"; }
 functions -M -s sf
 : $(( sf( a , b c ) ))
@@ -169,6 +176,7 @@ print -r -- tail`)
 // syntax.TestAnUnclosedCallIsRefused, which is the right place for it: the
 // question is the reader's.
 func TestTextThatIsNotAnExpressionIsRefusedAtTheCall(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a name nobody registered",

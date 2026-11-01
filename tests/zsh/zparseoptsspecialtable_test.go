@@ -55,6 +55,7 @@ func TestZparseoptsTableOverAFixedSlotIsAKindChange(t *testing.T) {
 // one, a hidden shadow and an ordinary name each take the table, and a
 // script's tie gives up its other half.
 func TestZparseoptsTableTakenWhereTheSlotTakesOne(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"zparseopts -A options a; echo after $?", "after 0\n"},
 		{"zparseopts -A ZSH_NAME a; echo after $?", "after 0\n"},

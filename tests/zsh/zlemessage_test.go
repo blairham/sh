@@ -14,6 +14,7 @@ import (
 // editor at status 0, and the arity is checked before the widget context —
 // measured 2026-10-04 against zsh 5.9.2 (#5942).
 func TestZleMessageGoesToTheEditor(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(
 		t,
 		`w() { zle -M "hello msg"; a=$?; zle -M -- -x; b=$?; zle -M 2>/dev/null; c=$?; zle -M x y 2>/dev/null; d=$?; print -r -- "$a $b $c $d" }

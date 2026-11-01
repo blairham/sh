@@ -39,6 +39,7 @@ import (
 // `norcs` included, is pinned against real zsh in share/suite/zsh/options.tests,
 // which runs both shells over one copy of the file.
 func TestTheBareListingComparesAgainstTheEmulationsOwnDefaults(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, mode, want string }{
 		// The control, and the reason this instrument can be trusted to
 		// produce agreement rather than only a difference: under `emulate
@@ -79,6 +80,7 @@ func TestTheBareListingComparesAgainstTheEmulationsOwnDefaults(t *testing.T) {
 // The same baseline decides `unsetopt`, which is the complement and not a
 // second rule: 185 names, and every one is in exactly one of the two lists.
 func TestTheTwoListingsPartitionTheTable(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"emulate zsh", "emulate sh", "emulate -R sh", "emulate csh"} {
 		t.Run(mode, func(t *testing.T) {
 			set, st := runZsh(t, t.TempDir(), mode+"\nsetopt\n")
@@ -115,6 +117,7 @@ func TestTheTwoListingsPartitionTheTable(t *testing.T) {
 // A rule keyed on the state would put the same row in the same list with the
 // same spelling in both columns, which is what this shell did.
 func TestTheListingIsKeyedOnTheModesDefaultRatherThanOnTheState(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		mode string
 		// state is what `${options[…]}` reads for the pair; it is the same in
@@ -164,6 +167,7 @@ func TestTheListingIsKeyedOnTheModesDefaultRatherThanOnTheState(t *testing.T) {
 // `off` in both modes — the parameter reports the *state* — while `set -o`
 // writes `promptsubst off` under zsh and `nopromptsubst on` under sh.
 func TestTheSetOListingMovesWithTheEmulationToo(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ mode, want string }{
 		{"emulate zsh", "nopromptpercent       off\npromptsubst           off"},
 		{"emulate sh", "promptpercent         on\nnopromptsubst         on"},
@@ -192,6 +196,7 @@ func TestTheSetOListingMovesWithTheEmulationToo(t *testing.T) {
 // which is what says the baseline belongs to the listings rather than to the
 // namespace.
 func TestTheConditionReadsTheStateAndNotTheDeviation(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"emulate zsh", "emulate sh"} {
 		t.Run(mode, func(t *testing.T) {
 			out, st := runZsh(t, t.TempDir(), mode+"\n"+

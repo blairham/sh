@@ -13,6 +13,7 @@ import (
 // `autoload -X` that finds nothing is reported. Measured 2026-10-02 on zsh
 // 5.9.2 under `-f` (#5148).
 func TestAutoloadDFallsBackToFpath(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "def"), []byte("print loaded by default path\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -37,6 +38,7 @@ func TestAutoloadDFallsBackToFpath(t *testing.T) {
 // waiting. Measured 2026-10-02 on zsh 5.9.2 under `-f` (#5148). See
 // autoloadMergeStub.
 func TestAutoloadAgainKeepsWhatTheStubHad(t *testing.T) {
+	t.Parallel()
 	cases := []struct{ src, want string }{
 		{"autoload -Uz /p/spec; autoload spec; functions spec", "spec () {\n\t# undefined\n\tbuiltin autoload -XUz /p\n}\n"},
 		{"autoload -Uz q; autoload -k q; functions q", "q () {\n\t# undefined\n\tbuiltin autoload -XUk\n}\n"},

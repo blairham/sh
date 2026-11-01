@@ -15,6 +15,7 @@ import (
 // not a descriptor. Measured 2026-10-16 on zsh 5.9.2 under `-fc` (#6647). See
 // interp's joinModes.
 func TestAJoinThatGoesBothWaysIsRefused(t *testing.T) {
+	t.Parallel()
 	const refused = "file mode mismatch on fd "
 	for _, c := range []struct {
 		src, out string

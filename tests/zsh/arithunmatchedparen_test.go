@@ -10,6 +10,7 @@ import "testing"
 //
 // Measured 2026-10-02 on zsh 5.9.2, `-f -c` (#5145).
 func TestAStrayCloseParenInArithmetic(t *testing.T) {
+	t.Parallel()
 	out, _, errs := runZshUTF8(t, `foo="3)"; (( foo )); print st=$?`)
 	if out != "st=2\n" || errs != "zsh:1: bad math expression: unexpected ')'\n" {
 		t.Errorf("got %q, %q", out, errs)
@@ -22,6 +23,7 @@ func TestAStrayCloseParenInArithmetic(t *testing.T) {
 //
 // Measured 2026-10-16 on zsh 5.9.2, from a file (#6803).
 func TestARefusedByteInAGroupWantsTheCloseParen(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ expr, want string }{
 		{`(1;2)`, "bad math expression: ')' expected"},
 		{`((1) ;)`, "bad math expression: ')' expected"},

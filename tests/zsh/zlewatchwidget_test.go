@@ -35,6 +35,7 @@ import (
 // through an ordinary keystroke's widget, is right.
 
 func TestAWidgetCalledFromAPlainHandlerIsGivenTheLine(t *testing.T) {
+	t.Parallel()
 	shellFd, systemFd, write, inherited := pipeAt(t)
 	if _, err := write.WriteString("lo-world\n"); err != nil {
 		t.Fatal(err)
@@ -69,6 +70,7 @@ func TestAWidgetCalledFromAPlainHandlerIsGivenTheLine(t *testing.T) {
 // the second. runWidgetFunction clears the state it opened on the way out,
 // and a handler is not over when one widget is.
 func TestAHandlerMayCallAWidgetTwice(t *testing.T) {
+	t.Parallel()
 	shellFd, systemFd, write, inherited := pipeAt(t)
 	if _, err := write.WriteString("x\n"); err != nil {
 		t.Fatal(err)
@@ -99,6 +101,7 @@ func TestAHandlerMayCallAWidgetTwice(t *testing.T) {
 // change that simply returned `true` from every handler would pass both of
 // them and fail this.
 func TestAHandlerThatRunsNoWidgetStillDrawsNothing(t *testing.T) {
+	t.Parallel()
 	shellFd, systemFd, write, inherited := pipeAt(t)
 	if _, err := write.WriteString("x\n"); err != nil {
 		t.Fatal(err)
@@ -120,6 +123,7 @@ func TestAHandlerThatRunsNoWidgetStillDrawsNothing(t *testing.T) {
 // holding is the editor's, not the session's, and a script at the next prompt
 // must find the parameters unset exactly as it did before.
 func TestAWidgetCalledFromAHandlerLeavesNothingBehind(t *testing.T) {
+	t.Parallel()
 	shellFd, systemFd, write, inherited := pipeAt(t)
 	if _, err := write.WriteString("x\n"); err != nil {
 		t.Fatal(err)
@@ -160,6 +164,7 @@ func runOneMore(t *testing.T, r *interp.Runner, src string) {
 // table rather than through a terminal, because what is being checked is the
 // argument list a widget is called with and nothing about the screen.
 func TestTheDoubleDashEndingAWidgetsOptionsIsNotAnArgument(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct {
 		call string
 		want string

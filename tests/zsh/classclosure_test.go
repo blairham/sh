@@ -21,6 +21,7 @@ import (
 // the closure, the bracket matched exactly one character, and the `##` behind
 // it repeated a literal `#` (#1409).
 func TestAClosureOverACharacterClassRepeatsTheWholeBracket(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The longest-match trims, which are where the extent of a single
 		// match is visible. Before the fix these were `[ x  ]` and `[  x ]`
@@ -191,6 +192,7 @@ func TestAClosureOverACharacterClassRepeatsTheWholeBracket(t *testing.T) {
 // them as evidence: a test written on either one would have recorded
 // agreement and pinned the bug in place.
 func TestTwoSpellingsCannotSeeAClassClosuresExtent(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a global substitution re-applies until nothing matches",
@@ -221,6 +223,7 @@ func TestTwoSpellingsCannotSeeAClassClosuresExtent(t *testing.T) {
 // at that layer. These rows are the same fault from the surface a script
 // sees: a refusal with status 1 that stopped the script (#1408).
 func TestAPatternOperandMayBeginWithAGroup(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"an anchor first in a group",

@@ -18,6 +18,7 @@ import (
 // listing name them differently: the bare form by entry, `-L` by the letter
 // that sets it.
 func TestCompctlListsThreeEntriesInAFreshShell(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if out, st := runZsh(t, dir, "compctl"); st != 0 || out != "COMMAND -c -tn\nDEFAULT -f -tn\nFIRST\n" {
 		t.Errorf("bare listing = %q, status %d", out, st)
@@ -32,6 +33,7 @@ func TestCompctlListsThreeEntriesInAFreshShell(t *testing.T) {
 // This is the shape the real configuration uses — `OMZP::golang` opens with
 // ten `compctl -g '…'` lines and reads none of them back.
 func TestCompctlRecordsADefinition(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if out, st := runZsh(t, dir, `compctl -g "*.go" gofmt`); st != 0 || out != "" {
 		t.Errorf("defining said %q at %d, want silence at 0", out, st)
@@ -55,6 +57,7 @@ func TestCompctlRecordsADefinition(t *testing.T) {
 // The listing is a normalization and not a replay, which is the half that has
 // to be right or it is a plausible-but-wrong answer.
 func TestCompctlNormalizesWhatItListsBack(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		// Simple flags cluster and sort, whatever order they arrived in.
@@ -91,6 +94,7 @@ func TestCompctlNormalizesWhatItListsBack(t *testing.T) {
 // DEFAULT to `-f` loses the `-tn` it had — and a set one is listed once, by
 // its letter, rather than twice.
 func TestCompctlSpecialEntriesAreReplacedWhole(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if out, _ := runZsh(t, dir, "compctl -f -D; compctl -L"); out != "compctl -C -c -tn\ncompctl -D -f\ncompctl -T\n" {
 		t.Errorf("-D listing = %q, want the default replaced and listed once", out)
@@ -106,6 +110,7 @@ func TestCompctlSpecialEntriesAreReplacedWhole(t *testing.T) {
 // Two forms are taken at 0 and store nothing, which is measured and is not
 // what most builtins do with either.
 func TestCompctlTakesSomeFormsAndStoresNothing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	fresh := "compctl -C -c -tn\ncompctl -D -f -tn\ncompctl -T\n"
 	for _, src := range []string{"compctl + ls", "compctl -nosuchthing"} {
@@ -120,6 +125,7 @@ func TestCompctlTakesSomeFormsAndStoresNothing(t *testing.T) {
 
 // And the refusals, each with zsh's own sentence and status.
 func TestCompctlRefusals(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an argument letter with nothing after it", "compctl -g", "glob pattern expected after -g"},

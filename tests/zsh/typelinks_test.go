@@ -42,6 +42,7 @@ func runZshType(t *testing.T, dir, src string) (string, int) {
 // neither would agree on that row — and the chain is what tells `-s` from
 // `-S`.
 func TestTypeResolvesTheLinkACommandIsFoundThrough(t *testing.T) {
+	t.Parallel()
 	dir := whenceLinkTree(t)
 	out, st := runZshType(t, dir, `type -s plain
 type -S plain
@@ -68,6 +69,7 @@ type two`)
 // about: `type` is `whence -v` here, so a second rendering of the arrow would
 // show up as these two lines disagreeing and as nothing else.
 func TestTypeAndWhenceVerboseWriteTheSameLinkLine(t *testing.T) {
+	t.Parallel()
 	dir := whenceLinkTree(t)
 	out, st := runZshType(t, dir, `type -s two
 whence -sv two
@@ -85,6 +87,7 @@ whence -Sv two`)
 // later-letter rule `-t` and `-p` settle by, and is why the two letters are
 // read separately rather than ordered.
 func TestTypeTheLongerChainWinsWhenBothLettersAreGiven(t *testing.T) {
+	t.Parallel()
 	dir := whenceLinkTree(t)
 	out, st := runZshType(t, dir, `type -sS two
 type -Ss two`)
@@ -98,6 +101,7 @@ type -Ss two`)
 // resolved only the last component would print this row with no arrow and
 // still agree everywhere the directories hold no links, which is most places.
 func TestTypeResolvesALinkInTheDirectoryComponent(t *testing.T) {
+	t.Parallel()
 	dir := whenceLinkTree(t)
 	out, st := runZshType(t, dir, `type -s deep
 type -S deep`)
@@ -111,6 +115,7 @@ type -S deep`)
 // a row says. The builtin row is the control — a name that is not a file is
 // never decorated.
 func TestTypeTheLinkLettersReachEveryRowOfTheListing(t *testing.T) {
+	t.Parallel()
 	dir := whenceLinkTree(t)
 	out, st := runZshType(t, dir, `type -sa two
 type -Sa two
@@ -128,6 +133,7 @@ type -a two`)
 // sentence quotes the arrow along with the path, and this is the one row that
 // can tell the two apart.
 func TestTypeQuotesThePathAndNotTheArrow(t *testing.T) {
+	t.Parallel()
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -159,6 +165,7 @@ func TestTypeQuotesThePathAndNotTheArrow(t *testing.T) {
 // Nothing but a file is decorated, and a name PATH does not hold is the
 // ordinary not-found line at 1 — the same answers the bare form gives.
 func TestTypeTheLinkLettersLeaveEverythingButAFileAlone(t *testing.T) {
+	t.Parallel()
 	dir := whenceLinkTree(t)
 	out, st := runZshType(t, dir, `f() { :; }
 alias al=ls

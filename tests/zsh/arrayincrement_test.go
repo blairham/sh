@@ -10,6 +10,7 @@ import "testing"
 // an association leave it untouched, where a plain `=` replaces either with a
 // number. Measured 2026-10-02 on zsh 5.9.2 (#5369).
 func TestAnArithmeticIncrementOfAnArrayKeepsTheArray(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`a=(5); (( a++ )); print ${(t)a} $a ${#a}`, "array 6 1\n"},
 		{`a=(); (( ++a )); print ${(t)a} $a`, "array 1\n"},

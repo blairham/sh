@@ -23,6 +23,7 @@ import (
 // In a UTF-8 locale — where a person's terminal is, and where the panel
 // agrees — the character is written, and this shell was already right there.
 func TestAUnicodeEscapeOutsideTheLocaleIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the complaint, then what came before it",
@@ -85,6 +86,7 @@ func TestAUnicodeEscapeOutsideTheLocaleIsRefused(t *testing.T) {
 // failing command before the refusal leaves 3 behind, and the script still
 // exits 0.
 func TestARefusedEscapeLeavesStatusZero(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"after a success", `LC_ALL=C; true; echo 'a\u00e9Z'`},
 		{"after a failure, so the 3 is not carried out", `LC_ALL=C; (exit 3); echo 'a\u00e9Z'`},

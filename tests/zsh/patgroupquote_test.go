@@ -16,6 +16,7 @@ import (
 // the quotes, so `[[ b == ("b") ]]` asks whether `b` is three characters and
 // says no, at status 1, with nothing said anywhere.
 func TestAQuotedOperatorInsideAPatternGroupIsText(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The filed shape: the escape and the two quotings of it.
 		{`[[ "<x" == (\<)* ]] && echo Y || echo N`, "Y"},
@@ -89,6 +90,7 @@ func TestAQuotedOperatorInsideAPatternGroupIsText(t *testing.T) {
 // an ordinary argument that globs. It is one scanner, and #1217 is the reason
 // that is asserted rather than assumed.
 func TestAQuotedOperatorInAGroupReachesEveryRoute(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`case "<x" in (\<)*) echo Y;; *) echo N;; esac`, "Y"},
 		{`case "<x" in ("<")*) echo Y;; *) echo N;; esac`, "Y"},

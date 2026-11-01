@@ -15,6 +15,7 @@ import (
 // is what makes it a test about the escape and not about the machine — the
 // corpus row for the same fact is written the same way, against `id -un`.
 func TestThePromptUserEscapeNamesThisProcessUser(t *testing.T) {
+	t.Parallel()
 	u, err := user.Current()
 	if err != nil {
 		t.Skipf("no user for this process: %v", err)
@@ -37,6 +38,7 @@ func TestThePromptUserEscapeNamesThisProcessUser(t *testing.T) {
 // The variable is read back in the same word, so the row also says the
 // assignment really happened and the escape simply did not consult it.
 func TestThePromptUserEscapeIgnoresTheEnvironmentNames(t *testing.T) {
+	t.Parallel()
 	u, err := user.Current()
 	if err != nil {
 		t.Skipf("no user for this process: %v", err)

@@ -74,6 +74,7 @@ func runZshLinks(t *testing.T, dir, src string) (string, int) {
 // a real file both letters print what the bare form prints, so a shell with
 // neither letter would agree on that row and on nothing else.
 func TestWhenceResolvesTheLinkACommandIsFoundThrough(t *testing.T) {
+	t.Parallel()
 	dir := whenceLinkTree(t)
 	out, st := runZshLinks(t, dir, `whence -s plain
 whence -S plain
@@ -100,6 +101,7 @@ whence two`)
 // agree with the reference on every case where the directories hold no links
 // — which is most of them, and is why this row is here.
 func TestWhenceResolvesALinkInTheDirectoryComponent(t *testing.T) {
+	t.Parallel()
 	dir := whenceLinkTree(t)
 	out, st := runZshLinks(t, dir, `whence -s deep
 whence -S deep`)
@@ -112,6 +114,7 @@ whence -S deep`)
 
 // `-S` wins when both are given, in either order.
 func TestWhenceTheLongerChainWinsWhenBothLettersAreGiven(t *testing.T) {
+	t.Parallel()
 	dir := whenceLinkTree(t)
 	out, st := runZshLinks(t, dir, `whence -sS two
 whence -Ss two`)
@@ -125,6 +128,7 @@ whence -Ss two`)
 // `-w` is not this question. Measured — the kind word is never decorated,
 // whichever of the two letters stands beside it.
 func TestWhenceTheKindWordIsNotDecoratedByTheLinkLetters(t *testing.T) {
+	t.Parallel()
 	dir := whenceLinkTree(t)
 	out, st := runZshLinks(t, dir, `whence -sw two
 whence -Sw two
@@ -138,6 +142,7 @@ whence -w two`)
 // The other three shapes each write the arrow: the bare form above, `-p`,
 // `-c` — which is what `which` and `where` are — and `-v`, which is `type`.
 func TestWhenceTheLinkLettersReachEveryShapeThatWritesAPath(t *testing.T) {
+	t.Parallel()
 	dir := whenceLinkTree(t)
 	out, st := runZshLinks(t, dir, `whence -sp two
 whence -sc two
@@ -161,6 +166,7 @@ where -S two`)
 // Rendering the whole string first and handing that to the sentence quoted
 // the arrow along with the path, which is what this row catches.
 func TestWhenceTheVerboseSentenceQuotesThePathAndNotTheArrow(t *testing.T) {
+	t.Parallel()
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -192,6 +198,7 @@ func TestWhenceTheVerboseSentenceQuotesThePathAndNotTheArrow(t *testing.T) {
 // A name that is not a file never reaches the resolution, and a name PATH
 // does not hold is the ordinary silence at 1.
 func TestWhenceTheLinkLettersLeaveEverythingButAFileAlone(t *testing.T) {
+	t.Parallel()
 	dir := whenceLinkTree(t)
 	out, st := runZshLinks(t, dir, `f() { :; }
 alias al=ls
@@ -217,6 +224,7 @@ print -r -- "missing=$?"`)
 // gap rather than the behavior — see whenceindent_test.go, and
 // interp.Runner.FunctionBodyIndentOption for the reader the four names share.
 func TestWhenceStillNamesTheLettersItHasNotGot(t *testing.T) {
+	t.Parallel()
 	dir := whenceLinkTree(t)
 	out, st := runZshLinks(t, dir, `whence -m "tw*" 2>&1
 print -r -- "m=$?"

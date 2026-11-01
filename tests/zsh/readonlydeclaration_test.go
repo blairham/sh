@@ -25,6 +25,7 @@ import (
 // evidence. A `readonly` that took every byte after a dash would pass a table
 // of takes alone.
 func TestReadonlyTakesTheDeclarationsLetters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ letter, want string }{
 		{"a", "array-readonly"},
 		{"A", "association-readonly"},
@@ -64,6 +65,7 @@ func TestReadonlyTakesTheDeclarationsLetters(t *testing.T) {
 // *shape* rather than an attribute word. It rides the same route and is here
 // so that the table's `-T` row is not the only thing standing for it.
 func TestReadonlyTakesTheTieLetter(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `readonly -T TT=x:y tt; print "${#tt} [${tt[1]}] [$TT]"`)
 	want := "2 [x] [x:y]\n"
 	if out != want || st != 0 {
@@ -88,6 +90,7 @@ func TestReadonlyTakesTheTieLetter(t *testing.T) {
 // pointed at the pair rather than at the answer, because the pair is what it
 // is for.
 func TestReadonlyAndTypesetTieAnArrayLiteralAlike(t *testing.T) {
+	t.Parallel()
 	ro, roSt := answersRun(t, `readonly -T AA aa=(a b); print "reached ${#aa}"`)
 	ts, tsSt := answersRun(t, `typeset -rT BB bb=(a b); print "reached ${#bb}"`)
 	for _, tc := range []struct {
@@ -116,6 +119,7 @@ func TestReadonlyAndTypesetTieAnArrayLiteralAlike(t *testing.T) {
 // `readonly` half was silent at 0 while the `typeset` half refused and
 // stopped the script.
 func TestReadonlyMeetsTheKindGateTypesetMeets(t *testing.T) {
+	t.Parallel()
 	for _, word := range []string{"readonly", "typeset"} {
 		t.Run(word, func(t *testing.T) {
 			out, st := answersRun(t, word+` -A path; print reached`)
@@ -132,6 +136,7 @@ func TestReadonlyMeetsTheKindGateTypesetMeets(t *testing.T) {
 
 // The preset's own answer, pinned where the rest of this dialect's are.
 func TestReadonlyWordIsTheDeclaration(t *testing.T) {
+	t.Parallel()
 	s := zsh.Semantics()
 	if got, want := s.ReadonlyWord, interp.ReadonlyWordIsTheDeclaration; got != want {
 		t.Errorf("ReadonlyWord = %v, want %v", got, want)

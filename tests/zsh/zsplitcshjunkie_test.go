@@ -10,6 +10,7 @@ import "testing"
 // never closes as words, as it does after the first (#5151, a chunk of
 // D04parameter.ztst). Measured 2026-10-03 on zsh 5.9.2 under `-f`.
 func TestTheShellWordSplitReadsOnAfterASecondUnclosedQuote(t *testing.T) {
+	t.Parallel()
 	const f = "setopt cshjunkiequotes\n"
 	for _, tc := range []struct{ src, want string }{
 		{`b=$'\' s\n" d\nword'; printf '<%s>' "${(@Z+n+)b}"; echo`, "<' s><\" d><word>\n"},

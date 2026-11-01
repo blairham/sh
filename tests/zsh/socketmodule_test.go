@@ -45,6 +45,7 @@ func socketDir(t *testing.T) string {
 // This is the test a hollow module fails. `zmodload -F zsh/net/socket
 // b:zsocket` answering 0 costs nothing to fake.
 func TestZsocketListensConnectsAcceptsAndCarriesAMessage(t *testing.T) {
+	t.Parallel()
 	out, st := runZshWithSystem(t, socketDir(t), `zmodload zsh/net/socket; zsocket -l sock
 print -r -- "listen=$? usable=$(( REPLY > 2 ))"
 listener=$REPLY
@@ -70,6 +71,7 @@ print -r -- "got=[$line]"`)
 // connection *is* waiting, so the 1 is about the queue rather than about the
 // descriptor.
 func TestZsocketDashTAnswersWithoutWaiting(t *testing.T) {
+	t.Parallel()
 	out, st := runZshWithSystem(t, socketDir(t), `zmodload zsh/net/socket; zsocket -l sock
 listener=$REPLY
 zsocket -a -t $listener 2>&1
@@ -94,6 +96,7 @@ print -r -- "closed=$?"`)
 // and is what zsocketBacklog exists to reproduce; a second connection with the
 // first still queued is `connection refused` rather than a second descriptor.
 func TestZsocketPutsTheDescriptorWhereItIsToldAndSaysSoWithDashV(t *testing.T) {
+	t.Parallel()
 	out, st := runZshWithSystem(t, socketDir(t), `zmodload zsh/net/socket; zsocket -l sock
 listener=$REPLY
 zsocket -d 8 sock
@@ -112,6 +115,7 @@ zsocket -v -d 9 sock`)
 // builtins, and dialect/zsh/internal/gatedfs/shellpath.go for why the process's directory is not the
 // shell's.
 func TestZsocketFollowsTheShellsOwnDirectory(t *testing.T) {
+	t.Parallel()
 	// `zsh/files` as well, for the `zf_mkdir` this row makes its directory
 	// with: that module's builtins wait for their own load (#4997).
 	out, st := runZshWithSystem(t, socketDir(t), `zmodload zsh/net/socket; zmodload zsh/files; zf_mkdir -p sub

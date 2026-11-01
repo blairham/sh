@@ -20,6 +20,7 @@ import (
 // bash 5.3.20 answers unset on the two rows whose bracket it reads as written
 // — see interp.Semantics.ConditionIsSetExpandsAFlatSubscript (#3298).
 func TestTheIsSetConditionExpandsASubscriptThatReachedItAsText(t *testing.T) {
+	t.Parallel()
 	const setup = `typeset -A m; k='x y'; kk='$k'; m[$k]=V; w='m[$k]'; `
 	for _, c := range []struct{ name, expr, want string }{
 		{"single quoted operand", `'m[$k]'`, "SET"},
@@ -49,6 +50,7 @@ func TestTheIsSetConditionExpandsASubscriptThatReachedItAsText(t *testing.T) {
 // Measured 2026-09-19 on zsh 5.9.2 from a script file — see
 // interp.Semantics.DeclarationOperandExpandsItsSubscript (#3298).
 func TestADeclarationOperandExpandsASubscriptThatReachedItAsText(t *testing.T) {
+	t.Parallel()
 	const keys = `; for q in "${(@k)d}"; do printf '[%s]' "$q"; done`
 	for _, c := range []struct{ name, src, want string }{
 		{"typeset over a table", `typeset -A d; k='x y'; typeset 'd[$k]'=Q` + keys, "[x y]"},
@@ -76,6 +78,7 @@ func TestADeclarationOperandExpandsASubscriptThatReachedItAsText(t *testing.T) {
 
 // The two axes this dialect answers, pinned where the rest of them are.
 func TestThisDialectExpandsASubscriptThatArrivedAsText(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().ConditionIsSetExpandsAFlatSubscript; got != interp.Yes {
 		t.Errorf("ConditionIsSetExpandsAFlatSubscript = %v, want %v", got, interp.Yes)
 	}
@@ -97,6 +100,7 @@ func TestThisDialectExpandsASubscriptThatArrivedAsText(t *testing.T) {
 // round not happening rather than the quoted brackets not reaching `unset`.
 // See interp.Semantics.UnsetExpandsAFlatSubscript (#3298).
 func TestABuiltinsOperandRoundsExceptAtUnset(t *testing.T) {
+	t.Parallel()
 	const table = `typeset -A m; k='x y'; m[$k]=hello; `
 	const keys = `; for q in "${(@k)m}"; do printf '[%s]' "$q"; done`
 	for _, c := range []struct{ name, src, want string }{
@@ -120,6 +124,7 @@ func TestABuiltinsOperandRoundsExceptAtUnset(t *testing.T) {
 // The three the builtins read, pinned where the rest of them are — and this
 // shell parts from the one that names the group at exactly one of them.
 func TestThisDialectRoundsABuiltinsSubscriptTextExceptAtUnset(t *testing.T) {
+	t.Parallel()
 	s := zsh.Semantics()
 	if got := s.UnsetExpandsAFlatSubscript; got != interp.No {
 		t.Errorf("UnsetExpandsAFlatSubscript = %v, want %v", got, interp.No)

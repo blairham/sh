@@ -24,6 +24,7 @@ import (
 // sentence and at the status the reference gives it, with the script carrying
 // on and the parameter untouched.
 func TestPrivateRefusesTheShellsOwnParameters(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `zmodload zsh/param/private
 f() { private path; print "st=$?"; print "p=$path" }
 f
@@ -91,6 +92,7 @@ f`)
 // anywhere. `private path` there is the listing `typeset path` is, and
 // `private HOME=/x` assigns.
 func TestTheShellsOwnParametersAreTakenOutsideAFunction(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `zmodload zsh/param/private
 private path; print "st=$?"
 private HOME=/x; print "st=$? home=$HOME"`)
@@ -114,6 +116,7 @@ private HOME=/x; print "st=$? home=$HOME"`)
 // a bare `+` is an option word rather than a declaration, so there is nothing
 // to refuse — until an operand carries a value, when both reasons come back.
 func TestTheTwoWaysPastTheRefusalOverTheShellsOwn(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `zmodload zsh/param/private
 f() { private -h path; print "st=$? p=[$path]" }
 f
@@ -178,6 +181,7 @@ f`)
 // not the word — `-` reached this already because it leaves every flag at its
 // zero, and `+` did not because it sets one.
 func TestABareSignListsRatherThanDeclares(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `v=hi
 typeset + v; typeset - v; typeset v`)
 	want := "v=hi\nv=hi\nv=hi\n"

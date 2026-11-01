@@ -27,6 +27,7 @@ func spliced(t *testing.T, src string) (string, int) {
 }
 
 func TestASubscriptOnAStringSplicesItsCharacters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ write, want string }{
 		// zsh 5.9.2, `v=abc` throughout:
 		{`v[2]=X`, "[aXc] typeset v=aXc"},
@@ -76,6 +77,7 @@ func TestASubscriptOnAStringSplicesItsCharacters(t *testing.T) {
 // the gap in front of it — which is the boundary, and the half that must not
 // move: `typeset -a u=( ” X )` is what zsh leaves.
 func TestASubscriptOnANameThatHoldsNothingBuildsAnArray(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ start, want string }{
 		{"", "typeset -a u=( '' X )"},
 		{"u=abc\nunset u\n", "typeset -a u=( '' X )"},
@@ -97,6 +99,7 @@ func TestASubscriptOnANameThatHoldsNothingBuildsAnArray(t *testing.T) {
 // character. The negative reading does not move, which is the same half of the
 // option that did not move for arrays (#1726).
 func TestKshArraysMovesWhichCharacterASubscriptNames(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ write, want string }{
 		{`v[0]=X`, "[Xbc]"},
 		{`v[1]=X`, "[aXc]"},
@@ -116,6 +119,7 @@ func TestKshArraysMovesWhichCharacterASubscriptNames(t *testing.T) {
 // A non-negative subscript below the first character is the array's refusal
 // reached through a string: the same sentence, and the script ends at 1.
 func TestASubscriptBelowTheFirstCharacterIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	for _, write := range []string{`v[0]=X`, `v[0,0]=X`} {
 		out, st := spliced(t, "v=abc\n"+write+"\nprint -r -- reached")
 		const want = "zsh:2: v: assignment to invalid subscript range"
@@ -129,6 +133,7 @@ func TestASubscriptBelowTheFirstCharacterIsRefusedByName(t *testing.T) {
 // reach. Measured: the subscript is ignored and the value lands whole, and
 // `+=` at one is refused outright.
 func TestASubscriptOnANumericNameTakesTheValueWhole(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, want string
 		status    int
@@ -154,6 +159,7 @@ func TestASubscriptOnANumericNameTakesTheValueWhole(t *testing.T) {
 // `v[3]` and left `v` alone — which is the shape a prompt theme's worker reads
 // its responses in, one `sysread` at a time into `buf[$#buf+1]`.
 func TestReadFillsASubscriptedOperand(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ start, operand, want string }{
 		{"v=xy\n", `v[$#v+1]`, "[xyQ] typeset v=xyQ"},
 		{"v=xy\n", `v[2]`, "[xQ] typeset v=xQ"},

@@ -17,6 +17,7 @@ import (
 // lines after it are the word's and never run as commands (#6614). Measured
 // 2026-10-15 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f < s.zsh`).
 func TestAnOpenGroupReadsOnIntoTheNextLineOnStandardInput(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, out, errs string }{
 		{
 			"print a(b\necho \"after st=$?\"\n", "",

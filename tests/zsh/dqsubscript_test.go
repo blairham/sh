@@ -11,6 +11,7 @@ import "testing"
 // `env -i PATH=/usr/bin:/bin LC_ALL=C`) with both keys planted; each row is
 // what that shell wrote.
 func TestADoubleQuotedSubscriptSpendsTheEscapedQuote(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const plant = "typeset -A h; h=('a\"b' bare 'a\\\"b' kept 'a$b' D 'axb' X 'a\\xb' KX)\na=('a\"b' 'a\\\"b')\n"
 	for _, c := range []struct{ name, src, want string }{

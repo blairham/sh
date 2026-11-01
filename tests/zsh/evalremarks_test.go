@@ -28,6 +28,7 @@ import (
 // the alias expansion a script gets. A table asserted through it would have
 // passed against the code that dropped the remark.
 func TestEvalAndSourceReportTheirRemarks(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	fn := filepath.Join(dir, "fn.sh")
 	if err := os.WriteFile(fn, []byte("ba() { print no; }\n"), 0o600); err != nil {

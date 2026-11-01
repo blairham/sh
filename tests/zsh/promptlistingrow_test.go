@@ -33,6 +33,7 @@ import (
 // default the driver supplies, which would make this a test of the front end
 // passing or failing for a reason in another package.
 func TestTheFivePromptSpellingsWriteANamedListingRow(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct{ name, want string }{
 		{"PROMPT", "typeset PROMPT=''\n"},
 		{"PROMPT2", "typeset PROMPT2=''\n"},
@@ -61,6 +62,7 @@ func TestTheFivePromptSpellingsWriteANamedListingRow(t *testing.T) {
 // broke listings altogether fails the control rather than passing this test
 // against two empty haystacks.
 func TestTheFivePromptSpellingsAreInTheWholeShellListings(t *testing.T) {
+	t.Parallel()
 	for _, form := range []string{"typeset -p", "set"} {
 		t.Run(form, func(t *testing.T) {
 			out, st := runZsh(t, t.TempDir(), form)
@@ -101,6 +103,7 @@ func TestTheFivePromptSpellingsAreInTheWholeShellListings(t *testing.T) {
 //     is the control that separates "these five now list" from "every
 //     produced name now lists".
 func TestTheFivePromptSpellingsKeepTheirTypeWordAndClaimNoAttribute(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `
 		for n in PROMPT PROMPT2 PROMPT3 PROMPT4 prompt; do
 			print -r -- "$n ${(tP)n}"
@@ -142,6 +145,7 @@ func TestTheFivePromptSpellingsKeepTheirTypeWordAndClaimNoAttribute(t *testing.T
 // rather than a default, which is also how the value half of `PROMPT4`'s row
 // is asserted without reading the front end's defaults.
 func TestAPromptSpellingsRowFollowsTheStoreItIsASpellingOf(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `PS1=QQ; typeset -p PROMPT prompt`)
 	if st != 0 || out != "typeset PROMPT=QQ\ntypeset prompt=QQ\n" {
 		t.Errorf("PS1=QQ then typeset -p = %q at %d, want both spellings reading QQ", out, st)

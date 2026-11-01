@@ -16,6 +16,7 @@ import (
 // 2026-09-26 on zsh 5.9.2 under `-f`; see dialect/zsh/shellownparameters.go
 // for the whole table and for the reference's own version.
 func TestTheShellsOwnStoredParametersDescribeThemselves(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the real uid", `print -r -- ${(t)UID}`, "integer-special\n"},
 		{"the effective uid", `print -r -- ${(t)EUID}`, "integer-special\n"},

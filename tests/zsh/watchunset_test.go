@@ -26,6 +26,7 @@ const watchProbe = `print -r -- "+W=${+WATCH} +w=${+watch} W=[$WATCH] ` +
 // set test cannot see on its own: `${+WATCH}` of 1 says the name is there and
 // `W=[]` says the pair's value went with the half that was removed.
 func TestUnsettingOneHalfOfTheWatchPairLeavesTheOther(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the array half", "unset watch",
@@ -77,6 +78,7 @@ func TestUnsettingOneHalfOfTheWatchPairLeavesTheOther(t *testing.T) {
 // the first and last rows wrong, and one that stopped mirroring after an
 // `unset` gets the middle two wrong.
 func TestAWriteAfterHalfThePairIsRemovedMirrorsOnlyIntoAHalfThatIsThere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the array gone, the scalar written",
@@ -117,6 +119,7 @@ func TestAWriteAfterHalfThePairIsRemovedMirrorsOnlyIntoAHalfThatIsThere(t *testi
 // Measured in the same run: every one of them answers the same in both
 // shells, before this change and after it.
 func TestUnsettingHalfOfATiedPairStillRemovesBoth(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a tie a script made", "typeset -T SCA sca\nSCA=a:b\nunset SCA\n" +

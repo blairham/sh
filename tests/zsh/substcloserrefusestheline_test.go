@@ -27,6 +27,7 @@ import (
 // `unsetopt shortloops` on a line above it, which moves none of these
 // eighteen columns.
 func TestABodyRefusedAtTheCloserRefusesTheLine(t *testing.T) {
+	t.Parallel()
 	for _, body := range []string{
 		// The six the reference refuses unconditionally, which is the
 		// measurement #4859 was filed from.
@@ -49,6 +50,7 @@ func TestABodyRefusedAtTheCloserRefusesTheLine(t *testing.T) {
 // refusal rather than about the substitution: each of these writes `b` in the
 // reference too.
 func TestABodyTheReferenceDefersLeavesTheLineRunning(t *testing.T) {
+	t.Parallel()
 	for _, body := range []string{
 		// The short-body option's own population, with the option on — which
 		// is this preset's default. TestTheShortLoopsOptionDecidesIt is where

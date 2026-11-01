@@ -9,6 +9,7 @@ import "testing"
 // 2026-10-03 on zsh 5.9 under `-c` (#5642). See
 // interp.Semantics.PlusSignedPrintListsNoValues.
 func TestAPlusPrintListsAsTheMinusDoes(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`x=/y; typeset +p x`, "typeset x=/y\n"},
 		{`typeset -i n=1; typeset +p n`, "typeset -i n=1\n"},

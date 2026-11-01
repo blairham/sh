@@ -85,6 +85,7 @@ func runChase(t *testing.T, root, src string) string {
 // four states are asked rather than the two that would pass if one of them
 // simply turned the other on.
 func TestChaseLinksAndChaseDotsOverTheFourCombinations(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src                      string
 		neither, dots, links, bothOpts string
@@ -220,6 +221,7 @@ func TestChaseLinksAndChaseDotsOverTheFourCombinations(t *testing.T) {
 // on, so it is the option and not the path that decides whether the letter is
 // heard. Measured on zsh 5.9.2, `-f`, 2026-09-26.
 func TestTheLogicalLetterOverridesChaseLinksAndNotChaseDots(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, setopt, src, want string }{
 		{
 			"chaselinks, cd -L through a link",
@@ -301,6 +303,7 @@ func TestTheLogicalLetterOverridesChaseLinksAndNotChaseDots(t *testing.T) {
 //
 // Measured on zsh 5.9.2, `-f`, 2026-09-26.
 func TestChaseLinksIsReadAtTheCommandThatIsRunning(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			// On at the `cd` and off by the `pwd`: `$PWD` was written
@@ -398,6 +401,7 @@ func TestChaseLinksIsReadAtTheCommandThatIsRunning(t *testing.T) {
 //
 // Measured on zsh 5.9.2, `-f`, 2026-09-26.
 func TestChaseOptionsAreReportedAndScopedLikeOptions(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"the two report apart",
@@ -474,6 +478,7 @@ func TestChaseOptionsAreReportedAndScopedLikeOptions(t *testing.T) {
 // Both names are written by a bare `setopt` when they are on, which is the
 // listing half of the reporting and is separate from `[[ -o … ]]`.
 func TestTheSetoptListingNamesTheChaseOptions(t *testing.T) {
+	t.Parallel()
 	root := chaseTree(t)
 	out := runChase(t, root, "setopt chaselinks chasedots\nsetopt\n")
 	for _, want := range []string{"chasedots\n", "chaselinks\n"} {

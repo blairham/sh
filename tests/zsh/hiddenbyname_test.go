@@ -24,6 +24,7 @@ import (
 // the whole of the rule, and a change that lifted the withholding everywhere
 // would have moved all three.
 func TestAHiddenNameAskedForByNameWritesItsValue(t *testing.T) {
+	t.Parallel()
 	const decl = "typeset -H h=hv\n"
 	for _, tc := range []struct{ name, src, want string }{
 		{"asked by name", "typeset h", "h=hv\n"},

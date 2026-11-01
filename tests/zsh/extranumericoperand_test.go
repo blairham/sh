@@ -17,6 +17,7 @@ import "testing"
 // to shift, so a second word is one of those rather than one too many. See
 // Semantics.ShiftNamesAreArrays, and the last row below, which is that.
 func TestAWordBehindANumericOperandIsTooManyArguments(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{

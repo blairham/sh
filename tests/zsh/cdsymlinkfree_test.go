@@ -22,6 +22,7 @@ import (
 // a directory called `-s` — the same failure `-q` had before #1558, and the
 // reason a letter this shell has is never a free one here.
 func TestCdSymlinkFreeIsThisShellsLetter(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().CdHasSymlinkFreeOption; got != interp.Yes {
 		t.Fatalf("this shell has `cd -s`; the preset says %v", got)
 	}
@@ -56,6 +57,7 @@ func TestCdSymlinkFreeIsThisShellsLetter(t *testing.T) {
 // `no such file or directory`. Saying either for both is an answer this
 // shell can be shown to disagree with.
 func TestCdSymlinkFreeRefusalIsNotTheMissingOne(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "real"), 0o755); err != nil {
 		t.Fatal(err)

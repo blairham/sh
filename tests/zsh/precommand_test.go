@@ -27,6 +27,7 @@ import (
 // one thing that cannot tell the fix from the bug.
 
 func TestNoglobSwitchesTheMatchOffForTheWordsBehindIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The pair that is the whole of it: without the modifier the
 		// unmatched pattern is fatal here, with it the word stands.
@@ -98,6 +99,7 @@ func TestNoglobSwitchesTheMatchOffForTheWordsBehindIt(t *testing.T) {
 // TestNoglobLeavesTheOtherHalvesOfMatchingAlone: only the filesystem pass is
 // switched off, which is the same boundary `set -o noglob` keeps.
 func TestNoglobLeavesTheOtherHalvesOfMatchingAlone(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "a.txt"), nil, 0o600); err != nil {
 		t.Fatal(err)
@@ -123,6 +125,7 @@ func TestNoglobLeavesTheOtherHalvesOfMatchingAlone(t *testing.T) {
 // from the written words rather than the expanded ones, and the copy that did
 // not know about the modifier read into a subshell and left the name empty.
 func TestNoglobDoesNotMoveTheCommandOutOfThisShell(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`echo a | read x; echo "x=[$x]"`, "x=[a]"},
 		{`echo a | noglob read x; echo "x=[$x]"`, "x=[a]"},
@@ -138,6 +141,7 @@ func TestNoglobDoesNotMoveTheCommandOutOfThisShell(t *testing.T) {
 // `whence -w` calls one reserved and the other a builtin, and every row here
 // is a shape that tells them apart. See syntax.Dialect.ReservedPrecommands.
 func TestNocorrectIsGrammarAndNoglobIsNot(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`nocorrect echo hi`, "hi"},
 		{`nocorrect nocorrect echo hi`, "hi"},
@@ -171,6 +175,7 @@ func TestNocorrectIsGrammarAndNoglobIsNot(t *testing.T) {
 // behind it, which is what says the word was consumed by the grammar rather
 // than passed on as an argument.
 func TestNocorrectRefusesWhatMayNotFollowIt(t *testing.T) {
+	t.Parallel()
 	if _, err := parseZsh("nocorrect if true; then echo hi; fi"); err == nil {
 		t.Error("nocorrect if … parsed, want a refusal")
 	}
@@ -192,6 +197,7 @@ func TestNocorrectRefusesWhatMayNotFollowIt(t *testing.T) {
 // The rows here run `/bin/sh`, which the scratch PATH does not hold and does
 // not need to: the name is written with a slash in it.
 func TestTheDashModifierNamesTheCommandWithADash(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The control, and then the one line that separates a modifier from
 		// a discard.
@@ -235,6 +241,7 @@ func TestTheDashModifierNamesTheCommandWithADash(t *testing.T) {
 // modifier still reads it — so it is this word and not "a modifier in front of
 // a modifier".
 func TestTheDashModifierStopsTheOptionScanBehindIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`exec -l /bin/sh -c 'echo "[$0]"'`, "[-/bin/sh]"},
 		{`exec -a zz /bin/sh -c 'echo "[$0]"'`, "[zz]"},
@@ -282,6 +289,7 @@ func TestTheDashModifierStopsTheOptionScanBehindIt(t *testing.T) {
 // assignment prefix takes a command off the route in every dialect, which is
 // the same clause the null command already carries.
 func TestAModifierWithNothingToRunLeavesARedirectionWithNoCommand(t *testing.T) {
+	t.Parallel()
 	const refused = "zsh:1: redirection with no command"
 	for _, tc := range []struct{ src, want string }{
 		{`NULLCMD=:; noglob >f; print after`, refused},
@@ -318,6 +326,7 @@ func TestAModifierWithNothingToRunLeavesARedirectionWithNoCommand(t *testing.T) 
 // whose own no-command form is defined, so a chain holding it leaves the
 // redirection something to belong to — wherever in the chain it stands.
 func TestTheRedirectionFormIsNotCommandless(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`NULLCMD=:; exec >f; print after; exec >&2; read -r x <f; print -r -- $x`,
 		`NULLCMD=:; builtin exec >f; print after; exec >&2; read -r x <f; print -r -- $x`,
@@ -332,6 +341,7 @@ func TestTheRedirectionFormIsNotCommandless(t *testing.T) {
 // TestCommandStopsTheScan: the word behind `command` is a command name and not
 // a modifier, which naming it in the table must not change.
 func TestCommandStopsTheScan(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// Looked up on the filesystem rather than read as the modifier it
 		// spells — the scratch PATH holds neither.
@@ -360,6 +370,7 @@ func TestCommandStopsTheScan(t *testing.T) {
 // The child prints its "$0" quoted: a child that printed it bare would match
 // `foo*` itself and hide the difference.
 func TestExecOptionsAreReadBeforeTheMatch(t *testing.T) {
+	t.Parallel()
 	const child = `/bin/sh -c 'printf "[%s]" "$0" "$@"; echo'`
 	for _, tc := range []struct{ src, want string }{
 		{`exec -a foo* ` + child, "[foo*]"},

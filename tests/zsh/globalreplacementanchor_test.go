@@ -18,6 +18,7 @@ import (
 // Every row below was taken against bash 5.3.20, bash-as-`sh`, bash 3.2.57
 // and ksh93u+ 2012-08-01 in the same run, and this shell is alone in each.
 func TestTheGlobalSpellingTakesAnAnchor(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -97,6 +98,7 @@ func TestTheGlobalSpellingTakesAnAnchor(t *testing.T) {
 // into it, because they are two questions: the other four columns answer the
 // first yes and this one no.
 func TestTheGlobalReplacementAnchorAnswer(t *testing.T) {
+	t.Parallel()
 	s := zsh.Semantics()
 	if got, want := s.GlobalReplacementAnchors, interp.Yes; got != want {
 		t.Errorf("GlobalReplacementAnchors = %v, want %v", got, want)

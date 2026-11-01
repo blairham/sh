@@ -11,6 +11,7 @@ import "testing"
 // The `16#` row beside it is the control that was already right, and the
 // plain `0` row says the base comes from the prefix rather than the zero.
 func TestABareHexPrefixTeachesTheBaseHere(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -i b; b=0x; echo "A [$b]"; typeset -p b
 typeset -i c; c=16#; echo "B [$c]"
 typeset -i d; d=0; echo "C [$d]"`)

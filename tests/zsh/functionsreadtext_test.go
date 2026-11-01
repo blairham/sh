@@ -10,6 +10,7 @@ import "testing"
 // a subshell's own definition. Measured on zsh 5.9.2 (`-f`, 2026-10-12),
 // byte for byte; see interp/bodytext.go and #6423.
 func TestAFunctionsKeptTextFollowsItsDefinition(t *testing.T) {
+	t.Parallel()
 	const src = `g() { if true; then a; fi; }
 x=${functions[g]}
 functions -x 2 g

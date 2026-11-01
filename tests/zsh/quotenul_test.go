@@ -9,6 +9,7 @@ import "testing"
 // `\0`, and as `\000` only before an octal digit. Measured 2026-10-02 on zsh
 // 5.9.2 under `-f` (#5336).
 func TestAQuotedNulIsBackslashZero(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`x=$'a\0b'; print -r -- ${(q)x} ${(qqqq)x}`, `a$'\0'b $'a\0b'` + "\n"},
 		{`x=$'\0'1; print -r -- ${(q)x} ${(qqqq)x}`, `$'\000'1 $'\0001'` + "\n"},

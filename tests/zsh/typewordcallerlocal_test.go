@@ -18,6 +18,7 @@ import "testing"
 // Measured on zsh 5.9.2, 2026-09-27, under `-f` from a script file with a
 // scratch `HOME` (#4833).
 func TestACallersLocalDescribesAsLocalFromACallee(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `inner() { print "  deep=${(t)ht}" }
 outer() { inner }
 top()   { typeset -a ht=(top level); outer }
@@ -44,6 +45,7 @@ stop`)
 // binding, and a fix keyed on making them agree would have made the listing
 // wrong. It is pinned here rather than left to be rediscovered.
 func TestAListingStillCallsACallersLocalGlobal(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `pinner() { typeset -p ht }
 ptop()   { typeset -a ht=(top level); pinner }
 ptop`)
@@ -65,6 +67,7 @@ ptop`)
 //
 // Measured on zsh 5.9.2, 2026-09-27 (#4833).
 func TestACalleeLooksPastAPrivateWhenItWritesTheWord(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `zmodload zsh/param/private
 v=9
 g() { print "  outer=${(t)v} [$v]" }

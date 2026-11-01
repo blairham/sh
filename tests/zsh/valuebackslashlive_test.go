@@ -13,6 +13,7 @@ import (
 // metacharacter behind it stays live. Measured 2026-10-03 on zsh 5.9.2 in a
 // directory holding `a*b`, `a\*b` and `a\\*b`.
 func TestAValueBackslashLeavesTheScriptsMetacharacterLive(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, n := range []string{`a*b`, `a\*b`, `a\\*b`} {
 		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o644); err != nil {

@@ -13,6 +13,7 @@ import "testing"
 // the script as the freeze's refusal does from inside `read`. Measured
 // 2026-10-27 and 2026-10-28 on zsh 5.9.2, `-c` (#6869).
 func TestReadArrayIntoAnElementSplices(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"the first element", `b=(x y); read -A 'b[1]' <<< 'p q'; typeset -p b`, "typeset -a b=( p q y )\n"},
 		{"a middle element", `b=(x y z); read -A 'b[2]' <<< 'p q'; typeset -p b`, "typeset -a b=( x p q z )\n"},

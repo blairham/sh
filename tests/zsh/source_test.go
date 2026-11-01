@@ -124,6 +124,7 @@ func wantWholeLines(t *testing.T, out string, want ...string) {
 }
 
 func TestSourceIsASynonymForDot(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "s.sh")
 	if err := os.WriteFile(path, []byte("echo via-source\n"), 0o600); err != nil {
@@ -141,6 +142,7 @@ func TestSourceIsASynonymForDot(t *testing.T) {
 // zsh's pairing of the two location answers and the reason the function flag
 // wins.
 func TestADiagnosticNamesTheSourcedFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "inc.sh"),
 		[]byte("nosuchcmd-xyz\nf() {\n  nosuchcmd-xyz\n}\n"), 0o600); err != nil {
@@ -164,6 +166,7 @@ func TestADiagnosticNamesTheSourcedFile(t *testing.T) {
 // from -c and 126 from a file `.` opened. bash says 2 for both and ksh93 3 for
 // both, so folding the two together would have lost one of zsh's answers.
 func TestASyntaxErrorDependsOnWhereItWasRead(t *testing.T) {
+	t.Parallel()
 	d := zsh.Diagnostics()
 	if d.SyntaxErrorStatus != 1 {
 		t.Errorf("SyntaxErrorStatus = %d, want 1", d.SyntaxErrorStatus)
@@ -187,6 +190,7 @@ func TestASyntaxErrorDependsOnWhereItWasRead(t *testing.T) {
 }
 
 func TestEvalAndDotAxes(t *testing.T) {
+	t.Parallel()
 	s := zsh.Semantics()
 	for _, tc := range []struct {
 		axis string
@@ -217,6 +221,7 @@ func TestEvalAndDotAxes(t *testing.T) {
 // TestExecAxesAndWording records what zsh does about `exec`, which is the most
 // divergent of the four.
 func TestExecAxesAndWording(t *testing.T) {
+	t.Parallel()
 	s := zsh.Semantics()
 	// zsh and ksh93 drop the EXIT trap where dash and bash run it.
 	if got := s.ExecFailureRunsExitTrap; got != interp.No {
@@ -261,6 +266,7 @@ func TestAFailedExecDropsTheExitTrap(t *testing.T) {
 // named after it, so bare `==` is a search for a command called `=`. Real zsh
 // says "= not found" and exits 1, and so do we.
 func TestDoubleEqualInTest(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if _, st := runZsh(t, dir, `test a "==" a`); st != 0 {
 		t.Errorf("equal operands: status %d, want 0", st)
@@ -283,6 +289,7 @@ func TestDoubleEqualInTest(t *testing.T) {
 // diagnostic blames the name that was typed. Run rather than asserted against
 // the wording string, since the wording is what would be wrong.
 func TestABracketNamesItself(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if out, _ := runZsh(t, dir, `test 1 -eq a`); !strings.Contains(out, `:test:`) {
 		t.Errorf("test: said %q, want %q", out, `:test:`)
@@ -313,6 +320,7 @@ func TestAKilledCommandsStatus(t *testing.T) {
 
 // TestPipefail: zsh has the option.
 func TestPipefail(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, _ := runZsh(t, dir, "set -o pipefail\n(exit 3) | (exit 4) | true\necho st=$?\n")
 	if !strings.Contains(out, "st=4") {
@@ -328,6 +336,7 @@ func TestPipefail(t *testing.T) {
 // dialect says `f: …` — still ends with the shape that did not, so neither
 // Contains nor HasSuffix can tell the two apart.
 func TestARedirectFailure(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, _ := runZsh(t, dir, "cat < nope\necho st=$?\n")
 	if got := strings.SplitN(strings.TrimSpace(out), "\n", 2)[0]; got != `zsh:1: no such file or directory: nope` {
@@ -346,6 +355,7 @@ func TestARedirectFailure(t *testing.T) {
 // TestSetOInABundle: `-o` as the last letter of a bundle, which is how every
 // real script writes it.
 func TestSetOInABundle(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, _ := runZsh(t, dir, "set -uo noglob\necho ok=$?\necho *\n")
 	if !strings.Contains(out, "ok=0") || !strings.Contains(out, "*") {
@@ -357,6 +367,7 @@ func TestSetOInABundle(t *testing.T) {
 // produced. An ordinary failing pipeline stops every shell in the panel, so
 // this is about the failure the option adds and not about pipelines.
 func TestErrexitAndPipefail(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, _ := runZsh(t, dir, "set -eo pipefail\nfalse | true\necho reached\n")
 	if got := strings.Contains(out, "reached"); got != false {
@@ -375,6 +386,7 @@ func TestErrexitAndPipefail(t *testing.T) {
 // zsh takes C89's three letters and exactly one of them, so the C99
 // additions are invalid directives — named as the whole directive.
 func TestPrintfLengthModifiers(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, _ := runZsh(t, dir, "printf \"[%ld][%hd][%Lf]\\n\" 42 42 1.5\n")
 	if want := "[42][42][1.500000]"; !strings.Contains(out, want) {
@@ -392,6 +404,7 @@ func TestPrintfLengthModifiers(t *testing.T) {
 }
 
 func TestPrintfOptions(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, _ := runZsh(t, dir, "printf -v o \"%05d\" 42\necho \"[$o]\"\n")
 	if !strings.Contains(out, `[00042]`) {
@@ -454,6 +467,7 @@ func TestUmask(t *testing.T) {
 
 // TestLet: this dialect has `let`, and words an empty one its own way.
 func TestLet(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if out, _ := runZsh(t, dir, "let \"x = 2 + 3\"\necho $x\n"); strings.TrimSpace(out) != "5" {
 		t.Errorf("said %q, want 5", out)
@@ -569,6 +583,7 @@ func TestUlimit(t *testing.T) {
 // TestABadBuiltinOption: this dialect's wording, status, usage line and
 // whether a special builtin's bad option ends the script.
 func TestABadBuiltinOption(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, _ := runZsh(t, dir, "export -Q x\necho \"st=$?\"\necho after\n")
 	if !strings.Contains(out, "-Q") {
@@ -587,6 +602,7 @@ func TestABadBuiltinOption(t *testing.T) {
 
 // The same complaint as an unknown conversion, spelled with the directive.
 func TestPrintfMissingFormatCharacter(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{`printf 'a%'`, "%: invalid directive"},
@@ -603,6 +619,7 @@ func TestPrintfMissingFormatCharacter(t *testing.T) {
 // zero rather than an escape left standing — the same NUL this shell's `\x`
 // gives.
 func TestPrintfUnicodeEscapeIsACodePointOrANul(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{`printf 'a\u0041Z'`, "aAZ"},
@@ -622,6 +639,7 @@ func TestPrintfUnicodeEscapeIsACodePointOrANul(t *testing.T) {
 // `\x` reads at most two digits as one byte, and an empty digit run as a
 // zero rather than as an escape left standing.
 func TestPrintfHexEscapeIsAByteOrANul(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{`printf 'a\x41Z'`, "aAZ"},
@@ -639,6 +657,7 @@ func TestPrintfHexEscapeIsAByteOrANul(t *testing.T) {
 // axis could not answer for both letters. `\x` is here with the same NUL for
 // an empty digit run a format gives, and the bare octal wants its `\0`.
 func TestPrintfBEscapesAreZshs(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{`printf '%b' 'a\0101Z'`, "aAZ"},
@@ -660,6 +679,7 @@ func TestPrintfBEscapesAreZshs(t *testing.T) {
 // is the reading between bash's and ksh93's: `-x` is a bad option and `-1` is
 // a count it refuses for being below zero, in a sentence of its own.
 func TestShiftReadsOnlyNonNumericDashWordsAsOptions(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		src  string
@@ -682,6 +702,7 @@ func TestShiftReadsOnlyNonNumericDashWordsAsOptions(t *testing.T) {
 // `\e` is the escape character here and `\E` is two characters — the opposite
 // of ksh93 (#908).
 func TestEchoTakesTheSmallEscapeAlone(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "echo -e 'a\\eZ:a\\EZ'\n")
 	if out != "a\x1bZ:a\\EZ\n" || st != 0 {
 		t.Errorf("said % x status %d, want the small letter as ESC and the capital as written", out, st)
@@ -691,6 +712,7 @@ func TestEchoTakesTheSmallEscapeAlone(t *testing.T) {
 // The field applies to what a `\c` left, as in bash and dash and not in
 // ksh93 (#910).
 func TestPrintfBStopIsPadded(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{`printf '[%5b]' 'a\cb'`, "[    a"},
@@ -716,6 +738,7 @@ const abandonFile = "echo IN-BEFORE\nset -u\necho X${NOPE}\necho IN-AFTER\n"
 // the 3 a syntax error in a sourced file carries — and a fix that resumed the
 // sourcing file with the wrong number would satisfy any weaker assertion.
 func TestAnErrorInASourcedFileEndsThatFileAlone(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "p.sh"), []byte(abandonFile), 0o600); err != nil {
 		t.Fatal(err)
@@ -738,6 +761,7 @@ func TestAnErrorInASourcedFileEndsThatFileAlone(t *testing.T) {
 // on zsh 5.9.2 — the same file, one operand changed, and the sourcing file
 // never runs again.
 func TestTheErrorOperatorEndsTheShellFromInsideASourcedFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "p.sh"),
 		[]byte("echo IN-BEFORE\necho X${NOPE?msg}\necho IN-AFTER\n"), 0o600); err != nil {
@@ -758,6 +782,7 @@ func TestTheErrorOperatorEndsTheShellFromInsideASourcedFile(t *testing.T) {
 // to stop. Unanimous in the panel, and the one rule a boundary that consumed
 // controlExit without asking which kind it held would break.
 func TestExitInASourcedFileStillEndsTheShell(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "p.sh"),
 		[]byte("echo IN-BEFORE\nexit 7\necho IN-AFTER\n"), 0o600); err != nil {
@@ -777,6 +802,7 @@ func TestExitInASourcedFileStillEndsTheShell(t *testing.T) {
 // One axis, two statuses — which is why the number is a Diagnostics field the
 // file route passes and `eval` does not.
 func TestEvalIsTheSameBoundaryWithADifferentStatus(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(t, dir, "eval 'echo IN-BEFORE\nset -u\necho X${NOPE}\necho IN-AFTER'\necho \"OUT-AFTER st=$?\"\n")
 	// The location is the evaluated text's, counted from the top of it:
@@ -812,6 +838,7 @@ func TestEvalIsTheSameBoundaryWithADifferentStatus(t *testing.T) {
 // does the reverse. The contents differ per directory so a row cannot pass by
 // finding the wrong file.
 func TestSourceIsNotASynonymForDot(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		inPath  bool
@@ -853,6 +880,7 @@ func TestSourceIsNotASynonymForDot(t *testing.T) {
 // found in the current directory can `source` another one there, and a `.`
 // inside it is the ordinary builtin again and reports the file missing.
 func TestSourceLooksInTheCurrentDirectoryForItsOwnCallOnly(t *testing.T) {
+	t.Parallel()
 	work, path := t.TempDir(), t.TempDir()
 	write := func(name, body string) {
 		t.Helper()
@@ -879,6 +907,7 @@ func TestSourceLooksInTheCurrentDirectoryForItsOwnCallOnly(t *testing.T) {
 // anywhere: this shell puts the builtin it was given in the *location*, so the
 // two names produce two different lines for one failure.
 func TestSourceNamesItselfWhenItCannotOpen(t *testing.T) {
+	t.Parallel()
 	work, path := t.TempDir(), t.TempDir()
 	out, st, err := preset.Combined(t, dialecttest.Base{
 		Dir: work, Vars: map[string]string{"PATH": path},
@@ -903,6 +932,7 @@ func TestSourceNamesItselfWhenItCannotOpen(t *testing.T) {
 // `shift` answers `a b c` in both columns, which is the control that says
 // the restore itself is not what the shells disagree about.
 func TestASetInASourcedFileIsRestoredOverHere(t *testing.T) {
+	t.Parallel()
 	for _, body := range []string{"set -- m n o p", "set --", "shift"} {
 		t.Run(body, func(t *testing.T) {
 			dir := t.TempDir()

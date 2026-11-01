@@ -13,6 +13,7 @@ import "testing"
 //
 // Every row measured 2026-10-02 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f`).
 func TestTheTypeFlagDescribesALetteredDeclarationHoldingNothing(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{
 			`setopt typesettounset; f() { local -a la; local -A aa; local -F fl; local -i n; local -u U; local -x X; print "[${(t)la}][${(t)aa}][${(t)fl}][${(t)n}][${(t)U}][${(t)X}]"; }; f`,

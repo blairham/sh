@@ -12,6 +12,7 @@ import "testing"
 //
 // Measured 2026-10-27 on zsh 5.9.2 from a script file, `typeset -A m` first.
 func TestAWrittenOperandsSubscriptMayHoldAnEquals(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{"typeset -A m; typeset m[e=f]=y; typeset -p m\n", "typeset -A m=( ['e=f']=y )\n"},
 		{"typeset -A m; typeset m[\"e=f\"]=y; typeset -p m\n", "typeset -A m=( ['e=f']=y )\n"},

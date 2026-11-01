@@ -14,6 +14,7 @@ import (
 // PATH=/usr/bin:/bin LC_ALL=C`); each row is what that shell wrote, with the
 // scratch directory written as P.
 func TestDynamicNamedDirectories(t *testing.T) {
+	t.Parallel()
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -53,6 +54,7 @@ func TestDynamicNamedDirectories(t *testing.T) {
 
 // Which spelling `%~` draws is decided by how much of the path each claims.
 func TestADynamicNameAgainstTheOtherNames(t *testing.T) {
+	t.Parallel()
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

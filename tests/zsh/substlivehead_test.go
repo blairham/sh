@@ -10,6 +10,7 @@ import "testing"
 // written there (#5641), and that one anywhere else, or in a field something
 // stands in front of, stays text. Measured 2026-10-03 on zsh 5.9.2 under -f.
 func TestASubstitutionsReplacementThatOpensTheResultIsExpanded(t *testing.T) {
+	t.Parallel()
 	const setup = "HOME=/h; PATH=/bin\n"
 	for _, tc := range []struct{ src, want string }{
 		{`s=A; print ${s:s/A/~/} ${s:gs/A/~/} ${(U)s:s/A/~/}`, "/h /h /h\n"},

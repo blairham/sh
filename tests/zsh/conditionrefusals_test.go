@@ -18,6 +18,7 @@ import (
 // leaves the condition **false**, where bash calls the same operand a failure
 // of the construct and ends at 2.
 func TestAnEmptyRegexOperandIsARefusedMatchRatherThanAFailure(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(t, dir, "[[ abc =~ \"\" ]]\nprintf 'st=%s' \"$?\"\n")
 	if want := "failed to compile regex: empty (sub)expression"; !strings.Contains(out, want) {

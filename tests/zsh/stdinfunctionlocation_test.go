@@ -12,6 +12,7 @@ import "testing"
 // Measured 2026-10-02 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -fs`, and `-fis`
 // alike).
 func TestAFunctionBodyOnStandardInputIsLocatedByTheFunction(t *testing.T) {
+	t.Parallel()
 	const src = "g() {\n  cd /nonexistent\n  : ${zz:?unset1}\n}\ng\n"
 	if got, want := zshStderrOnStdin(t, "zsh", src),
 		"g:cd:1: no such file or directory: /nonexistent\ng:2: zz: unset1\n"; got != want {

@@ -18,6 +18,7 @@ import (
 // `/usr/libexec/reset-ssh-configuration` — an Apple system script — is
 // unparseable without the first of these (#827, #815).
 func TestTheShortFormsRun(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"if [[ -n x ]] { echo A; }", "A"},
 		{"if (( 1 )) { echo A; }", "A"},
@@ -71,6 +72,7 @@ func TestTheShortFormsRun(t *testing.T) {
 // The rows the shell itself refuses, which is what makes the rule a rule
 // rather than "a brace group may follow anything".
 func TestTheShortFormsHaveABoundary(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		// A word does not end a header.
 		"if true { echo A; }\n",
@@ -114,6 +116,7 @@ func TestTheShortFormsHaveABoundary(t *testing.T) {
 // first. `if (( 0 )) { echo A }` opens each one, so the arm under test is the
 // only thing that varies (#1372).
 func TestAnArmNotWrittenShortTakesTheLongForm(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"if (( 0 )) { echo A } else echo B; fi", "B"},
 		// Its body is a list, which a short body is not.
@@ -172,6 +175,7 @@ func TestAnArmNotWrittenShortTakesTheLongForm(t *testing.T) {
 // Measured 2026-10-02 on zsh 5.9.2 beside a file named `2x2`, which a match
 // of `2*2` or `2?` would have found (#5138).
 func TestARepeatCountIsNeverMatched(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`repeat 2*2 print y`, "y\ny\ny\ny\n"},
 		{`repeat 2*2; do print y; done`, "y\ny\ny\ny\n"},
@@ -197,6 +201,7 @@ func TestARepeatCountIsNeverMatched(t *testing.T) {
 // 2026-10-02 on zsh 5.9.2; bytes rather than characters, so `é€abcdef` keeps
 // `é€abcde` (#5138).
 func TestTheBlamedArithmeticTextIsCutAtTenBytes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`(( 1 abcdefghijk ))`, "zsh:1: bad math expression: operator expected at `abcdefghij...'\n"},
 		{`(( 1 abcdefghi ))`, "zsh:1: bad math expression: operator expected at `abcdefghi '\n"},

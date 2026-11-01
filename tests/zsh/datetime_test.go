@@ -60,6 +60,7 @@ func runZshAt(t *testing.T, at time.Time, src string) (string, int) {
 // The module loads because all four of its features are here, which is the
 // only module in the table that can say so.
 func TestTheDatetimeModuleLoads(t *testing.T) {
+	t.Parallel()
 	out, st := runZshAt(t, datetimeEpoch,
 		`zmodload zsh/datetime; echo "st=$?"; zmodload -e zsh/datetime; echo "e=$?"; zmodload`)
 	want := "st=0\ne=0\nzsh/datetime\nzsh/main\n"
@@ -162,6 +163,7 @@ func TestTheClockParametersAreReadonly(t *testing.T) {
 // runs on. The instant, the epoch operand and everything zone-independent are
 // still literal.
 func TestStrftimeWrites(t *testing.T) {
+	t.Parallel()
 	local := time.Unix(1788698096, 0)
 	for _, tc := range []struct{ name, src, want string }{
 		{"an epoch operand", `strftime "%Y-%m-%d %H:%M:%S" 1788698096`, local.Format("2006-01-02 15:04:05") + "\n"},
@@ -227,6 +229,7 @@ func unpadded(s string) string { return strings.TrimPrefix(s, "0") }
 // cases are: `2026-09-06` is a different second in every zone, and the
 // question here is whether the reading agrees with the writing.
 func TestStrftimeReads(t *testing.T) {
+	t.Parallel()
 	local := time.Unix(1788698096, 0)
 	midnight := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, time.Local)
 	for _, tc := range []struct{ name, src, want string }{
@@ -278,6 +281,7 @@ func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 // Every complaint carries the builtin's own name in the location, and none of
 // them is fatal: status 1 and the script carries on.
 func TestStrftimeComplaints(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"no operands", `strftime`, "not enough arguments"},
 		{"too many", `strftime "%Y" 1 2 3`, "too many arguments"},
@@ -309,6 +313,7 @@ func TestStrftimeComplaints(t *testing.T) {
 // a refusal here would lose a header that reads perfectly well up to a
 // trailing field nobody asked about.
 func TestStrftimeWarnsAboutTrailingInput(t *testing.T) {
+	t.Parallel()
 	local := time.Unix(1788698096, 0)
 	midnight := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, time.Local)
 	out, st := runZshAt(t, datetimeEpoch,

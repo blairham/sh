@@ -18,6 +18,7 @@ import (
 // is written; a name with no function behind it writes nothing; and with no
 // transformation the sequences go out as they are.
 func TestTheTermcapTransformationCallsTheFunction(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, setup, code, arg, want string
 		installed                    bool

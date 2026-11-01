@@ -21,6 +21,7 @@ import (
 // paren in front of a case-insensitive pattern, which is what
 // `~/.zi/bin/lib/zsh/install.zsh:1580` is written as.
 func TestACaseArmsPatternMayBeginWithAGroup(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The flag is honored as well as read, which is #1244: these rows
 		// answered `miss` while `(#i)` reached the matcher as five literal
@@ -54,6 +55,7 @@ func TestACaseArmsPatternMayBeginWithAGroup(t *testing.T) {
 // construct: an arm's *body* is ordinary commands, and an expression in one
 // really is an expression.
 func TestAnArmsBodyStillTakesAnArithmeticCommand(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `case x in x) ((1+1)) && echo ran;; esac`)
 	if strings.TrimSpace(out) != "ran" || st != 0 {
 		t.Errorf("an arithmetic command in an arm's body = %q (status %d), want ran",
@@ -63,6 +65,7 @@ func TestAnArmsBodyStillTakesAnArithmeticCommand(t *testing.T) {
 
 // A loop item may begin with a group too, and the item is one word.
 func TestALoopItemMayBeginWithAGroup(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `setopt extendedglob
 for x in '(#i)a' b; do echo "got=[$x]"; done`)
 	want := "got=[(#i)a]\ngot=[b]\n"
@@ -88,6 +91,7 @@ for x in '(#i)a' b; do echo "got=[$x]"; done`)
 // `unknown file attribute:` where the loop should print `hi`, and every
 // parse-only row passed it.
 func TestArgumentPositionEndsWithTheList(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"in list, subshell body", `for x in a; do ( echo hi ); done`},
 		{"in list, newline before do", "for x in a\ndo ( echo hi ); done"},
@@ -110,6 +114,7 @@ func TestArgumentPositionEndsWithTheList(t *testing.T) {
 // No word in the item list is a reserved word — unanimous across the panel,
 // so this is core seen through one dialect rather than a dialect's answer.
 func TestNoWordInTheItemListIsReserved(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `for x in do; do echo "1=$x"; done
 for x in done; do echo "2=$x"; done
 for x (a done); do echo "3=$x"; done`)
@@ -135,6 +140,7 @@ for x (a done); do echo "3=$x"; done`)
 // the rows that separate them are the ones where the group carries text of
 // its own, and the `miss` subjects beside each one (#1218).
 func TestACaseArmsLeadingParenMayBeThePatternsOwn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The shape the issue was filed on.
 		{`case ab in (ab|cd)) echo hit;; *) echo miss;; esac`, "hit"},
@@ -196,6 +202,7 @@ func TestACaseArmsLeadingParenMayBeThePatternsOwn(t *testing.T) {
 // being a word, so only the arm reading is left, and it then finds `b` where
 // the arm's `)` belongs.
 func TestACaseArmNeedsAParenLeftToCloseIt(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`case ab in (a) b) echo hit;; *) echo miss;; esac`,
 		`case ab in (a|b) c) echo hit;; *) echo miss;; esac`,
@@ -224,6 +231,7 @@ func TestACaseArmNeedsAParenLeftToCloseIt(t *testing.T) {
 // is #1244, and a row asserting it would be asserting a feature nothing here
 // builds.
 func TestAGlobFlagsRefusalNamesTheTokenAfterThePattern(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`case abc in (#i*) echo Y;; esac`, "parse error near `echo'"},
 		{`case x in (#q) echo Y;; esac`, "parse error near `echo'"},

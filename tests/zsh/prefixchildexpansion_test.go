@@ -11,6 +11,7 @@ import "testing"
 // -i PATH=/usr/bin:/bin` — see Semantics.PrefixExpandsInTheExternalCommandsChild
 // (#6784, #6783).
 func TestAnExternalCommandsPrefixExpandsInItsChild(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`i=1; y=$((i++)) /usr/bin/true; echo $i`, "1\n"},
 		{`unset i; y=${i::=5} /usr/bin/true; echo "[$i]"`, "[]\n"},

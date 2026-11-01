@@ -22,6 +22,7 @@ import (
 // unset (#5999). The function ran bare before, with `$WIDGET` empty and the
 // assignment accepted.
 func TestACompletionWidgetFromItsKeyHasTheWidgetParameters(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(
 		t,
 		`cf() { print -r -- "W=$WIDGET t=${(t)BUFFER} B=$BUFFER C=$CURSOR L=$LBUFFER"; BUFFER=zz; ran=widget }

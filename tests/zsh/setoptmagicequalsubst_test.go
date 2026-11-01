@@ -26,6 +26,7 @@ import (
 // The whole table below was run in both states of the option in the reference
 // and every row is that binary's answer.
 func TestMagicEqualSubstExpandsTheValueOfAnyEqualsWord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, word, on, off string }{
 		// The issue's own reduction.
 		{"a bare tilde", `a=~`, "a=/Users/testhome", "a=~"},
@@ -113,6 +114,7 @@ func TestMagicEqualSubstExpandsTheValueOfAnyEqualsWord(t *testing.T) {
 // back at the return, so the first line is not a shell that never turned the
 // option off.
 func TestMagicEqualSubstIsReadWhenTheWordIsExpanded(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"defined with it off, called with it on",
@@ -167,6 +169,7 @@ func TestMagicEqualSubstIsReadWhenTheWordIsExpanded(t *testing.T) {
 // difference: a build that let the option split a word at a leading `=` hands
 // `=cmd` a home directory and reports *that* as the missing command.
 func TestMagicEqualSubstLeavesAWordThatOpensWithAnEqualsToTheEqualsExpansion(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, word, want string }{
 		{"a bare tilde", `=~`, "zsh:2: ~ not found"},
 		{"a path", `=~/x`, "zsh:2: ~/x not found"},
@@ -187,6 +190,7 @@ func TestMagicEqualSubstLeavesAWordThatOpensWithAnEqualsToTheEqualsExpansion(t *
 // All three agree with the reference in both states of the option, and they
 // did before #4548 too.
 func TestMagicEqualSubstLeavesTheAssignmentRoadsAlone(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a plain assignment", `v=~; print -r -- $v`},
 		{"a typeset operand", `typeset w=~; print -r -- $w`},
@@ -209,6 +213,7 @@ func TestMagicEqualSubstLeavesTheAssignmentRoadsAlone(t *testing.T) {
 // had to. And the listings keep reporting what they reported before, since the
 // state is now read off the axis rather than out of the recorded store.
 func TestMagicEqualSubstIsOneStateReadInOnePlace(t *testing.T) {
+	t.Parallel()
 	got := magicEqualRun(t, `
 print -r -- before: $(print -r -- a=~)
 (setopt magicequalsubst; print -r -- inside: a=~)

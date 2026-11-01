@@ -15,6 +15,7 @@ import (
 // Every row prints the status and then the mode. Measured on zsh 5.9.2, `-f`,
 // 2026-09-30; on main before this change every row but the controls differed.
 func TestEmulateReadsItsOptionsBeforeTheString(t *testing.T) {
+	t.Parallel()
 	const ng = "'[[ -o nullglob ]] && print ng; print ran'"
 	rows := []struct{ name, src, want string }{
 		{

@@ -60,6 +60,7 @@ func TestATempFileSubstitutionsBodyCountsFromTheScript(t *testing.T) {
 // was found by asking what travels with the offset rather than by reading the
 // symptom.
 func TestTheOffsetReachesADiagnosticAndADefinitionToo(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -91,6 +92,7 @@ func TestTheOffsetReachesADiagnosticAndADefinitionToo(t *testing.T) {
 // A function body, a sourced file and a `=(…)` inside another one each move
 // the two apart.
 func TestTheOffsetIsTakenWhereTheSubstitutionStands(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{

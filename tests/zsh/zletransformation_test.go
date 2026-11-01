@@ -14,6 +14,7 @@ import (
 // file with no terminal — which is what says this is registration rather than
 // drawing: it answers 0 with no editor running at all (#4450).
 func TestZleTransformationRegisters(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zle
 f() { print x; }
 zle -T tc f;  print "A=$?"
@@ -39,6 +40,7 @@ zle -- tc f 2>/dev/null; print "F=$?"`)
 // The two `too many` sentences really do differ by the word `option`, and
 // they are asserted whole rather than by substring for that reason.
 func TestZleTransformationArity(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zle
 f() { :; }
 zle -T;             print "A=$?"
@@ -64,6 +66,7 @@ zle -Tr tc f;       print "F=$?"`)
 // read: asked for every one-, two- and three-letter name — 18,278 of them —
 // this shell takes `tc` and refuses every other one.
 func TestZleTransformationNameIsChecked(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zle
 f() { :; }
 zle -T nosuchtype f; print "A=$?"
@@ -79,6 +82,7 @@ zle -T tc f;         print "C=$?"`)
 
 // `-r` is a modifier only `-T` reads, and on its own it is the bare `zle`.
 func TestZleForgetLetterIsAModifier(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/zle
 f() { :; }
 zle -r;        print "A=$?"

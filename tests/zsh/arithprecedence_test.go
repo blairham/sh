@@ -21,6 +21,7 @@ import (
 // operator — it is in the syntax package's own suite, where it belongs to the
 // flag rather than to this preset.
 func TestThisPresetBindsTheShiftsAndTheBitwiseOperatorsTighter(t *testing.T) {
+	t.Parallel()
 	if got, want := zsh.Dialect().ArithPrecedence,
 		syntax.ArithPrecedenceShiftsAndBitwiseBindTighter; got != want {
 		t.Errorf("ArithPrecedence = %v, want %v", got, want)
@@ -59,6 +60,7 @@ func TestThisPresetBindsTheShiftsAndTheBitwiseOperatorsTighter(t *testing.T) {
 // are rows here, because a shell that re-read only the line in front of it
 // would pass the first and fail the second.
 func TestCPrecedencesPutsCSOrderBack(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"on, off, and on again",

@@ -18,6 +18,7 @@ import (
 // (`/opt/homebrew/bin/zsh -f` under `env -i PATH=/usr/bin:/bin`, from `-c`
 // and from a script file).
 func TestAKindLetterOverZeroIsRefused(t *testing.T) {
+	t.Parallel()
 	kind := func(loc string) string {
 		return loc + " 0: can't change type of a special parameter\n"
 	}
@@ -65,6 +66,7 @@ func TestAKindLetterOverZeroIsRefused(t *testing.T) {
 // the 0 a refused `set -A` leaves. All four refusals answer alike. Measured
 // 2026-10-16 against zsh 5.9.2, `-f`, `env -i PATH=/usr/bin:/bin`.
 func TestARefusedReadArrayAtEndOfInputLeavesTheReadsStatus(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		want int
@@ -106,6 +108,7 @@ func TestARefusedReadArrayAtEndOfInputLeavesTheReadsStatus(t *testing.T) {
 // Runner.warnATruncatedPosition for why). Measured 2026-10-16 against zsh
 // 5.9.2, `-f`, `env -i PATH=/usr/bin:/bin`, from `-c` and a script file.
 func TestAPositionTooWideWarnsAtEveryStore(t *testing.T) {
+	t.Parallel()
 	const n = "99999999999999999999"
 	const warn = "zsh:1: number truncated after 19 digits: " + n + "\n"
 	for _, tc := range []struct {
@@ -147,6 +150,7 @@ func TestAPositionTooWideWarnsAtEveryStore(t *testing.T) {
 // and is shared with a numbered tilde. Measured 2026-10-16 against zsh 5.9.2,
 // `-f` (#6743).
 func TestTheTruncatedDigitCountIsTheShells(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		index string
 		count int

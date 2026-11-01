@@ -21,6 +21,7 @@ import (
 
 // The assignment, the base it reads back at, and the plus form.
 func TestSetArrayAssignsHere(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().SetArrayLetter; got != interp.Yes {
 		t.Errorf("SetArrayLetter = %v, want Yes", got)
 	}
@@ -43,6 +44,7 @@ h=hh; set -A $h m n; echo "E [${hh[@]}] n=${#hh[@]}"`)
 // a value, dash words and `--` included. ksh93 keeps parsing and answers both
 // of these the other way.
 func TestTheNameEndsTheOptionsHere(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().SetArrayOptionsContinuePastTheName; got != interp.No {
 		t.Errorf("SetArrayOptionsContinuePastTheName = %v, want No", got)
 	}
@@ -58,6 +60,7 @@ set -A dd -- 1 2; echo "B [${dd[@]}] n=${#dd[@]}"`)
 // ksh93 unsets the name. Both count 0, so `typeset -p` and `${a+x}` are the
 // only places it shows.
 func TestSetArrayWithNoValuesLeavesAnEmptyArrayHere(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().SetArrayWithNoValuesUnsetsTheName; got != interp.No {
 		t.Errorf("SetArrayWithNoValuesUnsetsTheName = %v, want No", got)
 	}
@@ -82,6 +85,7 @@ typeset -p a`)
 // whole array table being written, and rather than a refusal this shell does
 // not make being invented for it.
 func TestSetArrayWithNoNameNamesTheListingAsMissingHere(t *testing.T) {
+	t.Parallel()
 	if got := diagTable(zsh.Diagnostics()).SetArrayNeedsAName; got != "" {
 		t.Errorf("SetArrayNeedsAName = %q, want empty — this shell answers a "+
 			"missing name with a listing rather than a complaint", got)
@@ -102,6 +106,7 @@ func TestSetArrayWithNoNameNamesTheListingAsMissingHere(t *testing.T) {
 //	unset 1x          <script>:unset:1: 1x: invalid parameter name
 //	set -A ro q       <script>:N: read-only variable: ro
 func TestSetArrayRefusalsDoNotNameTheBuiltinHere(t *testing.T) {
+	t.Parallel()
 	if !diagTable(zsh.Diagnostics()).BadNameRefusalHidesTheBuiltin["set"] {
 		t.Error("BadNameRefusalHidesTheBuiltin has no `set` entry")
 	}
@@ -138,6 +143,7 @@ set -A ro q`)
 // is this shell's shape for every builtin's complaint and is why the assertion
 // asks for `:set:`.
 func TestAnAssociationTargetIsNamedAsMissingHere(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `typeset -A m
 set -A m k1 v1`)
 	if !strings.Contains(out, ":set:2: -A over an association is not implemented yet") {
@@ -147,6 +153,7 @@ set -A m k1 v1`)
 
 // The line this shell's own `add-zsh-hook` installs a hook with, end to end.
 func TestTheLineAddZshHookAssignsAHookWith(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `hook=precmd_functions
 typeset -ga $hook
 fn=my_hook
@@ -160,6 +167,7 @@ echo "n=${#precmd_functions[@]} [${precmd_functions[@]}]"`)
 
 // `-A` has left the refused-letter list, and it must not be on both.
 func TestTheArrayLetterIsNoLongerCalledMissingHere(t *testing.T) {
+	t.Parallel()
 	if got := diagTable(zsh.Diagnostics()).UnimplementedOptionLetters["set"]; strings.ContainsRune(got, 'A') {
 		t.Errorf("UnimplementedOptionLetters[set] = %q, which still claims -A is "+
 			"missing", got)
@@ -185,6 +193,7 @@ func TestTheArrayLetterIsNoLongerCalledMissingHere(t *testing.T) {
 // second and third rows carry neither letter back. The last row is the
 // control the axis is not asked on.
 func TestAnEmptyPrependMakesANonArrayAnEmptyArrayHere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a scalar", "s=v\nset +A s\ntypeset -p s", "typeset -a s=(  )\n"},
 		{"an exported scalar", "export e=1\nset +A e\ntypeset -p e", "typeset -a e=(  )\n"},
@@ -207,6 +216,7 @@ func TestAnEmptyPrependMakesANonArrayAnEmptyArrayHere(t *testing.T) {
 
 // And the axis those rows rest on, read off the vector.
 func TestTheEmptyPrependAxisIsAnsweredHere(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().SetArrayEmptyPrependMakesANonArrayAnEmptyArray; got != interp.Yes {
 		t.Errorf("SetArrayEmptyPrependMakesANonArrayAnEmptyArray = %v, want Yes", got)
 	}
@@ -218,6 +228,7 @@ func TestTheEmptyPrependAxisIsAnsweredHere(t *testing.T) {
 // not already an array re-creates it, so the letter is gone before the values
 // land. Measured in the same run.
 func TestAPrependIsNotFoldedHere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"upper over a scalar", "typeset -u d=ab\nset +A d cd\ntypeset -p d", "typeset -a d=( cd )\n"},
 		{"upper over an array", "typeset -a -u e=(ab)\nset +A e cd\ntypeset -p e", "typeset -au e=( cd )\n"},

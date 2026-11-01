@@ -25,6 +25,7 @@ import (
 // `AssignmentPrefixPersistsOnSpecialBuiltin` is No in this shell and these
 // two are kept anyway (#3313).
 func TestAnAssignmentInFrontOfAliasAndHashIsKept(t *testing.T) {
+	t.Parallel()
 	const src = `V1=1 alias >/dev/null;    print "alias=[${V1-UNSET}]"
 V2=1 hash >/dev/null;     print "hash=[${V2-UNSET}]"
 V3=1 : ;                  print "colon=[${V3-UNSET}]"
@@ -49,6 +50,7 @@ case "$(export -p)" in *V1=*) print exported;; *) print plain;; esac`
 // parentheses and gone outside them, which is what keeps the row above a
 // statement about the builtin rather than about where it stood.
 func TestAKeptPrefixDoesNotEscapeASubshell(t *testing.T) {
+	t.Parallel()
 	const src = `f(){ B=1 alias >/dev/null; print "infunc=[${B-UNSET}]"; }
 f; print "afterfunc=[${B-UNSET}]"
 ( C=1 alias >/dev/null; print "insub=[${C-UNSET}]" ); print "aftersub=[${C-UNSET}]"`

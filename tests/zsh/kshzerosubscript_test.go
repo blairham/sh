@@ -10,6 +10,7 @@ import "testing"
 // else moves (#5152). Measured 2026-10-02 on zsh 5.9.2
 // (`/opt/homebrew/bin/zsh -f`, `LC_ALL=C`).
 func TestKshZeroSubscriptNamesTheFirstElement(t *testing.T) {
+	t.Parallel()
 	const setup = "a=(p q r s); s=hello\n"
 	for _, tc := range []struct{ src, want string }{
 		// Off, which is the default: element 0 is no element.

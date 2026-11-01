@@ -34,6 +34,7 @@ import (
 // right and a substring assertion could not tell a widened text from a
 // prefixed one.
 func TestAnUnmatchedConstructIsQuotedBackWithItsWholeWord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, want string
 		line      int

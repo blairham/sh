@@ -8,6 +8,7 @@ import "testing"
 // **`read` keeps a NUL as a byte of the value** — see
 // interp.Semantics.NulInAValue. Measured against zsh 5.9.2.
 func TestReadKeepsANul(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `printf 'A=1\0B=2\0c\0d\n' > f
 read -r v < f; echo "raw=$v len=${#v}"
 read v < f; echo "cooked=${#v}"`)

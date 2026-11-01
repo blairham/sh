@@ -40,6 +40,7 @@ func markTree(t *testing.T) string {
 // its target. Measured 2026-10-16 on zsh 5.9.2, `-f`, over the same tree
 // (#6726).
 func TestTheMarkQualifiers(t *testing.T) {
+	t.Parallel()
 	dir := markTree(t)
 	for _, tc := range []struct{ src, want string }{
 		{`print -r -- *(T)`, "a  broken@ d/ dl@ f| lnk@ x* xl@\n"},
@@ -69,6 +70,7 @@ func TestTheMarkQualifiers(t *testing.T) {
 // name an `e` qualifier's code was shown rather than the one it chose.
 // Measured 2026-10-16 on zsh 5.9.2, `-f` (#6726).
 func TestMarkDirsMarksWhatTheCodeWasShown(t *testing.T) {
+	t.Parallel()
 	dir := markTree(t)
 	for _, tc := range []struct{ src, want string }{
 		{`setopt markdirs; print -r -- *`, "a broken d/ dl f lnk x xl\n"},

@@ -35,6 +35,7 @@ import (
 // as well as the hook's silence; a test reading only the hook would pass
 // against a `pushd` that had gone home quietly.
 func TestTheDirectoryStackReadsTheQuietLetter(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"pushd -q moves and says nothing",

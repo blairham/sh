@@ -25,6 +25,7 @@ import (
 // its dotted spelling — so what the row pins is the name, not the total.
 
 func TestSelfInsertIsAWidgetThisShellNames(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"print -r -- \"has=${+widgets[self-insert]} is=[${widgets[self-insert]}]\"\n")
 	if st != 0 {
@@ -46,6 +47,7 @@ func TestSelfInsertIsAWidgetThisShellNames(t *testing.T) {
 // take effect. A dialect with one and not the other loads a highlighter that
 // wraps `self-insert` and still never runs.
 func TestTheEditorIsToldWhatTypingIsCalled(t *testing.T) {
+	t.Parallel()
 	if got := zsh.EditorStyle().SelfInsertWidget; got != "self-insert" {
 		t.Errorf("SelfInsertWidget = %q, want self-insert", got)
 	}
@@ -59,6 +61,7 @@ func TestTheEditorIsToldWhatTypingIsCalled(t *testing.T) {
 // dialect's round trip rather than a terminal, which is what repl's own tests
 // cover.
 func TestAWrapperAroundTypingReachesTheEditor(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "w() { zle .self-insert }\nzle -N self-insert w\n")
 	ed := &stubEditor{gives: map[repl.Widget]repl.Line{
 		repl.WidgetSelfInsert: {Buffer: "x", Cursor: 1},
@@ -80,6 +83,7 @@ func TestAWrapperAroundTypingReachesTheEditor(t *testing.T) {
 
 // `bindkey` says the name back, which is the half a listing has to answer for.
 func TestTypingIsListedBack(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "bindkey '^G' self-insert\nbindkey '^G'\n")
 	if st != 0 {
 		t.Fatalf("status %d, output %q", st, out)

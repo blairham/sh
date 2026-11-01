@@ -15,6 +15,7 @@ import (
 // then reads for truth. The pair differing only in the digit is the
 // measurement: both fail identically and part company over the value.
 func TestLetKeepsWhatStoodBeforeARefusedByte(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		want int
@@ -49,6 +50,7 @@ func TestLetKeepsWhatStoodBeforeARefusedByte(t *testing.T) {
 // `let` with no operand is the control: that one *is* the builtin's, and does
 // name it.
 func TestAMathComplaintFromLetNamesNoBuiltin(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{`let '1+'`, `let '1/0'`, `let '1 @'`} {
 		out, _ := answersRun(t, src)
 		if strings.Contains(out, ":let:") {

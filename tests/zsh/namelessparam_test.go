@@ -15,6 +15,7 @@ import (
 // is a construct nobody can write, and nothing in `syntax` or `interp` can
 // notice that.
 func TestANamelessExpansionIsThisDialects(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -70,6 +71,7 @@ func TestANamelessExpansionIsThisDialects(t *testing.T) {
 // substituted a plausible fragment would still hand `emulate` a broken
 // command line.
 func TestThePluginArgvLineRuns(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A ICE
 ICE=(bash "" opts "noglob extendedglob")
 local -a precm

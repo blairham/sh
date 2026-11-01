@@ -25,6 +25,7 @@ import "testing"
 // reader falls back to the writer — two different answers to two different
 // parameters, which is the whole reason the order of the two reads matters.
 func TestTheWritingNullCommandAuthorisesBothSides(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		status          int

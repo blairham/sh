@@ -16,6 +16,7 @@ import (
 // through `print -P '%F{#rrggbb}'` — 150 at random and the grays from #000000
 // in steps of five (#5496).
 func TestTheNearest88ColorIsTheMeasuredOne(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		rgb  int
 		want int

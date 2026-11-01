@@ -15,6 +15,7 @@ import (
 // the list is spaced like any other. Measured 2026-10-02 on zsh 5.9.2 through
 // `which`, the A01grammar chunk (#5138).
 func TestACaseArmIsListedAsItWasRead(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `f() { case $1 in (one|two) :;; ( a | b ) :;; c|d) :;; (h|(i|j)) :;; esac }; which f
 emulate sh -c 'g() { case $1 in ( one | two ) :;; esac }'; which g`)
 	for _, want := range []string{
@@ -35,6 +36,7 @@ emulate sh -c 'g() { case $1 in ( one | two ) :;; esac }'; which g`)
 // one blank at its end, wherever the assignment stood. Measured 2026-10-02 on
 // zsh 5.9.2 through `which` (#5138), the A01grammar `typeset ac_file=…` row.
 func TestAReservedDeclarationHoldingAnAssignmentIsListedWithABlank(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset a="x y"`, "\ttypeset a=\"x y\" \n"},
 		{`typeset b=1 c`, "\ttypeset b=1 c \n"},
@@ -71,6 +73,7 @@ func TestAReservedDeclarationHoldingAnAssignmentIsListedWithABlank(t *testing.T)
 // blank is still followed by one. `echo a\  b` was listed `echo a\ b`, one
 // argument where there were two. Measured 2026-10-02 on zsh 5.9.2 (#5138).
 func TestAWordEndingInABlankKeepsItsSeparator(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "f() { echo a\\  b; x=a\\  print y }; which f")
 	for _, want := range []string{"\techo a\\  b\n", "\tx=a\\  print y\n"} {
 		if !strings.Contains(out, want) {

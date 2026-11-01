@@ -25,6 +25,7 @@ import "testing"
 // backslash in front of a blank, and a test that printed the words joined
 // could not tell a quoted word from two words.
 func TestAModifierAfterABareExpansion(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const setup = "a=(); b=(x 'y z'); s='p q'; p=/a/bb/c.txt; " +
 		"f() { print -r -- \"n=$# args=(${(j:|:)@})\" }; "
@@ -92,6 +93,7 @@ func TestAModifierAfterABareExpansion(t *testing.T) {
 // The four rows together are the claim. Any one of them passes against an
 // implementation that joins always or splits always.
 func TestWhatAModifierListIsAppliedTo(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const setup = "b=(/a/x.c /b/y.c 'p q'); " +
 		"f() { print -r -- \"n=$# [${(j:|:)@}]\" }; "

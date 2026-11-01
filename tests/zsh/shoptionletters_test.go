@@ -20,6 +20,7 @@ import (
 // where the two sets disagree; a letter the sets spell alike is left to the
 // table the panel shares (#4518).
 func TestShOptionLettersMoveTheLettersThatDisagree(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, letter, zsh, sh string }{
 		{"f is norcs here and globbing there", "f", "rcs=off glob=on", "rcs=on glob=off"},
 		{
@@ -57,6 +58,7 @@ func TestShOptionLettersMoveTheLettersThatDisagree(t *testing.T) {
 // set takes it and changes no option a listing shows, where sh's set spells
 // `markdirs` with it.
 func TestShOptionLettersGiveXAMeaning(t *testing.T) {
+	t.Parallel()
 	const read = "if [[ -o markdirs ]]; then print md=on; else print md=off; fi"
 	out, st := runZsh(t, t.TempDir(), "set -X\n"+read)
 	if want := "md=off\n"; st != 0 || out != want {
@@ -77,6 +79,7 @@ func TestShOptionLettersGiveXAMeaning(t *testing.T) {
 // never had to answer, because its own table reached them first — so they are
 // refused by name rather than by absence. See shRefusedLetters.
 func TestShOptionLettersRefuseTheLettersOnlyThisShellHas(t *testing.T) {
+	t.Parallel()
 	for _, letter := range []string{"h", "H", "E", "d", "g", "k", "w", "y", "B", "G", "Q", "3"} {
 		t.Run(letter, func(t *testing.T) {
 			out, st, errs := runZshSplit(t, t.TempDir(),
@@ -97,6 +100,7 @@ func TestShOptionLettersRefuseTheLettersOnlyThisShellHas(t *testing.T) {
 // The control every row above rests on: with the option off the same letters
 // are this shell's own, and one of them is a letter sh's set refuses.
 func TestThisShellsOwnLettersStandWithTheOptionOff(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"unsetopt shoptionletters\nset -g\nif [[ -o histignorespace ]]; then print g=on; else print g=off; fi")
 	if want := "g=on\n"; st != 0 || out != want {
@@ -108,6 +112,7 @@ func TestThisShellsOwnLettersStandWithTheOptionOff(t *testing.T) {
 // with it — which is what the invocation route needs, since `--emulate` is
 // applied before the letters are.
 func TestAnEmulationMovesTheLetterSet(t *testing.T) {
+	t.Parallel()
 	const read = "if [[ -o glob ]]; then print glob=on; else print glob=off; fi"
 	out, st := runZsh(t, t.TempDir(), "emulate sh\nset -f\n"+read)
 	if want := "glob=off\n"; st != 0 || out != want {
@@ -134,6 +139,7 @@ func TestAnEmulationMovesTheLetterSet(t *testing.T) {
 // modes and `noglobalrcs` under the other two; `-l` is login in every mode;
 // and the long spelling `--no-rcs` means what it always meant.
 func TestShOptionLettersReachTheInvocationsLetters(t *testing.T) {
+	t.Parallel()
 	const read = `if [[ -o rcs ]]; then printf "rcs=on "; else printf "rcs=off "; fi
 if [[ -o glob ]]; then printf "glob=on "; else printf "glob=off "; fi
 print`
@@ -163,6 +169,7 @@ print`
 // `-l` is spelled `l` in both sets, so it survives the borrowing — which is
 // what says the rule is about the *letters* and not about the options.
 func TestTheLoginLetterSurvivesTheBorrowedSet(t *testing.T) {
+	t.Parallel()
 	var out, errs bytes.Buffer
 	code := driver.MainArgs(zshWriting(&out, &errs),
 		[]string{"zsh", "--emulate", "sh", "-l", "-c", `[[ -o login ]] && echo login`})
@@ -174,6 +181,7 @@ func TestTheLoginLetterSurvivesTheBorrowedSet(t *testing.T) {
 // And `-d`, this shell's other startup letter, is a letter the borrowed set
 // does not have at all.
 func TestTheSystemStartupLetterIsRefusedInTheBorrowedSet(t *testing.T) {
+	t.Parallel()
 	var out, errs bytes.Buffer
 	code := driver.MainArgs(zshWriting(&out, &errs),
 		[]string{"zsh", "--emulate", "sh", "-d", "-c", "print ran"})
@@ -195,6 +203,7 @@ func TestTheSystemStartupLetterIsRefusedInTheBorrowedSet(t *testing.T) {
 // again. Each row reads the state *inside* as well as after, so a row cannot
 // pass on a shell that never borrowed the letters at all.
 func TestTheBorrowedLetterSetGoesBackWithTheOptionTable(t *testing.T) {
+	t.Parallel()
 	const read = "if [[ -o glob ]]; then printf 'glob=on '; else printf 'glob=off '; fi\n" +
 		"if [[ -o rcs ]]; then print rcs=on; else print rcs=off; fi"
 	for _, tc := range []struct{ name, src, want string }{

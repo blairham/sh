@@ -11,6 +11,7 @@ import "testing"
 // 2026-10-15 on zsh 5.9.2 under `-fc`; the table is on
 // interp.Semantics.UnmatchedPatternFailsOnlyTheProgram.
 func TestAnUnmatchedPatternInAProgramsWordsIsTheProgramsFailure(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, out, errs string }{
 		{
 			"/nonexistent/prog zz[x]zz; print after $?\n",
@@ -78,6 +79,7 @@ func TestAnUnmatchedPatternInAProgramsWordsIsTheProgramsFailure(t *testing.T) {
 // Measured 2026-10-15 on zsh 5.9.2 under `-fc`; the table is on
 // interp.Semantics.UnmatchedPatternFailsOnlyTheProgram.
 func TestARefusedPatternInAProgramsWordsIsTheProgramsFailure(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, out, errs string }{
 		{"/nonexistent/prog *(/nonexist); print after $?\n", "after 1\n", "zsh:1: missing end of string\n"},
 		{"/nonexistent/prog *(Z); print after $?\n", "after 1\n", "zsh:1: unknown file attribute: Z\n"},

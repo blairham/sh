@@ -40,6 +40,7 @@ import (
 // both, against real zsh over one copy of one file, is pinned in
 // share/suite/zsh/options.tests.
 func TestKshOptionPrintRewritesBothBareListingsIntoTheLongForm(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	setopt, st := runZsh(t, dir, "setopt kshoptionprint\nsetopt\n")
 	if st != 0 {
@@ -100,6 +101,7 @@ func TestKshOptionPrintRewritesBothBareListingsIntoTheLongForm(t *testing.T) {
 // option that disagree about ksh tell them apart, and there are exactly two
 // such cases.
 func TestTheListingShapeIsKeyedOnTheOptionAndNotOnTheMode(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src string
 		long      bool
@@ -136,6 +138,7 @@ func TestTheListingShapeIsKeyedOnTheOptionAndNotOnTheMode(t *testing.T) {
 // `emulate zsh` and under `emulate sh` alike — neither is reset by a bare
 // emulation — while sh's defaults for the two are the opposite of zsh's.
 func TestTheLongFormStillTakesItsBaselineFromTheMode(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ mode, want string }{
 		{"emulate zsh", "nopromptpercent       off\npromptsubst           off"},
 		{"emulate sh", "promptpercent         on\nnopromptsubst         on"},
@@ -163,6 +166,7 @@ func TestTheLongFormStillTakesItsBaselineFromTheMode(t *testing.T) {
 // request to move one and prints nothing in either shape, which is what says
 // this is a listing's rendering rather than a second thing `setopt` does.
 func TestNamingAnOptionPrintsNothingInEitherShape(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src string }{
 		{"the long form", "setopt kshoptionprint\nsetopt autocd\nunsetopt autocd\n"},
 		{"the short form", "setopt autocd\nunsetopt autocd\n"},
@@ -186,6 +190,7 @@ func TestNamingAnOptionPrintsNothingInEitherShape(t *testing.T) {
 // every listing's, which a case that only ever looked at `setopt` could not
 // distinguish.
 func TestSetPlusOKeepsItsOwnShape(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	off, st := runZsh(t, dir, "set +o\n")
 	if st != 0 {

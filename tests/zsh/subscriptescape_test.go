@@ -46,6 +46,7 @@ var keyEscapes = []struct {
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
 func TestAKeysBackslashIsDroppedBeforeNineCharacters(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, e := range keyEscapes {
 		want := "a" + e.c + "b"
@@ -79,6 +80,7 @@ func TestAKeysBackslashIsDroppedBeforeNineCharacters(t *testing.T) {
 // while store and read both kept the backslash, because the two agreed with
 // each other and with no other route.
 func TestAKeyStoredElsewhereIsFoundThroughASubscript(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, c := range []struct{ name, src, want string }{
 		{"the alias table", `alias 'a$b'=z; print -rn -- "${aliases[a\$b]}"`, "z"},
@@ -101,6 +103,7 @@ func TestAKeyStoredElsewhereIsFoundThroughASubscript(t *testing.T) {
 // indexed array — `${a[(r)a\{b]}` is `a\{b` where `h[a\{b]` stores `a{b`.
 // So one rule applied to both roads would be wrong on this row.
 func TestASearchKeepsTheBackslashAKeyDrops(t *testing.T) {
+	t.Parallel()
 	src := `a=('a{b' 'a\{b'); print -rn -- "${a[(r)a\{b]}"` + "\n"
 	if out, st := runZsh(t, t.TempDir(), src); out != `a\{b` || st != 0 {
 		t.Errorf("${a[(r)a\\{b]} = %q at %d, want %q", out, st, `a\{b`)

@@ -25,6 +25,7 @@ import (
 // field beside the one the `((` scan reads: the two were measured separately
 // and agree today by measurement rather than by construction (#3530).
 func TestTheArithSubstScanIsBlindToQuoting(t *testing.T) {
+	t.Parallel()
 	if !zsh.Dialect().ArithSubstScanIgnoresQuoting {
 		t.Fatal("this dialect's `$((` scan does not see quoting")
 	}

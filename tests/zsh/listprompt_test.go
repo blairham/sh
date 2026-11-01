@@ -15,6 +15,7 @@ import (
 // listprompt.go. The capitals pad to nine columns, nine and six, and a longer
 // value is not cut.
 func TestTheListPromptReportsWhereTheListingStands(t *testing.T) {
+	t.Parallel()
 	r := bindkeyRunner(t, "zmodload zsh/complist\nLISTPROMPT='[%L][%M][%P] %l %m %p %%'\n")
 	for _, c := range []struct {
 		view repl.ListScrollView

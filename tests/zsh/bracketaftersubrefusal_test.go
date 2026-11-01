@@ -23,6 +23,7 @@ import (
 // reaches the matcher, and it was refused before this change and after it —
 // so a suite written only that way passed throughout.
 func TestABracketAClassLeftOpenIsRefusedOnEverySurface(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"a prefix trim", `v=zzz; print -r -- ${v#x[[:alpha:]}`, "bad pattern: x[[:alpha:]"},
 		{"a suffix trim", `v=zzz; print -r -- ${v%[[:alpha:]y}`, "bad pattern: [[:alpha:]y"},
@@ -65,6 +66,7 @@ func TestABracketAClassLeftOpenIsRefusedOnEverySurface(t *testing.T) {
 // against a subject its first character does not rule out reaches the matcher
 // and is refused there, as it always was.
 func TestTheSameBracketIsRefusedWhenTheMatcherReachesIt(t *testing.T) {
+	t.Parallel()
 	out, _, errs := runZshSplit(t, t.TempDir(), "v=zzz\nprint -r -- ${v#[[:alpha:]}\nprint after\n")
 	if !strings.Contains(errs, "bad pattern: [[:alpha:]") {
 		t.Errorf("stderr = %q, want the refusal", errs)
@@ -81,6 +83,7 @@ func TestTheSameBracketIsRefusedWhenTheMatcherReachesIt(t *testing.T) {
 // `[[.a.]` closes at the `]` it can see — measured, `${v#x[[.a.]}` is `zzz`
 // at status 0 there — and a `\[` opens no bracket at all.
 func TestAClassThatClosesItsBracketIsNotRefused(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"a closed class", `v=azzz; print -r -- ${v#[[:alpha:]]}`, "zzz\n"},
 		{"a bracket closed after the class", `v=zzz; print -r -- ${v#x[[:alpha:]]}`, "zzz\n"},
@@ -106,6 +109,7 @@ func TestAClassThatClosesItsBracketIsNotRefused(t *testing.T) {
 // exactly as it spares a plain unterminated bracket, which is what says this
 // refusal went through the one switch rather than around it.
 func TestBadPatternStillSparesAFilenamePatternAClassLeftOpen(t *testing.T) {
+	t.Parallel()
 	out, st, errs := runZshSplit(t, t.TempDir(),
 		"unsetopt badpattern\nprint -r -- x[[:alpha:]\n")
 	if want := "x[[:alpha:]\n"; out != want {

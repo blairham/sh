@@ -20,6 +20,7 @@ import (
 // and a vertical tab or carriage return where a blank would be, neither of
 // which the default IFS holds.
 func TestCompinitSplitsTheTagLineOnBlanks(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.Chmod(dir, 0o755); err != nil {
 		t.Fatal(err)

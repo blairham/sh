@@ -15,6 +15,7 @@ import "testing"
 // 2026-10-02 on zsh 5.9.2, B02typeset's `reserved word and builtin
 // interfaces` (#5142).
 func TestDisableRSwitchesADeclarationWord(t *testing.T) {
+	t.Parallel()
 	const fn = "fn='fn() { typeset foo=`echo one word=two`; print -r -- \"[$foo] [$word]\" }'\n"
 	for _, tc := range []struct{ src, want string }{
 		{

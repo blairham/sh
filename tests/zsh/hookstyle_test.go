@@ -21,6 +21,7 @@ import (
 // reading only the named function finds a correctly registered hook and runs
 // nothing — which is #1281.
 func TestTheHookNames(t *testing.T) {
+	t.Parallel()
 	h := zsh.HookStyle()
 	if h.BeforePrompt != "precmd" {
 		t.Errorf("the prompt hook is %q, want precmd", h.BeforePrompt)
@@ -40,6 +41,7 @@ func TestTheHookNames(t *testing.T) {
 // and a `cd` in a `zsh -c` script with no prompt in sight both ran it, and a
 // prompt-loop hook would have caught neither. #1775.
 func TestTheDirectoryChangeHookIsNamed(t *testing.T) {
+	t.Parallel()
 	if name := zsh.Semantics().DirectoryChangeHook; name != "chpwd" {
 		t.Errorf("the directory-change hook is %q, want chpwd", name)
 	}
@@ -58,6 +60,7 @@ func TestTheDirectoryChangeHookIsNamed(t *testing.T) {
 // hook that fires must not also be announced as one that does not, which is
 // what the second loop below holds and what the exit hook's own test holds.
 func TestTheHooksThisShellDoesNotFireAreNamed(t *testing.T) {
+	t.Parallel()
 	want := map[string]bool{"periodic": true, "zshaddhistory": true}
 	got := map[string]bool{}
 	for _, name := range zsh.HookStyle().Unfired {
@@ -83,6 +86,7 @@ func TestTheHooksThisShellDoesNotFireAreNamed(t *testing.T) {
 // never had one. Announced as unfired until #2111, which is what a plugin
 // registering a cleanup hook found on every start.
 func TestTheExitHookIsNamedAndNoLongerAnnouncedAsUnfired(t *testing.T) {
+	t.Parallel()
 	if name := zsh.Semantics().ExitHook; name != "zshexit" {
 		t.Errorf("the exit hook is %q, want zshexit", name)
 	}
@@ -112,6 +116,7 @@ func TestTheExitHookIsNamedAndNoLongerAnnouncedAsUnfired(t *testing.T) {
 // does nothing is exactly what #1558 was: the shell has a directory-change
 // hook, and it has the letter that turns it off.
 func TestCdQuietSuppressesTheDirectoryChangeHook(t *testing.T) {
+	t.Parallel()
 	if zsh.Semantics().CdHasQuietOption != interp.Yes {
 		t.Fatalf("this shell has `cd -q`; the preset says %v", zsh.Semantics().CdHasQuietOption)
 	}
@@ -135,6 +140,7 @@ func TestCdQuietSuppressesTheDirectoryChangeHook(t *testing.T) {
 // indent, no terminators. That is FunctionLayout, which is why the hook table
 // names it rather than spelling a second arrangement that could drift from it.
 func TestTheCommandHooksManyLineFormIsTheFunctionLayout(t *testing.T) {
+	t.Parallel()
 	f, err := syntax.Parse("for i in 1 2; do echo $i; done\n", zsh.Dialect())
 	if err != nil {
 		t.Fatalf("parse: %v", err)

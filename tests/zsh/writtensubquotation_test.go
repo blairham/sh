@@ -21,6 +21,7 @@ import (
 // bash 5.3.20 stores under `$kq` and ksh93u+ 2012-08-01 under `q`. See
 // interp.Semantics.WrittenSubscriptQuotationStopsItsExpansion (#3942).
 func TestAWrittenSubscriptsApostropheIsPerformedAndKeptHere(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A m; kq=q; b="'q'"; (( m['$kq'] = 42 )); printf "[%s][%s]" "${m[$kq]}" "${m[$b]}"`
 	out, st := answersRun(t, src)
 	if out != "[][42]" || st != 0 {
@@ -32,6 +33,7 @@ func TestAWrittenSubscriptsApostropheIsPerformedAndKeptHere(t *testing.T) {
 // from. Not a pin on another axis: this one is reachable here, and the row
 // above is what reaches it.
 func TestTheWrittenSubscriptQuotationIsAnAxis(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().WrittenSubscriptQuotationStopsItsExpansion; got != interp.No {
 		t.Errorf("WrittenSubscriptQuotationStopsItsExpansion = %v, want no", got)
 	}

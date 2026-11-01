@@ -24,6 +24,7 @@ import (
 // the same trap. A grid made of those agrees for a reason that has nothing to
 // do with the question.
 func TestExecReachesTheShellsOwnCommands(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// A builtin, and the shell ends — `after` is never written.
 		{`exec :; print after`, ""},
@@ -71,6 +72,7 @@ func TestExecReachesTheShellsOwnCommands(t *testing.T) {
 // is different here is that a prefix builtin reached nothing at all, so the
 // `exec` is the redirection form and the shell is still the shell.
 func TestExecThatReachedNoCommandLeavesTheShellStanding(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`exec builtin; print "A st=$?"`, "A st=0"},
 		{`exec command; print "A st=$?"`, "A st=0"},

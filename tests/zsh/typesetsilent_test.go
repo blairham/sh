@@ -23,6 +23,7 @@ import (
 // intro and re-declares `local` names inside loops, which put nine lines on
 // stdout before every prompt of a real interactive session (#2033).
 func TestTypesetSilentQuietsAValuelessRedeclaration(t *testing.T) {
+	t.Parallel()
 	// The axis this option is the inverse of: zsh lists, and the option on is
 	// that axis answering No.
 	if got := zsh.Semantics().ValuelessDeclarationOfAHeldNameListsIt; got != interp.Yes {
@@ -50,6 +51,7 @@ func TestTypesetSilentQuietsAValuelessRedeclaration(t *testing.T) {
 // keeps a subshell's change inside the subshell — the same bargain `multios`
 // strikes. `$(setopt typeset_silent; …)` must not quiet the parent.
 func TestTypesetSilentStaysInTheSubshellThatSetIt(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	src := `(setopt typeset_silent; f(){ local s; s=1; local s; }; f); g(){ local t; t=2; local t; }; g`
 	out, st := runZsh(t, dir, src)
@@ -61,6 +63,7 @@ func TestTypesetSilentStaysInTheSubshellThatSetIt(t *testing.T) {
 // `setopt` reports what it was asked for, which it did while recorded too —
 // the point is that it now reports a name something reads.
 func TestTypesetSilentIsStillReportedBothWays(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(
 		t,

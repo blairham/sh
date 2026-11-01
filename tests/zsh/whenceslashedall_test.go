@@ -16,6 +16,7 @@ import (
 // on zsh 5.9.2 (/opt/homebrew/bin/zsh, -f), 2026-10-05, in a directory `<d>`
 // holding an executable `bin/man` and a plain file `plain`.
 func TestWhenceAllLooksASlashedNameUpAlongPath(t *testing.T) {
+	t.Parallel()
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

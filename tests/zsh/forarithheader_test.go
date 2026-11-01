@@ -25,6 +25,7 @@ func forHeaderDiagnostic(t *testing.T, src string) string {
 //
 // Measured 2026-09-12 on zsh 5.9.2 (#2225).
 func TestAForHeaderWithTooFewSeparatorsNamesTheLastSection(t *testing.T) {
+	t.Parallel()
 	for header, near := range map[string]string{
 		"((i=0))":   "i=0",
 		"((abc))":   "abc",
@@ -44,6 +45,7 @@ func TestAForHeaderWithTooFewSeparatorsNamesTheLastSection(t *testing.T) {
 // stops. Two wordings for one refusal, which is why the dialect carries two
 // fields: a single format would print a sentence ending in an empty pair of quotes here.
 func TestAForHeaderWithNothingToNameSaysOnlyParseError(t *testing.T) {
+	t.Parallel()
 	for _, header := range []string{"(())", "(( ))", "((;))", "((1;))", "(( x ; ))"} {
 		src := "for " + header + "; do echo x; break; done\n"
 		const want = "zsh:1: parse error\n"
@@ -58,6 +60,7 @@ func TestAForHeaderWithNothingToNameSaysOnlyParseError(t *testing.T) {
 // second `;` belongs to the third expression, so the loop parses and a body
 // that breaks on its first pass never reaches the leftover text.
 func TestAForHeaderWithExtraSeparatorsIsTaken(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"for ((;;;)); do echo body; break; done",
 		"for ((;;;;)); do echo body; break; done",
@@ -78,6 +81,7 @@ func TestAForHeaderWithExtraSeparatorsIsTaken(t *testing.T) {
 // expression, because the fold left the separator in it. One pass runs and the
 // arithmetic then fails, which is what makes the acceptance bounded.
 func TestTheFoldedSectionFailsAsArithmetic(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "for ((i=0;i<2;i++;i=9)); do echo b=$i; done")
 	const want = "b=0\nzsh:1: bad math expression: illegal character: ;\n"
 	if out != want || st != 1 {

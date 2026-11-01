@@ -19,6 +19,7 @@ import (
 // Ours recorded the selection, reported it truthfully through `-lF`, and went
 // on answering with the real count.
 func TestADeselectedParameterStopsAnswering(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 	}{

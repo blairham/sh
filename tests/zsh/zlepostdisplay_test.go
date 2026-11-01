@@ -28,6 +28,7 @@ import (
 // bound to a key. What is asserted here is the parameter; what it *draws* is
 // repl's, and repl/postdisplaypty_test.go drives a terminal for it.
 func TestAWidgetSetsTheTextDrawnAfterTheLine(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `
 		sugg() { POSTDISPLAY=" --sugg"; }
 		zle -N sugg
@@ -53,6 +54,7 @@ func TestAWidgetSetsTheTextDrawnAfterTheLine(t *testing.T) {
 // wrapper depends on: it saves the suggestion, clears it while a new one is
 // fetched, and puts one of the two back.
 func TestAWidgetReadsTheTextAlreadyDrawnAfterTheLine(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `
 		seen() { print -r -- "[$POSTDISPLAY][${(t)POSTDISPLAY}][${+POSTDISPLAY}]"; POSTDISPLAY=""; }
 		zle -N seen
@@ -78,6 +80,7 @@ func TestAWidgetReadsTheTextAlreadyDrawnAfterTheLine(t *testing.T) {
 // Outside a widget the name does not exist, which is the rule every line
 // parameter here follows: a script that is not editing a line has no line.
 func TestTheTextDrawnAfterTheLineIsAWidgetsAlone(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `
 		sugg() { POSTDISPLAY=" --sugg"; }
 		zle -N sugg
@@ -112,6 +115,7 @@ func runZleScript(t *testing.T, r *interp.Runner, src string) {
 // PREDISPLAY=pre:`, `${(t)…}` is `scalar-local-special`, `unset` leaves `${+…}`
 // 0 and nothing drawn, and outside a widget the name is unset (#6414).
 func TestAWidgetReadsWritesAndUnsetsTheTextDrawnBeforeTheLine(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `
 		pre() { PREDISPLAY="pre:"; }
 		seen() { typeset -p PREDISPLAY; print -r -- "[$PREDISPLAY][${(t)PREDISPLAY}]"; unset PREDISPLAY; print -r -- "[${+PREDISPLAY}]"; }

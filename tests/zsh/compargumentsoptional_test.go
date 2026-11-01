@@ -22,6 +22,7 @@ import "testing"
 // so it is the optional numbered argument at the position that lets the rest
 // in, and never the next numbered one.
 func TestAnOptionalArgumentLeavesTheRestStanding(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ specs, line, want string }{
 		{`'1:a:(x)' '*:r:(y)'`, "cmd ", "argument-1"},
 		{`'1::a:(x)' '*:r:(y)'`, "cmd ", "argument-1 argument-rest"},

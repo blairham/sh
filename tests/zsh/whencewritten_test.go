@@ -19,6 +19,7 @@ import (
 // a link `sub/lnk -> <d>/bin/man`. Nothing outside `<d>` is named, because
 // the host's own `/bin` is a link on some systems.
 func TestWhenceReportsAPathHitAsWritten(t *testing.T) {
+	t.Parallel()
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -69,6 +70,7 @@ func TestWhenceReportsAPathHitAsWritten(t *testing.T) {
 // alone, and in the shapes that write no line for a miss the status is 1
 // only when nothing was found. Measured on zsh 5.9.2 (-f), 2026-10-05.
 func TestWhenceAllIsSilentAboutAMissAfterAHit(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`whence -va sh nosuch`, "sh is /bin/sh\nst=0"},
 		{`whence -va nosuch sh`, "nosuch not found\nsh is /bin/sh\nst=1"},

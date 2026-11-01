@@ -11,6 +11,7 @@ import "testing"
 // declaration lands on. Measured 2026-10-15 on zsh 5.9.2, `-f`, `env -i
 // PATH=/usr/bin:/bin`, from `-c`.
 func TestANumericLetterBesideALiteralOverAHeldName(t *testing.T) {
+	t.Parallel()
 	const (
 		held   = ": v: can't assign array value to non-array\n"
 		unheld = ": v: inconsistent type for assignment\n"

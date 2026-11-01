@@ -18,6 +18,7 @@ import (
 // this is a letter zsh has simply never heard of. Measured 2026-09-05 on
 // 5.9.2 (#516).
 func TestExportHasNoOffOption(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().ExportTakesTheAttributeOff; got != interp.No {
 		t.Errorf("ExportTakesTheAttributeOff = %v, want No", got)
 	}

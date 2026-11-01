@@ -30,6 +30,7 @@ import (
 // option` for something this shell's model of zsh says zsh has. The two tables
 // have to move together, and this asserts that they did.
 func TestReadKeysIsNoLongerRefusedAsMissing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "in.txt")
 	if err := os.WriteFile(path, []byte("abcdef"), 0o644); err != nil {
@@ -69,6 +70,7 @@ print -r -- "st=$? [$v]"
 // is worth keeping is that taking two letters out of `qeEzcl` by hand is
 // exactly how one of the other three would go missing.
 func TestTheOtherTerminalLettersAreStillRefused(t *testing.T) {
+	t.Parallel()
 	for _, letter := range []string{"c", "l"} {
 		out, st := runZsh(t, t.TempDir(), "read -"+letter+" v\n")
 		want := "zsh:read:1: -" + letter + " is not implemented yet\n"
@@ -104,6 +106,7 @@ func TestTheOtherTerminalLettersAreStillRefused(t *testing.T) {
 // that sent this one through the same path would be inventing a prefix the
 // shell it is imitating does not print.
 func TestReadKeysWithNoTerminalSaysSoWithoutALocation(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "read -k v\nprint -r -- \"st=$?\"\n")
 	want := "not interactive and can't open terminal\nst=1\n"
 	if out != want || st != 0 {
@@ -113,6 +116,7 @@ func TestReadKeysWithNoTerminalSaysSoWithoutALocation(t *testing.T) {
 
 // And a bad attached count is located and named, which is the contrast.
 func TestReadKeysBadAttachedCountIsLocated(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "read -k2v x\n")
 	want := "zsh:read:1: number expected after -k: 2v\n"
 	if out != want || st != 1 {
@@ -123,6 +127,7 @@ func TestReadKeysBadAttachedCountIsLocated(t *testing.T) {
 // A non-digit after the letter is a letter, not a count, so the bundle carries
 // on and an unknown one is refused as an option.
 func TestReadKeysDoesNotSwallowALetter(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "read -kv x\n")
 	if !strings.Contains(out, "-v") || st == 0 {
 		t.Errorf("got %q status %d, want the letter v refused as an option", out, st)
@@ -142,6 +147,7 @@ func TestReadKeysDoesNotSwallowALetter(t *testing.T) {
 // A mutation run is what asked for this one: putting `k` back in the
 // unimplemented list broke nothing at all.
 func TestNoLetterIsBothAcceptedAndCalledMissing(t *testing.T) {
+	t.Parallel()
 	sem, dg := zsh.Semantics(), zsh.Diagnostics()
 	// `private` joined `read` here with #4738, and it is the second word in
 	// the tree to hold both halves of the pair: `-E` and `-m` are letters

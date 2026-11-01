@@ -25,6 +25,7 @@ import (
 // and dropped: same command, different answer, because only the second had an
 // inherited attribute to take off.
 func TestTypesetHideDetachesALocalFromTheSpecialParameter(t *testing.T) {
+	t.Parallel()
 	// `PATH` is written again before every call on purpose: a `local` of one
 	// half of a tie does not yet shadow the other half here (#1630), so a
 	// call that leaves the array moved would decide the next row rather than
@@ -57,6 +58,7 @@ unhidden`)
 // The attribute a call adds lasts as long as the call, so the caller's `PATH`
 // drives `path` again the moment the function returns.
 func TestTypesetHideLastsOnlyAsLongAsTheCall(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `PATH=/bin:/usr/bin
 f() { local -h PATH=/x; }
 f
@@ -72,6 +74,7 @@ print -r -- "after: ${(j:,:)path}"`)
 // its own plain `local` shadows a name that is already hidden, so it is
 // ordinary as well and the outer `path` is what it sees.
 func TestTypesetHideIsInheritedThroughANestedCall(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `PATH=/bin:/usr/bin
 inner() { local PATH=/z; print -r -- "inner: ${(j:,:)path}"; }
 outer() { local -h PATH=/x; inner; }
@@ -86,6 +89,7 @@ outer`)
 // `typeset` and `declare` — and so does `integer`, whose letter set is its
 // own and narrower.
 func TestThePlusHideFormIsTakenUnderEverySpelling(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `l() { local +h a=1; print -r -- "local: $a st=$?"; }
 l
 ty() { typeset +h b=2; print -r -- "typeset: $b st=$?"; }
@@ -113,6 +117,7 @@ it`)
 // local of one half of a tie does not shadow the other half here (#1630) —
 // so asserting on it would pin that bug rather than this fix.
 func TestTheCompauditDeclarationRuns(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `FPATH=/a:/b
 f() { local -a -U +h fpath; print -r -- "st=$?"; }
 f`)
@@ -166,6 +171,7 @@ print -r -- "after=${(t)EPOCHSECONDS}"`)
 // survives its shadow. Not written as `( … )` — a subshell is not where the
 // scope is, and the whole row would pass on a shell that ignored the letter.
 func TestTheHideLetterDetachesALocalOfAProducedParameter(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `plain() { local ARGC; print -r -- "plain=[$ARGC] ${(t)ARGC}"; }
 plain
 hidden() { local -h ARGC=5; print -r -- "hidden=[$ARGC] ${(t)ARGC}"; }
@@ -211,6 +217,7 @@ print -r -- "after"`)
 // from a script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with a
 // scratch HOME, one run per row.
 func TestAKindChangeTakesTheHideWordOff(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The two spellings #4901 was filed for: a declaration word carrying
 		// the container and a bare assignment reaching the same place.
@@ -390,6 +397,7 @@ func TestAKindChangeTakesTheHideWordOff(t *testing.T) {
 //
 // Measured with the rows above.
 func TestAKindChangeUnderAShadowLeavesTheOuterHideAlone(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a called function retyping its own local",
@@ -422,6 +430,7 @@ print "top ${(t)v}"`,
 // own `ARGC` back again, holding the shell's value rather than the empty
 // array this line made.
 func TestAKindChangeDoesNotPutAProducerBack(t *testing.T) {
+	t.Parallel()
 	const src = `f(){ local -h ARGC=5; print "${(t)ARGC}"; typeset -a ARGC; print "after ${(t)ARGC} [$ARGC]" }
 f`
 	want := "scalar-local-hide\nafter array-local []\n"

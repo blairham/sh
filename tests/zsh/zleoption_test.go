@@ -22,6 +22,7 @@ import (
 // prompt was never printed and a real configuration took 400ms to a prompt
 // where real zsh takes 33ms (#2121).
 func TestZleIsOnAtAnInteractivePromptAndOffInAScript(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name        string
 		interactive bool
@@ -57,6 +58,7 @@ func TestZleIsOnAtAnInteractivePromptAndOffInAScript(t *testing.T) {
 // TestZleIsOnAtAnInteractivePromptAndOffInAScript above keeps the *read*
 // following interactive alone, which is a separate measurement and unmoved.
 func TestZleMovesBothWaysAtAnInteractivePrompt(t *testing.T) {
+	t.Parallel()
 	const src = `unsetopt zle; s1=$?
 [[ -o zle ]] && a=on || a=off
 setopt zle; s2=$?
@@ -80,6 +82,7 @@ print -r -- "$s1 $a $s2 $b"`
 // everywhere — a `set` that always ran would answer `0` here and take the
 // refusal with it.
 func TestZleIsStillImmovableInAScript(t *testing.T) {
+	t.Parallel()
 	base := dialecttest.Base{Dir: t.TempDir()}
 	out, _, err := preset.Combined(t, base, `setopt zle; print -r -- "status $?"`)
 	if err != nil {
@@ -103,6 +106,7 @@ func TestZleIsStillImmovableInAScript(t *testing.T) {
 // what a bit hung off the Runner would not: `(unsetopt zle)` does not reach
 // the shell that started it.
 func TestZleMovedInASubshellStaysThere(t *testing.T) {
+	t.Parallel()
 	base := dialecttest.Base{Dir: t.TempDir(), Interactive: true}
 	out, st, err := preset.Combined(t, base,
 		`(unsetopt zle; [[ -o zle ]] && print -rn in=on || print -rn in=off); `+
@@ -124,6 +128,7 @@ func TestZleMovedInASubshellStaysThere(t *testing.T) {
 // direction decides it, which is why the split is written on the entry's own
 // set rather than through `immovable` — that answers one way for both.
 func TestZleNeedsATerminalToBeTurnedOnAndNotToBeTurnedOff(t *testing.T) {
+	t.Parallel()
 	base := dialecttest.Base{Dir: t.TempDir(), Interactive: true}
 	const src = `unsetopt zle; s1=$?
 [[ -o zle ]] && a=on || a=off

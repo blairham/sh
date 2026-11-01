@@ -36,6 +36,7 @@ import (
 // which is that view's own rule and not this letter's — see zshHistoryEvents.
 // The counts below are what a script can see.
 func TestTheHistoryIsPushedAndPopped(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			// The round trip: the outer list is gone while the pushed one
@@ -107,6 +108,7 @@ func TestTheHistoryIsPushedAndPopped(t *testing.T) {
 // The operands: a file to read the new list from, and the two sizes the
 // pushed session runs under.
 func TestTheHistoryPushTakesAFileAndTwoSizes(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	file := filepath.Join(dir, "hf")
 	if err := os.WriteFile(file, []byte("fromfile1\nfromfile2\n"), 0o600); err != nil {
@@ -160,6 +162,7 @@ func TestTheHistoryPushTakesAFileAndTwoSizes(t *testing.T) {
 // separates "accepted and did nothing" from "accepted and wrote". A test on
 // the status alone would pass against either.
 func TestTheHistoryPushAppendLetterWritesNothingHere(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	file := filepath.Join(dir, "ap")
 	out, st := runZshPrelude(t, dir, `fc -ap `+file+` 10 10
@@ -194,6 +197,7 @@ print -r -- "pop st=$?"`)
 // `fc -p -R f`, `fc -pR f`, `fc -R -p f` and `fc -p f` all leave the list
 // holding exactly the file.
 func TestAPushReadsItsFileIntoTheNewList(t *testing.T) {
+	t.Parallel()
 	for _, spelling := range []string{"-p -R", "-pR", "-R -p", "-p"} {
 		t.Run(spelling, func(t *testing.T) {
 			dir := t.TempDir()
@@ -225,6 +229,7 @@ func TestAPushReadsItsFileIntoTheNewList(t *testing.T) {
 // is only safe if a call the push does not claim falls through, and "falls
 // through" is the half a reordering can silently break.
 func TestAFileLetterWithoutAPushStillReadsIntoTheCurrentList(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	file := filepath.Join(dir, "hf")
 	if err := os.WriteFile(file, []byte("alpha\nbeta\n"), 0o600); err != nil {
@@ -263,6 +268,7 @@ func TestAFileLetterWithoutAPushStillReadsIntoTheCurrentList(t *testing.T) {
 // pseudo-terminal, because what is under test is which answer the builtin
 // gives for each — that the front end sets it correctly is the repl's own row.
 func TestTheListingSkipsItsOwnLineOnlyWhenItIsInTheList(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name    string
 		ignored bool

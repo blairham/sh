@@ -10,6 +10,7 @@ import "testing"
 // off leaves `$0` to the frame below. Measured 2026-10-02 on zsh 5.9.2 under
 // `-f` (#5155).
 func TestFunctionArgZeroIsReadAtTheCall(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"f(){ print $0 }; g(){ unsetopt functionargzero; f }; g", "g\n"},
 		{"() { unsetopt functionargzero; f(){ print $0 }; f }", "(anon)\n"},

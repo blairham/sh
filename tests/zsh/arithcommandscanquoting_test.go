@@ -27,6 +27,7 @@ import (
 // about *quoting*: a backslash and a command substitution are stepped over in
 // every column, so those two rows do not move (#3069).
 func TestTheArithCommandScanIsBlindToQuoting(t *testing.T) {
+	t.Parallel()
 	if !zsh.Dialect().ArithCommandScanIgnoresQuoting {
 		t.Fatal("zsh's arithmetic-command scan does not see quoting")
 	}

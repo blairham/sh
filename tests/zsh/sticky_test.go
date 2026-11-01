@@ -20,6 +20,7 @@ const stickyShow = "showopts() { print -r -- \"ws=${options[shwordsplit]} " +
 	"eg=${options[extendedglob]} em=$(emulate)\"; }\n"
 
 func TestAFunctionDefinedInAnEmulationReentersIt(t *testing.T) {
+	t.Parallel()
 	src := stickyShow + `showopts
 emulate -R sh -c "s1() { showopts; }"
 s1
@@ -38,6 +39,7 @@ showopts`
 // get wrong: `extendedglob` is turned on between the definition and the call
 // and the `-R` reset still takes it off inside the body.
 func TestAStickyCallCarriesTheDefinitionsMode(t *testing.T) {
+	t.Parallel()
 	src := stickyShow + `emulate -R sh -c "s1() { showopts; }"
 emulate -R ksh -c "s2() { showopts; }"
 setopt extendedglob
@@ -56,6 +58,7 @@ showopts`
 // `-R` is not what makes a function sticky — the plain form marks it too —
 // and whatever the body then moves goes back at the return.
 func TestAPlainEmulationIsStickyAndTheTableGoesBack(t *testing.T) {
+	t.Parallel()
 	src := stickyShow + `emulate sh -c "n1() { setopt errexit; showopts; }"
 n1
 print -r -- "after: ee=${options[errexit]}"`
@@ -72,6 +75,7 @@ print -r -- "after: ee=${options[errexit]}"`
 // the first adds no name, and the second happens where no emulation is
 // running at all.
 func TestTheStickyMarkIsTheLastDefinitions(t *testing.T) {
+	t.Parallel()
 	src := stickyShow + `f1() { showopts; }
 emulate -R sh -c "f1() { showopts; }"
 f1
@@ -89,6 +93,7 @@ f2`
 // ordinary callee runs under the emulation its caller is in, and goes back to
 // the shell's own when called from the top level.
 func TestWhatAStickyFunctionCallsIsNotSticky(t *testing.T) {
+	t.Parallel()
 	src := stickyShow + `plain() { showopts; }
 emulate -R sh -c "s1() { plain; }"
 s1
@@ -104,6 +109,7 @@ plain`
 // another one it defined stays in the emulation throughout, and a `-c` inside
 // a sticky body marks with its own mode rather than the enclosing one.
 func TestStickyCallsNest(t *testing.T) {
+	t.Parallel()
 	src := stickyShow + `emulate -R sh -c "a1() { showopts; a2; }; a2() { showopts; }"
 a1
 emulate -R ksh -c "b1() { emulate -R sh -c 'b2() { showopts; }'; }"

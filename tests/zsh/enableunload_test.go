@@ -18,6 +18,7 @@ import (
 // axis is what keeps one column's letter out of the other's option table —
 // see Semantics.EnableUnloadsABuiltin.
 func TestEnableHasNoDeleteLetter(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().EnableUnloadsABuiltin; got != interp.No {
 		t.Errorf("EnableUnloadsABuiltin is %v, want No", got)
 	}

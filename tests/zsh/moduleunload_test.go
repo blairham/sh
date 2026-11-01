@@ -26,6 +26,7 @@ import (
 // builtin is built. A roster read from before that move restores a state that
 // is no longer the startup state, which is the whole of this row.
 func TestUnloadingAModuleTakesItsGatedBuiltinsBack(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		module, builtin string
 		// what `whence -w` writes after the unload
@@ -133,6 +134,7 @@ func TestUnloadingAModuleTakesItsGatedParametersBack(t *testing.T) {
 // than merely emptied. `typeset -p langinfo` is `no such variable: langinfo`
 // at 1 there before the load and after the unload alike.
 func TestAReleasedParameterAnswersAsOneTheShellHasNotGot(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(t, dir,
 		"zmodload zsh/langinfo\nzmodload -u zsh/langinfo\n"+

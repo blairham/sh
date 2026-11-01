@@ -9,6 +9,7 @@ import "testing"
 // nothing follows it; inside `(( ))` the status is 2. Measured 2026-10-03 on
 // zsh 5.9.2 under `-f -c` (#5608).
 func TestAFailedExpansionInASubscriptIsReportedOnce(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(1 2); print ${a[${nope?boom}]}`, "zsh:1: nope: boom\n"},
 		{`a=(1 2); a[${nope?boom}]=1`, "zsh:1: nope: boom\n"},

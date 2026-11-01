@@ -40,6 +40,7 @@ func mathValue(t *testing.T, body, call string) string {
 // right-hand side is the last evaluation — and part company on every row here
 // that does not write one, which is where the plugin manager lives.
 func TestAMathFunctionReturnsTheLastArithmeticValueAndNotREPLY(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ body, call, want string }{
 		// A plain string assignment evaluates no arithmetic, so the last
 		// value is the argument — the reading that separates this from
@@ -81,6 +82,7 @@ func TestAMathFunctionReturnsTheLastArithmeticValueAndNotREPLY(t *testing.T) {
 // measured: an evaluation from before the math function existed is still what
 // an implementation that evaluates nothing hands back.
 func TestTheLastArithmeticValueOutlivesTheRegistration(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"g(){ :; }\n: $((123))\nfunctions -M -- mf 0 0 g\necho $(( mf() ))\n")
 	if out != "123\n" || st != 0 {
@@ -91,6 +93,7 @@ func TestTheLastArithmeticValueOutlivesTheRegistration(t *testing.T) {
 // TestAMathFunctionRuns is the seam itself: an expression that runs a shell
 // function, with everything a call brings.
 func TestAMathFunctionRuns(t *testing.T) {
+	t.Parallel()
 	// The body really runs, and its output lands where the command's does.
 	out, st := runZsh(t, t.TempDir(),
 		"g(){ echo IN; return 7; }\nfunctions -M mf 1 1 g\necho $(( mf(5) ))\necho st=$?\n")
@@ -118,6 +121,7 @@ func TestAMathFunctionRuns(t *testing.T) {
 // writes a number, and `$0` is the *registered* name rather than the
 // implementation's.
 func TestAMathFunctionSeesItsArgumentsEvaluatedAndAsStrings(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"g(){ echo \"0=$0 #=$# *=$*\"; }\nfunctions -M mf 0 3 g\n: $(( mf(1,2,3) ))\n")
 	if out != "0=mf #=3 *=1 2 3\n" {
@@ -149,6 +153,7 @@ func TestAMathFunctionSeesItsArgumentsEvaluatedAndAsStrings(t *testing.T) {
 
 // TestAMathFunctionRecursesAndCallsAnother — the seam re-enters itself.
 func TestAMathFunctionRecursesAndCallsAnother(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"g(){ if (( $1 <= 1 )); then return 1; else return $(( $1 * mf($1-1) )); fi }\n"+
 			"functions -M mf 1 1 g\necho $(( mf(5) ))\n")
@@ -172,6 +177,7 @@ func TestAMathFunctionRecursesAndCallsAnother(t *testing.T) {
 
 // TestTheArityOperandsAreNameMinMaxImpl, each measured.
 func TestTheArityOperandsAreNameMinMaxImpl(t *testing.T) {
+	t.Parallel()
 	// A minimum on its own is also the maximum.
 	for _, c := range []struct{ spec, call, want string }{
 		{"mf 1", "mf(1)", "8\n"},
@@ -206,6 +212,7 @@ func TestTheArityOperandsAreNameMinMaxImpl(t *testing.T) {
 // mode this whole issue guards against, so each refusal is checked for leaving
 // no registration behind as well as for its sentence.
 func TestABadArityOperandIsRefusedAndNothingIsRegistered(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ spec, want string }{
 		{"mf x 1 g", "-M: invalid min number of arguments: x"},
 		{"mf -1 1 g", "-M: invalid min number of arguments: -1"},
@@ -238,6 +245,7 @@ func TestABadArityOperandIsRefusedAndNothingIsRegistered(t *testing.T) {
 // name nobody defined, and the failure arrives at the call instead. Three
 // separate sentences for three separate questions.
 func TestRegistrationDoesNotCheckTheImplementation(t *testing.T) {
+	t.Parallel()
 	// The failing call ends the script the way any arithmetic failure in
 	// this shell does, so only the registration's own status is 0 here.
 	out, _ := runZsh(t, t.TempDir(),
@@ -267,6 +275,7 @@ func TestRegistrationDoesNotCheckTheImplementation(t *testing.T) {
 // registered first, with the operands a re-registration would default to left
 // out. Row for row as measured.
 func TestTheListingSaysRegistrationsBackInTheFormThatWouldMakeThem(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ spec, want string }{
 		{"mf", "functions -M mf\n"},
 		{"mf 0", "functions -M mf 0 0\n"},
@@ -321,6 +330,7 @@ func TestTheListingSaysRegistrationsBackInTheFormThatWouldMakeThem(t *testing.T)
 // there, with the default arity and itself as the implementation. Measured,
 // and it is why a `*` in the operand is a bad name rather than a pattern.
 func TestOperandsAlwaysRegisterAndNeverFilterTheListing(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"g(){ :; }\nfunctions -M mf 0 3 g\nfunctions -M mf\necho $(( mf(1,2,3) ))\n")
 	if !strings.Contains(out, "no such function: mf") {
@@ -338,6 +348,7 @@ func TestOperandsAlwaysRegisterAndNeverFilterTheListing(t *testing.T) {
 // TestPlusMRemovesARegistration, which is the spelling — `unfunction -M` is
 // not, and stays a bad option under that word.
 func TestPlusMRemovesARegistration(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"g(){ :; }\nfunctions -M mf 1 1 g\nfunctions +M mf\nfunctions -M\necho $(( mf(1) ))\n")
 	if !strings.Contains(out, "unknown function: mf") {
@@ -364,6 +375,7 @@ func TestPlusMRemovesARegistration(t *testing.T) {
 // nor the `$functions` associative array, which is what says the two tables
 // are separate rather than one with a flag.
 func TestARegistrationIsNotAFunction(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"g(){ :; }\nfunctions -M mf 1 1 g\nfunctions\necho ${+functions[mf]} ${+functions[g]}\n")
 	if strings.Contains(out, "mf () {") {
@@ -377,6 +389,7 @@ func TestARegistrationIsNotAFunction(t *testing.T) {
 // TestARegistrationMadeInASubshellIsNotTheParents — the table is inherited and
 // owned, the way the function table is.
 func TestARegistrationMadeInASubshellIsNotTheParents(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"g(){ return 5; }\nfunctions -M mf 1 1 g\n( functions -M x 1 1 g; functions +M mf )\nfunctions -M\n")
 	if out != "functions -M mf 1 1 g\n" {
@@ -394,6 +407,7 @@ func TestARegistrationMadeInASubshellIsNotTheParents(t *testing.T) {
 // not a call in the shell that has one either, which is what makes the grammar
 // additive: turning it on changes nothing about text the other five accept.
 func TestTheCallFormNeedsTheParenthesisTouchingTheName(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "g(){ :; }\nfunctions -M mf 1 1 g\necho $(( mf ( 5 ) ))\n")
 	if !strings.Contains(out, "operator expected") {
 		t.Errorf("output = %q, want the space to break the call", out)
@@ -422,6 +436,7 @@ func TestTheCallFormNeedsTheParenthesisTouchingTheName(t *testing.T) {
 // letter it has **not** got is refused **by name**. Measured 2026-09-28 on zsh
 // 5.9.2 over every letter of the alphabet beside `-M`.
 func TestTheLetterIsExclusive(t *testing.T) {
+	t.Parallel()
 	for _, word := range []string{"functions -Mm", "functions -mM", "functions -M -m"} {
 		out, st := runZsh(t, t.TempDir(), "g(){ :; }\n"+word+" mf 1 1 g\necho st=$?\nfunctions -M\n")
 		if out != "st=0\n" || st != 0 {
@@ -496,6 +511,7 @@ func TestTheLetterIsExclusive(t *testing.T) {
 // silences it — so the `--` has to be stepped over rather than read as the
 // name.
 func TestTheDoubleDashSpellingTheLoaderUses(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"-zi_scheduler_add_sh(){ local idx=\"$1\"\n"+
 			"  if [[ $idx -gt 2 ]]; then return 1; else return idx; fi\n}\n"+

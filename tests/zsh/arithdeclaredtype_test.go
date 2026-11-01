@@ -28,6 +28,7 @@ import "testing"
 // tests/zsh/integerassignvalue_test.go for #4595's neighboring rule about
 // the assignment's *value*.
 func TestAnArithmeticDeclarationTakesItsTypeFromTheValue(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{

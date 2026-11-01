@@ -20,6 +20,7 @@ import "testing"
 // each filed from one half of such a pair (#4895, #4899). Only a row that
 // moves between the two says the state exists.
 func TestAParameterArrivesOnItsFirstReference(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			// #4895's one surviving row.
@@ -137,6 +138,7 @@ func TestAParameterArrivesOnItsFirstReference(t *testing.T) {
 // read none of the names. The pair is the point again: the load is what moves
 // the row, and the same `unset` without it is a silent 0.
 func TestAnExplicitModuleLoadIsAReference(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"after the load the freeze is there",
@@ -190,6 +192,7 @@ func TestAnExplicitModuleLoadIsAReference(t *testing.T) {
 // for it, which was a probe grepping that listing for `^funcstack$`: the
 // line is there and an anchored bare name is exactly what cannot see it.
 func TestTheListingFormsSplitOverADeferredParameter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the set listing writes the name",

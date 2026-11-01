@@ -14,6 +14,7 @@ import "testing"
 // values, quoted correctly, by the other renderer in the same builtin. So what
 // was wrong was one call site and not a missing facility.
 func TestTheBareStyleListingQuotesItsValues(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zstyle :a:b st plain value "with spaces" "has'quote"
 zstyle
 print ...
@@ -32,6 +33,7 @@ zstyle -L`)
 // of "quote what needs it" would quote a pattern holding a space too, and this
 // listing is a display where `-L` is a command that has to read back.
 func TestTheBareStyleListingLeavesThePatternBare(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zstyle ':a b:*' st 'v v'
 zstyle
 print ...
@@ -47,6 +49,7 @@ zstyle -L`)
 // The indent is the `-e` marker's field, eight columns either way — found
 // because it is the same line as the quoting.
 func TestTheBareStyleListingMarksAnEvaluatedStyle(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zstyle -e ':c:*' ev 'reply=(x y)'
 zstyle ':d:*' pl bare
 zstyle`)
@@ -65,6 +68,7 @@ zstyle`)
 // The pattern and the style's *name* go through the same speller, which the
 // values make easy to miss.
 func TestTheStyleListingEscapesAByteQuotesCannotHold(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zstyle $'con\x00text' $'ke\x00y' $'val\x00u' e
 zstyle p1 s1 $'a\tb' $'c\nd' $'e\x01f' $'g\x7fh'
 zstyle p2 s2 $'has \x01 and space'
@@ -86,6 +90,7 @@ zstyle -L`)
 // the word into the escaped form. The first row is what a byte-wise safe-set
 // test gets wrong, and it is the control for the second.
 func TestTheStyleListingLeavesARuneAlone(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zstyle p1 s1 $'h\xc3\xa9x' $'m\x80y'
 zstyle -L`)
 	want := "zstyle p1 s1 héx $'m\\M-\\C-@y'\n"
@@ -98,6 +103,7 @@ zstyle -L`)
 // the first. Measured 2026-09-26 on zsh 5.9.2 with the four-value style the
 // suite sets.
 func TestTheStylePatternTestReachesEveryValue(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zstyle ':ztst:context:sub1' array-style array value elements 'with spaces'
 zstyle -m :ztst:context:sub1 array-style 'arr*';        print "A=$?"
 zstyle -m :ztst:context:sub1 array-style 'value';       print "B=$?"

@@ -45,6 +45,7 @@ func qRows(out string) string {
 }
 
 func TestATypesetLetterWithNoNamesListsWhatCarriesIt(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, line, want string }{
 		{"exported", "typeset -x", "qb=2\nqf=6\n"},
 		{"arrays", "typeset -a", "qd=( p )\n"},
@@ -72,6 +73,7 @@ func TestATypesetLetterWithNoNamesListsWhatCarriesIt(t *testing.T) {
 // alike: a minus reaching the names listing would read as a working `-x` to
 // anything consuming it.
 func TestTheTwoSignsOfAttributeLetterAreTwoListings(t *testing.T) {
+	t.Parallel()
 	plus, st := runZsh(t, t.TempDir(), declared+"typeset +x")
 	if want := "qb\nqf\n"; qRows(plus) != want || st != 0 {
 		t.Fatalf("typeset +x = %q (status %d), want %q", qRows(plus), st, want)
@@ -86,6 +88,7 @@ func TestTheTwoSignsOfAttributeLetterAreTwoListings(t *testing.T) {
 // compound half of it is measured from a second direction: this wrote a bare
 // `qd` for an exported array until #1868, where the shell writes its elements.
 func TestABareExportWritesACompoundValue(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "typeset -ax qd=(p q)\nexport")
 	if want := "qd=( p q )\n"; qRows(out) != want || st != 0 {
 		t.Errorf("export = %q (status %d), want %q", qRows(out), st, want)

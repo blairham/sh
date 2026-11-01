@@ -15,6 +15,7 @@ import "testing"
 // even the text it is spelled with — and a table with no pattern characters
 // in its keys answers as the exact lookup it always looked like.
 func TestKeyFlagsReadTheKeysAsPatterns(t *testing.T) {
+	t.Parallel()
 	out, st, errs := runZshSplit(t, t.TempDir(), `typeset -A h; h=('a*' star 'b?' q x plain '\*' bs '[' br 'a(b' grp)
 print -r -- "[${h[(k)abc]}] [${h[(K)b1]}] [${h[(k)a\*]}] [${h[(k)x]}] [${#h[(K)b1]}]"
 print -r -- "[${h[(k)*]}] [${h[(k)\*]}] [${h[(ke)abc]}] [${h[(kn:2:)abc]}] [${(k)h[(k)b7]}]"

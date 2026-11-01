@@ -10,6 +10,7 @@ import "testing"
 // is read as a modifier list, and refused naming its `$` (#5151, a chunk of
 // D04parameter.ztst). Measured 2026-10-03 on zsh 5.9.2 under `-f`.
 func TestARangeSegmentHoldingAnEscapedQuoteIsAModifier(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`: "${foo:0:${\"}}"; echo after`, "zsh:1: unrecognized modifier `$'\n"},
 		{`: ${foo:${\"}}`, "zsh:1: unrecognized modifier `$'\n"},

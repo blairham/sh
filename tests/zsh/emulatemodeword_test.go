@@ -19,6 +19,7 @@ import (
 // column writes. Measured 2026-09-18 on zsh 5.9.2 under `env -i
 // PATH=/usr/bin:/bin LC_ALL=C`, each row that shell's exact answer.
 func TestWhichWordsTheEmulateBuiltinReadsAsAMode(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		src  string
@@ -112,6 +113,7 @@ func TestWhichWordsTheEmulateBuiltinReadsAsAMode(t *testing.T) {
 // of a refusal. Neither can be seen from a passing command line, so they are
 // asserted where the value is written.
 func TestTheEmulationOptionValueIsWhole(t *testing.T) {
+	t.Parallel()
 	e := zsh.Semantics().EmulationOption
 	if e.Spellings != "--emulate" {
 		t.Errorf("Spellings = %q, want --emulate", e.Spellings)

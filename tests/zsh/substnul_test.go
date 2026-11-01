@@ -14,6 +14,7 @@ import "testing"
 // end, one inside a quoted word and one in an unquoted word with a blank after
 // it, and the backquoted spelling.
 func TestASubstitutionKeepsANul(t *testing.T) {
+	t.Parallel()
 	src := `v=$(printf 'a\0b'); printf '<%s>' "$v" ${#v}; echo
 v=$(printf 'a\n\0'); printf '<%s>' "$v"; echo
 printf '<%s>' "x$(printf 'a\0b')y" $(printf 'p\0q r'); echo

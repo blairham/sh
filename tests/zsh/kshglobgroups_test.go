@@ -13,6 +13,7 @@ import "testing"
 //
 // Every row measured 2026-10-02 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f`).
 func TestKshGlobTakesTheQuantifiedGroups(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{"setopt kshglob\n[[ b == @(a|b) ]] && print 1\n[[ bb == +(b) ]] && print 2\n[[ '' == ?(x) ]] && print 3\n[[ c == !(a|b) ]] && print 4\n[[ aa == *(a) ]] && print 5", "1\n2\n3\n4\n5\n"},
 		{"setopt kshglob\ncase b in @(a|b)) print C;; esac", "C\n"},
@@ -38,6 +39,7 @@ func TestKshGlobTakesTheQuantifiedGroups(t *testing.T) {
 //
 // Every row measured 2026-10-02 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f`).
 func TestShGlobWithKshGlobReadsABareParenthesisAsText(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ pattern, subject, want string }{
 		{"a(b|c)", "a(b", "M\n"},
 		{"a(b|c)", "c)", "M\n"},

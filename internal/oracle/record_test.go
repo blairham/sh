@@ -32,6 +32,7 @@ func recordOf(cases []Case) *Run {
 
 // The gate. Everything else in this file is about how it fails.
 func TestTheCommittedRecordAndDocumentAgree(t *testing.T) {
+	t.Parallel()
 	golden, err := Load(filepath.Join("testdata", "golden.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -306,6 +307,7 @@ func TestACurrentCellIsNotReportedStale(t *testing.T) {
 // from TestTheCommittedRecordAndDocumentAgree so a failure says which of the
 // two questions was answered no.
 func TestTheCommittedRecordWasNormalizedByThisBuild(t *testing.T) {
+	t.Parallel()
 	golden, err := Load(filepath.Join("testdata", "golden.json"))
 	if err != nil {
 		t.Fatal(err)

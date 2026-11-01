@@ -12,6 +12,7 @@ import "testing"
 // (`/opt/homebrew/bin/zsh -f` under `env -i PATH=/usr/bin:/bin`, from `-c`
 // and from a script file alike).
 func TestABuiltinStoreThatRetypesAHiddenNameDropsTheHide(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ body, want string }{
 		{"local -h HOME; set -A HOME x; echo ${(t)HOME}", "array-local"},
 		{"local -h v; set -A v x; echo ${(t)v}", "array-local"},

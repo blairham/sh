@@ -25,6 +25,7 @@ import (
 // **with** one that separates them — which is why this was filed as a reading
 // the `-c` probe could not see.
 func TestAConditionWithNoTermIsBlamedOnTheTokenAfterTheCloser(t *testing.T) {
+	t.Parallel()
 	var out, errs bytes.Buffer
 	run := func(argv ...string) (string, int) {
 		out.Reset()

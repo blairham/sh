@@ -35,6 +35,7 @@ func zshScriptFileAt(t *testing.T, src string) string {
 // doors into one state, so all three have to be behind the alias resolution
 // rather than in front of it.
 func TestTheInvocationTakesSingleCommandUnderEverySpelling(t *testing.T) {
+	t.Parallel()
 	script := zshScriptFileAt(t, "echo P1\necho P2\necho P3\n")
 	for _, argv := range [][]string{
 		{"zsh", "-t", script},
@@ -55,6 +56,7 @@ func TestTheInvocationTakesSingleCommandUnderEverySpelling(t *testing.T) {
 // have to see it. Measured: `zsh -t -c 'echo "$-"'` is `569Xt`, and a `-t`
 // script's first line reporting `setopt` writes `singlecommand`.
 func TestTheOptionIsVisibleToTheWholeNamespaceAfterTheInvocation(t *testing.T) {
+	t.Parallel()
 	script := zshScriptFileAt(t,
 		"setopt | grep single\n[[ -o singlecommand ]]; echo \"cond=$?\"\n")
 	var out, errs bytes.Buffer
@@ -79,6 +81,7 @@ func TestTheOptionIsVisibleToTheWholeNamespaceAfterTheInvocation(t *testing.T) {
 // Measured, `zsh -t -c $'echo A\necho B'` writes both lines, which is
 // Semantics.OneCommandStopsACommandString answered `No`.
 func TestACommandStringIsReadToItsEnd(t *testing.T) {
+	t.Parallel()
 	var out, errs bytes.Buffer
 	code := driver.MainArgs(zshWriting(&out, &errs), []string{"zsh", "-t", "-c", "echo A\necho B"})
 	if out.String() != "A\nB\n" || code != 0 {
@@ -91,6 +94,7 @@ func TestACommandStringIsReadToItsEnd(t *testing.T) {
 // singlecommand` after `zsh -t` is `can't change option: singlecommand`, so
 // the grant really is the invocation's and not the state's.
 func TestAScriptStillMayNotMoveItInEitherDirection(t *testing.T) {
+	t.Parallel()
 	script := zshScriptFileAt(t, "unsetopt singlecommand\necho AFTER\n")
 	var out, errs bytes.Buffer
 	code := driver.MainArgs(zshWriting(&out, &errs), []string{"zsh", "-t", script})

@@ -11,6 +11,7 @@ import "testing"
 //
 // Measured 2026-10-02 on zsh 5.9.2, `-f -c` (#5145).
 func TestInfAndNaNAreConstants(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want, errs string }{
 		{"before a parameter", "in=1 info=2 Infinity=3 Inf=4; print $(( in )) $(( info )) $(( Infinity )) $(( $Inf )) $(( inf )) $(( INF )) $(( Inf )) $(( iNF ))", "1 2 3 4 Inf Inf Inf Inf\n", ""},
 		{"nan", "nan=5; print $(( nan )) $(( NaN ))", "NaN NaN\n", ""},

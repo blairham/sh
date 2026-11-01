@@ -16,6 +16,7 @@ import (
 // 2026-09-06 on zsh 5.9.2, and against the other four, which read every one
 // of these as arithmetic and fail there.
 func TestASubscriptFlagGroupIsThisDialects(t *testing.T) {
+	t.Parallel()
 	const a = "a=(alpha beta gamma beta delta)\n"
 	for _, tc := range []struct{ src, want string }{
 		{`printf "[%s]" "${a[(r)*a]}"`, `[alpha]`},
@@ -53,6 +54,7 @@ func TestASubscriptFlagGroupIsThisDialects(t *testing.T) {
 // The shape the plugin manager on this machine writes six times before it
 // defines anything, which is why this dialect has the construct at all.
 func TestTheFlagGroupShapeAPluginManagerAsksWith(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`p=(/u/bin /pfx/bin); Z=/pfx; [[ -z ${p[(re)${Z}/bin]} ]] && printf add || printf keep`, "keep"},
 		{`p=(/u/bin); Z=/pfx; [[ -z ${p[(re)${Z}/bin]} ]] && printf add || printf keep`, "add"},
@@ -69,6 +71,7 @@ func TestTheFlagGroupShapeAPluginManagerAsksWith(t *testing.T) {
 // measured on zsh 5.9.2, `${a[(w)y]}` on `(x y)` is empty and `${a[(w)2]}`
 // is `y`.
 func TestAWordLetterOverAnArrayIsTheOrdinarySubscript(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `a=(x y); printf "[%s]" "${a[(w)y]}" "${a[(w)2]}"`)
 	if want := "[][y]"; out != want || st != 0 {
 		t.Errorf("= %q (status %d), want %q at 0", out, st, want)
@@ -84,6 +87,7 @@ func TestAWordLetterOverAnArrayIsTheOrdinarySubscript(t *testing.T) {
 // zsh 5.9.2, and every row pairs the write with the read that names the same
 // position, because the two agreeing is the whole of the rule.
 func TestASearchOnTheLeftOfAnAssignmentNamesACharacter(t *testing.T) {
+	t.Parallel()
 	const s = `s=hello` + "\n"
 	for _, tc := range []struct{ src, want string }{
 		{`printf "[%s]" "${s[(i)l]}"; s[(r)l]=Q; printf "[%s]" "$s"`, `[3][heQlo]`},
@@ -184,6 +188,7 @@ func TestARefusedSubscriptFlagOnTheLeftEndsTheLine(t *testing.T) {
 // one the plugin manager on this machine reaches three times before it has
 // loaded anything.
 func TestASearchOverAScalarIsThisDialects(t *testing.T) {
+	t.Parallel()
 	const s = `s="hello world"` + "\n"
 	for _, tc := range []struct{ src, want string }{
 		{`printf "[%s]" "${s[(i)l]}"`, `[3]`},
@@ -221,6 +226,7 @@ func TestASearchOverAScalarIsThisDialects(t *testing.T) {
 // can show: the substrate answers the encoding question from an axis, and
 // this preset is the one that answers it yes.
 func TestASearchOverAScalarCountsCharacters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`LC_ALL=en_US.UTF-8; s="héllo"; printf "[%s]" "${s[(i)l]}" "${s[(i)é]}" "${s[(r)é]}"`, `[3][2][é]`},
 		{`LC_ALL=C; s="héllo"; printf "[%s]" "${s[(i)l]}"`, `[4]`},
@@ -236,6 +242,7 @@ func TestASearchOverAScalarCountsCharacters(t *testing.T) {
 // has loaded anything: a search used as a present-or-absent test, landing on
 // a name that holds a *string* rather than the array it reads as.
 func TestTheOptionTestAPluginManagerReachesOverAString(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`opts="-X -w"; [[ -n ${opts[(r)-X]} ]] && printf found || printf missing`, "found"},
 		{`opts="-X -w"; [[ -n ${opts[(r)-C]} ]] && printf found || printf missing`, "missing"},
@@ -251,6 +258,7 @@ func TestTheOptionTestAPluginManagerReachesOverAString(t *testing.T) {
 // arithmetic — which is the same reading the four dialects without the
 // construct give it, and the whole of why the flag is additive.
 func TestAnUnreadableSubscriptFlagGroupIsArithmetic(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `a=(x y); printf "[%s]" "${a[(z)2]}"`)
 	if !strings.Contains(out, "bad math expression") || st == 0 {
 		t.Errorf(`${a[(z)2]} = %q (status %d), want an arithmetic failure`, out, st)
@@ -267,6 +275,7 @@ func TestAnUnreadableSubscriptFlagGroupIsArithmetic(t *testing.T) {
 // arithmetic and fail there — and because the *shape* below is the one the
 // plugin manager on this machine reaches before it has defined anything.
 func TestASearchOverAnAssociationIsThisDialects(t *testing.T) {
+	t.Parallel()
 	const m = "typeset -A m=(gamma one alpha two beta one)\n"
 	for _, tc := range []struct{ src, want string }{
 		{`printf "[%s]" "${m[(i)alpha]}"`, `[alpha]`},
@@ -309,6 +318,7 @@ func TestTheHookTableSearchAPluginManagerReaches(t *testing.T) {
 // array where it does, and a refusal naming the doubled letter that asks for
 // a table.
 func TestTheArrayFlagIsThisDialects(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`v="a|b"; printf "[%s]" "${(@Akons:|:u)v}"`, `[a][b]`},
 		{`v="a b"; printf "[%s]" "${(A)#v}"`, `[3]`},
@@ -337,6 +347,7 @@ func TestTheArrayFlagIsThisDialects(t *testing.T) {
 // dialect has and the core does not; the pattern row is the discriminator
 // that says the table's reading is exact and not a search.
 func TestTheKeyFlagsOverEverySurface(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an ordered array", `a=(x y z x); printf "[%s]" "${a[(k)x]}" "${a[(K)*]}"`, "[x][x]"},
 		{"a miss", `a=(x y z); printf "[%s]" "${a[(k)q]}"`, "[]"},
@@ -366,6 +377,7 @@ func TestTheKeyFlagsOverEverySurface(t *testing.T) {
 // Measured 2026-09-25 on zsh 5.9.2. The other four read every one of these as
 // arithmetic, so the letter is this preset's as much as the group is.
 func TestALineSubscriptIsThisDialects(t *testing.T) {
+	t.Parallel()
 	const v = "v=$'aa\\nbb\\ncc'\n"
 	for _, tc := range []struct{ src, want string }{
 		{`printf "[%s]" "${v[(f)2]}"`, `[bb]`},

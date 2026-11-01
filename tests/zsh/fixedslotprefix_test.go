@@ -85,6 +85,7 @@ func TestAnArrayPrefixToAFixedScalarSlotIsRefused(t *testing.T) {
 // (#6486). The sentence is the same on both routes and the `echo` after it
 // never runs, so the status is the only thing that moves.
 func TestARefusedWholeArrayStoreLeavesZeroFromACommandString(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src     string
 		command int
@@ -136,6 +137,7 @@ func TestARefusedWholeArrayStoreLeavesZeroFromACommandString(t *testing.T) {
 // the route: a subshell's own status is 0 from a script file as well, so the
 // file's 1 above is the top level's and not the refusal's.
 func TestARefusedWholeArrayStoreInASubshellLeavesZero(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"( set -A HOME x; echo x ); echo next=$?",
 		"( read -A HOME <<< x; echo x ); echo next=$?",

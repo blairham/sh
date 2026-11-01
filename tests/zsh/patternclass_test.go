@@ -21,6 +21,7 @@ import (
 // `[[ $name != [[:IDENT:]]## ]]`, and with the name missing that guard fired
 // on every well-formed name it was given.
 func TestTheCharacterClassesBeyondPosix(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The startup's own line, both ways round.
 		{`n=POWERLEVEL9K; [[ $n != [[:IDENT:]]## ]] && echo refused || echo passed`, "passed"},
@@ -96,6 +97,7 @@ func TestTheCharacterClassesBeyondPosix(t *testing.T) {
 // the prelude, because that is where the variable gets its value — the same
 // text the line editor's own answer is built from, so the two cannot drift.
 func TestTheWordClassFollowsTheWordCharactersDefault(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`echo "[$WORDCHARS]"`, "[*?_-.[]~=/&;!#$%^(){}<>]"},
 		{`[[ - = [[:WORD:]] ]] && echo hit || echo miss`, "hit"},
@@ -114,6 +116,7 @@ func TestTheWordClassFollowsTheWordCharactersDefault(t *testing.T) {
 // the matcher: pathname expansion builds its own options and would carry the
 // roster or not carry it independently of a condition.
 func TestTheExtraClassesReachPathnameExpansion(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, name := range []string{"abc", "a_b", "9z", "x.y"} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o644); err != nil {

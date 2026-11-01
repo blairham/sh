@@ -17,6 +17,7 @@ import "testing"
 // lists the pair as `typeset -UT SCALAR array=( l o c a )` and
 // `typeset -aT SCALAR array=( l o c a )`.
 func TestTheUniqueLetterOnATiedScalar(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const reduction = `typeset -T SCALAR=l:o:c:a:l array
 print $array
@@ -43,6 +44,7 @@ typeset -p SCALAR array`
 // a reading that put the whole attribute on the array half gets the two
 // scalar writes backwards.
 func TestTheWrittenNameDecidesWhichSideIsUniquified(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -91,6 +93,7 @@ func TestTheWrittenNameDecidesWhichSideIsUniquified(t *testing.T) {
 // What the attribute does to the value a name is already holding, which is the
 // half #4495 was missing, and the rest of the letter's rows on a tie.
 func TestTheUniqueLetterOnATieInDetail(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		// The first occurrence is the one kept and it does not move, on the
@@ -184,6 +187,7 @@ func TestTheUniqueLetterOnATieInDetail(t *testing.T) {
 // reached it, where the same value under a `-U` written *on* the tie is
 // `a:b`. See interp/tiedscalar.go.
 func TestATieStartsBothNamesOver(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{

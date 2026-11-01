@@ -17,6 +17,7 @@ import (
 // indents with tabs, terminates statements with nothing, and gives `then`
 // and `do` lines of their own.
 func TestTypesetFSaysTheFunctionBack(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `f() { if true; then echo one; fi; for w in a b; do echo $w; done; }
 typeset -f f`)
 	want := "f () {\n\tif true\n\tthen\n\t\techo one\n\tfi\n\tfor w in a b\n\tdo\n\t\techo $w\n\tdone\n}\n"
@@ -179,6 +180,7 @@ func TestTypesetCapitalFFormatsTheValueAtItsPrecision(t *testing.T) {
 // output base has and the one every read has to agree with. A test that only
 // echoed the parameter could not tell the two apart.
 func TestAFloatNameHoldsTheRenderedText(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"its length is of the digits written", `typeset -F 3 v=1.5; echo "${#v}"`, "5\n"},
 		{
@@ -226,6 +228,7 @@ func TestAFloatNameHoldsTheRenderedText(t *testing.T) {
 // spellings with no number behind them are ordinary options, which is the
 // half a rule written as "the letter ends its word" would get wrong.
 func TestANumberTakingLetterEndsItsWordOnlyWhenItTakesOne(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"the letters behind it are lost when a number follows",
@@ -306,6 +309,7 @@ func TestTheFloatAttributeReachesACountedParameter(t *testing.T) {
 // that used to stand here asserted the refusal; this one asserts the
 // declaration, so the file does not go on claiming a letter is missing.
 func TestTypesetCapitalEDeclaresAFloat(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -E v; typeset -p v; echo st=$?`)
 	wantWholeLines(t, out, "typeset -E v=0.000000000e+00", "st=0")
 	if st != 0 {
@@ -315,6 +319,7 @@ func TestTypesetCapitalEDeclaresAFloat(t *testing.T) {
 
 // The case attributes fold assignments here too, later ones included.
 func TestCaseAttributesFold(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `typeset -u w=abc
 echo $w
 w=def
@@ -329,6 +334,7 @@ echo $w`)
 // bash's listing rather than from dash's. Asserted on whole rendered lines,
 // through a filter, because the rest of the listing is the machine's.
 func TestBareSetListsAssignments(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`v1=plain; v2='has space'; v3="quo'te"; a=(x 'y z'); myfn() { echo hi; }; set`)
 	if st != 0 {
@@ -355,6 +361,7 @@ func TestBareSetListsAssignments(t *testing.T) {
 // A bare `local` lists every parameter with its attributes in *words* — the
 // order measured against zsh 5.9.2, one name per combination.
 func TestBareLocalListsEveryParameterWithItsAttributes(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`f() { local x=1; local -r r=2; local -i i=3; local -a c=(x "y z"); `+
 			`local -A d=([k]="v w"); local -x e=4; local -ir ir=5; local -xr q=1; local u; local; }; f`)
@@ -597,6 +604,7 @@ func TestBareExportAndReadonlyAreAssignmentsAlone(t *testing.T) {
 // A bad `local` name: the digit-led complaint, fatal as every declaration's
 // bad name is here, with the builtin named by the location machinery.
 func TestLocalBadNameIsFatal(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `f() { local 1x=5; echo unreached; }
 f
 echo after`)
@@ -610,6 +618,7 @@ echo after`)
 
 // `command -V` says it the way `type` does, shell's name off the line.
 func TestCommandCapitalV(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `command -V echo
 command -V nosuch; echo st=$?`)
 	if !strings.Contains(out, "echo is a shell builtin\n") ||
@@ -625,6 +634,7 @@ command -V nosuch; echo st=$?`)
 // `typeset -gA ZI` left an ordinary name and the `ZI[...]=` lines after it
 // were refused with `assignment to invalid subscript range` (#989).
 func TestGlobalAssociativeDeclaration(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"the subscript is a key at the top level",

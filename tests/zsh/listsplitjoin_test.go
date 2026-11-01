@@ -27,6 +27,7 @@ import (
 // because a lost field boundary reads back through `"$@"` as the same
 // characters.
 func TestAnUnquotedListIsJoinedOnIFSHere(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, setup, word, want string }{
 		// **The discriminating rows**, and what says it is the join: one
 		// empty element is *no* field and two are *two*, which splitting
@@ -89,6 +90,7 @@ func TestAnUnquotedListIsJoinedOnIFSHere(t *testing.T) {
 // for the suite above: they must be unchanged by it, and they are what a
 // probe run in this state reports whatever the join does.
 func TestAnUnquotedListIsNotSplitWithoutTheOption(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, setup, word, want string }{
 		{"an empty element between two", `IFS=:; set -- b '' c`, `x${@}y`, `2[xb][cy]`},
 		{"two empty elements", `IFS=:; set -- '' ''`, `${@}`, `0[]`},

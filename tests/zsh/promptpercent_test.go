@@ -9,6 +9,7 @@ import "testing"
 // 2026-10-02 on zsh 5.9.2 under `-f` (#5155). See
 // interp.Runner.SetPromptPercent.
 func TestPromptPercentOffLeavesTheEscapesAsText(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	cases := []struct{ src, want string }{
 		{`unsetopt promptpercent; print -P '%/ %% %!'`, "%/ %% %!\n"},

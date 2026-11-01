@@ -26,6 +26,7 @@ import (
 // them would be *stricter than the shell being modeled*, which is the one way
 // this could fail the file it exists to run.
 func TestAnUnknownWidgetIsAcceptedInSilence(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"bindkey '^[[A' history-substring-search-up; echo \"st=$?\"\nbindkey '^[[A'\n")
 	if st != 0 {
@@ -40,6 +41,7 @@ func TestAnUnknownWidgetIsAcceptedInSilence(t *testing.T) {
 // TestABindingIsSaidBack covers the plain form and the one-argument query
 // together, since the second is how a person checks the first.
 func TestABindingIsSaidBack(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"bindkey '^X^T' transpose-chars; echo \"st=$?\"\nbindkey '^X^T'\nbindkey '^X^Q'\n")
 	want := "st=0\n\"^X^T\" transpose-chars\n\"^X^Q\" undefined-key\n"
@@ -51,6 +53,7 @@ func TestABindingIsSaidBack(t *testing.T) {
 // TestRemovingABindingLeavesItUndefined is `-r`, including that removing a key
 // nobody bound is still 0 — measured; there is nothing to fail at.
 func TestRemovingABindingLeavesItUndefined(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"bindkey '^A'\nbindkey -r '^A'; echo \"st=$?\"\nbindkey '^A'\nbindkey -r '^X^Q'; echo \"none=$?\"\n")
 	want := "\"^A\" beginning-of-line\nst=0\n\"^A\" undefined-key\nnone=0\n"
@@ -64,6 +67,7 @@ func TestRemovingABindingLeavesItUndefined(t *testing.T) {
 // `-v` and `-e` change which keymap is current and stay changed; `-M` names
 // one for a single command and leaves the current one alone, measured.
 func TestTheKeymapCanBeSelectedAndNamed(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"bindkey -M emacs '^X^Q' beginning-of-line\nbindkey '^X^Q'\n"+
 			"bindkey -v; echo \"v=$?\"\nbindkey '^X^Q'\nbindkey -e; echo \"e=$?\"\nbindkey '^X^Q'\n")
@@ -83,6 +87,7 @@ func TestTheKeymapCanBeSelectedAndNamed(t *testing.T) {
 // TestAKeymapThatIsNotThereIsRefused, in this shell's own wording and with its
 // own backtick-and-quote spelling.
 func TestAKeymapThatIsNotThereIsRefused(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "bindkey -M nosuchmap '^A' beginning-of-line\n")
 	if !strings.Contains(out, "no such keymap `nosuchmap'") {
 		t.Errorf("output = %q, want the keymap refused", out)
@@ -98,6 +103,7 @@ func TestAKeymapThatIsNotThereIsRefused(t *testing.T) {
 // nothing — measured in both, and a shared helper would quietly make them
 // agree.
 func TestBindkeyRefusesInItsOwnWords(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "bindkey -q\n")
 	if !strings.Contains(out, "bad option: -q") || st != 1 {
 		t.Errorf("output = %q at %d, want the option refused this builtin's way", out, st)
@@ -123,6 +129,7 @@ func TestBindkeyRefusesInItsOwnWords(t *testing.T) {
 // is the one that looks like a typo and is not: the caret clears the top three
 // bits of whatever follows, and a space is 0x20, so `^ ` is NUL.
 func TestSequenceNotationRoundTrips(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ written, printed string }{
 		{`\C-x\C-y`, "^X^Y"},
 		{`\e[A`, "^[[A"},
@@ -146,6 +153,7 @@ func TestSequenceNotationRoundTrips(t *testing.T) {
 // TestAStringBindingIsShownAsAString is `-s`, whose target is text to type
 // rather than a widget — and which the listing tells apart by quoting it.
 func TestAStringBindingIsShownAsAString(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "bindkey -s '^X^Z' 'echo hi'; echo \"st=$?\"\nbindkey '^X^Z'\n")
 	if want := "st=0\n\"^X^Z\" \"echo hi\"\n"; out != want {
 		t.Errorf("output = %q, want %q", out, want)
@@ -155,6 +163,7 @@ func TestAStringBindingIsShownAsAString(t *testing.T) {
 // TestSeveralPairsBindAtOnce, which an rc file does and which a loop over
 // argument pairs is the only way to get right.
 func TestSeveralPairsBindAtOnce(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"bindkey '^X^Q' beginning-of-line '^X^W' end-of-line; echo \"st=$?\"\nbindkey '^X^Q'\nbindkey '^X^W'\n")
 	want := "st=0\n\"^X^Q\" beginning-of-line\n\"^X^W\" end-of-line\n"
@@ -167,6 +176,7 @@ func TestSeveralPairsBindAtOnce(t *testing.T) {
 // a space and `^?` after a tilde in this shell's own output — and `-L` writes
 // the same list as the commands that would set it.
 func TestTheListingIsSortedByTheBytesTheKeySends(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "bindkey -r '^A'\nbindkey\n")
 	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
 	if len(lines) < 10 {
@@ -210,6 +220,7 @@ func TestTheListingIsSortedByTheBytesTheKeySends(t *testing.T) {
 // TestWhatIsNotBuiltIsRefusedAsMissing keeps a gap distinguishable from a
 // typo, which is the split `whence` makes for the same reason.
 func TestWhatIsNotBuiltIsRefusedAsMissing(t *testing.T) {
+	t.Parallel()
 	for _, letter := range []string{"p", "R", "D", "d"} {
 		out, st := runZsh(t, t.TempDir(), "bindkey -"+letter+" x y\n")
 		if !strings.Contains(out, "-"+letter+" is not implemented yet") || st != 1 {
@@ -221,6 +232,7 @@ func TestWhatIsNotBuiltIsRefusedAsMissing(t *testing.T) {
 // TestBindingsAreASubshellsOwn, for the reason the styles are: the table is in
 // the Runner and not in a package variable, so a clone cannot write through.
 func TestBindingsAreASubshellsOwn(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"bindkey '^X^Q' beginning-of-line\n(bindkey -r '^X^Q')\nbindkey '^X^Q'\n")
 	if want := "\"^X^Q\" beginning-of-line\n"; out != want {
@@ -236,6 +248,7 @@ func TestBindingsAreASubshellsOwn(t *testing.T) {
 // a widget this editor has not got must be present and map to nothing, because
 // that is what stops the key doing what it used to.
 func TestOnlyTheChangesReachTheEditor(t *testing.T) {
+	t.Parallel()
 	r := bindkeyRunner(t, "")
 	if got := zsh.KeyBindings(r, repl.KeymapMain); len(got) != 0 {
 		t.Errorf("with nothing rebound the table = %v, want empty", got)
@@ -301,6 +314,7 @@ func bindkeyRunner(t *testing.T, src string) *interp.Runner {
 // vicmd '^Xz' beginning-of-line`: in command mode the key moves the cursor to
 // the start of the line, and in insert mode the same key does nothing.
 func TestTheCommandKeymapIsReadWhenTheEditorIsInIt(t *testing.T) {
+	t.Parallel()
 	r := bindkeyRunner(t, "bindkey -v\n"+
 		"bindkey -M vicmd '^Xz' beginning-of-line\n"+
 		"bindkey -M viins '^Xy' end-of-line\n")
@@ -325,6 +339,7 @@ func TestTheCommandKeymapIsReadWhenTheEditorIsInIt(t *testing.T) {
 // editor does *while typing*, and in command mode the same key means something
 // else, so dropping it as "already the default" would leave the key dead.
 func TestACommandKeyBoundToItsEmacsDefaultIsStillReported(t *testing.T) {
+	t.Parallel()
 	r := bindkeyRunner(t, "bindkey -M vicmd '^A' beginning-of-line\n")
 	got, bound := zsh.KeyBindings(r, repl.KeymapViCommand)["\x01"]
 	if !bound || got != (repl.Binding{Widget: repl.WidgetBeginningOfLine}) {
@@ -348,6 +363,7 @@ func TestACommandKeyBoundToItsEmacsDefaultIsStillReported(t *testing.T) {
 // what the *editor* would consult. The last three rows are the ones that tell
 // the two apart, and each of them has the option and the keymap disagreeing.
 func TestViEditingAndTheOptionAreReadTogether(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src    string
 		vi     bool // what the line editor does
@@ -404,6 +420,7 @@ func TestViEditingAndTheOptionAreReadTogether(t *testing.T) {
 // because no `bindkey` command would make it, and a name no keymap has is
 // refused with a colon that the same complaint from `-M` does not have.
 func TestTheKeymapListingSaysWhichOneIsCurrent(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{src: "bindkey -lL main\n", want: "bindkey -A emacs main\n"},
 		{src: "setopt vi\nbindkey -lL main\n", want: "bindkey -A viins main\n"},
@@ -435,6 +452,7 @@ func TestTheKeymapListingSaysWhichOneIsCurrent(t *testing.T) {
 // accepting the line, because `accept-line` is the editor's own control flow
 // and has no widget for an override to carry.
 func TestTheCommandKeymapIsTheChangesAndNothingElse(t *testing.T) {
+	t.Parallel()
 	r := bindkeyRunner(t, "bindkey -v\n")
 	if got := zsh.KeyBindings(r, repl.KeymapViCommand); len(got) != 0 {
 		t.Errorf("with nothing bound into it, vicmd = %v, want empty", got)
@@ -461,6 +479,7 @@ func TestTheCommandKeymapIsTheChangesAndNothingElse(t *testing.T) {
 // override pointing at the completion widget, and the key loop's own `^D` was
 // never asked. The session could not be ended from the keyboard.
 func TestEndOfInputSurvivesARedefinedCompletionWidget(t *testing.T) {
+	t.Parallel()
 	r := bindkeyRunner(t, "zle -C delete-char-or-list .delete-char-or-list _main_complete\n")
 	if b, present := zsh.KeyBindings(r, repl.KeymapMain)["\x04"]; present {
 		t.Errorf("^D reached the editor as %#v, want it left to the editor's own dispatch", b)
@@ -503,6 +522,7 @@ func TestEndOfInputSurvivesARedefinedCompletionWidget(t *testing.T) {
 // `-s` and quotes it so that the line read back as shell code binds the same
 // bytes. Measured 2026-10-03 on zsh 5.9.2 under `-fc` (#5672).
 func TestAStringBindingIsDecodedAndListedWithItsFlag(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{"bindkey -s '^Xa' '\\777'; bindkey '^Xa'", "\"^Xa\" \"\\M-^?\"\n"},
 		{"bindkey -s '^Xb' '\\x41'; bindkey '^Xb'", "\"^Xb\" \"A\"\n"},
@@ -531,6 +551,7 @@ func TestAStringBindingIsDecodedAndListedWithItsFlag(t *testing.T) {
 // first and the double quotes second. Measured 2026-10-03 on zsh 5.9.2,
 // `bindkey '<v>' foo; bindkey -L '<v>'` (#5672).
 func TestABackslashOrCaretKeyListsAsItReadsBack(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ written, listed string }{
 		{"\\\\", "bindkey \"\\\\\\\\\" foo\n"},
 		{"a\\\\", "bindkey \"a\\\\\\\\\" foo\n"},
@@ -561,6 +582,7 @@ func TestABackslashOrCaretKeyListsAsItReadsBack(t *testing.T) {
 // one, and a keymap the editor is not driven from starts with nothing bound.
 // Measured 2026-10-03 on zsh 5.9.2 under `-fc` (#5691).
 func TestAListingNamesTheKeymapItWasAskedAbout(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{"bindkey -M main '^Xq' foo; bindkey '^Xq'", "\"^Xq\" foo\n"},
 		{"bindkey -v; bindkey -M main '^Xq' foo; bindkey -M viins '^Xq'", "\"^Xq\" foo\n"},
@@ -595,6 +617,7 @@ func TestAListingNamesTheKeymapItWasAskedAbout(t *testing.T) {
 // -v` the key at its default is no change, so the editor is handed nothing
 // and acts on it by itself.
 func TestControlVIsQuotedInsertInEachInsertKeymap(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"bindkey -M viins '^V'\nbindkey -M emacs '^V'\nbindkey -M vicmd '^V'\nbindkey -v\nbindkey '^V'\n")
 	want := "\"^V\" vi-quoted-insert\n\"^V\" quoted-insert\n\"^V\" undefined-key\n\"^V\" vi-quoted-insert\n"
@@ -626,6 +649,7 @@ func TestTheViinsListingIsZshs(t *testing.T) {
 // A run of one-byte keys folds, `-L` writes it with `-R`, and a sequence of
 // more than one byte never folds — measured on zsh 5.9.2 (#6272).
 func TestARunOfKeysIsListedAsARange(t *testing.T) {
+	t.Parallel()
 	src := "bindkey -N x; bindkey -M x a self-insert; bindkey -M x b self-insert; bindkey -M x c undo\n" +
 		"bindkey -M x '^Xa' undo; bindkey -M x '^Xb' undo\nbindkey -M x; bindkey -M x -L\n"
 	want := "\"^Xa\" undo\n\"^Xb\" undo\n\"a\"-\"b\" self-insert\n\"c\" undo\n" +
@@ -638,6 +662,7 @@ func TestARunOfKeysIsListedAsARange(t *testing.T) {
 // `^\` lists as `"^\\\\"`, and reading that back binds the same key: zsh
 // 5.9.2 takes `^\` and `^\\` alike (#6272).
 func TestControlBackslashListsAsItReadsBack(t *testing.T) {
+	t.Parallel()
 	src := "bindkey -N y; bindkey -M y '^\\' undo; bindkey -M y\n" +
 		"bindkey -N z; bindkey -M z '^\\\\' undo; bindkey -M z\n"
 	want := "\"^\\\\\\\\\" undo\n\"^\\\\\\\\\" undo\n"

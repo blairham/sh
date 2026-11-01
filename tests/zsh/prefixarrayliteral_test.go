@@ -10,6 +10,7 @@ import "testing"
 // child no `x` at all, and takes no export attribute for it. Measured
 // 2026-10-15 on zsh 5.9.2 from `-c` under `env -i PATH=/usr/bin:/bin`.
 func TestAnArrayLiteralPrefixIsAnArray(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"function", `f(){ typeset -p x; }; x=(a b) f; typeset -p x`,
@@ -58,6 +59,7 @@ func TestAnArrayLiteralPrefixIsAnArray(t *testing.T) {
 // the index. Measured 2026-10-15 on zsh 5.9.2, `-f`, `env -i
 // PATH=/usr/bin:/bin`, `-c` and a script file alike.
 func TestAPlacedArrayLiteralPrefixIsSeenBehindIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`x=([2]=a) y=${x[2]} /usr/bin/printenv y`, "a\n"},
 		{`x=([2]=a b) y=${x[3]} /usr/bin/printenv y`, "b\n"},

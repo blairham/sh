@@ -20,6 +20,7 @@ import (
 //
 // and `type` writes the same sentence.
 func TestAnAutoloadStubWithAFixedFileIsNamedWithIt(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	fns := filepath.Join(dir, "fns")
 	if err := os.Mkdir(fns, 0o755); err != nil {

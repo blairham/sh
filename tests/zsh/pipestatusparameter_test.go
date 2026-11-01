@@ -14,6 +14,7 @@ import "testing"
 // this shell have" walked past it. Measured 2026-09-27 on zsh 5.9.2 under
 // `-f` from a script file; interp/pipestatus.go has the seam.
 func TestThePipelineStatusDescribesItself(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the two readings agree now",
@@ -62,6 +63,7 @@ func TestThePipelineStatusDescribesItself(t *testing.T) {
 // mechanism: the same removal, the same record, opposite answers, measured in
 // the two references (#4877).
 func TestUnsettingThePipelineStatusEndsItHere(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `true
 unset pipestatus
 print -r -- "[${(t)pipestatus}][${+pipestatus}][$pipestatus]"

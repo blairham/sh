@@ -12,6 +12,7 @@ import "testing"
 // Measured 2026-10-02 on zsh 5.9.2, `env -i PATH=/usr/bin:/bin
 // LC_ALL=en_US.UTF-8 zsh -fc` (#5153).
 func TestReadTakesAWideDelimiterWhole(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"two records", `print -n "first£second£" | { read -d £ one; read -d £ two; print $one; print $two }`, "first\nsecond\n"},
 		{"and what follows is the next read's", `printf "aéb" | { read -d é x; print $x; read y; print $y }`, "a\nb\n"},

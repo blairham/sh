@@ -13,6 +13,7 @@ import (
 //
 // Measured 2026-09-11 on zsh 5.9.2, each row a `-c` of its own.
 func TestAWholeArraySubscriptInAnExpressionIsTheSlice(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset -A m; m[k]=9; echo $(( m[*] ))`, "9"},
 		{`typeset -A m; m[k]=9; echo $(( m[@] ))`, "9"},

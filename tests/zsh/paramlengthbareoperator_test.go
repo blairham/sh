@@ -20,6 +20,7 @@ import "testing"
 // syntax.Dialect.ParamLengthBareOperatorIsTheParameter for the panel this is
 // the dissenting column of.
 func TestALengthPrefixOverABareOperatorIsTheParameter(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t,
 		"set -- p q\n"+
 			"echo \"[${#+}]\"\necho \"[${#=}]\"\n"+

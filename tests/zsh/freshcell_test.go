@@ -18,6 +18,7 @@ import "testing"
 
 // Both spellings, and the caller's array afterwards as the control.
 func TestAValuelessLocalOfANameHoldingAnArray(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `arr=(a b)
 f(){ local -a arr; print -r -- "letter n=$#arr all=[${arr[*]}]"; typeset -p arr }
 f
@@ -36,6 +37,7 @@ print -r -- "after n=$#arr all=[${arr[*]}]"`)
 // function in this shell has a scope: the row is not a corollary but the
 // second of the loops the drop has to reach.
 func TestAValuelessTypesetInAFunctionOfANameHoldingAnArray(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `arr=(a b)
 f(){ typeset arr; print -r -- "in n=$#arr all=[${arr[*]}]"; typeset -p arr }
 f
@@ -56,6 +58,7 @@ print -r -- "after n=$#arr all=[${arr[*]}]"`)
 // own line before anything else runs — and this engine prints nothing there,
 // which is a listing this change does not touch and is filed on its own.
 func TestAValuelessDeclarationWithNoScopeKeepsTheArray(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `arr=(a b)
 typeset -a arr
 print -r -- "top letter n=$#arr all=[${arr[*]}]"
@@ -74,6 +77,7 @@ h`)
 
 // The association, which is the other table and so its own row.
 func TestAValuelessLocalOfANameHoldingAnAssociation(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -A m; m=(k v j w)
 f(){ local -A m; print -r -- "letter n=${#m} keys=[${(k)m}]"; typeset -p m }
 f
@@ -94,6 +98,7 @@ print -r -- "after n=${#m} [$m[k]]"`)
 // its own — and it is `compaudit` that decides whether the completion
 // directories are secure.
 func TestALocalArrayAppendedToHoldsOnlyWhatTheFunctionAdded(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `_i_files=(stale1 stale2)
 audit(){ local -a _i_files _i_addfiles; _i_files+=(real1)
   print -r -- "inside n=$#_i_files [${_i_files[*]}] add=$#_i_addfiles" }

@@ -13,6 +13,7 @@ import (
 // 2026-10-02 on zsh 5.9.2 under `-f` (#5155); each row is one refusal, with
 // `print after $?` behind it to show whether the script goes on.
 func TestRestrictedModeRefusesInItsOwnWords(t *testing.T) {
+	t.Parallel()
 	const on = "setopt restricted; "
 	cases := []struct{ src, want string }{
 		{"set -r; cd /; print after $?", "zsh:cd:1: restricted\nafter 1\n"},
@@ -41,6 +42,7 @@ func TestRestrictedModeRefusesInItsOwnWords(t *testing.T) {
 
 // And `.` on a path is taken in this mode, where the other two refuse it.
 func TestRestrictedModeReadsADotPath(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	got, _ := runZsh(t, dir, "print 'print sourced' >| x\nsetopt restricted\n. ./x\nprint after $?\n")
 	if want := "sourced\nafter 0\n"; got != want {

@@ -27,6 +27,7 @@ import (
 // Measured 2026-09-25 against `/opt/homebrew/bin/zsh` — zsh 5.9.2
 // (aarch64-apple-darwin25.4.0) — with `-f`.
 func TestHupMovesTheSwitch(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"on in a shell nobody has asked", "[[ -o hup ]] && print on || print off\n", "on\n"},
 		{"off once it is unset", "unsetopt hup\n[[ -o hup ]] && print on || print off\n", "off\n"},
@@ -67,6 +68,7 @@ func TestHupMovesTheSwitch(t *testing.T) {
 // 2026-09-25: `unsetopt hup; setopt` writes `nohup` among the deviations, and
 // a shell nobody has asked writes neither spelling.
 func TestHupIsListedOnlyWhenItIsOff(t *testing.T) {
+	t.Parallel()
 	quiet, st := runZsh(t, t.TempDir(), "setopt\n")
 	if st != 0 {
 		t.Fatalf("status %d: %q", st, quiet)

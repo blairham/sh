@@ -12,6 +12,7 @@ import "testing"
 // backslash reaches the matcher with its own escape taken off. Every row
 // measured 2026-10-02 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f`).
 func TestABareSubscriptHoldsWhatAQuotedOneHolds(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`s='ab*c'; x='*'; print $s[(i)${(q)x}*]`, "3"},
 		{`s=abc; print $s[(i)${(L)x}b]`, "2"},

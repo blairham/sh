@@ -31,6 +31,7 @@ import (
 // agree, which is the blind spot #2122 was filed about and #2283 found for
 // `fc -W`: a route nothing swept.
 func TestHashdirsIsOnAtAnInteractivePromptAndOffInAScript(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name        string
 		interactive bool
@@ -60,6 +61,7 @@ func TestHashdirsIsOnAtAnInteractivePromptAndOffInAScript(t *testing.T) {
 // The listing is where the difference shows, and it is what #2351 is about:
 // the interactive route carried one extra row.
 func TestAnInteractiveListingDoesNotCarryNoHashdirs(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name        string
 		interactive bool
@@ -88,6 +90,7 @@ func TestAnInteractiveListingDoesNotCarryNoHashdirs(t *testing.T) {
 // It still moves both ways wherever it starts, which is `recordedOver`'s
 // bargain and is what real zsh does with the name in either kind of shell.
 func TestHashdirsMovesBothWaysFromEitherBase(t *testing.T) {
+	t.Parallel()
 	const src = `unsetopt hashdirs; s1=$?
 [[ -o hashdirs ]] && a=on || a=off
 setopt hashdirs; s2=$?

@@ -14,6 +14,7 @@ import (
 // adding one match to `x ` and `Z` typed after it; Open is "nothing after
 // it", the word is what goes in, and the row is what a listing draws.
 func TestCompaddSuffixesAndFileMarks(t *testing.T) {
+	t.Parallel()
 	tree := t.TempDir()
 	for _, d := range []string{"dd"} {
 		if err := os.Mkdir(filepath.Join(tree, d), 0o755); err != nil {
@@ -73,6 +74,7 @@ func TestCompaddSuffixesAndFileMarks(t *testing.T) {
 // pseudo-terminal against zsh 5.9.2, a `zle -C` widget listing two matches
 // after the typed word: each listing is `always  auto`, and `a\ b  a\ d`.
 func TestAListingDrawsTheMatchWithoutWhatIsAroundIt(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ call, line, want string }{
 		{"compset -P '*='; compadd always auto", "x --c=a", "--c=always@always --c=auto@auto"},
 		{"compadd -p qq always auto", "x qqa", "qqalways@always qqauto@auto"},

@@ -18,6 +18,7 @@ import (
 // on for this one without something objecting — the shells have the same
 // arrays, so nothing about having subscripts implies the same word boundary.
 func TestASubscriptHoldingABlankIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`typeset -A m; m[foo bar]=qux; echo "[${m[foo bar]}]"`,
 		`typeset -A m; m[foo bar]+=qux`,
@@ -38,6 +39,7 @@ func TestASubscriptHoldingABlankIsRefused(t *testing.T) {
 // key `two words`. Here so that the flag giving those two the longer element
 // cannot be turned on for this one in silence.
 func TestAnArrayLiteralElementHoldingABlankIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`typeset -A m; m=( [two words]=2 )`,
 		`m=( [1 2]=x )`,

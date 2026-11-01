@@ -15,6 +15,7 @@ import (
 // here reads zsh's function files: the probe called them.
 
 func TestZcalcAnswersWhatZshAnswers(t *testing.T) {
+	t.Parallel()
 	// One directory for every row: a subtest's own would be named after the
 	// row, and a row is shell. HOME is where nothing is, as it was measured.
 	dir := t.TempDir()
@@ -33,6 +34,7 @@ func TestZcalcAnswersWhatZshAnswers(t *testing.T) {
 // with four of them gives. Measured 2026-10-04 against zsh 5.9.2 with its own
 // zmathfuncdef, under -f with standard input on the null device.
 func TestZmathfuncdefCountsTheArgumentsZshCounts(t *testing.T) {
+	t.Parallel()
 	const wrong = "wrong number of arguments: f(1,2,3,4)"
 	for _, tc := range []struct{ body, counts, call string }{
 		{`$1*$1`, "1 1", wrong},
@@ -72,6 +74,7 @@ func TestZmathfuncdefCountsTheArgumentsZshCounts(t *testing.T) {
 // the usage is this file's own words, so only its stream and status are
 // held to zsh's.
 func TestZmathfuncdefDefinesAndRemoves(t *testing.T) {
+	t.Parallel()
 	out, _ := runZshOnPath(t, t.TempDir(), "fpath=("+shippedFunctionDir(t)+")\n"+
 		"autoload -Uz zmathfuncdef\n"+
 		"zmathfuncdef sq '$1*$1'; print -r -- $(( sq(4) ))\n"+
@@ -90,6 +93,7 @@ func TestZmathfuncdefDefinesAndRemoves(t *testing.T) {
 // printed), so this follows the manual, on the is-at-least precedent: the
 // listing, run in a fresh shell, gives back the same functions.
 func TestZmathfuncdefListsInAFormThatRestores(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	listing, _ := runZshOnPath(t, dir, "fpath=("+shippedFunctionDir(t)+")\n"+
 		"autoload -Uz zmathfuncdef\nzmathfuncdef sq '$1*$1'\nzmathfuncdef add '$1+${2:-10}'\nzmathfuncdef\n")
@@ -105,6 +109,7 @@ func TestZmathfuncdefListsInAFormThatRestores(t *testing.T) {
 // promptinit with three themes of the test's own first on $fpath, so every
 // row is about the prompt command and none about which themes a copy ships.
 func TestPromptinitAnswersWhatZshAnswers(t *testing.T) {
+	t.Parallel()
 	themes := t.TempDir()
 	for name, body := range map[string]string{
 		"prompt_tiny_setup": `prompt_tiny_help() { print -r -- "tiny: help text" }

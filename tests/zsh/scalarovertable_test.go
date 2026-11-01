@@ -33,6 +33,7 @@ const scalarOverTableRefusal = "attempt to set associative array to scalar"
 // scalar instead. That is what makes this an axis of its own rather than a
 // value of ScalarAssignedOverACompoundReplacesTheName (#4617).
 func TestAScalarStoredOverATableIsRefusedUnderKshArrays(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a plain assignment", "typeset -A h=(one 1)\nh=string\nprint after"},
 		{"an append", "typeset -A h=(one 1)\nh+=string\nprint after"},
@@ -68,6 +69,7 @@ func TestAScalarStoredOverATableIsRefusedUnderKshArrays(t *testing.T) {
 // a bare `$h` reads `pre`. A replacement that had gone through the string
 // append would have written `prex`.
 func TestWithoutKshArraysTheSameStoreReplacesTheName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a plain assignment", "typeset -A h=(one 1)\nh=string\ntypeset -p h", "typeset h=string"},
 		{"an append", "typeset -A h=(one 1)\nh+=string\ntypeset -p h", "typeset h=string"},
@@ -109,6 +111,7 @@ func TestWithoutKshArraysTheSameStoreReplacesTheName(t *testing.T) {
 // The rest here say it is the bare name's kind and not the declaration, not
 // the operator and not the parentheses.
 func TestOnlyABareScalarStoreOverATableIsRefusedHere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an ordinary array appended to", "typeset -a a=(x y)\na+=string\ntypeset -p a", "typeset -a a=( xstring y )"},
 		{"a subscript", "typeset -A h=(one 1)\nh[one]=Q\ntypeset -p h", "typeset -A h=( [one]=Q )"},
@@ -149,6 +152,7 @@ func TestOnlyABareScalarStoreOverATableIsRefusedHere(t *testing.T) {
 // append half of the same row moved already (#4619) and is asserted whole
 // above.
 func TestAnOrdinaryArrayUnderTheOptionIsNotRefused(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"typeset -a a=(x y)\na=string\nprint after",
 		"typeset -a a=(x y)\na+=string\nprint after",
@@ -175,6 +179,7 @@ func TestAnOrdinaryArrayUnderTheOptionIsNotRefused(t *testing.T) {
 // `f.sh:read:1:`, exactly as it does for its own `read-only variable` refusal
 // from inside the same builtins.
 func TestEveryScalarStoreOverATableIsRefusedHere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"a for loop's variable", "typeset -A h=(one 1)\nfor h in x y; do :; done\nprint after"},
 		{"read", "typeset -A h=(one 1)\nprint x | read h\nprint after"},
@@ -206,6 +211,7 @@ func TestEveryScalarStoreOverATableIsRefusedHere(t *testing.T) {
 // claim about order rather than about a restore: a store that wrote the key
 // first and complained second would list the same table with a `0` in it.
 func TestTheRefusalsReachHere(t *testing.T) {
+	t.Parallel()
 	t.Run("or-else does not catch it", func(t *testing.T) {
 		out, st := answersRun(t, "setopt ksharrays\ntypeset -A h=(one 1)\nh=string || print caught\nprint after")
 		if strings.Contains(out, "caught") || strings.Contains(out, "after") || st != 1 {
@@ -251,6 +257,7 @@ func TestTheRefusalsReachHere(t *testing.T) {
 // `setopt localoptions ksharrays` reaches a store inside it and not one after
 // it has returned.
 func TestTheRefusalIsAnsweredWhenTheStoreRuns(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, "typeset -A h=(one 1)\nf() { setopt localoptions ksharrays; h=string }\nf\nprint after")
 	if !strings.HasPrefix(out, "f: h: "+scalarOverTableRefusal) || strings.Contains(out, "after") || st != 1 {
 		t.Errorf("inside = %q status %d, want the refusal at 1", out, st)
@@ -264,6 +271,7 @@ func TestTheRefusalIsAnsweredWhenTheStoreRuns(t *testing.T) {
 // And `emulate ksh` and `emulate sh` carry it, which is how a script reaches
 // the option without naming it.
 func TestTheEmulationsCarryTheRefusal(t *testing.T) {
+	t.Parallel()
 	for _, em := range []string{"emulate ksh", "emulate sh"} {
 		out, st := answersRun(t, em+"\ntypeset -A h=(one 1)\nh=string\nprint after")
 		if !strings.Contains(out, "h: "+scalarOverTableRefusal) || strings.Contains(out, "after") || st != 1 {
@@ -276,6 +284,7 @@ func TestTheEmulationsCarryTheRefusal(t *testing.T) {
 // column they were measured from. The option-off answer is the dialect's
 // default and setKshArrays is what moves it — see ksharrays_test.go.
 func TestTheScalarOverATableAnswerIsThisDialects(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().ScalarStoredOverATableIsRefused; got != interp.No {
 		t.Errorf("ScalarStoredOverATableIsRefused = %v, want No", got)
 	}

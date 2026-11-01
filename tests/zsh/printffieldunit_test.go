@@ -10,6 +10,7 @@ import "testing"
 // 5.9.2 from a script file under `env -i PATH=/usr/bin:/bin`, with `LC_ALL` as
 // each row sets it (#2298). See Semantics.PrintfFieldCountsCharacters.
 func TestAPrintfFieldIsCharactersWhereTheLocaleHasThem(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a precision", `LC_ALL=en_US.UTF-8; printf '[%.2s]' αβγ`, "[αβ]"},
 		{"a width", `LC_ALL=en_US.UTF-8; printf '[%7s]' αβγ`, "[    αβγ]"},

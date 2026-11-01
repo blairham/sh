@@ -16,6 +16,7 @@ import (
 // answer is a question rather than a constant.
 
 func TestPromptStyle(t *testing.T) {
+	t.Parallel()
 	expand := zsh.PromptStyle().Expand
 	if expand == nil {
 		t.Fatal("Expand is nil, so `setopt prompt_subst` could never turn it on")
@@ -36,6 +37,7 @@ func TestPromptStyle(t *testing.T) {
 
 // The table, as measured against real zsh.
 func TestPromptCodes(t *testing.T) {
+	t.Parallel()
 	st := zsh.PromptStyle()
 	if st.Escape != '%' {
 		t.Errorf("Escape = %q, want a percent sign", st.Escape)
@@ -87,6 +89,7 @@ func TestPromptCodes(t *testing.T) {
 
 // The visual codes, measured as the exact bytes each put on the wire.
 func TestPromptSequences(t *testing.T) {
+	t.Parallel()
 	st := zsh.PromptStyle()
 	for code, want := range map[rune]string{
 		'B': "\x1b[1m", 'b': "\x1b[0m", 'U': "\x1b[4m", 'u': "\x1b[24m",
@@ -126,6 +129,7 @@ func TestPromptColors(t *testing.T) {
 // zsh's defaults, as measured — including a continuation written the way zsh
 // writes it, with a code that is not drawable yet.
 func TestPromptDefaults(t *testing.T) {
+	t.Parallel()
 	st := zsh.PromptStyle()
 	if st.Default != "%m%# " {
 		t.Errorf("default = %q, want %%m%%# — host and privilege", st.Default)
@@ -142,6 +146,7 @@ func TestPromptDefaults(t *testing.T) {
 
 // A bare `!` is a bare `!` here: measured, only ksh93 reads it.
 func TestNoHistoryCharacter(t *testing.T) {
+	t.Parallel()
 	if got := zsh.PromptStyle().History; got != 0 {
 		t.Errorf("History = %q, want none", got)
 	}
@@ -155,6 +160,7 @@ func TestNoHistoryCharacter(t *testing.T) {
 // — and an operator follows it, since `true &&` inside a `then` draws
 // `then cmdand`.
 func TestPromptOpenWords(t *testing.T) {
+	t.Parallel()
 	w := zsh.PromptStyle().OpenWords
 	for word, want := range map[string]string{
 		"for": "for", "while": "while", "until": "until", "select": "select",
@@ -204,6 +210,7 @@ func TestPromptOpenWords(t *testing.T) {
 // on both, but `${PS1+set}` tells them apart, and a dialect that collapsed
 // them would be answering a question the panel has three answers to (#1421).
 func TestAScriptGetsAnEmptyPromptRatherThanNone(t *testing.T) {
+	t.Parallel()
 	st := zsh.PromptStyle()
 	if !st.AssignsWithNobodyToPrompt {
 		t.Error("zsh sets PS1 and PS2 in a non-interactive shell, to the empty string")
@@ -226,6 +233,7 @@ func TestAScriptGetsAnEmptyPromptRatherThanNone(t *testing.T) {
 // measurement and reads identically to a field somebody forgot, and the
 // difference between those two is the whole reason this test exists.
 func TestAUidWithNoPasswordDatabaseEntryIsDrawnAsNothing(t *testing.T) {
+	t.Parallel()
 	if got := zsh.PromptStyle().NoLoginName; got != "" {
 		t.Errorf("NoLoginName = %q, want empty — zsh draws nothing for a nameless uid", got)
 	}

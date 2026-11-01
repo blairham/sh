@@ -28,6 +28,7 @@ const widgetsReturningSaid = "w2=3 w3=1 w4=0 after-false=0\n"
 // widget built from others — `zle backward-word || …` — read a move that
 // did not happen as one that did.
 func TestCallingAWidgetAnswersWhatItsFunctionReturned(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, widgetsReturning+
 		`k() { zle w2; a=$?; zle w3; b=$?; zle w4; c=$?; false; zle w4; print -r -- "w2=$a w3=$b w4=$c after-false=$?" }
 zle -N k
@@ -42,6 +43,7 @@ zle -N k
 // from a plain `zle -F` handler, which reaches the widget by a different
 // path — runWidgetFunction rather than a nested call — and was 0 there too.
 func TestAHandlersWidgetCallAnswersWhatItsFunctionReturned(t *testing.T) {
+	t.Parallel()
 	shellFd, systemFd, write, inherited := pipeAt(t)
 	if _, err := write.WriteString("x\n"); err != nil {
 		t.Fatal(err)

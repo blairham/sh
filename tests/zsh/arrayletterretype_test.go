@@ -17,6 +17,7 @@ import "testing"
 // under `env -i PATH=/usr/bin:/bin`, from `-c` and from a script file),
 // output compared byte for byte (#6514).
 func TestAnArrayLetterInFrontOfALiteralRetypesAFrozenScalar(t *testing.T) {
+	t.Parallel()
 	const ro = "typeset -r v=1; "
 	const refused = "zsh:1: read-only variable: v\n"
 	for _, tc := range []struct{ name, src, want string }{

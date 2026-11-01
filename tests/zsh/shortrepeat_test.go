@@ -9,6 +9,7 @@ import "testing"
 // 2026-10-02 on zsh 5.9.2 under `-f` (#5155): with `shortloops` off, the
 // option gives `repeat` alone its one-command body back.
 func TestShortRepeatKeepsRepeatsShortBody(t *testing.T) {
+	t.Parallel()
 	cases := []struct{ src, want string }{
 		{"unsetopt shortloops; setopt shortrepeat; eval 'repeat 3 print n'", "n\nn\nn\n"},
 		{"unsetopt shortloops shortrepeat; eval 'repeat 3 print n'", "(eval):1: parse error near `print'\n"},

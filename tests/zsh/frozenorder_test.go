@@ -17,6 +17,7 @@ import (
 // normalized as below, traced and not. We refused every row before
 // expanding anything (#6674).
 func TestAFrozenElementIsRefusedBeforeItsSubscript(t *testing.T) {
+	t.Parallel()
 	checkFrozen(t, frozenElementScript,
 		"VAL RO ERR VAL RO VAL RO VAL RO RO VAL RO ERR VAL RO done")
 }
@@ -25,6 +26,7 @@ func TestAFrozenElementIsRefusedBeforeItsSubscript(t *testing.T) {
 // keys included, and a word that will not expand is reported instead.
 // Measured the same way.
 func TestAFrozenLiteralIsExpandedBeforeItIsRefused(t *testing.T) {
+	t.Parallel()
 	checkFrozen(t, frozenLiteralScript, "VAL RO VAL RO ERR SUB VAL RO VAL RO done")
 }
 
@@ -33,6 +35,7 @@ func TestAFrozenLiteralIsExpandedBeforeItIsRefused(t *testing.T) {
 // refused once the list is built, before the subscript. Measured 2026-10-15
 // on zsh 5.9.2 from a file. We read the subscript first (#6675).
 func TestAnElementLiteralBuildsItsListFirst(t *testing.T) {
+	t.Parallel()
 	checkFrozen(t, "s() { echo SUB >&2; echo \"$1\"; }\n"+
 		"v() { echo VAL >&2; }\n"+
 		"a=(1 2); a[$(s 1)]=(p $(v)); typeset -p a\n"+
@@ -52,6 +55,7 @@ func TestAnElementLiteralBuildsItsListFirst(t *testing.T) {
 // reported instead. Measured 2026-10-15 on zsh 5.9.2 from a file. We
 // refused on the letter with the operand never expanded (#6674).
 func TestAFlaggedTableWriteExpandsItsOperandBeforeTheRefusal(t *testing.T) {
+	t.Parallel()
 	checkFrozen(t, "s() { echo SUB >&2; echo \"$1\"; }\n"+
 		"v() { echo VAL >&2; }\n"+
 		"typeset -A t; t=(k 1)\n"+

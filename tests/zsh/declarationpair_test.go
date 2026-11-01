@@ -10,6 +10,7 @@ import "testing"
 // comma used to be read as the arithmetic operator (#5440). Measured
 // 2026-10-02 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f`, `LC_ALL=C`).
 func TestADeclarationsPairNamesASpan(t *testing.T) {
+	t.Parallel()
 	const setup = "a=(p q r s); s=abcd\n"
 	for _, tc := range []struct{ src, want string }{
 		{`typeset "a[2,3]"=W; print -r -- "<$a>"`, "<p W s>\n"},

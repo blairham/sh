@@ -24,6 +24,7 @@ import (
 // Measured on zsh 5.9.2 through a pseudo-terminal, 2026-09-22, from inside a
 // widget bound to `^M`: `PENDING=[0] KQC=[0]`.
 func TestTheQueueParametersAreZeroRatherThanAbsent(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"PENDING", "KEYS_QUEUED_COUNT"} {
 		t.Run(name, func(t *testing.T) {
 			r, out := zleRunner(t, fmt.Sprintf(`
@@ -46,6 +47,7 @@ func TestTheQueueParametersAreZeroRatherThanAbsent(t *testing.T) {
 // string would pass the test above if it were written with `${…-0}` and
 // fails here, which is the point of spending a second suite on it.
 func TestTheQueueParametersReadAsArithmetic(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `
 		kind() {
 			# The plugin's own line 307, which is why only PENDING was
@@ -82,6 +84,7 @@ func TestTheQueueParametersReadAsArithmetic(t *testing.T) {
 // zlelocaltype_test.go already asserts, which is what says it was reading
 // the shell it claimed to be reading.
 func TestTheQueueParametersCarryTheirType(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"PENDING", "KEYS_QUEUED_COUNT"} {
 		t.Run(name, func(t *testing.T) {
 			r, out := zleRunner(t, fmt.Sprintf(`
@@ -104,6 +107,7 @@ func TestTheQueueParametersCarryTheirType(t *testing.T) {
 // A shell that answered 0 unconditionally would pass every row up there and
 // fail this one.
 func TestTheQueueParametersBelongToTheCall(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"PENDING", "KEYS_QUEUED_COUNT"} {
 		t.Run(name, func(t *testing.T) {
 			got := zleParam(t, fmt.Sprintf(`print -r -- "[${(t)%s}] [${+%s}]"`, name, name))
@@ -123,6 +127,7 @@ func TestTheQueueParametersBelongToTheCall(t *testing.T) {
 // input will redo, so a line typed ahead of the prompt is highlighted once
 // rather than once per key (#6363) — the `[pending]` row is their shape.
 func TestPendingIsTheEditorsCountOfTypedBytes(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `
 		kind() {
 			if (( $PENDING > 0 || $KEYS_QUEUED_COUNT > 0 )); then

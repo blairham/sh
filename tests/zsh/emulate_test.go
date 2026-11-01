@@ -11,6 +11,7 @@ import (
 // A bare `emulate` names the current mode, and the mode is what the last
 // emulation set — measured, `zsh` before anything and the word after.
 func TestBareEmulateNamesTheMode(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `emulate; emulate sh; emulate; emulate ksh; emulate`)
 	if st != 0 || out != "zsh\nsh\nksh\n" {
 		t.Errorf("out %q status %d, want the three modes in turn", out, st)
@@ -21,6 +22,7 @@ func TestBareEmulateNamesTheMode(t *testing.T) {
 // failed glob passes through, and arrays base at zero; `emulate zsh` puts all
 // three back.
 func TestEmulateShMovesTheMeasuredAxes(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`x="a b"; set -- $x; echo n=$#; emulate sh; set -- $x; echo n=$#; echo x*; `+
 			`a=(p q); echo ${a[1]}; emulate zsh; set -- $x; echo n=$#`)
@@ -35,6 +37,7 @@ func TestEmulateShMovesTheMeasuredAxes(t *testing.T) {
 // script runs past. Measured on the real shell, which stops for `emulate sh`
 // and for `emulate ksh` alike and carries on for `emulate zsh`.
 func TestEmulateShEndsTheScriptOnAFailedRedirection(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"sh", "ksh"} {
 		out, st := runZsh(t, t.TempDir(), `emulate `+mode+`; exec 3>/nope/x; echo after`)
 		if strings.Contains(out, "after") {
@@ -58,6 +61,7 @@ func TestEmulateShEndsTheScriptOnAFailedRedirection(t *testing.T) {
 // A plain emulation resets options to its defaults — measured, no -R needed:
 // `setopt err_exit; emulate zsh` turns errexit back off.
 func TestEmulateResetsOptions(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `setopt err_exit; emulate zsh; false; echo reached`)
 	if st != 0 || !strings.Contains(out, "reached") {
 		t.Errorf("out %q status %d, want errexit gone", out, st)
@@ -75,6 +79,7 @@ func TestEmulateResetsOptions(t *testing.T) {
 // would pass the first half of each, and the pre-#2515 shell passed the
 // second.
 func TestEmulateLeavesTheOptionsItDoesNotOwn(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		// The one a session reads before it records a line, which is why
@@ -119,6 +124,7 @@ func TestEmulateLeavesTheOptionsItDoesNotOwn(t *testing.T) {
 // `-R` is the form that reaches the rest: every name but the nine describing
 // how the shell was started.
 func TestEmulateDashRResetsWhatABareEmulationLeaves(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	// The same option as the first row above and the opposite answer, which
 	// is what says the two forms differ rather than that the option moved.
@@ -145,6 +151,7 @@ func TestEmulateDashRResetsWhatABareEmulationLeaves(t *testing.T) {
 // prompt theme opens every function with, so a wrong set here is wrong on
 // every function call rather than once in an rc file.
 func TestEmulateDashLResetsTheSameSetAsABareOne(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`f() { setopt histignorespace extendedglob; emulate -L sh; `+
 			`[[ -o histignorespace ]]; echo "kept=$?"; [[ -o extendedglob ]]; echo "gone=$?"; }; f`)
@@ -158,6 +165,7 @@ func TestEmulateDashLResetsTheSameSetAsABareOne(t *testing.T) {
 // zsh they print the same thing, and that is how the old reading got in.
 // `SH` is zsh because the letter is read case-sensitively.
 func TestEmulateReadsAWordWithNoLetterOfItsOwnAsZsh(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`emulate csh; emulate fish; echo st=$?; emulate; emulate csh; emulate SH; emulate`)
 	if st != 0 || out != "st=0\nzsh\nzsh\n" {
@@ -168,6 +176,7 @@ func TestEmulateReadsAWordWithNoLetterOfItsOwnAsZsh(t *testing.T) {
 // `-c` runs the string under the emulation and restores everything after,
 // options included — measured, a `no_glob` set before it comes back.
 func TestEmulateDashCRestores(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`setopt no_glob; emulate sh -c 'x="a b"; set -- $x; echo n=$#'; echo x*; `+
 			`x="c d"; set -- $x; echo n=$#; emulate`)
@@ -185,6 +194,7 @@ func TestEmulateDashCRestores(t *testing.T) {
 // restore on return; localoptions.go is that seam now, and the letter is one
 // `setopt` on top of the emulation. See localoptions_test.go for its rows.
 func TestEmulateRefusals(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, want string
 		status    int
@@ -206,6 +216,7 @@ func TestEmulateRefusals(t *testing.T) {
 // An emulation in a subshell stays there: the semantics swap is
 // copy-on-write and the mode lives in the variable table a clone copies.
 func TestEmulateStaysInItsSubshell(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `(emulate sh); emulate; x="a b"; set -- $x; echo n=$#`)
 	if st != 0 || out != "zsh\nn=1\n" {
 		t.Errorf("out %q status %d, want the parent untouched", out, st)
@@ -218,6 +229,7 @@ func TestEmulateStaysInItsSubshell(t *testing.T) {
 // `setopt`'s: underscores and all, and refused by `setopt`'s sentence when it
 // is not a name at all.
 func TestEmulateTakesAnOptionByName(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		src  string
@@ -245,6 +257,7 @@ func TestEmulateTakesAnOptionByName(t *testing.T) {
 // asserted on the whole rendered line, because what is being pinned is the
 // sentence and not only the status.
 func TestEmulateRefusesAnOptionItCannotName(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(t, dir, `emulate zsh -o nosuchopt; echo st=$?`)
 	if !strings.Contains(out, "emulate:1: no such option: nosuchopt\n") || !strings.Contains(out, "st=1\n") {
@@ -271,6 +284,7 @@ func TestEmulateRefusesAnOptionItCannotName(t *testing.T) {
 // option on afterwards — so a test at the top level would pass with the
 // letter ignored, which is what it did before.
 func TestEmulateDashLLastsAsLongAsTheFunction(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(t, dir,
 		`f() { emulate -L zsh -o extendedglob; [[ -o extendedglob ]]; echo in=$?; }; f; `+
@@ -325,6 +339,7 @@ func TestEmulateDashLLastsAsLongAsTheFunction(t *testing.T) {
 // reading `$-` afterwards tells the two answers apart without depending on
 // what the machine happens to have installed.
 func TestEmulateTurnsPosixBuiltinsOnForTheShFamily(t *testing.T) {
+	t.Parallel()
 	const probe = `command set -f; echo "st=$?"; case $- in (*f*) echo SET;; (*) echo UNSET;; esac`
 	for _, mode := range []string{"sh", "ksh"} {
 		out, st := runZsh(t, t.TempDir(), `emulate `+mode+`; `+probe)
@@ -357,6 +372,7 @@ func TestEmulateTurnsPosixBuiltinsOnForTheShFamily(t *testing.T) {
 // zsh 5.9.2, 2026-09-13, by reading `${options[name]}` after
 // `emulate -R <mode>` in a fresh shell.
 func TestAnEmulationLeavesTheEmulationsOwnDefaults(t *testing.T) {
+	t.Parallel()
 	// `[[ -o … ]]` answers 0 for on, so the strings below read on/off.
 	probe := func(names ...string) string {
 		src := ""
@@ -412,6 +428,7 @@ func TestAnEmulationLeavesTheEmulationsOwnDefaults(t *testing.T) {
 // script — with `rcs` reading identically to `hashdirs` in all of them, which
 // this harness cannot ask for because it does not suppress startup files.
 func TestAnEmulationResetsAnInvocationDecidedNameEndToEnd(t *testing.T) {
+	t.Parallel()
 	const read = `[[ -o hashdirs ]] && print -r on || print -r off`
 	for _, tc := range []struct{ name, src, want string }{
 		// The reset, in every mode.

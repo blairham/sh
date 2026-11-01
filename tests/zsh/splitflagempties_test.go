@@ -11,6 +11,7 @@ import "testing"
 // Measured 2026-10-01 on zsh 5.9.2 (`-f`, a script file under `env -i
 // PATH=/usr/bin:/bin LC_ALL=C`); each row is what that shell wrote.
 func TestAnUnquotedIFSSplitInAGroupKeepsItsEmptyFields(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const setup = "show() { for x in \"$@\"; do printf '<%s>' \"$x\"; done; }\nIFS=:; u='a::b:'; a=(x '' y)\n"
 	for _, c := range []struct{ name, src, want string }{

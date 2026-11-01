@@ -18,6 +18,7 @@ import (
 // ordinary word, so a script that means the tenth parameter and runs under the
 // wrong reading prints something plausible rather than failing (#2879).
 func TestAPositionalPastTheNinthNeedsNoBraces(t *testing.T) {
+	t.Parallel()
 	const set = `set -- 1 2 3 4 5 6 7 8 9 ten eleven twelve; `
 	for _, tc := range []struct{ name, src, want string }{
 		{"the tenth", set + `echo "[$10]"`, "[ten]\n"},

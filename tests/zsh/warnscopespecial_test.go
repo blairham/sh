@@ -18,6 +18,7 @@ import "testing"
 // scalars. The integer pair is written as arithmetic, the route both shells
 // call `numeric`; the word itself is TestScopeLintWordFollowsTheArithmeticRoute's.
 func TestScopeLintsPassOverTheShellsOwnParameters(t *testing.T) {
+	t.Parallel()
 	const on = "setopt localoptions warn_nested_var warn_create_global"
 	for _, tc := range []struct{ name, src, want string }{
 		{

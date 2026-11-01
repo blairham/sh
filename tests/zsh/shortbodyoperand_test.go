@@ -23,6 +23,7 @@ import (
 // there — `zsh -n -c 'if | :'` parses — so their wording is downstream of a
 // grammar difference and is not this (#2235).
 func TestALeadingAmpersandInALoopHeaderIsNamedWhereItStands(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"while & do :; done\n", "parse error near `&'"},
 		{"until & do :; done\n", "parse error near `&'"},

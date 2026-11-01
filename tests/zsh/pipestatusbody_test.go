@@ -23,6 +23,7 @@ import (
 // one-element answer `pipestatus/reading-it-twice-in-one-chain` exists to
 // protect against.
 func TestACompoundWritesTheRecordOnlyForWhatItsBodyHolds(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`if [[ a = b ]]; then :; fi`, "0"},
 		{`if [[ a = b ]]; then [[ b = b ]]; fi`, "1 0"},

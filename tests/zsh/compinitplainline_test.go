@@ -19,6 +19,7 @@ import (
 // a bare line and one separated by tabs, so both readings are exercised and
 // the two have to agree on every key.
 func TestCompinitReadsAPlainLineAsCompdefWould(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.Chmod(dir, 0o755); err != nil {
 		t.Fatal(err)

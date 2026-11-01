@@ -10,6 +10,7 @@ import "testing"
 // set. Every row measured 2026-10-05 against zsh 5.9.2 through a
 // pseudo-terminal, a `zle -C` widget writing `$words` and `$CURRENT`.
 func TestTheWordsAreTheCommandBeingCompleted(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, setup, line, want string }{
 		{"a pipe", "", "echo a | grep -", "grep,-|2"},
 		{"an and-list", "", "true && grep -", "grep,-|2"},

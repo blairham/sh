@@ -27,6 +27,7 @@ func runZmodloadAutoload(t *testing.T, src, want string, status int) {
 
 // A module that will not load is refused at the call, and the promise is spent: the next call is command not found.
 func TestZmodloadAutoloadIsAPromiseAndACallSpendsIt(t *testing.T) {
+	t.Parallel()
 	runZmodloadAutoload(t, `zmodload -a zsh/nosuch mb
 print -r -- "st=$?"
 { mb; } 2>/dev/null
@@ -41,6 +42,7 @@ print -r -- "c2=$?"`,
 
 // A module that loads and does not define the name is two lines and the end of the script, with the module left unloaded and the promise standing — a subshell gives up alone.
 func TestZmodloadAutoloadOfANameTheModuleLacksEndsTheScript(t *testing.T) {
+	t.Parallel()
 	runZmodloadAutoload(t, `zmodload -a zsh/zutil zfoo
 print -r -- "st=$?"
 ( zfoo ) 2>&1
@@ -62,6 +64,7 @@ print -r -- never`,
 
 // A module's own builtin is a promise until the module loads, so it can be registered; the call loads the module and runs the real builtin, after which the name is defined and a second registration is refused.
 func TestZmodloadAutoloadOverAModulesOwnBuiltin(t *testing.T) {
+	t.Parallel()
 	runZmodloadAutoload(t, `zmodload -a zsh/zutil zformat
 print -r -- "st=$?"
 zformat -f R "%a-%b" a:1 b:2
@@ -79,6 +82,7 @@ print -r -- "again=$?"`,
 
 // The refusals: a builtin that is really there, a name with a slash (which is what a module named with no builtin after it registers), and `-b` on its own.
 func TestZmodloadAutoloadRefusals(t *testing.T) {
+	t.Parallel()
 	runZmodloadAutoload(t, `zmodload -a zsh/nosuch echo 2>&1
 print -r -- "echo=$?"
 zmodload -a zsh/nosuch 2>&1
@@ -101,6 +105,7 @@ zmodload -a`,
 
 // The two listings, `-L` with operands registering, `$modules`, and `-ua` and `-ub` taking promises back.
 func TestZmodloadAutoloadListingsAndRemoval(t *testing.T) {
+	t.Parallel()
 	runZmodloadAutoload(t, `zmodload -a zsh/nosuch mc mb
 zmodload -ab foo
 zmodload -La m1 b1
@@ -148,6 +153,7 @@ zmodload -La`,
 // settled only promises naming the module being loaded would leave the
 // promise standing here and answer 0 to the second line.
 func TestZmodloadAutoloadIsSettledByAnyLoadOfTheDefiningModule(t *testing.T) {
+	t.Parallel()
 	runZmodloadAutoload(t, `zmodload -a zsh/nosuch zparseopts
 print -r -- "st=$?"
 zmodload zsh/zutil

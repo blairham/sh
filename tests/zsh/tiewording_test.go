@@ -10,6 +10,7 @@ import "testing"
 // scalar already is (#5151, a chunk of D04parameter.ztst). Measured
 // 2026-10-02 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f`, `LC_ALL=C`).
 func TestARetieNamesWhichHalfTheNameAlreadyIs(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset -T t1 t2 +; typeset -T t2 t1 +; echo $?`, "zsh:typeset:1: already tied as non-scalar: t2\n1\n"},
 		{`typeset -T t1 t2; typeset -T t2 t3; echo $?`, "zsh:typeset:1: already tied as non-scalar: t2\n1\n"},

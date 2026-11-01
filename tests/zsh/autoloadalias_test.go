@@ -20,6 +20,7 @@ import "testing"
 // This shell behaved as though `-U` were always given (#1993): the letter was
 // recorded, so the stub listed back correctly, and never acted on.
 func TestAutoloadExpandsAliasesUnlessMinusU(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ letters, want string }{
 		{"-Uz", "af:1: command not found: myalias\n"},
 		{"-U", "af:1: command not found: myalias\n"},
@@ -46,6 +47,7 @@ af`
 // Measured — the same file and alias, with `unalias myalias` after the
 // declaration, answers `af:1: command not found: myalias`.
 func TestAutoloadReadsTheAliasTableAtTheCall(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"af": "myalias\n"})
 	out, _ := runZsh(t, t.TempDir(), `alias myalias='print -r -- EXPANDED'
 fpath=(`+fp+`)
@@ -61,6 +63,7 @@ af`)
 // follow the same letter — which is the second route into a function file and
 // the one a fix is most likely to miss.
 func TestPlusXFollowsTheSameLetter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ letters, want string }{
 		{"+X", "af () {\n\tprint -r -- EXPANDED\n}\nEXPANDED\n"},
 		{"-U +X", "af () {\n\tmyalias\n}\naf:1: command not found: myalias\n"},
@@ -83,6 +86,7 @@ af`)
 // written in the command string is not expanded and one in a function file
 // is.
 func TestTheAliasesOptionReachesAFunctionFile(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"af": "myalias\n"})
 	out, _ := runZsh(t, t.TempDir(), `alias myalias='print -r -- EXPANDED'
 fpath=(`+fp+`)
@@ -98,6 +102,7 @@ af`)
 // the same table: this file's recurring defect is a second route that omits
 // what the first one carries.
 func TestWritingAFunctionBodyExpandsAliasesToo(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `alias myalias='print -r -- EXPANDED'
 functions[g]='myalias'
 g`)

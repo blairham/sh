@@ -22,6 +22,7 @@ import (
 // The `'f'` row is what says so from the other side — the name is one nobody
 // could object to and the quotes are all that is unusual.
 func TestAPosixFunctionNameIsAnyWord(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a name holding a space", `'a b'() { printf b; }; 'a b'`, "b"},
@@ -81,6 +82,7 @@ func TestAPosixFunctionNameIsAnyWord(t *testing.T) {
 // assignment wins and the brace group has nothing to be part of — while
 // `'a=b'()` and `a\=b()` are definitions, so it is the bare `=` that decides.
 func TestAnArrayAssignmentIsNotAPosixDefinition(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if out, st := runZsh(t, dir, `a=(x y); printf "%d %s" ${#a} ${a[1]}`); out != "2 x" || st != 0 {
 		t.Errorf("out %q status %d, want %q at 0", out, st, "2 x")
@@ -101,6 +103,7 @@ func TestAnArrayAssignmentIsNotAPosixDefinition(t *testing.T) {
 // flattened — a declaration carrying `a*b` as a plain name would define a
 // function nobody asked for at status 0.
 func TestABarePatternIsAGeneratedPosixName(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`a*b() { :; }`,
 		`a?b() { :; }`,

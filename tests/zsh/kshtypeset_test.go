@@ -18,6 +18,7 @@ import (
 // Each is read by `eval` after `disable -r` so that the builtin runs, which is
 // how the reference's own suite asks it.
 func TestKshTypesetKeepsABuiltinDeclarationsAssignmentWhole(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, off, on string }{
 		{"the assignment", `typeset x=$(echo a b); print -r -- "[$x]" $+b`, "[a] 1\n", "[a b] 0\n"},
 		{"a name from a parameter", `nm=z; typeset $nm=$(echo c d); print -r -- "[$z]" $+d`, "[c] 1\n", "[c d] 0\n"},
@@ -60,6 +61,7 @@ func TestKshTypesetKeepsABuiltinDeclarationsAssignmentWhole(t *testing.T) {
 // reserved word still on, and leaves the reserved word itself alone: its
 // operands were decided by the parse.
 func TestKshTypesetReachesBuiltinAndNotTheReservedWord(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`setopt kshtypeset; builtin typeset c=$(echo 5 6); print -r "[$c]" $+6`, "[5 6] 0\n"},
 		{`setopt kshtypeset; f() { typeset "z"=$(echo c d) x=$(echo g h); print -r -- "[$z][$x]" $+d $+h; }; f`, "[c][g h] 1 0\n"},

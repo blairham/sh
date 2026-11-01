@@ -14,6 +14,7 @@ import "testing"
 // queued a task: the queue gained an empty entry and `.zi-run-task` was
 // reached with no index, `bad set of key/value pairs for associative array`.
 func TestAListsReplacementIsReadOnce(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`i=0; c=(ab cd); x=(${c[@]/b/$((++i))}); print -r -- $x $i`, "a1 cd 1\n"},
 		{`i=0; set -- ab cd ab; x=${@/b/$((++i))}; print -r -- $x $i`, "a1 cd a1 1\n"},

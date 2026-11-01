@@ -19,6 +19,7 @@ import (
 // corpus graded `local` — so `typeset` with nothing after it wrote nothing at
 // all, which is the one answer no shell gives.
 func TestABareTypesetIsTheSameListingAsABareLocal(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().BareTypesetListing; got != interp.BareLocalListsEveryParameter {
 		t.Errorf("BareTypesetListing = %v, want BareLocalListsEveryParameter", got)
 	}

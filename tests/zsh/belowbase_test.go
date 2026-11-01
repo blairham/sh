@@ -11,6 +11,7 @@ import (
 // The first element is 1 here, so `a[0]` is below it: the assignment is
 // refused and the script ends at 1. Measured against zsh 5.9.2 (2026-09-05).
 func TestASubscriptBelowTheFirstElementIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`a=(p q); a[0]=x; echo ok`,
 		`a=(p q); a[0]+=Q; echo ok`,
@@ -27,6 +28,7 @@ func TestASubscriptBelowTheFirstElementIsRefused(t *testing.T) {
 // Through a literal the sentence is a different one, and it names the
 // subscript rather than the array.
 func TestASubscriptBelowTheFirstElementInALiteral(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `a=([0]=p); echo ok`)
 	want := "zsh:1: bad subscript for direct array assignment: 0\n"
 	if out != want || st != 1 {
@@ -38,6 +40,7 @@ func TestASubscriptBelowTheFirstElementInALiteral(t *testing.T) {
 // from the last — and one that runs past the start places an element in front
 // of every other, however far past it went.
 func TestANegativeSubscriptPastTheStartInserts(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`a=(p q); a[-3]=x; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
 		`a=(p q); a[-5]=x; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
@@ -54,6 +57,7 @@ func TestANegativeSubscriptPastTheStartInserts(t *testing.T) {
 // this shell puts it there for its own messages, and the script runs on where
 // the assignment stops it. Measured against zsh 5.9.2 (2026-09-05).
 func TestUnsetBelowTheFirstElementIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`a=(x y z); unset "a[0]"; echo "st=$? n=${#a[@]}"`,
 		`a=v; unset "a[0]"; echo "st=$? [$a]"`,
@@ -72,6 +76,7 @@ func TestUnsetBelowTheFirstElementIsRefused(t *testing.T) {
 // from the last, and one that runs past the start finds no span to replace,
 // so it is left alone without a word rather than refused.
 func TestUnsetPastTheStartSaysNothing(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `a=(x y z); unset "a[-4]"; echo "st=$? n=${#a[@]}"`)
 	if out != "st=0 n=3\n" || st != 0 {
 		t.Errorf("got %q (status %d), want %q at 0", out, st, "st=0 n=3\n")

@@ -13,6 +13,7 @@ import "testing"
 // through this shell gives the same 47 lines. `-M` was read and dropped until
 // #6152, so every row here that is not a plain prefix match failed.
 func TestAMatchSpecificationWidensWhatMatches(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ spec, word, candidates, want string }{
 		{"m:{a-zA-Z}={A-Za-z}", "RE", "README.md repl rpc.go Rx readme", "README.md repl readme"},
 		{"m:{a-zA-Z}={A-Za-z}", "re", "README.md repl rpc.go Rx readme", "README.md repl readme"},
@@ -77,6 +78,7 @@ func TestAMatchSpecificationWidensWhatMatches(t *testing.T) {
 // 5.9.2, 2026-10-05: a lower-case matcher inserts the candidate, and an
 // upper-case one writes the word's own characters into it where they matched.
 func TestAnUpperCaseMatcherWritesTheWordIn(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ spec, candidate, word, want string }{
 		{"M:_=", "foo", "f_o", "f_oo"},
 		{"m:_=", "foo", "f_o", "foo"},

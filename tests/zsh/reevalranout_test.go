@@ -12,6 +12,7 @@ import "testing"
 // on zsh 5.9.2, the A01grammar chunk `Status on bad substitution in if
 // without else` (#5138).
 func TestARereadValueThatRanOutInTheNameIsABadSubstitution(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`a='${'; if : ${(e)a}; then echo x; fi`, "zsh:1: bad substitution\n"},
 		{`a='${x'; : ${(e)a}`, "zsh:1: bad substitution\n"},

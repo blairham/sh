@@ -36,6 +36,7 @@ func offeredAt(t *testing.T, specs, line string) string {
 // The length of the name being shut off is what decides, and nothing about
 // the word under the cursor.
 func TestAnExclusionListWhileItsOwnOptionIsUnderTheCursor(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, specs, line, want string }{
 		// The idiom itself, both spellings. Typing either one leaves the
 		// long one offered and the short one is the cursor's own, offered

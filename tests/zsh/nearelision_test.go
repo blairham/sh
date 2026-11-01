@@ -27,6 +27,7 @@ import (
 // and `parse error near ` + a shortened word is a prefix of the same sentence
 // with the long word in it.
 func TestAQuotedWordIsCutToTwentyBytesAndMarked(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		why, src, want string
 	}{
@@ -79,6 +80,7 @@ func TestAQuotedWordIsCutToTwentyBytesAndMarked(t *testing.T) {
 // diagnostic than the shell's and would stop matching it. The row that
 // catches that is the one whose expected text is deliberately invalid.
 func TestTheTwentyByteCutIsByBytesAndSplitsACharacter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		why, src, want string
 	}{
@@ -124,6 +126,7 @@ func TestTheTwentyByteCutIsByBytesAndSplitsACharacter(t *testing.T) {
 // The last three rows above assert text that is not valid UTF-8, and this
 // says so out loud so that a later reader does not "fix" them.
 func TestTheSplitCharacterRowsAreDeliberatelyInvalidUTF8(t *testing.T) {
+	t.Parallel()
 	src := "v=$(echo héllo wöéxxxx\n"
 	_, err := syntax.Parse(src, zsh.Dialect())
 	if err == nil {

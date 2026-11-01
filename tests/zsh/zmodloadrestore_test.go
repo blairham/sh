@@ -22,6 +22,7 @@ const restoreRefused = "zmodload zsh/parameter\n" +
 // Two sentences and not one, and the second names the *module* — a location
 // this builtin writes nowhere else.
 func TestReSelectingAParameterOverAnAssignedNameIsRefused(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		restoreRefused+"zmodload -F zsh/parameter +p:parameters\necho st=$?\n")
 	for _, want := range []string{
@@ -46,6 +47,7 @@ func TestReSelectingAParameterOverAnAssignedNameIsRefused(t *testing.T) {
 // The refusal is a refusal: the selection does not happen, and the listing
 // afterwards still writes the feature off.
 func TestARefusedReSelectionLeavesTheFeatureOff(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		restoreRefused+"zmodload -F zsh/parameter +p:parameters\nzmodload -lF zsh/parameter\n")
 	if !strings.Contains(out, "-p:parameters\n") {
@@ -58,6 +60,7 @@ func TestARefusedReSelectionLeavesTheFeatureOff(t *testing.T) {
 
 // It is per feature, and the rest of the line still happens.
 func TestTheRestOfTheSelectionStillHappens(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"zmodload zsh/parameter\n"+
 			"zmodload -F zsh/parameter -p:parameters -p:functions\n"+
@@ -76,6 +79,7 @@ func TestTheRestOfTheSelectionStillHappens(t *testing.T) {
 // A plain load widens a narrowed module, so it is the same restore and meets
 // the same refusal — which is why the guard is not in the `-F` path alone.
 func TestAPlainLoadMeetsTheSameRefusal(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		restoreRefused+"zmodload zsh/parameter\necho st=$?\nzmodload -lF zsh/parameter\n")
 	if !strings.Contains(out, "error when adding parameter `parameters'") ||
@@ -90,6 +94,7 @@ func TestAPlainLoadMeetsTheSameRefusal(t *testing.T) {
 // The question is whether the name holds a value *now*, and `unset` frees it:
 // the producer goes back in silence at 0 and answers again.
 func TestAnUnsetNameIsFreeAgain(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		restoreRefused+"unset parameters\n"+
 			"zmodload -F zsh/parameter +p:parameters\necho st=$?\n"+
@@ -105,6 +110,7 @@ func TestAnUnsetNameIsFreeAgain(t *testing.T) {
 // And a feature that was never deselected is not a restore at all: selecting
 // it again over a name that holds a value says nothing.
 func TestSelectingAFeatureThatIsAlreadyOnIsNotARestore(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"zmodload zsh/parameter\nzmodload -F zsh/parameter +p:parameters\necho st=$?\n")
 	if out != "st=0\n" || st != 0 {

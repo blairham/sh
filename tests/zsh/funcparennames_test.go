@@ -15,6 +15,7 @@ import (
 // name that was *called*, so a reading that defined one function and pointed
 // the rest at it would parse and answer every call with the same name (#1685).
 func TestTheParenthesisSpellingDefinesEveryNameToo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`a b () { echo "$0"; }; a; b`, "a\nb"},
 		{`clipcopy clippaste() { echo "$0"; }; clipcopy; clippaste`, "clipcopy\nclippaste"},

@@ -61,6 +61,7 @@ func TestANamedCoprocIsAParseErrorHere(t *testing.T) {
 // With nothing started the two letters are the same refusal in the same
 // words, at 1, asserted as whole rendered lines with this shell's location.
 func TestTheCoprocessLettersWithNothingStarted(t *testing.T) {
+	t.Parallel()
 	out, st, errs := runZshSplit(t, t.TempDir(),
 		`print -p x; echo "p=$?"; read -p y; echo "r=$?"`)
 	wantOut := "p=1\nr=1\n"

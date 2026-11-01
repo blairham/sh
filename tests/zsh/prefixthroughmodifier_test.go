@@ -27,6 +27,7 @@ import "testing"
 // asked the roster about `:` and the persistence axis about `builtin`, and
 // neither answered for the command that was going to run.
 func TestAPrefixStandsInFrontOfWhatTheModifiersResolveTo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, cmd, want string }{
 		{"a transparent modifier is looked through", "builtin :", "x=v"},
 		{"and so is the one that is not a builtin", "noglob :", "x=v"},
@@ -59,6 +60,7 @@ func TestAPrefixStandsInFrontOfWhatTheModifiersResolveTo(t *testing.T) {
 // `builtin` with nothing behind it is one of those, which is why the bare
 // word is not in the table above.
 func TestWithoutTheOptionTheResolutionIsUnchanged(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, cmd, want string }{
 		{"a special builtin is not kept here", "builtin :", "x=43"},
 		{"nor an ordinary one", "builtin true", "x=43"},

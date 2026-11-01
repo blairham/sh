@@ -26,6 +26,7 @@ import (
 // name it does not have, and a mixture of those. So the letter selects nothing
 // once operands have; it is with **no** operand that it narrows.
 func TestTheTieLetterUnderThePrintLetterIsAListing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const tie = "typeset -T A a=(x y)\n"
 	for _, tc := range []struct {
@@ -75,6 +76,7 @@ func TestTheTieLetterUnderThePrintLetterIsAListing(t *testing.T) {
 // does have are still listed — which is `typeset -p`'s own answer and was the
 // declaring form's refusal before.
 func TestTheTiePrintListingReportsANameItDoesNotHave(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const tie = "typeset -T A a=(x y)\n"
 	for _, tc := range []struct{ name, src, wantOut, wantErr string }{
@@ -107,6 +109,7 @@ func TestTheTiePrintListingReportsANameItDoesNotHave(t *testing.T) {
 // `-p` there is nothing to remove — where with operands `+T` is still the
 // untie refusal.
 func TestTheTiePrintListingWithNoOperand(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	// Whole-output containment rather than a filtered listing, because the
 	// bare form writes the shell's own tied pairs too — `PATH`/`path` and the
@@ -166,6 +169,7 @@ func TestTheTiePrintListingWithNoOperand(t *testing.T) {
 // refusal, and without `-p` the letter still declares and still refuses the
 // arities it refused.
 func TestTheDeclaringFormOfTheTieLetterIsUnmoved(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const tie = "typeset -T A a=(x y)\n"
 	for _, tc := range []struct{ name, src, want string }{

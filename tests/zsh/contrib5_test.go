@@ -13,6 +13,7 @@ import (
 // with its own copies; testdata/contrib5.tsv's header says how. The prelude
 // is one line, as the measurement's was, so a diagnostic names the same line.
 func TestCatchThrowZmathfuncZstylePlusAnswerWhatZshAnswers(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, row := range contribRows(t, "contrib5.tsv") {
 		t.Run(row[0], func(t *testing.T) {

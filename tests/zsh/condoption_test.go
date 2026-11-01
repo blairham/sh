@@ -19,6 +19,7 @@ import (
 // answered the base name correctly and ignored the prefix would pass a test
 // that only asked the true side.
 func TestTheOptionTestReadsTheZshNamespace(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -71,6 +72,7 @@ func TestTheOptionTestReadsTheZshNamespace(t *testing.T) {
 // same branch here as they do there — a name resolved to the *wrong* state
 // would parse fine and send the file down the other path in silence.
 func TestTheOptionTestAnswersTheNamesRealStartupFilesAsk(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -122,6 +124,7 @@ func TestTheOptionTestAnswersTheNamesRealStartupFilesAsk(t *testing.T) {
 // made a startup file take the branch we wanted. Every entry added for this
 // change is checked against the behavior it names, from the other side.
 func TestTheNamesTheNamespaceClaimsAreTrue(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `f() { echo "zero=$0"; }; f; [[ -o functionargzero ]]; echo "opt=$?"`)
 	if want := "zero=f\nopt=0\n"; out != want {
 		t.Errorf("got %q, want %q — the option and the behavior it names must agree", out, want)
@@ -135,6 +138,7 @@ func TestTheNamesTheNamespaceClaimsAreTrue(t *testing.T) {
 // own location rather than a builtin's — which is the half a shared wording
 // constant cannot get right on its own.
 func TestAnUnknownConditionOptionIsSaidAndIsNotFatal(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `[[ -o nosuchoption ]]; echo "st=$?"; echo alive`)
 	if want := "zsh:1: no such option: nosuchoption\nst=3\nalive\n"; out != want {
 		t.Errorf("got %q, want %q", out, want)
@@ -152,6 +156,7 @@ func TestAnUnknownConditionOptionIsSaidAndIsNotFatal(t *testing.T) {
 // whole condition — and together they are what a "return false and paint the
 // status on" implementation cannot produce.
 func TestAnUnknownConditionOptionIsNotAFalseHere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -192,6 +197,7 @@ func TestAnUnknownConditionOptionIsNotAFalseHere(t *testing.T) {
 // The seam is what makes that true rather than a coincidence, and this is the
 // row that would fail if the condition grew a table of its own.
 func TestTheConditionAndSetoptShareOneNamespace(t *testing.T) {
+	t.Parallel()
 	const src = `[[ -o glob ]]; echo "before=$?"; setopt no_glob; [[ -o glob ]]; echo "after=$?"`
 	if out, _ := runZsh(t, t.TempDir(), src); out != "before=0\nafter=1\n" {
 		t.Errorf("got %q, want %q", out, "before=0\nafter=1\n")

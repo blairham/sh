@@ -28,6 +28,7 @@ import (
 // $functions is a view of the function table, and the reads are placed so that
 // no single snapshot could answer all three.
 func TestFunctionsIsAViewOfTheFunctionTable(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `echo "a=[${functions[g]:-ABSENT}] n=${#functions}"
 g(){ :; }
 echo "b=[${functions[g]:-ABSENT}] n=${#functions}"
@@ -43,6 +44,7 @@ echo "c=[${functions[g]:-ABSENT}] n=${#functions}"`)
 // header, no trailing newline — and a nested one is indented twice. Asserted
 // as bytes, because every character that decides this is whitespace.
 func TestFunctionsHoldsTheBodyAListingWouldPrint(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`f(){ echo one; if [[ 1 = 1 ]]; then echo two; fi; }`+"\n"+
 			`printf "[%s]" "$functions[f]"`)
@@ -58,6 +60,7 @@ func TestFunctionsHoldsTheBodyAListingWouldPrint(t *testing.T) {
 // in a stored table would shadow the view, and `${#functions}` would then
 // stop moving.
 func TestFunctionsIsWrittenThroughToTheFunctionTable(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `functions[h]="echo made"
 h
 echo "n=${#functions}"
@@ -73,6 +76,7 @@ echo "after=$? n=${#functions}"`)
 // A body that will not parse defines nothing and says so, rather than storing
 // text whose call fails several hundred lines away.
 func TestFunctionsRefusesABodyItCannotRead(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `functions[h]="if" 2>&1
 echo "n=${#functions}"`)
 	want := "zsh:1: h: not a function body this shell can read\nn=0\n"
@@ -93,6 +97,7 @@ echo "n=${#functions}"`)
 // what real zsh 5.9.2 says: `type pushd` there is `pushd is a shell
 // builtin`, and `${(k)functions}` names none of the three.
 func TestFunctionsLeavesOutTheFunctionsThatAreTheShell(t *testing.T) {
+	t.Parallel()
 	out, st := runZshPrelude(t, t.TempDir(), `mine(){ :; }
 echo "listed=[${(k)functions}]"
 type pushd
@@ -110,6 +115,7 @@ echo "declared=[$(declare -f)]"`)
 // would have to be cleared on every route a redefinition can arrive by, and
 // this is the route a fifth one would have missed.
 func TestRedefiningAPreludeFunctionPutsItInTheListing(t *testing.T) {
+	t.Parallel()
 	out, st := runZshPrelude(t, t.TempDir(), `echo "before=[${(k)functions}]"
 pushd(){ echo mine; }
 echo "after=[${(k)functions}] body=[$functions[pushd]]"`)
@@ -125,6 +131,7 @@ echo "after=[${(k)functions}] body=[$functions[pushd]]"`)
 // leaving it undefined. Two spellings of one thing must not leave the shell in
 // two states (#1082).
 func TestUnsettingAFunctionsElementIsUnsetDashF(t *testing.T) {
+	t.Parallel()
 	out, st := runZshPrelude(t, t.TempDir(), `pushd(){ echo mine; }
 echo "listed=[${(k)functions}]"
 unset "functions[pushd]"
@@ -142,6 +149,7 @@ echo "again=[${(k)functions}]"`)
 // `[[ -o ]]` already share — the same 197 keys real zsh carries, and the same
 // live state.
 func TestOptionsIsAViewOfTheOptionNamespace(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `echo "n=${#options}"
 echo "a=$options[extendedglob]"
 setopt extendedglob
@@ -158,6 +166,7 @@ echo "c=$options[extendedglob]"`)
 // names mean opposite states — which is what makes 197 rather than the 185
 // the listings print.
 func TestOptionsCarriesTheCompatSpellingsAsKeys(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`echo "[$options[log]] [$options[histnofunctions]]"
 setopt histnofunctions
@@ -171,6 +180,7 @@ echo "[$options[log]] [$options[histnofunctions]]"`)
 // Assigning is `setopt` written as an assignment, with zsh's two measured
 // complaints — both of which leave the *command's* status at 0.
 func TestOptionsIsWrittenThroughToTheOptions(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `options[extendedglob]=on
 [[ -o extendedglob ]] && echo on-now
 options[nosuchopt]=on 2>&1
@@ -187,6 +197,7 @@ echo "bad=$? still=[$options[extendedglob]]"`)
 // $builtins is a view of the builtin table, and a builtin switched off is not
 // a key here — measured, the count drops and the key goes.
 func TestBuiltinsIsAViewAndDropsOneThatIsSwitchedOff(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `echo "a=[$builtins[cd]]"
 disable cd
 echo "b=[${builtins[cd]:-ABSENT}]"
@@ -202,6 +213,7 @@ echo "c=[$builtins[cd]]"`)
 // no writer would otherwise take the assignment into a stored table and shadow
 // itself from then on.
 func TestBuiltinsIsReadonly(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `builtins[x]=y 2>&1; echo "st=$?"`)
 	want := "zsh:1: read-only variable: builtins\n"
 	if out != want || st != 1 {
@@ -211,6 +223,7 @@ func TestBuiltinsIsReadonly(t *testing.T) {
 
 // $aliases is a view of the alias table, written through in both directions.
 func TestAliasesIsAViewOfTheAliasTable(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `echo "a=[${aliases[q]:-ABSENT}] n=${#aliases}"
 alias q=ls
 echo "b=[$aliases[q]] n=${#aliases}"
@@ -230,6 +243,7 @@ echo "e=[${aliases[zz]:-ABSENT}] n=${#aliases}"`)
 // $commands is a view of the PATH search, which is what makes it move when
 // PATH does — the property a hash table filled in once would not have.
 func TestCommandsIsAViewOfThePathSearch(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(t, dir, `echo "absent=[${commands[definitelynotacommand]:-ABSENT}]"
 echo "a=[${commands[ls]:-ABSENT}]"
@@ -251,6 +265,7 @@ echo "c=[${commands[ls]:-ABSENT}]"`)
 // and it is what the *name itself* runs. Measured on zsh 5.9.2 with
 // `PATH=/usr/bin:/bin` — `commands[zz]=/bin/echo; zz hi` prints `hi`.
 func TestWritingCommandsHashesTheCommand(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "realcmd"),
 		[]byte("#!/bin/sh\necho real\n"), 0o755); err != nil {
@@ -282,6 +297,7 @@ myc`)
 // *top* of the PATH scan and not behind it. Measured: `commands[ls]=/bin/echo;
 // ls WOW` prints `WOW` there.
 func TestAWrittenCommandsEntryWinsOverThePathSearch(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "realcmd"),
 		[]byte("#!/bin/sh\necho real\n"), 0o755); err != nil {
@@ -311,6 +327,7 @@ realcmd`)
 // It is the discriminating row for the read, because a lookup-backed read
 // would answer empty for the very entry the line before it wrote.
 func TestCommandsReportsAnEntryThatWillNotRun(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `commands[qq]=/no/such/thing
 echo "v=[${commands[qq]}] plus=${+commands[qq]}"`)
 	want := "v=[/no/such/thing] plus=1\n"
@@ -337,6 +354,7 @@ echo "v=[${commands[qq]}] plus=${+commands[qq]}"`)
 // the lookup answered the hash would be the one shape it forbids — a
 // `${(k)commands}` that names fewer commands than `${+commands[c]}` admits to.
 func TestTheWholeCommandsTableCarriesTheHash(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "realcmd"),
 		[]byte("#!/bin/sh\necho real\n"), 0o755); err != nil {
@@ -370,6 +388,7 @@ echo "n=${#commands} v=[${(o)commands}]"`)
 // it — which is the no-shadowing property this test is about, now shown by a
 // table that grew rather than by one that refused to.
 func TestAProducedAssociationCannotBeShadowed(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `f(){ :; }
 typeset -A functions
 echo "declared=[${functions[f]:-ABSENT}] n=${#functions}"
@@ -395,6 +414,7 @@ other`)
 // read through — the count moves inside — and not about isolation, which is
 // filed separately.
 func TestAProducedAssociationIsReadThroughInsideASubshell(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `f(){ :; }
 (echo "before=${#functions}"; g(){ :; }; echo "after=${#functions}")`)
 	want := "before=1\nafter=2\n"
@@ -420,6 +440,7 @@ func TestAProducedAssociationIsReadThroughInsideASubshell(t *testing.T) {
 // standard output, because "reads as empty" is precisely what an unnamed
 // absence looks like from the caller's side.
 func TestAnAbsentParameterRefusesByNameOnEveryReadRoute(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, snippet string }{
 		{"a bare name", `print -r -- "[$zshabsentprobe]"`},
 		{"a subscript", `print -r -- "[${zshabsentprobe[zsh/zle]}]"`},
@@ -471,6 +492,7 @@ func TestAnAbsentParameterRefusesByNameOnEveryReadRoute(t *testing.T) {
 // spellings now stop at the diagnostic, because a body fed to a program is
 // expanded in that program's process and a failure there costs the command.
 func TestAHereDocumentNamesAnAbsentParameterTheWayItNamesAnUnsetOne(t *testing.T) {
+	t.Parallel()
 	absent, ast := runZshAbsentProbe(t, t.TempDir(), "cat <<E\n[$zshabsentprobe]\nE\n")
 	unset, ust := runZshAbsentProbe(t, t.TempDir(), "set -u\ncat <<E\n[$nosuchvar]\nE\n")
 	if !strings.Contains(absent, absentProbeParam+": parameter not implemented yet") {
@@ -496,6 +518,7 @@ func TestAHereDocumentNamesAnAbsentParameterTheWayItNamesAnUnsetOne(t *testing.T
 // would be this shell inventing a diagnostic the shell it models does not
 // write, over a spelling that means nothing in either.
 func TestArithmeticReadsAnAbsentParameterAsZeroLikeTheRealThing(t *testing.T) {
+	t.Parallel()
 	out, st := runZshAbsentProbe(t, t.TempDir(), `print -r -- "n=$(( zshabsentprobe + 1 ))"`)
 	if want := "n=1\n"; out != want || st != 0 {
 		t.Errorf("arithmetic on an absent parameter = %q (status %d), want %q", out, st, want)
@@ -510,6 +533,7 @@ func TestArithmeticReadsAnAbsentParameterAsZeroLikeTheRealThing(t *testing.T) {
 // for, and `${p+x}` answering "no" is an answer where `${p}` answering empty
 // is not.
 func TestAnAbsentParameterYieldsToTheScriptsOwnAnswer(t *testing.T) {
+	t.Parallel()
 	out, st := runZshAbsentProbe(t, t.TempDir(), `print -r -- "default=[${zshabsentprobe-d}]"
 print -r -- "alternate=[${zshabsentprobe+set}]"
 dirstack=(a b)
@@ -535,6 +559,7 @@ print -r -- "own=[$dirstack] [${dirstack[1]}] [${#dirstack}]"`)
 // is the one of these the shell being modeled lets a script assign, because
 // assigning it is how a script sets the directory stack.
 func TestAProducedTableRefusesAWriteAsAReadOnlyName(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`modules=(a b c)`,
 		`modules[1]=q`,
@@ -559,6 +584,7 @@ func TestAProducedTableRefusesAWriteAsAReadOnlyName(t *testing.T) {
 // A `${+modules}` in front of this line makes the same `unset` a refusal, in
 // both shells — see deferredparameters_test.go.
 func TestAProducedTableMayStillBeUnset(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "unset modules\necho \"st=$?\"")
 	if out != "st=0\n" || st != 0 {
 		t.Errorf("unsetting an absent parameter = %q (status %d), want a silent 0", out, st)
@@ -569,6 +595,7 @@ func TestAProducedTableMayStillBeUnset(t *testing.T) {
 // answer rather than a stub: each reports on something this shell cannot do,
 // so "none" is true. A real zsh with none of them defined says the same.
 func TestTheEmptyParametersReadEmptyAndSayNothing(t *testing.T) {
+	t.Parallel()
 	for _, name := range emptyModuleParams() {
 		t.Run(name, func(t *testing.T) {
 			out, st := runZsh(t, t.TempDir(),
@@ -590,6 +617,7 @@ func TestTheEmptyParametersReadEmptyAndSayNothing(t *testing.T) {
 // as plausible then as it is now. This fails instead, at the name of the
 // parameter that has to move with it (#1137).
 func TestTheEmptyParametersStayHonest(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ param, waitsFor string }{
 		{"dis_aliases", "disable -a nosuch"},
 		{"dis_builtins", "disable -b nosuch"},
@@ -629,6 +657,7 @@ print -r -- "st=$?"`)
 // nothing said at either end. The three zsh marks readonly refuse in zsh's own words
 // instead, which does the same job.
 func TestWritingToAnEmptyParameterIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	// `dis_functions` was the middle row and is a table now (#5267): a write
 	// to it defines a switched-off function, which disablefunction_test.go
 	// asserts.
@@ -653,6 +682,7 @@ print -r -- "unreached"`)
 // kind at once, which is what #2081's first pass did (the alarm above caught
 // the letters, not this).
 func TestTheThreeAliasParametersAreThreeSets(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `unalias -a
 alias -g G=x; alias r=y; alias -s t=z
 print -r -- "aliases=${(k)aliases}"
@@ -668,6 +698,7 @@ print -r -- "saliases=${(k)saliases}"`)
 // and `saliases[t]=…` is `alias -s t=…`, which is what makes them the
 // parameter form of the builtin rather than three views of one map.
 func TestWritingTheAliasParametersDefinesThatKind(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `unalias -a
 galiases[G]=x
 saliases[t]=z
@@ -709,6 +740,7 @@ func emptyModuleParams() []string {
 // zsh hides them for the same reason; `builtins` appears as a bare name
 // because it is readonly, and carries no value.
 func TestTheProducedParametersStayOutOfASetListing(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `f(){ :; }; alias a=b; set`)
 	for _, name := range []string{"functions=", "options=", "commands=", "aliases=", "builtins="} {
 		if strings.Contains(out, name) {
@@ -747,6 +779,7 @@ func TestTheProducedParametersStayOutOfASetListing(t *testing.T) {
 // something every unknown name gets — and it is the row that would still fire
 // if somebody put a name back on the roster and broke the wording.
 func TestEveryAbsentParameterRefusesByName(t *testing.T) {
+	t.Parallel()
 	for _, name := range absentModuleParams() {
 		t.Run(name, func(t *testing.T) {
 			out, st := runZsh(t, t.TempDir(), `print -r -- "n=${#`+name+`}"`)
@@ -790,6 +823,7 @@ func TestEveryAbsentParameterRefusesByName(t *testing.T) {
 // it thought would agree with it whatever it said. Their being separate lists
 // is what makes this an assertion.
 func TestTheThreeRostersAccountForTheModuleExactlyOnce(t *testing.T) {
+	t.Parallel()
 	seen := map[string]string{}
 	for roster, names := range map[string][]string{
 		"implemented": implementedModuleParams(),
@@ -840,6 +874,7 @@ func TestTheThreeRostersAccountForTheModuleExactlyOnce(t *testing.T) {
 // which is **on** in a fresh shell — it goes off, so it is off and not the
 // default.
 func TestUnsettingAnOptionsElementTurnsTheOptionOff(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(t, dir, `setopt noclobber
 : > f
@@ -864,6 +899,7 @@ echo "equals-after=[$options[equals]]"`)
 // assignment: silent here, `no such option` there. Measured both ways in the
 // same shell, so a single rule for the two spellings fails this test.
 func TestUnsettingAnUnknownOptionsElementIsSilent(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `unset "options[nosuchopt]" 2>&1
 echo "unset=$?"
 options[nosuchopt]=on 2>&1
@@ -878,6 +914,7 @@ echo "assign=$?"`)
 // the assignment — `unset "options[hashall]"` is `hashcmds` off — which is
 // what shows the lookup was not written a second time here.
 func TestUnsettingACompatSpellingGoesThroughTheCanonicalOption(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `setopt hashall
 echo "a=[$options[hashall]] [$options[hashcmds]]"
 unset "options[HASH_ALL]"
@@ -894,6 +931,7 @@ echo "b=[$options[hashall]] [$options[hashcmds]]"`)
 // asked for absence and has it, and reads the same empty string here that zsh
 // reads. Both halves in one shell, because the point is that they differ.
 func TestUnsettingAnEmptyParametersElementIsSilent(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `unset "dis_aliases[f]" 2>&1
 echo "unset=$? n=${#dis_aliases} v=[${dis_aliases[f]}]"
 unset "nameddirs[x]" 2>&1
@@ -920,6 +958,7 @@ echo "assign=$?"`)
 // directory, `onpath=[]`: the filled table is the whole answer, and it is
 // filled once until something empties it (#5266).
 func TestUnsettingACommandsElementForgetsTheHashedCommand(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "toolx"), []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
@@ -948,6 +987,7 @@ echo "onpath=[${commands[toolx]:+found}]"`)
 // `parameters[nope]` evaluated to 0 and was silent at status 0, which is the
 // answer this mechanism exists to stop.
 func TestUnsettingAnAbsentParametersElementRefusesByName(t *testing.T) {
+	t.Parallel()
 	// A name of the tests' own rather than `modules`, which this used to ask
 	// about, `jobstates` before that and `parameters` before that. Each move
 	// was the same correction one step further along — a name this shell now
@@ -986,6 +1026,7 @@ echo "other=$?"`)
 // panel answer for an element write, which is why the rule here is the
 // mechanism's own rather than a copy.
 func TestUnsettingAnAbsentNameTheScriptOwnsIsTheScriptsArray(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `dirstack=(a b c)
 unset "dirstack[2]" 2>&1
 echo "st=$? v=[${dirstack[*]}]"`)
@@ -1009,6 +1050,7 @@ echo "st=$? v=[${dirstack[*]}]"`)
 // all — the pathname match finds nothing and ends the script, which is why the
 // line after it is marked unreached and the status is 1.
 func TestUnsettingFunctionsThroughNoglobUndefinesTheFunction(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `m(){ echo hi; }
 noglob unset functions[m]
 echo "st=$? left=${#functions}"
@@ -1029,6 +1071,7 @@ echo "unreached kept=${#functions}"`)
 // index, a range and a second subscript alike. Held here because the fix above
 // could have been written as "any subscript removes something".
 func TestOtherSubscriptFormsOnFunctionsRemoveNothing(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `m(){ echo hi; }
 for s in nope 1 1,2 '(r)m'; do
   unset "functions[$s]" 2>&1
@@ -1132,6 +1175,7 @@ func absentModuleParams() []string {
 // fetched through `(k)`, so a change to either route that did not change the
 // other fails this.
 func TestTheKeyAndTheTableAgreeAboutEveryFunction(t *testing.T) {
+	t.Parallel()
 	out, st := runZshPrelude(t, t.TempDir(), `f(){ echo hi; }
 autoload -Uz a1
 for n in f a1 pushd nosuch; do
@@ -1162,6 +1206,7 @@ done`)
 // no key for however well it resolves), and a parameter of every container
 // kind beside one the shell refuses by name.
 func TestTheKeyAndTheTableAgreeAboutOptionsCommandsAndParameters(t *testing.T) {
+	t.Parallel()
 	// The command PATH resolves has to be one this test made: the session
 	// runs with no PATH and no external commands, which is what keeps it a
 	// test about the shell.
@@ -1222,6 +1267,7 @@ done`)
 // what a read finds first, so a name given one has stopped answering for
 // anything from that moment.
 func TestTheNamedDirectoryParameterIsAViewOfTheTable(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"empty until something writes one", `print -r -- "n=${#nameddirs}"`, "n=0\n"},
 		{
@@ -1272,6 +1318,7 @@ func TestTheNamedDirectoryParameterIsAViewOfTheTable(t *testing.T) {
 // into, so that probe cannot tell the two answers apart — and which of them
 // each name gives is the only thing this test is about.
 func TestAWholeTableAssignmentReachesTheProducer(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// The four that merge. The first key survives.
 		{

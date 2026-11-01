@@ -85,6 +85,7 @@ func TestAnExpansionInsideAPatternGroupIsItsValue(t *testing.T) {
 // The alternation is the one the plugin manager's ice list is, so these rows
 // are the construct rather than an illustration of it.
 func TestAnExpansionInsideAGroupGlobsOnlyWhereTheFlagSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`L='a|b'; [[ a == ($L) ]] && echo Y || echo N`, "N"},
 		{`L='a|b'; [[ a == (${~L}) ]] && echo Y || echo N`, "Y"},
@@ -174,6 +175,7 @@ func TestAGroupsExpansionReachesEveryRoute(t *testing.T) {
 // and the two named `ice.zsh` and `other.zsh` are not — so the row fails if
 // the `|` divides and fails if the expansion never happened.
 func TestAnAlternationFromAValueNeedsTheFlag(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`: > 'ice|other.zsh'; : > ice.zsh; : > other.zsh; L='ice|other'; print -r -- ($L).zsh`, "ice|other.zsh"},
 		{

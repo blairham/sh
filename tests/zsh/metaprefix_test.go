@@ -16,6 +16,7 @@ import (
 // because nothing followed it": there the escape did write, and the prefix
 // still went (#1643).
 func TestPrintMetaPrefixWithNoTarget(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`print 'X\M-'`, "X\n"},
 		{`print 'X\C-'`, "X\n"},
@@ -39,6 +40,7 @@ func TestPrintMetaPrefixWithNoTarget(t *testing.T) {
 // so `\M-\xff` is 0xdc and then `xff` as three characters — four plausible
 // bytes where the shell writes one.
 func TestPrintMetaPrefixTakesAnEscape(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`print 'X\M-\xffY'`, "X\xffY\n"},
 		{`print 'X\C-\x41Y'`, "X\x01Y\n"},
@@ -69,6 +71,7 @@ func TestPrintMetaPrefixTakesAnEscape(t *testing.T) {
 // text rather than a byte, so the character is written unchanged and the
 // prefix goes on to whatever comes next. Measured 2026-09-12, zsh 5.9.2.
 func TestPrintMetaPrefixSkipsACodePoint(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`print 'X\M-\u0041\tZ'`, "XA\x89Z\n"},
 		{`print 'X\M-\u0041\u0042Z'`, "XAB\xda\n"},
@@ -89,6 +92,7 @@ func TestPrintMetaPrefixSkipsACodePoint(t *testing.T) {
 // and then set the high bit answers 0xff, and the shell answers 0x9f, because
 // the `?` case is on the character written and a metafied `?` is not it.
 func TestPrintMetaPrefixesCompose(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`print 'X\M-\C-AY'`, "X\x81Y\n"},
 		{`print 'X\C-\M-AY'`, "X\x81Y\n"},
@@ -110,6 +114,7 @@ func TestPrintMetaPrefixesCompose(t *testing.T) {
 // escape set, which is the shape that would have to be fixed twice.
 // Measured 2026-09-12, zsh 5.9.2.
 func TestEscapeFlagReadsTheMetaPrefixes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`v='X\M-'; print -r -- ${(g:e:)v}`, "X\n"},
 		{`v='X\M-\xffY'; print -r -- ${(g:e:)v}`, "X\xffY\n"},

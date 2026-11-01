@@ -54,6 +54,7 @@ func runShipped(t *testing.T, src string) (string, int) {
 // inside another function, a resolution forced with "+X" before any call, and
 // the same through "source". Each has to come back with the function working.
 func TestEveryRouteIntoTheFunctionSearchFindsTheShippedFiles(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	sourced := filepath.Join(dir, "sourced.zsh")
 	if err := os.WriteFile(
@@ -97,6 +98,7 @@ source `+sourced)
 // is the arrangement an installation has. All four, because a payload that
 // ships three of them is a startup file that still fails.
 func TestAllFourShippedNamesResolve(t *testing.T) {
+	t.Parallel()
 	out, st := runShipped(t, `autoload -Uz add-zsh-hook colors is-at-least regexp-replace
 for name in add-zsh-hook colors is-at-least regexp-replace; do
 	$name --nonsense-argument >/dev/null 2>&1
@@ -122,6 +124,7 @@ done`)
 // spelling from 2.6-17 to 6.0 crossed with itself, agree in full. See
 // docs/spec/functions.md.
 func TestIsAtLeastAnswersWhatZshAnswers(t *testing.T) {
+	t.Parallel()
 	out, st := runShipped(t, isAtLeastProbe)
 	if out != isAtLeastWant || st != 0 {
 		t.Errorf("%s = %q (status %d), want %q", "isAtLeast", out, st, isAtLeastWant)
@@ -223,6 +226,7 @@ default present 99.0 1
 // pattern, and removing the last element **unsets** the array rather than
 // leaving an empty one.
 func TestAddZshHookAnswersWhatZshAnswers(t *testing.T) {
+	t.Parallel()
 	out, st := runShipped(t, addZshHookProbe)
 	if out != addZshHookWant || st != 0 {
 		t.Errorf("%s = %q (status %d), want %q", "addZshHook", out, st, addZshHookWant)
@@ -239,6 +243,7 @@ func TestAddZshHookAnswersWhatZshAnswers(t *testing.T) {
 // Standard error is dropped because the complaint names the line of the
 // function file it came from, which is a fact about whose file it is.
 func TestAddZshHookAnswersWithAutoloadsStatus(t *testing.T) {
+	t.Parallel()
 	out, st := runShipped(t, `autoload -Uz add-zsh-hook
 show() { print -r -- "$1 st=$2 (${precmd_functions[@]})" }
 { add-zsh-hook -k precmd kf } 2>/dev/null; show k $?
@@ -618,6 +623,7 @@ second=0 keys=11
 // quotes — a lone double quote in a replacement is replaced literally, where
 // an eval reports "unmatched" and drops it.
 func TestRegexpReplaceAnswersWhatZshAnswers(t *testing.T) {
+	t.Parallel()
 	out, st := runShipped(t, regexpReplaceProbe)
 	if out != regexpReplaceWant || st != 0 {
 		t.Errorf("%s = %q (status %d), want %q", "regexpReplace", out, st, regexpReplaceWant)
@@ -692,6 +698,7 @@ unset var st=1 nv=[]
 //
 // Measured: zsh 5.9.2 handed the same file on FPATH answers identically.
 func TestAShippedFunctionLoadedWithUIsNotRewrittenByAnAlias(t *testing.T) {
+	t.Parallel()
 	out, st := runShipped(t, aliasLoadProbe)
 	if out != aliasLoadWant || st != 0 {
 		t.Errorf("%s = %q (status %d), want %q", "aliasLoad", out, st, aliasLoadWant)
@@ -717,6 +724,7 @@ without -U st=0
 // syntax error in a function file is otherwise silent until somebody presses
 // the key it is bound to.
 func TestEveryShippedFunctionFileLoads(t *testing.T) {
+	t.Parallel()
 	entries, err := os.ReadDir(shippedFunctionDir(t))
 	if err != nil {
 		t.Fatal(err)

@@ -28,6 +28,7 @@ import (
 // part company: a digit, an upper-case letter, an underscore and a lower-case
 // one all sort differently under a collation than under a byte comparison.
 func TestOneOrderReachesEverySurfaceThatSortsWords(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, n := range []string{"a", "b", "Z", "A_upper", "1digit", "_under", "banana", "Cherry", "date"} {
 		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {

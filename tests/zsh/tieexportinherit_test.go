@@ -23,6 +23,7 @@ import "testing"
 // to reduce: every shape without one agrees, and did before the fix. The rows
 // below carry the pair with and without it.
 func TestATiesHalvesDoNotInheritTheExportTheyShadow(t *testing.T) {
+	t.Parallel()
 	const tie = "outer=(i n)\n" + `print -r -- "${(t)OUTER} / ${(t)outer}"`
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, pre, letters, want string }{
@@ -88,6 +89,7 @@ func TestATiesHalvesDoNotInheritTheExportTheyShadow(t *testing.T) {
 // The same fact as the listing writes it, which is the form the suite asks
 // for and the one that named this issue.
 func TestTheListingOfATieOverAnExportedGlobal(t *testing.T) {
+	t.Parallel()
 	const tie = "outer=(i n)\ntypeset -p OUTER outer"
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, pre, want string }{
@@ -124,6 +126,7 @@ func TestTheListingOfATieOverAnExportedGlobal(t *testing.T) {
 // And the ordinary declarations over the same exported global, which are what
 // say the shadow is right in general and only the tie path was not asking.
 func TestAnOrdinaryLocalOverAnExportedGlobalWasAlreadyRight(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a scalar", "export v=old\nf(){ local v=new; " + `print -r -- "${(t)v}"` + " }\nf", "scalar-local"},

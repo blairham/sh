@@ -15,6 +15,7 @@ import (
 // read: `print -r -- $NULLCMD` answers `cat` in real zsh 5.9.2, measured
 // 2026-09-10.
 func TestTheNullCommandParametersHaveTheirDefaults(t *testing.T) {
+	t.Parallel()
 	out, st := runZshPrelude(t, t.TempDir(), `print -r -- "[$NULLCMD][$READNULLCMD]"`)
 	if st != 0 {
 		t.Fatalf("status %d", st)
@@ -27,6 +28,7 @@ func TestTheNullCommandParametersHaveTheirDefaults(t *testing.T) {
 // And the vector names them rather than holding their values, which is what
 // lets a script reassign them between two commands.
 func TestTheNullCommandAxesNameTheParameters(t *testing.T) {
+	t.Parallel()
 	s := zsh.Semantics()
 	if got, want := s.NullCommandVariable, "NULLCMD"; got != want {
 		t.Errorf("NullCommandVariable = %q, want %q", got, want)
@@ -44,6 +46,7 @@ func TestTheNullCommandAxesNameTheParameters(t *testing.T) {
 // are what separate the two parameters — left at `cat` and `more` both routes
 // print the file and the probe proves nothing.
 func TestARedirectionWithNoCommandRunsTheHook(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the reading parameter", `R(){ print -r -- R; }; READNULLCMD=R; <f`, "R\n"},
 		{"the writing parameter", `N(){ print -r -- N; }; NULLCMD=N; READNULLCMD=R; <f 2>/dev/null`, "N\n"},
@@ -70,6 +73,7 @@ func TestARedirectionWithNoCommandRunsTheHook(t *testing.T) {
 // it is on in either order, and turning it off hands the shell back to
 // `shnullcmd` if that one is still on. Measured on zsh 5.9.2.
 func TestTheNullCommandOptions(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, wantOut string
 		wantStatus         int
@@ -100,6 +104,7 @@ func TestTheNullCommandOptions(t *testing.T) {
 // `multios` is the axis under this shell's own name, in both directions, and
 // it moves rather than being remembered.
 func TestMultiosIsTheAxisUnderItsOwnName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"reading, on", `all <f <g`, "<a><b>\n"},
 		{"reading, off", `unsetopt multios; all <f <g`, "<b>\n"},

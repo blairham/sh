@@ -18,6 +18,7 @@ import (
 // was glob-matched before the builtin saw it, so the line died as
 // `no matches found: a[1]=v` and the name check was never asked (#1203).
 func TestASubscriptedOperandWritesTheElement(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset a[1]=v; echo "[${a[1]}]"`, "[v]\n"},
@@ -36,6 +37,7 @@ func TestASubscriptedOperandWritesTheElement(t *testing.T) {
 // words — measured 2026-09-07 against zsh 5.9.2, where all three end the
 // script.
 func TestASubscriptedOperandRefusesWhatBelongsToTheName(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{
@@ -70,6 +72,7 @@ func TestASubscriptedOperandRefusesWhatBelongsToTheName(t *testing.T) {
 // the refusals above do — and the first element is number one here, so `a[0]`
 // is what asks the question.
 func TestTheSubscriptRangeComplaintDoesNotNameTheBuiltin(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, src := range []string{`export a[0]=v`, `typeset a[0]=v`, `a[0]=v`} {
 		out, st := runZsh(t, dir, src)
@@ -83,6 +86,7 @@ func TestTheSubscriptRangeComplaintDoesNotNameTheBuiltin(t *testing.T) {
 // column, so it stays an ordinary word — and here that word is a pattern with
 // no match, which is what makes the difference visible at all.
 func TestASecondSubscriptIsNotPartOfTheName(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset a[1][2]=v`)
 	if want := "zsh:1: no matches found: a[1][2]=v\n"; out != want || st != 1 {
 		t.Errorf("typeset a[1][2]=v = %q (status %d), want %q at 1", out, st, want)
@@ -92,6 +96,7 @@ func TestASecondSubscriptIsNotPartOfTheName(t *testing.T) {
 // `-g` takes no shadow, so it never asks the local refusal: the element lands
 // on the global array and is there after the function returns.
 func TestAGlobalElementDeclarationIsNotRefused(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `f() { typeset -g a[1]=v; }; f; echo "[${a[1]}]"`)
 	if want := "[v]\n"; out != want || st != 0 {
 		t.Errorf("typeset -g a[1]=v = %q (status %d), want %q at 0", out, st, want)
@@ -108,6 +113,7 @@ func TestAGlobalElementDeclarationIsNotRefused(t *testing.T) {
 // cannot see this at all. #1770 was filed from `-c` alone and read as a
 // divergence on every route; from a file this shell already agreed.
 func TestAStoreRefusalOfADeclaredElementLeavesZeroFromACommandString(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`a=(x y); typeset a[0]=v`,
 		`a=(x y); export a[0]=v`,
@@ -151,6 +157,7 @@ func TestAStoreRefusalOfADeclaredElementLeavesZeroFromACommandString(t *testing.
 // subscript, about a declaration, or about the route. Each names the builtin
 // in its location where the store's own complaint does not — the same seam.
 func TestOnlyTheStoresOwnRefusalOfADeclaredElementFollowsTheRoute(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`a=(x y); readonly a[0]=v`,
 		`a=(x y); integer a[0]=5`,

@@ -14,6 +14,7 @@ import (
 // `ab` and a file literally named `aa|ab`, which is what would match were the
 // bar a character.
 func TestAResultSuppliesGroupSyntaxUnderGlobsubst(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, n := range []string{"aa", "ab", "aa|ab"} {
 		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o644); err != nil {

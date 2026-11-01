@@ -37,6 +37,7 @@ func cells(t *testing.T, setup, call string) string {
 }
 
 func TestCompdescribeGroupsNamesThatShareADescription(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, setup, call, want string }{
 		{
 			"three names on one row, one on another",
@@ -132,6 +133,7 @@ func TestCompdescribeGroupsNamesThatShareADescription(t *testing.T) {
 // TestCompdescribeCutsADescriptionToItsColumn — a description longer than
 // the screen leaves it is cut there, not wrapped.
 func TestCompdescribeCutsADescriptionToItsColumn(t *testing.T) {
+	t.Parallel()
 	long := strings.Repeat("x", 150)
 	got := cells(t, "G=(-a:s -b:s -c:"+long+")", "-I '' 60 '-- ' E -g G")
 	if want := "-- " + strings.Repeat("x", 107) + "#110 "; !strings.HasSuffix(got, ","+want) {

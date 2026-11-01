@@ -18,6 +18,7 @@ import "testing"
 // under `env -i PATH=/usr/bin:/bin TERM=dumb` with a scratch `HOME`, one
 // shell per row (#5045).
 func TestASelectionWithdrawsOnlyOnTheWayOff(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 	}{
@@ -163,6 +164,7 @@ func TestAGatedNameNeedsNoExemptionFromTheTransition(t *testing.T) {
 // itself still fires for a name the script really has taken, which is the
 // control underneath.
 func TestAWideningAfterSuchANarrowIsSilent(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"zmodload -F zsh/parameter p:funcstack\nzmodload zsh/parameter\n"+
 			"f(){ :; }\nprint \"${+functions} ${#functions}\"")

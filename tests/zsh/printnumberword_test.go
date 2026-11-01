@@ -28,6 +28,7 @@ import "testing"
 // and the honest answer became a diagnostic at the point of printing it
 // (#1652).
 func TestADashBeforeADigitIsAnOperandToPrint(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"one digit", "print -1", "-1\n"},
 		{"two digits", "print -12", "-12\n"},
@@ -56,6 +57,7 @@ func TestADashBeforeADigitIsAnOperandToPrint(t *testing.T) {
 // option letter `print` does not have is refused by name. Measured in that
 // shell as `zsh:print:1: bad option: -1` at status 1 for both spellings.
 func TestADigitAfterALetterIsStillAnOptionLetterToPrint(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"print -n1", "print -r1"} {
 		out, st, errs := runZshSplit(t, t.TempDir(), src)
 		if out != "" || st != 1 {

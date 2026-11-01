@@ -9,6 +9,7 @@ import "testing"
 // substring range: kept for the arithmetic, except one before `$` (#5637).
 // Measured 2026-10-03 on zsh 5.9.2 under `-f`.
 func TestARangeKeepsItsBackslashes(t *testing.T) {
+	t.Parallel()
 	const setup = "foo=abcdef\n"
 	for _, tc := range []struct{ src, want string }{
 		{

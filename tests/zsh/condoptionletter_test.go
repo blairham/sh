@@ -22,6 +22,7 @@ import (
 // below that turn the option **on** are the evidence; the rest are there to
 // pin the roster.
 func TestAConditionOptionMayBeALetter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The discriminating pair: same letter, option off then on.
 		{`[[ -o a ]]; print "st=$?"`, "st=1"},
@@ -64,6 +65,7 @@ func TestAConditionOptionMayBeALetter(t *testing.T) {
 // reference's holes rather than ours — `b c j o z A` are `no such option`
 // there exactly as a long name it has never heard of is.
 func TestTheLettersThisOperatorRefuses(t *testing.T) {
+	t.Parallel()
 	for _, c := range []string{"b", "c", "j", "o", "z", "A"} {
 		src := "[[ -o " + c + " ]]; print \"st=$?\""
 		out, _ := runZsh(t, t.TempDir(), src)

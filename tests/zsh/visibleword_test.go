@@ -15,6 +15,7 @@ import (
 // Measured 2026-10-02 on zsh 5.9.2, `env -i PATH=/usr/bin:/bin
 // LC_ALL=en_US.UTF-8 zsh -fc "\$'…'"` (#5153).
 func TestADiagnosticNamesAWordVisibly(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ word, want string }{
 		{`\x01x`, `command not found: ^Ax`},
 		{`a\tb`, `command not found: a\tb`},
@@ -38,6 +39,7 @@ func TestADiagnosticNamesAWordVisibly(t *testing.T) {
 // Under C a byte from 0xa0 up is written as it is, and one from 0x80 to 0x9f
 // still takes `\M-`; `cd` names its operand the same way.
 func TestADiagnosticNamesAWordVisiblyUnderTheCLocale(t *testing.T) {
+	t.Parallel()
 	_, _, errs := runZshUTF8(t, "LC_ALL=C; $'a\\xe9\\x9b'")
 	if want := "command not found: a\xe9\\M-^[\n"; !strings.Contains(errs, want) {
 		t.Errorf("stderr %q, want it to hold %q", errs, want)
@@ -51,6 +53,7 @@ func TestADiagnosticNamesAWordVisiblyUnderTheCLocale(t *testing.T) {
 // `print -X` counts the columns a character is drawn in: three wide letters
 // take six. Measured 2026-10-02, `print -X8 -r -- $'one\tＺＳＨ\tthree'`.
 func TestPrintExpandsTabsByColumns(t *testing.T) {
+	t.Parallel()
 	out, _, errs := runZshUTF8(t, "print -X8 -r -- $'one\\tＺＳＨ\\tthree'")
 	if want := "one     ＺＳＨ  three\n"; out != want || errs != "" {
 		t.Errorf("got %q, %q, want %q", out, errs, want)

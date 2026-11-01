@@ -63,6 +63,7 @@ func runPattern(t *testing.T, p1, p2, src string) (string, int) {
 }
 
 func TestWhencePatternAnswersFromEveryTable(t *testing.T) {
+	t.Parallel()
 	p1, p2 := patternTree(t)
 	lines := func(ls ...string) string { return strings.Join(ls, "\n") + "\n" }
 	for _, c := range []struct {
@@ -130,6 +131,7 @@ func TestWhencePatternAnswersFromEveryTable(t *testing.T) {
 // echo` the builtin's sentence. The second row is the control that says the
 // letter did not simply replace `-v`.
 func TestWhenceFunctionLetterOutranksTheShape(t *testing.T) {
+	t.Parallel()
 	p1, p2 := patternTree(t)
 	for _, c := range []struct{ src, want string }{
 		{"whence -vf qqa", "qqa () {\n\t:\n}\n"},

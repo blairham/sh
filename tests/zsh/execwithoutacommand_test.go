@@ -13,6 +13,7 @@ import (
 // option words, ahead of the line's redirections and fatal at 1. Measured
 // 2026-10-02 on zsh 5.9.2 under `-f` (#5380).
 func TestAnExecOfOptionsAloneIsRefused(t *testing.T) {
+	t.Parallel()
 	const none = "zsh:1: exec requires a command to execute\n"
 	for _, tc := range []struct {
 		src, want string

@@ -287,6 +287,7 @@ func TestItLivesAsLongAsTheLineDoes(t *testing.T) {
 // `array-local-special`: a script that is not running a widget must not find
 // it.
 func TestItIsNotAParameterOutsideAWidget(t *testing.T) {
+	t.Parallel()
 	if got := zleParam(t, `print "[${+region_highlight}]"`); !strings.Contains(got, "[0]") {
 		t.Errorf("outside a widget: got %q, want it unset", got)
 	}
@@ -303,6 +304,7 @@ func TestItIsNotAParameterOutsideAWidget(t *testing.T) {
 // choice it records is the reason this test could sit here saying the wrong
 // thing without hiding a regression.
 func TestAWidgetSeesItAsASpecialArray(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `
 		kind() { print -r -- "[${(t)region_highlight}] [${+region_highlight}]"; }
 		zle -N kind

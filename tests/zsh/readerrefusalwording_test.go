@@ -12,6 +12,7 @@ import (
 // sentence was another shell's. Every row measured 2026-10-04 on zsh 5.9.2,
 // and each group has a control that keeps the old sentence.
 func TestReaderRefusalsAreWordedAsThisShellWordsThem(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		// `=` and `^` are no flags inside the group.
 		{"an equals sign in a flag group", `x=ab; echo ${(=)x}`, "error in flags near position 4 in '${(=)x}'"},

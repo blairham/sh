@@ -46,6 +46,7 @@ func (e *nestingEditor) Perform(_ repl.Widget, in repl.Line) (repl.Line, bool) {
 // `$WIDGET`, no line, an unset `PENDING` — the `bad math expression`
 // zsh-autosuggestions printed on every key — and was refused its next `zle`.
 func TestANestedWidgetCallPutsTheCallersStateBack(t *testing.T) {
+	t.Parallel()
 	const src = `
 		outer() {
 			POSTDISPLAY=pd

@@ -18,6 +18,7 @@ import "testing"
 // Measured 2026-09-18 on zsh 5.9.2 from a script file under
 // `env -i PATH=/usr/bin:/bin LC_ALL=C`, one probe at a time.
 func TestALoneDashGivenToBuiltinIsEaten(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 		status          int

@@ -24,6 +24,7 @@ import (
 // Measured on zsh 5.9.2, 2026-09-10, and every row below is that shell's own
 // answer.
 func TestGlobSubstReachesEveryPatternOperand(t *testing.T) {
+	t.Parallel()
 	const src = `setopt globsubst
 u='a*b'
 [[ 'axb' == $u ]] && echo "1 yes" || echo "1 no"
@@ -47,6 +48,7 @@ v='a*b'
 // shell already had right — a fix that turned the reading on unconditionally
 // would pass the test above and break every script that never asked.
 func TestWithTheOptionOffTheResultIsStillText(t *testing.T) {
+	t.Parallel()
 	const src = `u='a*b'
 [[ 'axb' == $u ]] && echo "1 yes" || echo "1 no"
 case axb in ($u) echo "2 yes";; (*) echo "2 no";; esac
@@ -65,6 +67,7 @@ w='axbtail'; print -r -- "3 [${w#$u}]"
 // subshell's — measured, and the same arrangement `multios` and `shwordsplit`
 // use.
 func TestGlobSubstIsTheAxisAndSoStaysInASubshell(t *testing.T) {
+	t.Parallel()
 	const src = `u='a*b'
 setopt globsubst
 (unsetopt globsubst; [[ 'axb' == $u ]]; echo "sub=$?")
@@ -92,6 +95,7 @@ unsetopt globsubst
 // Measured on zsh 5.9.2, 2026-09-10, in a directory holding `AGENTS.md`,
 // `CLA.md`, `xN` and `xy`.
 func TestBareGlobQualifiersCanBeTurnedOff(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, name := range []string{"AGENTS.md", "CLA.md", "xN", "xy"} {
 		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {

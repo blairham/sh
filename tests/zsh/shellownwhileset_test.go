@@ -11,6 +11,7 @@ import "testing"
 // PATH=/usr/bin:/bin`, `-f` (#5575). HISTFILE is the control: it is never
 // special. See interp.Runner.MarkShellOwnParameterWhileSet.
 func TestTheLocaleAndTerminalNamesAreTheShellsOwnWhileSet(t *testing.T) {
+	t.Parallel()
 	src := `for n in TERM LANG LC_ALL RPS1 HISTFILE; do
   print -r -- "$n [${(tP)n}]"
   typeset $n=x; print -r -- "${(tP)n}"

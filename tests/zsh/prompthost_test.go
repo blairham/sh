@@ -21,6 +21,7 @@ import (
 // name that tells "the leading n" apart from "the whole name": this machine's
 // own has two components, where the two readings agree.
 func TestTheShortHostCodeCountsAndTheLongOneDoesNot(t *testing.T) {
+	t.Parallel()
 	r := zshRunnerForTest(t)
 	// Through the parameter, because that is where this shell's `%m` reads
 	// from since #2576 — `SetPromptHost` is not consulted at all here, and a

@@ -15,6 +15,7 @@ import (
 // `BRACE_CCL option starting from NUL` (#5155). It was the backslash, the
 // digits and everything between `0` and `\`.
 func TestABraceClassReadsADollarSingleSpanAsItsValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`setopt braceccl; for c in {$'\0'-$'\5'}; do print -n $(( #c )),; done`, "0,1,2,3,4,5,"},
 		{`setopt braceccl; print -r -- {$'\t'b}`, "\t b\n"},
@@ -31,6 +32,7 @@ func TestABraceClassReadsADollarSingleSpanAsItsValue(t *testing.T) {
 // escapes only behind `-e`, and the option is scoped as the axis it reads is.
 // Measured 2026-10-02 on zsh 5.9.2, E01options' `BSD_ECHO option` (#5155).
 func TestBsdechoTakesEchosEscapesAway(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `setopt bsdecho; echo "a\nb"; echo -e "c\nd"; [[ -o bsdecho ]] && echo on
 unsetopt bsdecho; echo "e\nf"; (setopt bsdecho); echo "g\nh"`)
 	if want := "a\\nb\nc\nd\non\ne\nf\ng\nh\n"; out != want {
@@ -45,6 +47,7 @@ unsetopt bsdecho; echo "e\nf"; (setopt bsdecho); echo "g\nh"`)
 // option` (#5155); bash's `cdable_vars` takes a relative value and announces
 // it, and has its own tests.
 func TestCdablevarsReadsTheOperandAsANamedDirectory(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "tmpcd"), 0o755); err != nil {
 		t.Fatal(err)
@@ -66,6 +69,7 @@ unsetopt cdablevars; (cd v2)`)
 // `end`, and the one-command body is gone. Measured 2026-10-02 on zsh 5.9.2
 // under `eval`, E01options' `CSH_JUNKIE_LOOPS option (for loop)` (#5155).
 func TestCshjunkieloopsClosesALoopBodyWithEnd(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`for f in a b; print $f; end`, "a\nb\n"},
 		{`for f (a b) print $f; print x; end`, "a\nx\nb\nx\n"},

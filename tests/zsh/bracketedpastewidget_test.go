@@ -26,6 +26,7 @@ import (
 // reaches WidgetBracketedPaste, and that a name after it asks for the text
 // rather than the insert.
 func TestABracketedPasteWidgetReachesTheEditorsPaste(t *testing.T) {
+	t.Parallel()
 	t.Run("inserted", func(t *testing.T) {
 		r, out := zleRunner(t, "w() { zle .bracketed-paste; print -r -- \"rc=$?\"; }\nzle -N bracketed-paste w\n")
 		ed := &stubEditor{gives: map[repl.Widget]repl.Line{
@@ -68,6 +69,7 @@ func TestABracketedPasteWidgetReachesTheEditorsPaste(t *testing.T) {
 // `bindkey | grep 200` in zsh 5.9.2 is `"^[[200~" bracketed-paste`, and with
 // the widget missing this shell listed no such key at all.
 func TestTheStandardKeymapListsThePasteMarker(t *testing.T) {
+	t.Parallel()
 	_, out := zleRunner(t, "bindkey '^[[200~'\n")
 	if want := "\"^[[200~\" bracketed-paste\n"; out.String() != want {
 		t.Errorf("bindkey '^[[200~' = %q, want %q", out.String(), want)

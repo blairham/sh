@@ -22,6 +22,7 @@ import "testing"
 // operator: an attributed name adds, a plain one joins, and taking the
 // attribute off turns the very next `+=` back into a join.
 func TestIntegerAttributeMakesAppendAddHere(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -i a=1; a+=2; echo "A a=$a"
 typeset -i c=1 d=2; c+=d; echo "B c=$c"
 e=1; f=2; e+=f; echo "C e=$e"
@@ -40,6 +41,7 @@ integer i=1; i+=2; echo "F i=$i"`)
 // The right-hand side is a whole expression rather than a number, and an
 // empty one is zero rather than nothing.
 func TestIntegerAppendEvaluatesItsRightSideHere(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -i a=1 b=2; a+=b+1; echo "A a=$a"
 typeset -i c=1; c+=" 2 "; echo "B c=$c"
 typeset -i d=1; d+="2+3"; echo "C d=$d"
@@ -56,6 +58,7 @@ typeset -i h=1; h+=$(( 3 * 2 )); echo "G h=$h"`)
 // The sum is written back out in the name's base, and a base the append is
 // told sticks to the name exactly as a plain assignment's does.
 func TestIntegerAppendKeepsTheOutputBaseHere(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -i16 a=255; a+=1; echo "A a=$a"
 typeset -i b=1; b+=0x10; echo "B b=$b"; b=5; echo "C b=$b"`)
 	want := "A a=16#100\nB b=16#11\nC b=16#5\n"
@@ -67,6 +70,7 @@ typeset -i b=1; b+=0x10; echo "B b=$b"; b=5; echo "C b=$b"`)
 // The float letter takes the same rule, which is why the question is about
 // the *value* a name holds and not about the integer letter alone.
 func TestFloatAttributeMakesAppendAddHere(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -F 3 a=1.5; a+=2.25; echo "A a=$a"
 typeset -F 3 b=1; b+=; echo "B b=$b"`)
 	want := "A a=3.750\nB b=1.000\n"

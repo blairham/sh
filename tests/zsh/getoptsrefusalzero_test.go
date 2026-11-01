@@ -16,6 +16,7 @@ import (
 // 5.9.2 (`/opt/homebrew/bin/zsh -f` under `env -i PATH=/usr/bin:/bin`, from
 // `-c` and from a script file), the sentence compared byte for byte.
 func TestARefusedGetoptsStoreLeavesZeroFromACommandString(t *testing.T) {
+	t.Parallel()
 	const (
 		ro      = "zsh:1: read-only variable: v\n"
 		private = "zmodload zsh/param/private; f(){ private v=1; g; }; g(){ set -- -a; getopts a v; }; f"

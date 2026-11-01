@@ -13,6 +13,7 @@ import "testing"
 //
 // Every row measured 2026-10-02 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f`).
 func TestOnlyTheShModeReadsInfAndNaNAsParameters(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`emulate zsh; inf=42; nan=7; echo $((inf)) $((nan)) $((Inf))`, "Inf NaN Inf\n"},
 		{`emulate sh; inf=42; nan=7; echo $((inf)) $((nan)) $((Inf))`, "42 7 0\n"},

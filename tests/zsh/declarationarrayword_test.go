@@ -32,6 +32,7 @@ import (
 // offered wherever an assignment could not stand rather than where a
 // declaration's operand does (#3087, #3351).
 func TestAnArrayOperandNeedsAnUnquotedDeclarationWord(t *testing.T) {
+	t.Parallel()
 	d := zsh.Dialect()
 	if got := d.DeclarationArrayFromTheCommandWord; got != syntax.DeclarationArrayFromAnUnquotedLiteralWord {
 		t.Fatalf("DeclarationArrayFromTheCommandWord = %v, want the unquoted-literal reading", got)

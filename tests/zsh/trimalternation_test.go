@@ -16,6 +16,7 @@ import (
 // rather than a second length rule — the first arm matching as much as it
 // can, and a later arm taken where the rest of the pattern needs it.
 func TestALongestPrefixTrimTakesTheArmWrittenFirst(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`x=abc; printf '[%s]' "${x##(a|ab)}"`, "[bc]"},
 		{`x=abc; printf '[%s]' "${x##(ab|a)}"`, "[c]"},

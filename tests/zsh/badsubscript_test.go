@@ -9,6 +9,7 @@ import "testing"
 // range, and no builtin name for `unset`, which words the failure as the
 // shell's rather than the builtin's. Measured against zsh 5.9.2 (2026-09-05).
 func TestABadSubscriptIsTheBareSentence(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(x y z); echo "[${a[b c]}]"`, "zsh:1: bad math expression: operator expected at `c'\n"},
 		{`x=abcdef; echo "[${x:1+:2}]"`, "zsh:1: bad math expression: operand expected at end of string\n"},
@@ -23,6 +24,7 @@ func TestABadSubscriptIsTheBareSentence(t *testing.T) {
 // `unset` reports 1 and the next command still runs, so the array is still
 // there to be counted.
 func TestABadSubscriptToUnsetIsAFailedBuiltin(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `a=(x y z); unset "a[1+]"; echo "st=$? n=${#a[@]}"`)
 	want := "zsh:1: bad math expression: operand expected at end of string\nst=1 n=3\n"
 	if out != want || st != 0 {

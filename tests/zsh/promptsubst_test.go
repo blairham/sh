@@ -20,6 +20,7 @@ import (
 // PromptStyle.Expand both ways in one shell, because a value settled when
 // the shell started would pass a test that only ever looks once.
 func TestPromptSubstMovesTheAnswerWhileTheShellRuns(t *testing.T) {
+	t.Parallel()
 	expand := zsh.PromptStyle().Expand
 	if expand == nil {
 		t.Fatal("Expand is nil; the option could never turn it on")

@@ -27,6 +27,7 @@ import (
 // string, so what the rendering is worth is nothing, and the `print` still
 // prints its brackets.
 func TestAFailedRenderingCostsTheRenderingAndNotTheScript(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(
 		t,
@@ -48,6 +49,7 @@ func TestAFailedRenderingCostsTheRenderingAndNotTheScript(t *testing.T) {
 // because its value begins with the substitution that fails: what is kept is
 // the text in front of it rather than nothing at all.
 func TestAGivenUpRenderingIsWorthWhatItDrew(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(
 		t,
@@ -67,6 +69,7 @@ func TestAGivenUpRenderingIsWorthWhatItDrew(t *testing.T) {
 // is thrown away with the rest, so an implementation that simply stopped its
 // walk where the failure was would answer `PRE-MID-` and pass the row above.
 func TestAGivenUpRenderingDropsASubstitutionThatHadSucceeded(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(t, dir, `setopt promptsubst; V=MID; s='PRE-${V}-$((nofunc()))-POST'; print -r -- "ONE=[${(%%)s}]"`)
 	const want = "zsh:1: unknown function: nofunc\n" +
@@ -80,6 +83,7 @@ func TestAGivenUpRenderingDropsASubstitutionThatHadSucceeded(t *testing.T) {
 // not both given up, so the doubled percent left standing by the abandoned
 // expansion is still drawn as one.
 func TestTheEscapeTableStillReadsWhatAGivenUpRenderingDrew(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(t, dir, `setopt promptsubst; s='PRE-%%-$((nofunc()))-POST'; print -r -- "ONE=[${(%%)s}]"`)
 	const want = "zsh:1: unknown function: nofunc\n" +
@@ -94,6 +98,7 @@ func TestTheEscapeTableStillReadsWhatAGivenUpRenderingDrew(t *testing.T) {
 // as exiting rather than complaining, and it does so here exactly as it does
 // inside a file `.` read — so the `print` never runs.
 func TestTheErrorOperatorEndsTheShellAtARendering(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(
 		t,
@@ -115,6 +120,7 @@ func TestTheErrorOperatorEndsTheShellAtARendering(t *testing.T) {
 // mark, so a boundary that cleared only the unwinding would catch the error
 // and still swallow the `print`.
 func TestABadSubstitutionInARenderingStillLetsTheCommandRun(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(
 		t,
@@ -137,6 +143,7 @@ func TestABadSubstitutionInARenderingStillLetsTheCommandRun(t *testing.T) {
 // The diagnostic's location is TestTheShellSpeaksInsideABuiltin's, not this
 // boundary's.
 func TestPrintPIsTheSameBoundary(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st, errs := runZshSplit(
 		t,

@@ -86,6 +86,7 @@ func TestTheClassIsTheReservedWordTable(t *testing.T) {
 // defined for the listing, which is what puts the resolutions in an order
 // rather than a pair.
 func TestTheDeclarationCommandsAreReservedWordsInEveryForm(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, name := range []string{"export", "readonly", "local", "typeset", "declare", "integer", "float"} {
 		// The plain answer names the first resolution, which is the word.
@@ -131,6 +132,7 @@ func TestTheDeclarationCommandsAreReservedWordsInEveryForm(t *testing.T) {
 // `float` that always added `E` would answer `typeset -E d=1.50e+00` for the
 // line below and look right on every other row.
 func TestFloatIsADeclarationHere(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, c := range []struct{ src, want string }{
 		{"float c=1.5; typeset -p c", "typeset -E c=1.500000000e+00\n"},

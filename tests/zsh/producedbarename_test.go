@@ -19,6 +19,7 @@ import "testing"
 // by accident of the parameter being new. Its *values* move every second,
 // which is why every assertion counts fields rather than comparing text.
 func TestAProducedArrayReadsAsTheWholeListHere(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name, src, want string

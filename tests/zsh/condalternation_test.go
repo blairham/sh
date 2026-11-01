@@ -26,6 +26,7 @@ func parseFails(t *testing.T, src string) bool {
 // `_rg` are unusable without it — which is what puts it far above its two-file
 // count in the real-script sweep (#826, #815).
 func TestAGroupMayStartAPatternOperand(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`k=a; [[ $k == (a|b) ]] && echo hit || echo miss`, "hit"},
 		{`k=c; [[ $k == (a|b) ]] && echo hit || echo miss`, "miss"},
@@ -54,6 +55,7 @@ func TestAGroupMayStartAPatternOperand(t *testing.T) {
 // turn every pattern into a literal; measured by mutation, that is exactly
 // what a stability-only test lets through.
 func TestAPrintedPatternOperandStillMatches(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`k=a; [[ $k == (a|b) ]] && echo hit || echo miss`, "hit"},
 		{`k=c; [[ $k == (a|b) ]] && echo hit || echo miss`, "miss"},
@@ -79,6 +81,7 @@ func TestAPrintedPatternOperandStillMatches(t *testing.T) {
 // And the boundary: a group is read where a *pattern* is read and nowhere
 // else in the construct, so these stay refused in this dialect too.
 func TestAGroupIsRefusedWhereNoPatternIsRead(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`[[ -n (a|b) ]]`,
 		`k=a; [[ (a|b) == $k ]]`,
@@ -129,6 +132,7 @@ func TestAGroupIsRefusedWhereNoPatternIsRead(t *testing.T) {
 // right bytes and handed on the wrong ones would parse perfectly and match
 // the wrong subject. The `miss` rows are what make that visible.
 func TestANumericRangeMayStartAPatternGroup(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The gate itself, on both sides of every bound.
 		{`k=5.9; [[ $k == (5.<1->*|<6->.*) ]] && echo hit || echo miss`, "hit"},
@@ -176,6 +180,7 @@ func TestANumericRangeMayStartAPatternGroup(t *testing.T) {
 // the wording is #1111's business; what this pins is that the shape test is
 // the whole of the exception.
 func TestOnlyTheRangeShapeSurvivesALeadingGroup(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`k=x; [[ $k == (a<b) ]] && echo hit || echo miss`,
 		`k=x; [[ $k == (a>b) ]] && echo hit || echo miss`,

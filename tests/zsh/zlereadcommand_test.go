@@ -25,6 +25,7 @@ import (
 // every one at status 0, and `$LASTWIDGET` reads `.read-command` afterwards.
 // A read with nothing left to read is the failure.
 func TestReadCommandNamesTheWidgetAKeyWouldRun(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `w() {
   while zle .read-command; do
     print -r -- "$REPLY ${(q)KEYS}"
@@ -60,6 +61,7 @@ zle -N w
 // strips each key off a copy of the text never gets past half a character,
 // which is how bracketed-paste-magic's loop hung on a paste holding one.
 func TestReadCommandReadsAWholeCharacterInAUTF8Locale(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ lang, want string }{
 		{"en_US.UTF-8", "self-insert é\nself-insert z\nrest=\n"},
 		{"C", "self-insert $'\\303'\nself-insert $'\\251'\nrest=\n"},
@@ -87,6 +89,7 @@ zle -N w
 // only where another byte is already in hand, and a byte read on that leads
 // nowhere goes back for the next read.
 func TestReadCommandGivesBackWhatItReadPastAKey(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `bindkey '^Xa' beginning-of-line
 bindkey '^Xab' end-of-line
 w() {
@@ -121,6 +124,7 @@ func TestSplitUndoClosesTheEditorsChange(t *testing.T) {
 // read as a number is read here, so a word that is not one is 0, which
 // measured is what `zle .undo abc` does.
 func TestTheUndoNumberRoundTripsThroughTheEditor(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `w() {
   print -r -- "n=$UNDO_CHANGE_NO t=${(t)UNDO_CHANGE_NO}"
   zle .undo $UNDO_CHANGE_NO; print -r -- st=$?
@@ -144,6 +148,7 @@ zle -N w
 // `$KEYS` is the keystroke the widget is running for: measured against zsh
 // 5.9.2, `scalar-local-readonly-special`, and `$'\024'` from a widget on `^T`.
 func TestKeysIsTheKeystrokeTheWidgetIsFor(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "w() { print -r -- \"${(t)KEYS} ${(q)KEYS}\" }\nzle -N w\n")
 	_, _, printed, _ := runWidgetWatching(t, r, out, "w", repl.Line{Keys: "\x14"}, &stubEditor{})
 	if want := "scalar-local-readonly-special $'\\024'\n"; printed != want {
@@ -157,6 +162,7 @@ func TestKeysIsTheKeystrokeTheWidgetIsFor(t *testing.T) {
 // count is refused in two sentences. Moving the editor between its two
 // dispatches is not built, and says so rather than reporting it done.
 func TestSelectingAKeymapFromAWidget(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `w() {
   zle -K main; print -r -- "st=$? $KEYMAP"
   zle -K emacs; print -r -- "st=$? $KEYMAP"
@@ -192,6 +198,7 @@ zle -N w
 // against zsh 5.9.2: inside a widget `zle -U - abc` pushes `abc`, and `zle`,
 // `zle --` and `zle -` are each status 0; under `zsh -c` each is 1.
 func TestALoneDashEndsZlesOptions(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(
 		t,
 		"w() { zle -U - abc; print -r -- st=$?; zle; print -r -- $?; zle -; print -r -- $? }\nzle -N w\n",
@@ -212,6 +219,7 @@ func TestALoneDashEndsZlesOptions(t *testing.T) {
 // Both are built-in widgets, so a listing has them and the dotted spelling
 // reaches them past a redefinition.
 func TestReadCommandAndSplitUndoAreListed(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "zle -la read-command && zle -la split-undo && print -r -- both\n")
 	if out != "both\n" {
 		t.Errorf("got %q", out)

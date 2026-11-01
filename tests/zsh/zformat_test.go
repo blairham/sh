@@ -27,6 +27,7 @@ func runZformatCases(t *testing.T, cases []zparseoptsCase) {
 
 // `-f`: `%c` substitution and the field widths around it.
 func TestZformatSubstitutesAndPads(t *testing.T) {
+	t.Parallel()
 	runZformatCases(t, []zparseoptsCase{{
 		name:    "two-specifiers",
 		snippet: `zformat -f R "%c-%d" c:hi d:there; echo "st=$? [$R]"`,
@@ -86,6 +87,7 @@ func TestZformatSubstitutesAndPads(t *testing.T) {
 
 // The ternary, and the two different questions `-f` and `-F` ask about it.
 func TestZformatTernaryAsksArithmeticUnderDashFAndWidthUnderDashF(t *testing.T) {
+	t.Parallel()
 	runZformatCases(t, []zparseoptsCase{{
 		name:    "the-manuals-example",
 		snippet: `zformat -f R "The answer is '%3(c.yes.no)'." c:3; echo "st=$? [$R]"`,
@@ -172,6 +174,7 @@ func TestZformatTernaryAsksArithmeticUnderDashFAndWidthUnderDashF(t *testing.T) 
 
 // `-a`: aligning a list into columns.
 func TestZformatAlignsAList(t *testing.T) {
+	t.Parallel()
 	runZformatCases(t, []zparseoptsCase{{
 		name:    "the-separators-line-up",
 		snippet: `zformat -a A " -- " "foo:bar" "longer:baz" "nocolon"; echo "st=$? ${(j:~:)A}"`,
@@ -215,6 +218,7 @@ func TestZformatAlignsAList(t *testing.T) {
 // synopsis gets wrong: exactly one option word, and everything after it is
 // data however it is spelled.
 func TestZformatReadsExactlyOneOptionWord(t *testing.T) {
+	t.Parallel()
 	runZformatCases(t, []zparseoptsCase{{
 		name:    "a-second-letter-becomes-the-parameter-name",
 		snippet: `zformat -f -F R "%(c.y.n)" c: 2>&1; echo "st=$? [$R]"`,

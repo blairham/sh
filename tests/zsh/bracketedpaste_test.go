@@ -16,6 +16,7 @@ import (
 // and only then. Measured 2026-10-02 on zsh 5.9.2 through a
 // pseudo-terminal; see zleboot.go (#5497).
 func TestTheBracketedPasteParameterIsTheEditorsOwn(t *testing.T) {
+	t.Parallel()
 	const kind = `print -r -- ${(t)zle_bracketed_paste} ${(qqqq)zle_bracketed_paste}`
 	for _, c := range []struct {
 		name                  string
@@ -63,6 +64,7 @@ func TestTheBracketedPasteParameterIsTheEditorsOwn(t *testing.T) {
 // zle` under `-fiV +Z` brings the parameter at the next line, and a script
 // that unset it after the load does not get it back from the next line.
 func TestStartingALineLoadsTheEditorsModuleOnce(t *testing.T) {
+	t.Parallel()
 	var out bytes.Buffer
 	r := preset.Runner(dialecttest.Base{
 		Dir: t.TempDir(), Interactive: true, Terminal: true, Stdout: &out, Stderr: &out,

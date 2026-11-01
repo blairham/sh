@@ -40,6 +40,7 @@ func TestReswordsIsZshsReservedWordTable(t *testing.T) {
 // by a different route — see the note on `$terminfo` in declaretail_test.go,
 // where the difference is recorded rather than matched.
 func TestReswordsReadsWithoutTheModuleBeingLoaded(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `print -r -- "n=${#reswords} t=${(t)reswords}"`)
 	want := "n=31 t=array-readonly-hide-hideval-special\n"
 	if out != want || st != 0 {
@@ -58,6 +59,7 @@ func TestReswordsReadsWithoutTheModuleBeingLoaded(t *testing.T) {
 // what the missing `assign=` and `n=` lines record, and it is the same
 // fatality every frozen name in this module has.
 func TestReswordsRefusesAWrite(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `reswords=(a b) 2>&1
 echo "assign=$?"
 print -r -- "n=${#reswords}"`)
@@ -79,6 +81,7 @@ print -r -- "n=${#reswords}"`)
 // A list assembled from this parser's own reserved words would answer the
 // opposite for all four.
 func TestReswordsAnswersTheIndexAHighlighterAsks(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `zmodload zsh/parameter
 for w in if typeset foreach '[[' ']]' in ls; do
   print -r -- "$w ${reswords[(Ie)$w]}"

@@ -176,6 +176,7 @@ func (e *stubEditor) UndoTo(n int, in repl.Line) (repl.Line, bool) {
 // an rc file that defines a widget runs to the end, and the widget is there
 // afterwards in both spellings of the listing.
 func TestAWidgetIsDefinedAndSaidBack(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"f(){:}; zle -N b f; zle -N a; zle -N c f; echo st=$?\nzle -l\n")
 	if want := "st=0\na\nb (f)\nc (f)\n"; out != want || st != 0 {
@@ -186,6 +187,7 @@ func TestAWidgetIsDefinedAndSaidBack(t *testing.T) {
 // The two listings are exact, and both are sorted by widget name whatever
 // order the definitions arrived in.
 func TestTheListingHasTwoSpellings(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "f(){:}; zle -N b f; zle -N a; zle -N c f\nzle -l -L\n")
 	if want := "zle -N a\nzle -N b f\nzle -N c f\n"; out != want {
 		t.Errorf("output = %q, want %q", out, want)
@@ -196,6 +198,7 @@ func TestTheListingHasTwoSpellings(t *testing.T) {
 // real startup file work: a plugin defines its widgets and its functions in
 // whichever order suits it, so `zle -N` cannot require the function yet.
 func TestAWidgetNamingAFunctionThatIsNotThereIsAccepted(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "zle -N foo; echo st=$?\nzle -l -L\n")
 	if want := "st=0\nzle -N foo\n"; out != want || st != 0 {
 		t.Errorf("output = %q status %d, want %q at 0", out, st, want)
@@ -207,6 +210,7 @@ func TestAWidgetNamingAFunctionThatIsNotThereIsAccepted(t *testing.T) {
 // `zle -l foo || zle -N foo` asks, so it had to be got right rather than
 // approximated.
 func TestListingByNameIsAQuestion(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"f(){:}; zle -N a f; zle -N b f\n"+
 			"zle -l a b; echo two=$?\nzle -l nosuch; echo one=$?\nzle -l a nosuch; echo mixed=$?\n")
@@ -228,6 +232,7 @@ func TestListingByNameIsAQuestion(t *testing.T) {
 // claim that a key bound to it does something, which is the rule bindkey.go
 // applies to the keymaps.
 func TestEveryWidgetIsADifferentQuestionFromTheDefinedOnes(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"zle -l end-of-line; echo plain=$?\nzle -l -a end-of-line; echo all=$?\n")
 	if want := "plain=1\nall=0\n"; out != want {
@@ -252,6 +257,7 @@ func TestEveryWidgetIsADifferentQuestionFromTheDefinedOnes(t *testing.T) {
 // zmodload's rather than zstyle's `invalid option`, and the usage complaints
 // name the letter that was short, which zstyle's do not.
 func TestZleRefusesEachMistakeItsOwnWay(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 		status          int
@@ -302,6 +308,7 @@ func TestZleRefusesEachMistakeItsOwnWay(t *testing.T) {
 //
 // `M` left it with #5942: the message under the line is built.
 func TestALetterThisShellHasNotGotSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, letter := range []string{"I", "c", "f", "g", "m", "G"} {
 		out, st := runZsh(t, t.TempDir(), "zle -"+letter+" x y\n")
 		want := "zsh:zle:1: -" + letter + " is not implemented yet\n"
@@ -324,6 +331,7 @@ func TestALetterThisShellHasNotGotSaysSo(t *testing.T) {
 // answers it with the pair split over two words, so it is about the letters
 // and not about one word of them. #1648.
 func TestTwoOperationLettersAreRefused(t *testing.T) {
+	t.Parallel()
 	const want = "zsh:zle:1: incompatible operation selection options\n"
 	for _, src := range []string{
 		"zle -ND w",
@@ -352,6 +360,7 @@ func TestTwoOperationLettersAreRefused(t *testing.T) {
 // two operations to zsh and would be `-f is not implemented yet` here if the
 // letters were not all read before either question is asked.
 func TestTheThreeRefusalsComeInTheOrderZshAnswersThemIn(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{"zle -Nx w", "zsh:zle:1: bad option: -x\n"},
 		{"zle -xN w", "zsh:zle:1: bad option: -x\n"},
@@ -373,6 +382,7 @@ func TestTheThreeRefusalsComeInTheOrderZshAnswersThemIn(t *testing.T) {
 // zsh 5.9.2, measured the same day: `-NN` and `-N -N` define a widget, and
 // `-a`, `-w` and `-L` sit beside an operation without being one.
 func TestARepeatedLetterAndAModifierAreNotASecondOperation(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"zle -NN w",
 		"zle -N -N w",
@@ -403,6 +413,7 @@ func TestARepeatedLetterAndAModifierAreNotASecondOperation(t *testing.T) {
 // name is asserted alongside because it is what a wrapper shared between
 // bindings is supposed to read instead.
 func TestAWidgetFunctionIsCalledWithNoArguments(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, widget string }{
 		{
 			"a widget naming another function",
@@ -437,6 +448,7 @@ func TestAWidgetFunctionIsCalledWithNoArguments(t *testing.T) {
 // `-D` takes several, and a name nothing answers to costs the status rather
 // than the rest of the list.
 func TestDeletingWidgets(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"f(){:}; zle -N a f; zle -N b f\nzle -D a b; echo st=$?\nzle -l\n")
 	if want := "st=0\n"; out != want || st != 0 {
@@ -453,6 +465,7 @@ func TestDeletingWidgets(t *testing.T) {
 // `-A` is a copy and not a notion of an alias, which is measured: the second
 // name lists exactly as a definition of its own would.
 func TestAliasingAWidgetCopiesIt(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "f(){:}; zle -N w f; zle -A w x; echo st=$?\nzle -l\nzle -l -L\n")
 	want := "st=0\nw (f)\nx (f)\nzle -N w f\nzle -N x f\n"
 	if out != want {
@@ -471,6 +484,7 @@ func TestAliasingAWidgetCopiesIt(t *testing.T) {
 // `scalar-local-special` — so a shell that is not running one must find them
 // unset, and assigning to one there is an ordinary variable assignment.
 func TestTheWidgetParametersAreNotThereOutsideAWidget(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(
 		t,
 		t.TempDir(),
@@ -486,6 +500,7 @@ func TestTheWidgetParametersAreNotThereOutsideAWidget(t *testing.T) {
 // TestRunningAWidgetHandsOverTheLineAndTakesItBack is the round trip, and the
 // parameters are the whole of what a widget can do with a line.
 func TestRunningAWidgetHandsOverTheLineAndTakesItBack(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(
 		t,
 		`w() { print -r -- "W=$WIDGET B=[$BUFFER] C=$CURSOR L=[$LBUFFER] R=[$RBUFFER]"; BUFFER="rewritten"; CURSOR=3; }
@@ -508,6 +523,7 @@ zle -N w
 // read back inside the same widget — which is why these cannot be four plain
 // variables reconciled when the call returns.
 func TestTheFourParametersAreLiveInEachOthersArithmetic(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `w() {
   BUFFER="abcdef"; CURSOR=2
   print -r -- "1 L=[$LBUFFER] R=[$RBUFFER] C=$CURSOR"
@@ -540,6 +556,7 @@ zle -N w
 // the clamp on the *other* parameter's assignment and the one a widget that
 // replaces the whole buffer reaches.
 func TestShorteningTheBufferBringsTheCursorWithIt(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(
 		t,
 		`w() { print -r -- "before=$CURSOR"; BUFFER="ab"; print -r -- "after=$CURSOR L=[$LBUFFER] R=[$RBUFFER]"; }
@@ -561,6 +578,7 @@ zle -N w
 // The cursor is clamped rather than refused: 999 on a four-character line
 // reads back 4 and -5 reads back 0.
 func TestTheCursorIsClampedRatherThanRefused(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `w() { CURSOR=999; print -r -- "hi=$CURSOR"; CURSOR=-5; print -r -- "lo=$CURSOR"; }
 zle -N w
 `)
@@ -577,6 +595,7 @@ zle -N w
 // widget function sees it; what the widget leaves is not what the next command
 // reads. The same discipline hooks run under, measured the same way.
 func TestTheStatusGoesInAndDoesNotComeOut(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "w() { print -r -- \"sees=$?\"; return 7; }\nzle -N w\nfalse\n")
 	_, ok, printed := runWidget(t, r, out, "w", repl.Line{})
 	if !ok {
@@ -593,6 +612,7 @@ func TestTheStatusGoesInAndDoesNotComeOut(t *testing.T) {
 // A widget invoking another runs it against the same line, and `$WIDGET` stays
 // the outer one's name — measured, `zle b` from `a` reports `a` inside `b`.
 func TestOneWidgetInvokesAnotherAgainstTheSameLine(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `b() { BUFFER="$BUFFER-B"; print -r -- "in-b W=$WIDGET"; }
 a() { zle b; print -r -- "back rc=$? B=[$BUFFER]"; }
 zle -N a; zle -N b
@@ -613,6 +633,7 @@ zle -N a; zle -N b
 // all. Measured with the widget's own stderr redirected to a file, so a redraw
 // could not have hidden one.
 func TestInvokingANameNothingAnswersToIsSilent(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "a() { zle nosuch_zz; print -r -- \"rc=$?\"; }\nzle -N a\n")
 	_, ok, printed := runWidget(t, r, out, "a", repl.Line{})
 	if !ok {
@@ -633,6 +654,7 @@ func TestInvokingANameNothingAnswersToIsSilent(t *testing.T) {
 // editor says `previous-history`, and a mapping that reached the wrong action
 // would still return 0 and still edit the line.
 func TestInvokingABuiltInWidgetReachesTheEditor(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "a() { zle up-line-or-history; print -r -- \"rc=$?\"; }\nzle -N a\n")
 	_, ok, printed, ed := runWidgetWatching(t, r, out, "a", repl.Line{}, &stubEditor{})
 	if !ok {
@@ -657,6 +679,7 @@ func TestInvokingABuiltInWidgetReachesTheEditor(t *testing.T) {
 // 2026-09-12 against zsh 5.9.2: the buffer is the recalled entry immediately,
 // with the cursor at its end.
 func TestWhatTheEditorGivesBackIsVisibleToTheRestOfTheWidget(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t,
 		"a() { zle up-line-or-history; print -r -- \"[$BUFFER][$CURSOR][$LBUFFER]\"; }\nzle -N a\n")
 	ed := &stubEditor{gives: map[repl.Widget]repl.Line{
@@ -682,6 +705,7 @@ func TestWhatTheEditorGivesBackIsVisibleToTheRestOfTheWidget(t *testing.T) {
 // every such widget operate on a stale copy, and the two would drift further
 // apart with every action in a run of them.
 func TestTheEditorIsGivenTheLineTheWidgetIsHoldingNow(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "a() { BUFFER=rewritten; CURSOR=2; zle end-of-line; }\nzle -N a\n")
 	ed := &stubEditor{}
 	if _, ok, _, _ := runWidgetWatching(t, r, out, "a", repl.Line{Buffer: "old", Cursor: 0}, ed); !ok {
@@ -699,6 +723,7 @@ func TestTheEditorIsGivenTheLineTheWidgetIsHoldingNow(t *testing.T) {
 // than a case anyone meets: a refusal a script can see beats a call that
 // appears to work.
 func TestAnActionTheEditorDeclinesIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t,
 		"a() { zle history-incremental-search-backward; print -r -- \"rc=$?\"; }\nzle -N a\n")
 	ed := &stubEditor{refuse: map[repl.Widget]bool{repl.WidgetSearchHistoryBackward: true}}
@@ -720,6 +745,7 @@ func TestAnActionTheEditorDeclinesIsRefusedByName(t *testing.T) {
 // The line comes back with it, so `$BUFFER` after an abandoned search is the
 // line as it was, and so does the key that ended it, as `$KEYS`.
 func TestTheSearchStatusIsTheCallsStatus(t *testing.T) {
+	t.Parallel()
 	for _, status := range []int{0, 1, 3} {
 		r, out := zleRunner(
 			t,
@@ -748,6 +774,7 @@ zle -N a
 // is no editor to have refused: the same answer a name nothing answers to
 // gets.
 func TestABuiltInWidgetWithNoEditorIsSilent(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "a() { zle end-of-line; print -r -- \"rc=$?\"; }\nzle -N a\n")
 	out.Reset()
 	if _, ok := zsh.RunWidget(r, context.Background(), "a", repl.Line{}); !ok {
@@ -762,6 +789,7 @@ func TestABuiltInWidgetWithNoEditorIsSilent(t *testing.T) {
 // key that names it do nothing — measured through a pseudo-terminal, silence
 // and a live shell.
 func TestAWidgetWithNoFunctionDoesNotRun(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "zle -N w never_defined_zz\n")
 	line, ok, printed := runWidget(t, r, out, "w", repl.Line{Buffer: "abc", Cursor: 1})
 	if ok {
@@ -782,6 +810,7 @@ func TestAWidgetWithNoFunctionDoesNotRun(t *testing.T) {
 // The parameters are taken away again when the call ends, so nothing about one
 // keystroke's widget is visible to the next one's or to a script.
 func TestTheParametersAreGoneWhenTheWidgetEnds(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "w() { BUFFER=inside; }\nzle -N w\n")
 	if _, ok, _ := runWidget(t, r, out, "w", repl.Line{Buffer: "abc", Cursor: 3}); !ok {
 		t.Fatal("the widget did not run")
@@ -799,6 +828,7 @@ func TestTheParametersAreGoneWhenTheWidgetEnds(t *testing.T) {
 // prompt would find `$BUFFER` set — after a crash nobody would connect it to.
 // A widget that called `exit` is the reachable version of the same path.
 func TestTheParametersAreGoneHoweverTheCallEnded(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "w() { BUFFER=x; exit 3; }\nzle -N w\n")
 	if _, _, printed := runWidget(t, r, out, "w", repl.Line{Buffer: "abc", Cursor: 3}); printed != "" {
 		t.Errorf("output = %q, want nothing said", printed)
@@ -823,6 +853,7 @@ func TestTheParametersAreGoneHoweverTheCallEnded(t *testing.T) {
 // where the shell being modeled refuses every time. Nothing in the suite
 // noticed, because every other test asked a *fresh* runner.
 func TestAScriptCannotCallAWidgetAfterOneHasRun(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "w() { print -r -- ran; }\nzle -N w\n")
 	if _, ok, _ := runWidget(t, r, out, "w", repl.Line{Buffer: "x", Cursor: 1}); !ok {
 		t.Fatal("the widget did not run, so this is not the path under test")
@@ -852,6 +883,7 @@ func TestAScriptCannotCallAWidgetAfterOneHasRun(t *testing.T) {
 // quietly stored the new name would be the silent no-op this builtin exists to
 // avoid.
 func TestTheWidgetNameIsReadOnly(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "w() { WIDGET=changed; print -r -- \"unreached=[$WIDGET]\"; }\nzle -N w\n")
 	if _, ok, _ := runWidget(t, r, out, "w", repl.Line{}); !ok {
 		t.Fatal("the widget did not run")
@@ -869,6 +901,7 @@ func TestTheWidgetNameIsReadOnly(t *testing.T) {
 // every assignment for the rest of the session. There is no other way to lift
 // it, which is why UnsetDynamic does — see the note there.
 func TestTheWidgetNameIsAnOrdinaryVariableAfterTheCall(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "w() { :; }\nzle -N w\n")
 	if _, ok, _ := runWidget(t, r, out, "w", repl.Line{}); !ok {
 		t.Fatal("the widget did not run")
@@ -883,6 +916,7 @@ func TestTheWidgetNameIsAnOrdinaryVariableAfterTheCall(t *testing.T) {
 // adding a second entry — measured, `zle -N w f; zle -N w g` leaves one widget
 // backed by `g`.
 func TestRedefiningAWidgetReplacesIt(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"f() { :; }; g() { :; }; zle -N w f; zle -N w g\nzle -l\nzle -l -L\n")
 	if want := "w (g)\nzle -N w g\n"; out != want {
@@ -894,6 +928,7 @@ func TestRedefiningAWidgetReplacesIt(t *testing.T) {
 // no function behind it and no `zle -N` that would define it. Measured —
 // `zle -la -L` in the real shell writes `accept-line`, not `zle -N accept-line`.
 func TestTheSourceListingLeavesTheEditorsOwnActionsAlone(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "zle -la -L\n")
 	if !strings.Contains(out, "end-of-line\n") {
 		t.Errorf("output = %q, want the action's bare name in it", out)
@@ -908,6 +943,7 @@ func TestTheSourceListingLeavesTheEditorsOwnActionsAlone(t *testing.T) {
 // reaches repl for a key bound to a widget somebody defined is the *name*, not
 // one of the editor's actions.
 func TestAKeyBoundToADefinedWidgetReachesTheFrontEndAsOne(t *testing.T) {
+	t.Parallel()
 	r, _ := zleRunner(t, "f(){:}; zle -N mine f\nbindkey '^G' mine\n")
 	got := zsh.KeyBindings(r, repl.KeymapMain)
 	if want := (repl.Binding{Function: "mine"}); got["\a"] != want {
@@ -931,6 +967,7 @@ func TestAKeyBoundToADefinedWidgetReachesTheFrontEndAsOne(t *testing.T) {
 // The module the builtin belongs to still answers about itself rather than
 // pretending, and `whence` finds the name because registering is enough.
 func TestZleIsABuiltinTheShellWillOwnUpTo(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "whence -v zle; whence -w zle\n")
 	if want := "zle is a shell builtin\nzle: builtin\n"; out != want {
 		t.Errorf("output = %q, want %q", out, want)
@@ -966,6 +1003,7 @@ func runZshVars(t *testing.T, r *interp.Runner, src string) (string, int) {
 // line a completion loader writes runs to the end, and the widget is there
 // afterwards in both listing spellings.
 func TestACompletionWidgetIsDefinedAndSaidBack(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"zle -C mywidget complete-word _main_complete; echo st=$?\nzle -l\nzle -l -L\n")
 	want := "st=0\nmywidget -C complete-word _main_complete\n" +
@@ -981,6 +1019,7 @@ func TestACompletionWidgetIsDefinedAndSaidBack(t *testing.T) {
 // w` reads back in full both ways, because the completer in the middle is not
 // recoverable from a default.
 func TestACompletionWidgetListingNeverAbbreviates(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "zle -C w complete-word w\nzle -l\nzle -l -L\n")
 	if want := "w -C complete-word w\nzle -C w complete-word w\n"; out != want {
 		t.Errorf("output = %q, want %q", out, want)
@@ -989,6 +1028,7 @@ func TestACompletionWidgetListingNeverAbbreviates(t *testing.T) {
 
 // The two kinds sort together into one listing, each in its own spelling.
 func TestTheTwoKindsOfWidgetShareOneListing(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"zle -N nw nf; zle -C cw complete-word cf\nzle -l\nzle -l -L\n")
 	want := "cw -C complete-word cf\nnw (nf)\n" +
@@ -1005,6 +1045,7 @@ func TestTheTwoKindsOfWidgetShareOneListing(t *testing.T) {
 // is one, and it is unarguably a widget — answers `invalid widget`, which is a
 // different complaint from the `no such widget` that `-D` and `-A` make.
 func TestTheCompleterIsAClosedSetOfCompletionWidgets(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{
 		"complete-word", "delete-char-or-list", "expand-or-complete",
 		"expand-or-complete-prefix", "list-choices", "menu-complete",
@@ -1035,6 +1076,7 @@ func TestTheCompleterIsAClosedSetOfCompletionWidgets(t *testing.T) {
 // answers have to agree — a shell whose `-la` denies the name and whose `-C`
 // accepts it would be inconsistent with itself.
 func TestMenuSelectIsRefusedAsACompleterAndAbsentFromTheListing(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "zle -C w menu-select f\n")
 	if want := "zsh:zle:1: invalid widget `menu-select'\n"; out != want || st != 1 {
 		t.Errorf("output = %q status %d, want %q at 1", out, st, want)
@@ -1050,6 +1092,7 @@ func TestMenuSelectIsRefusedAsACompleterAndAbsentFromTheListing(t *testing.T) {
 // completion driver, which is the largest single class of complaint a real
 // startup produced. All eight lines, no output, and eight widgets afterwards.
 func TestTheCompletionLoadersRebindingLoopRuns(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"for w in complete-word delete-char-or-list expand-or-complete "+
 			"expand-or-complete-prefix list-choices menu-complete "+
@@ -1064,6 +1107,7 @@ func TestTheCompletionLoadersRebindingLoopRuns(t *testing.T) {
 // All three words are required, and unlike `-N` the function may not be left
 // to default to the widget's name.
 func TestACompletionWidgetTakesExactlyThreeWords(t *testing.T) {
+	t.Parallel()
 	for _, args := range []string{"", " a", " a b"} {
 		out, st := runZsh(t, t.TempDir(), "zle -C"+args+"\n")
 		if want := "zsh:zle:1: not enough arguments for -C\n"; out != want || st != 1 {
@@ -1081,6 +1125,7 @@ func TestACompletionWidgetTakesExactlyThreeWords(t *testing.T) {
 // afterwards, so a shell that required the function here would fail all of
 // them.
 func TestACompletionWidgetDoesNotNeedItsFunctionYet(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "zle -C w complete-word nosuchfn; echo st=$?\nzle -l\n")
 	if want := "st=0\nw -C complete-word nosuchfn\n"; out != want || st != 0 {
 		t.Errorf("output = %q status %d, want %q at 0", out, st, want)
@@ -1092,6 +1137,7 @@ func TestACompletionWidgetDoesNotNeedItsFunctionYet(t *testing.T) {
 // the rest intact — which is the encoding's own test, since a widget occupies
 // more than one slot of the array it is stored in.
 func TestACompletionWidgetIsAWidgetEverywhereElse(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"zle -C a complete-word af; zle -C b list-choices bf; zle -N c cf\n"+
 			"zle -l b; echo q=$?\nzle -D b; echo d=$?\nzle -l\n")
@@ -1104,6 +1150,7 @@ func TestACompletionWidgetIsAWidgetEverywhereElse(t *testing.T) {
 // and all — measured. A copy that kept only the function would be a widget
 // that had quietly become an ordinary one.
 func TestAliasingACompletionWidgetCopiesTheCompleter(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "zle -C w complete-word f; zle -A w y\nzle -l\n")
 	if want := "w -C complete-word f\ny -C complete-word f\n"; out != want {
 		t.Errorf("output = %q, want %q", out, want)
@@ -1114,6 +1161,7 @@ func TestAliasingACompletionWidgetCopiesTheCompleter(t *testing.T) {
 // merging it: measured both ways, one widget of the later kind and no trace of
 // the earlier one's completer.
 func TestRedefiningAcrossTheTwoKindsReplacesTheWhole(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "zle -N w f; zle -C w complete-word g\nzle -l\n")
 	if want := "w -C complete-word g\n"; out != want {
 		t.Errorf("-C over -N: output = %q, want %q", out, want)
@@ -1129,6 +1177,7 @@ func TestRedefiningAcrossTheTwoKindsReplacesTheWhole(t *testing.T) {
 // fail this one. A key bound to a completion widget calls the function, which
 // can see the line and the widget's own name.
 func TestACompletionWidgetRunsItsFunction(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "cf() { print -r -- \"ran W=$WIDGET B=[$BUFFER] C=$CURSOR L=[$LBUFFER]\"; }\n"+
 		"zle -C cw complete-word cf\n")
 	line, ok, printed := runWidget(t, r, out, "cw", repl.Line{Buffer: "abcdef", Cursor: 2})
@@ -1151,6 +1200,7 @@ func TestACompletionWidgetRunsItsFunction(t *testing.T) {
 // says `scalar-local-special`, and each of the four assignments answers
 // `read-only variable:` and stops the function where it stands.
 func TestTheLineIsReadOnlyInsideACompletionWidget(t *testing.T) {
+	t.Parallel()
 	for _, name := range zleLineParameterNames {
 		src := "cf() { " + name + "=zz; print -r -- unreached; }\nzle -C cw complete-word cf\n"
 		r, out := zleRunner(t, src)
@@ -1183,6 +1233,7 @@ var zleLineParameterNames = []string{"BUFFER", "CURSOR", "LBUFFER", "RBUFFER"}
 // writable, which is what makes the read-only mark a property of the
 // definition rather than of the shell.
 func TestTheLineStaysWritableInsideAnOrdinaryWidget(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "nf() { BUFFER=zz; CURSOR=1; print -r -- \"reached B=[$BUFFER] C=$CURSOR\"; }\n"+
 		"zle -N nw nf\n")
 	line, ok, printed := runWidget(t, r, out, "nw", repl.Line{Buffer: "abcd", Cursor: 2})
@@ -1202,6 +1253,7 @@ func TestTheLineStaysWritableInsideAnOrdinaryWidget(t *testing.T) {
 // at the next prompt finds four ordinary variables. Marking a name read-only
 // with no way to lift it would strand the whole session after one keystroke.
 func TestTheReadOnlyLineIsLiftedWhenTheCompletionWidgetReturns(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "cf() { :; }\nnf() { BUFFER=edited; }\n"+
 		"zle -C cw complete-word cf\nzle -N nw nf\n")
 	if _, ok, _ := runWidget(t, r, out, "cw", repl.Line{Buffer: "abcd", Cursor: 2}); !ok {
@@ -1235,6 +1287,7 @@ func TestTheReadOnlyLineIsLiftedWhenTheCompletionWidgetReturns(t *testing.T) {
 // `exit` included, since that is committed by the same widget, so the session
 // cannot even be left (#2082).
 func TestAWidgetCanAcceptTheLine(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "w(){ zle .accept-line }; zle -N w")
 	line, ok, said := runWidget(t, r, out, "w", repl.Line{Buffer: "echo hi", Cursor: 7})
 	if !ok {
@@ -1255,6 +1308,7 @@ func TestAWidgetCanAcceptTheLine(t *testing.T) {
 // name — which is what a widget calling `zle accept-line` means in a shell
 // with no plugins loaded.
 func TestTheUndottedAcceptAsksTheSameThing(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "w(){ zle accept-line }; zle -N w")
 	line, ok, _ := runWidget(t, r, out, "w", repl.Line{Buffer: "x", Cursor: 1})
 	if !ok || !line.Accept {
@@ -1265,6 +1319,7 @@ func TestTheUndottedAcceptAsksTheSameThing(t *testing.T) {
 // A widget may rewrite the line and accept it in one call, which is what a
 // wrapper that adds something before committing does.
 func TestAWidgetMayRewriteAndAccept(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "w(){ BUFFER='rewritten'; zle .accept-line }; zle -N w")
 	line, ok, _ := runWidget(t, r, out, "w", repl.Line{Buffer: "typed", Cursor: 5})
 	if !ok || !line.Accept || line.Buffer != "rewritten" {
@@ -1275,6 +1330,7 @@ func TestAWidgetMayRewriteAndAccept(t *testing.T) {
 // The request belongs to the keystroke that made it. A second widget that
 // does not ask must not inherit the first one's accept.
 func TestAnAcceptDoesNotSurviveIntoTheNextWidget(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "a(){ zle .accept-line }; b(){ :; }; zle -N a; zle -N b")
 	if line, _, _ := runWidget(t, r, out, "a", repl.Line{Buffer: "one", Cursor: 3}); !line.Accept {
 		t.Fatal("the first widget did not accept")
@@ -1292,6 +1348,7 @@ func TestAnAcceptDoesNotSurviveIntoTheNextWidget(t *testing.T) {
 // accept: only the editor's own "commit this line" does that, and a widget
 // whose every action committed the line would run one command per keystroke.
 func TestTheDottedSpellingReachesTheEditorAndDoesNotAccept(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "w(){ zle .end-of-line }; zle -N w")
 	line, ok, said, ed := runWidgetWatching(t, r, out, "w", repl.Line{Buffer: "x", Cursor: 1}, &stubEditor{})
 	if !ok {
@@ -1317,6 +1374,7 @@ func TestTheDottedSpellingReachesTheEditorAndDoesNotAccept(t *testing.T) {
 // second for a keystroke; without the draw the person spends that second
 // looking at the line as it was.
 func TestRedisplayDrawsTheLineTheWidgetHasNow(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "a() { BUFFER=drawn; CURSOR=5; zle -R; print -r -- \"rc=$?\"; }\nzle -N a\n")
 	ed := &stubEditor{}
 	_, ok, printed, _ := runWidgetWatching(t, r, out, "a", repl.Line{Buffer: "old"}, ed)
@@ -1335,6 +1393,7 @@ func TestRedisplayDrawsTheLineTheWidgetHasNow(t *testing.T) {
 // prompt, and nothing under repl/ owns one for something other than a search
 // or a listing to write on.
 func TestRedisplayWithADisplayStringIsRefused(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "a() { zle -R hi; print -r -- \"rc=$?\"; }\nzle -N a\n")
 	ed := &stubEditor{}
 	_, ok, printed, _ := runWidgetWatching(t, r, out, "a", repl.Line{}, ed)
@@ -1358,6 +1417,7 @@ func TestRedisplayWithADisplayStringIsRefused(t *testing.T) {
 // and this one is silent. A shell that gave all three the same answer would be
 // tidier and would not be this shell.
 func TestRedisplayOutsideAWidgetIsSilent(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{"zle -R\n", "zle -R hi\n"} {
 		out, st := runZsh(t, t.TempDir(), src)
 		if out != "" || st != 1 {
@@ -1368,6 +1428,7 @@ func TestRedisplayOutsideAWidgetIsSilent(t *testing.T) {
 
 // `zle -U` puts characters where the editor reads them next.
 func TestPushingKeysBackReachesTheEditor(t *testing.T) {
+	t.Parallel()
 	// The string is built in the body: a widget function is called with no
 	// arguments, which is measured and is what TestAWidgetFunctionIsCalledWithNoArguments pins.
 	r, out := zleRunner(t, "a() { local k=q; zle -U -- \"${k}x\"; print -r -- \"rc=$?\"; }\nzle -N a\n")
@@ -1397,6 +1458,7 @@ func TestPushingKeysBackReachesTheEditor(t *testing.T) {
 // that took the operands as a list would silently push something else where a
 // `$REPLY` split into two words.
 func TestPushingKeysTakesExactlyOneOperand(t *testing.T) {
+	t.Parallel()
 	for src, want := range map[string]string{
 		"zle -U\n":       "zsh:zle:1: not enough arguments for -U\n",
 		"zle -U x y\n":   "zsh:zle:1: too many arguments for -U\n",
@@ -1411,6 +1473,7 @@ func TestPushingKeysTakesExactlyOneOperand(t *testing.T) {
 
 // And with the right arity but no widget, it says which of the two it is.
 func TestPushingKeysOutsideAWidgetSaysSo(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "zle -U x\n")
 	want := "zsh:zle:1: can only be called from widget function\n"
 	if out != want || st != 1 {
@@ -1426,6 +1489,7 @@ func TestPushingKeysOutsideAWidgetSaysSo(t *testing.T) {
 // checking that promoting them out of the unimplemented set left them on the
 // side the measurement put them.
 func TestRedisplayAndPushAreOperationLetters(t *testing.T) {
+	t.Parallel()
 	const want = "zsh:zle:1: incompatible operation selection options\n"
 	for _, src := range []string{"zle -NR w\n", "zle -NU w\n", "zle -RU\n"} {
 		out, st := runZsh(t, t.TempDir(), src)
@@ -1450,6 +1514,7 @@ func TestRedisplayAndPushAreOperationLetters(t *testing.T) {
 // The status is the half that matters as much as the output: a wrapper
 // branches on it.
 func TestADottedNameThatIsNotABuiltInIsAnOrdinaryWidget(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `orig() { BUFFER="$BUFFER-ORIG"; print -r -- "orig ran"; }
 zle -N orig
 zle -A orig ._p9k_orig_clear-screen
@@ -1484,6 +1549,7 @@ zle -N a
 // disjoint and either order answers the same. The protection is what buys
 // that, and TestADottedBuiltInNameIsProtected is where it is pinned.
 func TestTheDottedSpellingStillReachesTheEditorPastARebinding(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, "f() { print -r -- MINE }\nzle -N up-line-or-history f\n"+
 		"a() { zle .up-line-or-history; print -r -- \"rc=$?\"; }\nzle -N a\n")
 	_, ok, printed, ed := runWidgetWatching(t, r, out, "a", repl.Line{}, &stubEditor{})
@@ -1507,6 +1573,7 @@ func TestTheDottedSpellingStillReachesTheEditorPastARebinding(t *testing.T) {
 // a built-in's is status 0. That refusal is what keeps the two name sets
 // disjoint, which is what lets a dotted call ask one table and then the other.
 func TestADottedBuiltInNameIsProtected(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -1533,6 +1600,7 @@ func TestADottedBuiltInNameIsProtected(t *testing.T) {
 // the completer. A check written before either of those would be right about
 // the name and wrong about which complaint comes out.
 func TestTheProtectedNameComesAfterTheSourceAndTheCompleter(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "zle -A nosuchw .accept-line\n")
 	if w := "zsh:zle:1: no such widget `nosuchw'\n"; out != w || st != 1 {
 		t.Errorf("alias: output = %q status %d, want %q at 1", out, st, w)
@@ -1559,6 +1627,7 @@ func TestTheProtectedNameComesAfterTheSourceAndTheCompleter(t *testing.T) {
 // no entry for, and which the plugin's own ignore list cannot match because
 // the pattern it holds is the bare `autosuggest-clear`.
 func TestTheEveryWidgetListingIsBareNames(t *testing.T) {
+	t.Parallel()
 	const define = "myfn() { :; }\nzle -N foo myfn\nzle -C cw complete-word myfn\n"
 
 	out, _ := runZsh(t, t.TempDir(), define+"zle -la\n")
@@ -1608,6 +1677,7 @@ func TestTheEveryWidgetListingIsBareNames(t *testing.T) {
 // lists its own actions under both spellings, for the reason the file header
 // gives.
 func TestEveryBuiltinIsListedDottedAndBare(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "zle -la\n")
 	names := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
 
@@ -1653,6 +1723,7 @@ func TestEveryBuiltinIsListedDottedAndBare(t *testing.T) {
 // A plugin that enumerates before it wraps therefore never saw the one widget
 // every plugin wraps.
 func TestTheListingHasEveryWidgetTheEditorPerforms(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "zle -la\n")
 	for _, want := range []string{"accept-line", ".accept-line"} {
 		if !strings.Contains(out, want+"\n") {

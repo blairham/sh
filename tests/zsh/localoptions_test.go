@@ -16,6 +16,7 @@ import "testing"
 // The row the issue opens with: a function that asks for the scoping does not
 // leak what it changed.
 func TestLocalOptionsRestoresOnReturn(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`f() { setopt localoptions extendedglob; }; f; [[ -o extendedglob ]] || echo gone`)
 	if st != 0 || out != "gone\n" {
@@ -26,6 +27,7 @@ func TestLocalOptionsRestoresOnReturn(t *testing.T) {
 // The save is taken when the body starts, not when the `setopt localoptions`
 // line runs: an option moved *before* that line is restored too. Measured.
 func TestLocalOptionsRestoresAnOptionMovedBeforeItWasAskedFor(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`f() { setopt extendedglob; setopt localoptions; }; f; [[ -o extendedglob ]] || echo gone`)
 	if st != 0 || out != "gone\n" {
@@ -38,6 +40,7 @@ func TestLocalOptionsRestoresAnOptionMovedBeforeItWasAskedFor(t *testing.T) {
 // globally, which is the only arrangement that can tell this from the option
 // simply never having been on.
 func TestLocalOptionsIsAskedAtTheReturn(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`setopt localoptions; f() { unsetopt localoptions; setopt extendedglob; }; f; `+
 			`[[ -o extendedglob ]] && echo kept; [[ -o localoptions ]] && echo lo_on`)
@@ -51,6 +54,7 @@ func TestLocalOptionsIsAskedAtTheReturn(t *testing.T) {
 // account for: at that return the option was off, nothing else was put back,
 // and it is on again afterwards.
 func TestLocalOptionsItselfIsAlwaysRestored(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`setopt localoptions; f() { unsetopt localoptions; [[ -o localoptions ]] || echo off_inside; }; f; `+
 			`[[ -o localoptions ]] && echo on_after`)
@@ -63,6 +67,7 @@ func TestLocalOptionsItselfIsAlwaysRestored(t *testing.T) {
 // so an inner function that never mentions the option still restores while
 // the outer one is still running — the option is on when it returns.
 func TestLocalOptionsRestoresAtEachNestedReturn(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`i() { setopt extendedglob; }; o() { setopt localoptions; i; `+
 			`[[ -o extendedglob ]] || echo gone_in_outer; }; o; `+
@@ -75,6 +80,7 @@ func TestLocalOptionsRestoresAtEachNestedReturn(t *testing.T) {
 // With nothing asking for the scoping a change leaks, which is what says the
 // rows above are the option working rather than functions never leaking.
 func TestOptionsLeakWithoutLocalOptions(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`i() { setopt extendedglob; }; o() { i; }; o; [[ -o extendedglob ]] && echo kept`)
 	if st != 0 || out != "kept\n" {
@@ -85,6 +91,7 @@ func TestOptionsLeakWithoutLocalOptions(t *testing.T) {
 // `unsetopt` is localized the same way `setopt` is. `nomatch` is on by
 // default, so turning it off is the visible direction.
 func TestLocalOptionsRestoresAnUnsetopt(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`f() { setopt localoptions; unsetopt nomatch; }; f; [[ -o nomatch ]] && echo back`)
 	if st != 0 || out != "back\n" {
@@ -95,6 +102,7 @@ func TestLocalOptionsRestoresAnUnsetopt(t *testing.T) {
 // A `return` from the middle of the body restores exactly as falling off the
 // end does, and the status the `return` asked for still travels.
 func TestLocalOptionsRestoresOnAnEarlyReturn(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`f() { setopt localoptions; setopt extendedglob; return 3; }; f; echo rc=$?; `+
 			`[[ -o extendedglob ]] || echo gone`)
@@ -106,6 +114,7 @@ func TestLocalOptionsRestoresOnAnEarlyReturn(t *testing.T) {
 // The names backed by a semantics axis rather than by a flag are localized
 // too — `ksharrays` moves the array base, and it is 1-based again afterwards.
 func TestLocalOptionsRestoresAnAxisBackedOption(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`f() { setopt localoptions; setopt ksharrays; }; f; a=(x y z); echo ${a[1]}`)
 	if st != 0 || out != "x\n" {
@@ -117,6 +126,7 @@ func TestLocalOptionsRestoresAnAxisBackedOption(t *testing.T) {
 // dialect's own builtin: it is the option table that is saved, not the
 // builtin that wrote it.
 func TestLocalOptionsRestoresWhatSetMoved(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`f() { setopt localoptions; set -o noglob; }; f; [[ -o noglob ]] || echo restored`)
 	if st != 0 || out != "restored\n" {
@@ -126,6 +136,7 @@ func TestLocalOptionsRestoresWhatSetMoved(t *testing.T) {
 
 // An anonymous function is a function call and gets a scope of its own.
 func TestLocalOptionsRestoresForAnAnonymousFunction(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`() { setopt localoptions; setopt extendedglob; }; [[ -o extendedglob ]] || echo gone`)
 	if st != 0 || out != "gone\n" {
@@ -137,6 +148,7 @@ func TestLocalOptionsRestoresForAnAnonymousFunction(t *testing.T) {
 // same mechanism: the option reads on inside the call, and the emulation and
 // everything moved with it goes back at the return.
 func TestEmulateLIsLocalOptions(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`f() { emulate -L zsh; [[ -o localoptions ]] && echo lo_on; setopt extendedglob; }; f; `+
 			`[[ -o extendedglob ]] || echo gone`)
@@ -149,6 +161,7 @@ func TestEmulateLIsLocalOptions(t *testing.T) {
 // save taken at the call rather than at the `emulate` line, an option moved
 // before `emulate -L` is restored too.
 func TestEmulateLRestoresAnOptionMovedBeforeIt(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`f() { setopt extendedglob; emulate -L zsh; }; f; [[ -o extendedglob ]] || echo gone`)
 	if st != 0 || out != "gone\n" {
@@ -160,6 +173,7 @@ func TestEmulateLRestoresAnOptionMovedBeforeIt(t *testing.T) {
 // the option on — and the *next* function call localizes. Measured, and it is
 // what says the letter is the option and not a scope of its own.
 func TestEmulateLAtTheTopLevelLeavesTheOptionOn(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`emulate -L zsh; [[ -o localoptions ]] && echo lo_on; `+
 			`f() { setopt extendedglob; }; f; [[ -o extendedglob ]] || echo gone`)
@@ -173,6 +187,7 @@ func TestEmulateLAtTheTopLevelLeavesTheOptionOn(t *testing.T) {
 // switches the scoping *off* and everything it moved is kept. Measured, and
 // it is why the mode travels with the table rather than beside it.
 func TestABareEmulateTurnsTheScopingOff(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`f() { setopt localoptions; emulate sh; }; f; [[ -o shwordsplit ]] && echo ws_on; emulate`)
 	if st != 0 || out != "ws_on\nsh\n" {
@@ -183,6 +198,7 @@ func TestABareEmulateTurnsTheScopingOff(t *testing.T) {
 // And the same in reverse: with the option still on at the return the mode
 // goes back with the rest of the table.
 func TestTheEmulationModeIsRestoredWithTheTable(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `f() { emulate -L sh; emulate; }; f; emulate`)
 	if st != 0 || out != "sh\nzsh\n" {
 		t.Errorf("out %q status %d, want the mode restored at the return", out, st)

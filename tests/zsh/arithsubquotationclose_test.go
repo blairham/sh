@@ -29,6 +29,7 @@ import (
 // not be able to produce one. See
 // interp.Semantics.ArithSubscriptQuotationMustClose (#3796).
 func TestTheUnclosedQuotationRefusalIsAnswered(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().ArithSubscriptQuotationMustClose; got != interp.No {
 		t.Errorf("ArithSubscriptQuotationMustClose = %v, want no", got)
 	}

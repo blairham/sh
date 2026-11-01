@@ -93,6 +93,7 @@ func TestTheConditionalsTestLetters(t *testing.T) {
 // is that path's own depth, which is why only the abbreviated side is named
 // here and the other is asked as a comparison.
 func TestTheConditionalCountsTheWorkingDirectoryTwice(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir, "z"), 0o755); err != nil {
 		t.Fatal(err)
@@ -117,6 +118,7 @@ func TestTheConditionalCountsTheWorkingDirectoryTwice(t *testing.T) {
 // reading that used the number is wrong for eleven months of the year and
 // right for none of the ones a careless test would pick.
 func TestTheConditionalsClock(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`print -r -- "${(%):-%8(D.T.F)}${(%):-%9(D.T.F)}"`, "TF"},
 		{`print -r -- "${(%):-%10(d.T.F)}${(%):-%11(d.T.F)}"`, "TF"},
@@ -137,6 +139,7 @@ func TestTheConditionalsClock(t *testing.T) {
 // Three of these are what a reading that "looks for the next delimiter" gets
 // wrong, and each was measured before it was written.
 func TestTheConditionalsGrammar(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ text, want string }{
 		// The delimiter is whatever character follows the letter, including
@@ -217,6 +220,7 @@ func TestTheConditionalsGrammar(t *testing.T) {
 // The paired half is below: a letter that *is* in the table and that a script
 // cannot count is refused by name.
 func TestALetterWithNoTestDrawsNothingAndIsNotRefused(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, text := range []string{`%(a.T.F)X`, `%(z.T.F)X`, `%(%.T.F)X`} {
 		out, st := promptExpands(t, dir, text)
@@ -235,6 +239,7 @@ func TestALetterWithNoTestDrawsNothingAndIsNotRefused(t *testing.T) {
 // the construct in front of the letter — the letter alone is not an escape
 // and would send a reader looking for the wrong thing.
 func TestATestLetterWithNoAnswerIsRefusedByName(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(t, dir, `print -r -- "${(%):-%(e.y.n)}"`)
 	want := "zsh:1: ${(%):-%(e.y.n)}: the %(e prompt escape is not implemented\n"
@@ -251,6 +256,7 @@ func TestATestLetterWithNoAnswerIsRefusedByName(t *testing.T) {
 // sequence is bytes the terminal reads and not a column, the text between
 // `%{ %}` is hidden, and `%G` is a column with no text at all.
 func TestTheColumnCondition(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ text, want string }{
 		{`%(l.T.F)`, "T"},
@@ -306,6 +312,7 @@ func TestTheColumnCondition(t *testing.T) {
 // nought — and a line filled exactly wraps after, which is what leaves five
 // narrow characters at width five at nought.
 func TestTheColumnWrapsAtColumns(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		cols, text, want string
@@ -354,6 +361,7 @@ func TestTheColumnWrapsAtColumns(t *testing.T) {
 // reached. Measured, `${(%):-ab(N)}` unquoted draws the seven characters,
 // where `${(U):-ab(N)}` — which also rewrites its result — is generated away.
 func TestNothingInAPromptExpansionIsAPattern(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{`print -r -- ${(%):-ab(N)}`, "ab(N)"},
@@ -374,6 +382,7 @@ func TestNothingInAPromptExpansionIsAPattern(t *testing.T) {
 // The two spellings of the expansion agree about the conditional, the way
 // they agree about everything else in the one table.
 func TestPrintPAndTheFlagAgreeAboutTheConditional(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, text := range []string{`%(?.y.n)`, `%1(l.a.b)`, `a%Gb%3(l.T.F)`, `%(?.%(1?.a.b.c).d)`} {
 		src := "v=" + shquote(text) + `; a=$(print -rP -- "$v"); b="${(%)v}"; ` +

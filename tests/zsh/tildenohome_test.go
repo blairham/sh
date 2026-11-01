@@ -29,6 +29,7 @@ import (
 // 'echo ~'` has a home to read where bash has none. That is about what a
 // shell puts in its environment, not about what a tilde does without one.
 func TestAnUnsetHomeReadsAsAnEmptyOne(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a bare tilde", "HOME=/h\nunset HOME\nprintf '<%s>' ~", "<>"},
 		{"with a tail", "HOME=/h\nunset HOME\nprintf '<%s>' ~/x", "</x>"},
@@ -57,6 +58,7 @@ func TestAnUnsetHomeReadsAsAnEmptyOne(t *testing.T) {
 
 // And the preset says so.
 func TestTheEmptyStringIsThisDialectsNoHomeAnswer(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().TildeWithNoHome; got != interp.TildeWithNoHomeIsEmpty {
 		t.Errorf("TildeWithNoHome = %v, want is empty", got)
 	}

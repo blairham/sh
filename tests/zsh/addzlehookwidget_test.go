@@ -14,6 +14,7 @@ import "testing"
 // is no widget yet, and the usage (#5393). Nothing here reads zsh's function
 // file; the probe calls it.
 func TestTheShippedAddZleHookWidget(t *testing.T) {
+	t.Parallel()
 	out, _ := runShipped(t, `autoload -Uz add-zle-hook-widget; myinit() { :; }; zle -N zle-line-init myinit
 foo() {:}; zle -N foo; add-zle-hook-widget line-init foo; zstyle -L; zle -lL zle-line-init
 add-zle-hook-widget line-init foo; add-zle-hook-widget zle-line-init baz; add-zle-hook-widget -d line-init foo

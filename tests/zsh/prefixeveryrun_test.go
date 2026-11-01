@@ -34,6 +34,7 @@ const twoFunctionsOneCallSite = `g() { echo "g v=$v"; }; h() { echo "h v=$v"; d=
 // trace line, because the inner run cleared the literal the outer one was
 // waiting on. See interp/commandrecords.go.
 func TestAPrefixIsExpandedInEveryRunOfItsCommand(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 		status          int

@@ -12,6 +12,7 @@ import "testing"
 // empty word. Every row measured on zsh 5.9.2 under -f, 2026-10-05; `show`
 // prints the count and then each word.
 func TestTheElementBeforeTheFirstIsNoFieldWhereFieldsAreKept(t *testing.T) {
+	t.Parallel()
 	const pre = `show() { printf '%s:' $#; for x in "$@"; do printf '<%s>' "$x"; done; print; }
 q=(a b)
 `

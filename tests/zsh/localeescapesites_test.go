@@ -17,6 +17,7 @@ import "testing"
 // reasoned: a builtin's refusal leaves **0** and an expansion's leaves **1**,
 // both abandoning the script where they stand.
 func TestEverySiteRefusesACodePointOutsideTheLocale(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		status          int

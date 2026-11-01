@@ -13,6 +13,7 @@ import "testing"
 // been (`x`, `y`). The second row writes past the end and reads the first
 // element, so it has nothing to see and is the control (#6099).
 func TestAnElementReadSeesWhatItsSubscriptWrote(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(x y); print -r -- "${a[(a[1]=7)>0]}"`, "7\n"},
 		{`a=(x y); print -r -- "${a[(a[2]=7)>0]}"`, "x\n"},
@@ -30,6 +31,7 @@ func TestAnElementReadSeesWhatItsSubscriptWrote(t *testing.T) {
 // its end assigned. The third is the control: a search in an end needs the
 // array before the end, so it is read first as it always was.
 func TestARangeIsReadAfterItsEnds(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`a=(x y); print -r -- "${a[1,a[2]=9]}"`, "x 9\n"},
 		{`a=(x y); print -r -- $a[1,a[2]=9]`, "x 9\n"},

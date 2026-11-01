@@ -10,6 +10,7 @@ import "testing"
 // the left side holds (#5151, a chunk of D04parameter.ztst). Measured
 // 2026-10-03 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f`).
 func TestAZipOperandMustBeAName(t *testing.T) {
+	t.Parallel()
 	const setup = "x=(p q); b=(1 2)\n"
 	for _, tc := range []struct{ src, want string }{
 		{`print ${x:^^^y}; echo after`, "zsh:2: not an identifier: ^y\n"},
@@ -42,6 +43,7 @@ func TestAZipOperandMustBeAName(t *testing.T) {
 // parameter past the end is one empty element rather than no array. The set
 // operators take neither. Measured 2026-10-03 on zsh 5.9.2.
 func TestAZipReadsItsOperandAsAParameter(t *testing.T) {
+	t.Parallel()
 	const setup = "x=(p q)\n"
 	for _, tc := range []struct{ src, want string }{
 		{`setopt nounset; print ${x:^nope}; echo after`, "zsh:2: nope: parameter not set\n"},

@@ -9,6 +9,7 @@ import "testing"
 // makes over a pair the shell ties itself. Measured 2026-10-02 on zsh 5.9.2
 // under `-f`; every row is reported and runs on.
 func TestTheShellsOwnTiedPairsCannotBeRetied(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"typeset -T FOO manpath; print $?", "zsh:typeset:1: manpath special parameter can only be tied to special parameter MANPATH\n1\n"},
 		{"typeset -T PATH foo; print $?", "zsh:typeset:1: PATH special parameter can only be tied to special parameter path\n1\n"},
@@ -36,6 +37,7 @@ func TestTheShellsOwnTiedPairsCannotBeRetied(t *testing.T) {
 // one of the shell's own pairs with `-T` leaves the pair tied after it
 // returns. Measured 2026-10-02 on zsh 5.9.2 under `-f`.
 func TestTheShellsOwnPairSurvivesARetieInAFunction(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"f(){ typeset -UT MANPATH manpath; MANPATH=/a:/a; print $manpath }; f; MANPATH=/c:/c; print $manpath", "/a\n/c /c\n"},
 		{

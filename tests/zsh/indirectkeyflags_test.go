@@ -17,6 +17,7 @@ import (
 // values came back — a list of the right length at status 0, which is the
 // shape nothing complains about. See #1608.
 func TestTheIndirectionFlagAnswersWithTheKeysThisDialectAsksFor(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"k names the keys of the table the value named",
@@ -56,6 +57,7 @@ func TestTheIndirectionFlagAnswersWithTheKeysThisDialectAsksFor(t *testing.T) {
 // the words, and an implementation that answered the right *number* of fields
 // in the wrong order would satisfy anything counting them.
 func TestTheParameterPrinterIdiomReproducesAnAssociation(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -A tab=(k1 v1 k2 'has space')
 name=tab
 local kv=("${(@kvP)name}")

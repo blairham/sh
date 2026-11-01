@@ -13,6 +13,7 @@ import (
 // 2026-10-02 on zsh 5.9.2 under `-f` (#5155). See
 // interp.Runner.endLocalLoops.
 func TestLocalLoopsStopsALoopControlAtTheFunction(t *testing.T) {
+	t.Parallel()
 	const brk = "zsh:1: `break' active at end of function scope\n"
 	cases := []struct{ src, want string }{
 		{"setopt localloops; f(){ break }; for i in 1 2; do print $i; f; done", "1\n" + brk + "2\n" + brk},

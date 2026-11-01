@@ -97,6 +97,7 @@ func TestTheWholeElementReplacementIsThisDialects(t *testing.T) {
 // array as it was. Both halves are here because the pair is what says the
 // reporting is the pattern's doing.
 func TestTheWholeElementReplacementReportsIntoItsReplacement(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"$MATCH is the element the pattern took",

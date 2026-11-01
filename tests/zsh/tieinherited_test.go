@@ -19,6 +19,7 @@ import (
 // about *where the tie came from*: a rule keyed on "a local over a tie is not
 // tied" passes every script row below and gets both of those wrong.
 func TestALocalInheritsATieOnlyWhereTheShellMadeIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a script's tie, shadowed by a plain local",
@@ -69,6 +70,7 @@ func TestALocalInheritsATieOnlyWhereTheShellMadeIt(t *testing.T) {
 // what an assignment moves is a property of the pair — so answering this with
 // that one would take the tie off both names at once.
 func TestTheUnshadowedHalfOfAScriptsTieIsStillTied(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `typeset -T TT tt
 f(){ typeset TT; print "shadowed=${(t)TT} partner=${(t)tt}" }
 f`)
@@ -83,6 +85,7 @@ f`)
 // anywhere" answers yes for every function-local tie there is — the depth the
 // tie was made at is what keeps that from happening.
 func TestATieMadeInAFunctionIsTiedInThatFunction(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `f(){ typeset -T TT tt; print "s=${(t)TT} a=${(t)tt}" }; f`)
 	want := "s=scalar-local-tied a=array-local-tied\n"
 	if out != want || st != 0 {
@@ -94,6 +97,7 @@ func TestATieMadeInAFunctionIsTiedInThatFunction(t *testing.T) {
 // taken by a *caller* is the binding a deeper frame reads, so the tie is off
 // there too.
 func TestACallersLocalOverAScriptsTieReachesTheCallee(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `typeset -T TT tt
 g(){ print "g=${(t)tt}" }
 f(){ typeset tt; g }
@@ -108,6 +112,7 @@ f`)
 // empty, writing it does not move the caller's scalar, and the caller's tie is
 // intact at the return. A fix aimed at the word must not move any of it.
 func TestDetachingTheWordDoesNotMoveTheValues(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `typeset -T TT tt
 TT=a:b
 f(){ typeset tt; print "in=[$tt] n=$#tt"; tt=(x y); print "after=[$TT]" }

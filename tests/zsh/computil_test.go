@@ -44,6 +44,7 @@ const unameSpecs = `-i '' -s : ` +
 // (`compinit` against this machine's own functions) on 2026-09-15: `uname -`
 // and Tab offers `-a -m -n -p -r -s -v`, in that order.
 func TestTheShippedArgumentsProtocolOffersTheOptions(t *testing.T) {
+	t.Parallel()
 	got := completionFor(t, widgetOf(`
 		comparguments `+unameSpecs+` || return
 		local -a next direct odirect equal
@@ -87,6 +88,7 @@ func TestTheShippedArgumentsProtocolOffersTheOptions(t *testing.T) {
 // Three specs with no exclusions between them, so that the answer is a list
 // and not the single name `uname` happens to leave.
 func TestTheShippedArgumentsProtocolOffersTheRestOfAStack(t *testing.T) {
+	t.Parallel()
 	got := completionFor(t, widgetOf(`
 		comparguments -i '' -s : '-a[all]' '-m[machine]' '-p[processor]' || return
 		local -a next direct odirect equal
@@ -108,6 +110,7 @@ func TestTheShippedArgumentsProtocolOffersTheRestOfAStack(t *testing.T) {
 // 5.9.2 from both directions — `uname -` is 1, because a lone `-` is not yet a
 // stack, and `uname -a` is 0.
 func TestAStackIsOnlyOfferedWhereOneIsBeingWritten(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, line, want string }{
 		{"a lone dash is not a stack", "uname -", "1"},
 		{"a letter after it is", "uname -a", "0"},
@@ -134,6 +137,7 @@ func TestAStackIsOnlyOfferedWhereOneIsBeingWritten(t *testing.T) {
 // adds a space on `/bin/zsh` against this machine's own functions, and offered
 // nothing here.
 func TestTheOptionUnderTheCursorIsOfferedBack(t *testing.T) {
+	t.Parallel()
 	// One spec set holding all six argument forms, so that every row is asked
 	// of the same parse and a difference can only be the form.
 	const forms = `'-a[plain]' '-n[next]:nx:' '-o=[out]:out:' ` +
@@ -180,6 +184,7 @@ func TestTheOptionUnderTheCursorIsOfferedBack(t *testing.T) {
 // Measured with `--all` and `--almost` declared: `cmd --all --almost<TAB>`
 // offers `--almost` and not `--all`.
 func TestTheOptionUnderTheCursorIsTheOnlyOneOfferedBack(t *testing.T) {
+	t.Parallel()
 	got := reported(t, `comparguments -i '' : '--all[all]' '--almost[almost]' '-p[proc]'
 		local -a n d od e; comparguments -O n d od e
 		local -a names=( ${n%%:*} ); say "${names[*]}"`,
@@ -192,6 +197,7 @@ func TestTheOptionUnderTheCursorIsTheOnlyOneOfferedBack(t *testing.T) {
 // TestComparguments is the six read-back verbs, each asked in the position
 // its measurement was taken in.
 func TestComparguments(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, line, body, want string }{
 		// `-i` is 0 where an option could be written here.
 		{"options here", "uname -", `comparguments ` + unameSpecs + `; say $?`, "0"},
@@ -627,6 +633,7 @@ func TestComparguments(t *testing.T) {
 // `options` — and the third `comptry` adds nothing, because a tag is used
 // once.
 func TestComptagsRunsTheTagLoop(t *testing.T) {
+	t.Parallel()
 	const loop = `
 		comptags -i :complete:make: argument-rest options
 		comptry -m '(|*-)argument-* (|*-)option[-+]* values'
@@ -647,6 +654,7 @@ func TestComptagsRunsTheTagLoop(t *testing.T) {
 
 // TestComptags is the rest of the verbs, each from both sides.
 func TestComptags(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, body, want string }{
 		// `-T` is whether any set was built, and it is 1 until one is.
 		{"nothing tried", `comptags -i :x: aa; comptags -T; say $?`, "1"},
@@ -691,6 +699,7 @@ func TestComptags(t *testing.T) {
 // TestCompdescribe is the two-pass builder, and the padding is the row worth
 // having: it is what makes a listing line up, and it is measured.
 func TestCompdescribe(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, body, want string }{
 		{
 			"names and descriptions",
@@ -833,6 +842,7 @@ func TestCompdescribe(t *testing.T) {
 
 // TestCompvalues is `_values`' half of the same machinery.
 func TestCompvalues(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, line, body, want string }{
 		// The value under the cursor counts as already given, exactly as an
 		// option does. Measured with `tar c`: `c` is missing from the answer
@@ -896,6 +906,7 @@ func TestCompvalues(t *testing.T) {
 // TestCompquoteQuotesInPlace is the one of the eight the manual calls useful
 // outside the shipped tree.
 func TestCompquoteQuotesInPlace(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, body, want string }{
 		{"a scalar", `local one='a b'; compquote one; say "$one"`, `a\ b`},
 		{
@@ -922,6 +933,7 @@ func TestCompquoteQuotesInPlace(t *testing.T) {
 // zsh 5.9.2, `-r` over an empty or unset array is 0, which is its rule for
 // one match or none (#6144).
 func TestCompfilesAndCompgroupsAnswerWithoutClaiming(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, body, want string }{
 		{"compfiles builds no pattern", `compfiles -p t a '' ' ' '' f '*'; say $?`, "0"},
 		{"compfiles narrows nothing", `compfiles -r t ''; say $?`, "0"},
@@ -945,6 +957,7 @@ func TestCompfilesAndCompgroupsAnswerWithoutClaiming(t *testing.T) {
 // — `compdescribe -i x` is two words and answers the count instead. See
 // TestTheCompletionBuiltinsCountTheirWordsFirst.
 func TestTheEightRefuseOutsideACompletion(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{
 		"comparguments", "compdescribe", "compfiles", "compgroups",
 		"compquote", "comptags", "comptry", "compvalues",
@@ -979,6 +992,7 @@ func TestTheEightRefuseOutsideACompletion(t *testing.T) {
 // Found by `make coverage` (#2293, under #2291), which reported all ten as
 // surface no case in the tree ever asked about. Eight of the ten were wrong.
 func TestTheCompletionBuiltinsCountTheirWordsFirst(t *testing.T) {
+	t.Parallel()
 	const few, many, place = "not enough arguments", "too many arguments",
 		"can only be called from completion function"
 	for _, c := range []struct{ name, src, want string }{
@@ -1024,6 +1038,7 @@ func TestTheCompletionBuiltinsCountTheirWordsFirst(t *testing.T) {
 // shell that read it as a candidate offers an eighth match spelled `-`.
 // Measured on zsh 5.9.2, 2026-09-15: `compadd - -a -m` there offers two.
 func TestCompaddEndsItsOptionsOnALoneDash(t *testing.T) {
+	t.Parallel()
 	got := completionFor(t, widgetOf("compadd -o nosort - -a -m"), "uname -")
 	want := []string{"-a", "-m"}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
@@ -1040,6 +1055,7 @@ func TestCompaddEndsItsOptionsOnALoneDash(t *testing.T) {
 // TestCompaddStrikesThroughTheArraysItIsGiven is `-D`, by position, more than
 // once, and with an array longer than the candidate list.
 func TestCompaddStrikesThroughTheArraysItIsGiven(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, body, want string }{
 		{
 			"by position",
@@ -1097,6 +1113,7 @@ func reported(t *testing.T, body, line string) string {
 // expand-or-complete`, which is what the shipped completion system's first
 // call looked like from the outside.
 func TestACompletionWidgetsFunctionIsCalledWithNoArguments(t *testing.T) {
+	t.Parallel()
 	got := completionFor(t, widgetOf(`compadd -U -Q -- "n=$# [$*]"`), "git che")
 	if len(got) != 1 || got[0] != "n=0 []" {
 		t.Errorf("the function saw %q, want [n=0 []]", got)
@@ -1113,6 +1130,7 @@ func TestACompletionWidgetsFunctionIsCalledWithNoArguments(t *testing.T) {
 // dropped as "nothing to say". Measured: with `compinit` run, `uname -` and
 // Tab completed nothing here and offered seven options in zsh.
 func TestARedefinedStandardWidgetOnItsOwnKeyReachesTheEditor(t *testing.T) {
+	t.Parallel()
 	r := bindkeyRunner(t, "_f() { compadd -U -Q -- x }\n"+
 		"zle -C expand-or-complete .expand-or-complete _f\n")
 	got, bound := zsh.KeyBindings(r, repl.KeymapMain)["\t"]

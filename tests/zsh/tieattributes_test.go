@@ -19,6 +19,7 @@ import (
 // Measured 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0), `-f` from a
 // script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME.
 func TestTheHideLetterOnATieLine(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the letter on the tie's own line reaches both halves",
@@ -73,6 +74,7 @@ func TestTheHideLetterOnATieLine(t *testing.T) {
 // Nothing had asked the word about it, which is why the two disagreed for as
 // long as they did.
 func TestThePartnerOfABuiltInTieIsNotLocal(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"from the scalar end",
@@ -134,6 +136,7 @@ f`,
 // have been written by not shadowing the partner at all, and that would pass
 // every row of the test above and break every row of this one.
 func TestTheMirrorStillCarriesTheValues(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `f(){ typeset PATH=/x; print "in=${#path} ${path[1]}" }
 f
 print "out=${path[1]} n=${#path}"`)
@@ -154,6 +157,7 @@ print "out=$PATH"`)
 // a tie declaration carries is the **scalar's** — see
 // Runner.freezeWithoutDeferring (#4874).
 func TestAFrozenTieRefusesALiteralOnItsArrayHalf(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `typeset -rT TT tt=(a b); print "reached ${#tt}"`)
 	if !strings.Contains(out, "read-only variable: tt") {
 		t.Errorf("a frozen tie with an array literal = %q, want the freeze to refuse it", out)
@@ -168,6 +172,7 @@ func TestAFrozenTieRefusesALiteralOnItsArrayHalf(t *testing.T) {
 // value": the scalar half's value is this declaration's own and is taken
 // through the freeze, and the same literal with no `-r` is stored.
 func TestAFrozenTieTakesTheScalarHalfsValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the scalar half under a freeze", `typeset -rT TT=x:y tt; print "${#tt} [$TT] ${(t)tt}"`, "2 [x:y] array-readonly-tied\n"},
 		{"the array half with no freeze", `typeset -T TT tt=(a b); print "${#tt} [$TT] ${(t)tt}"`, "2 [a:b] array-tied\n"},
@@ -188,6 +193,7 @@ func TestAFrozenTieTakesTheScalarHalfsValue(t *testing.T) {
 // Measured 2026-09-27 on zsh 5.9.2 (aarch64-apple-darwin25.4.0), `-f` from a
 // script file under `env -i PATH=/usr/bin:/bin LC_ALL=C` with a scratch HOME.
 func TestADeclarationOverATieMirrorIsNotARedeclaration(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the array half after the scalar was declared",
@@ -273,6 +279,7 @@ func TestADeclarationOverATieMirrorIsNotARedeclaration(t *testing.T) {
 // mirror keeps what the partner put there; a first declaration of the name
 // with no mirror in front of it does not.
 func TestADeclarationOverATieMirrorKeepsTheValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"over the mirror", `f(){ typeset PATH=/x; typeset path; print "n=$#path [$path]" }; f`, "n=1 [/x]\n"},
 		{"with no mirror", `f(){ typeset path; print "n=$#path [$path]" }; f`, "n=0 []\n"},
@@ -296,6 +303,7 @@ func TestADeclarationOverATieMirrorKeepsTheValue(t *testing.T) {
 // asks the listing question. Without these rows the branch was a reading
 // nothing could contradict.
 func TestLocalAtTheTopLevelListsAHeldName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a second local of the same name", `local v; local v; print "${(t)v}"`, "v=''\nscalar\n"},
 		{"a local over a name already holding", `v=hi; local v; print "${(t)v}"`, "v=hi\nscalar\n"},

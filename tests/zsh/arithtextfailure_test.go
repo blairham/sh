@@ -12,6 +12,7 @@ import "testing"
 // shell, as any failed expansion in a command's words does here. See
 // interp.Semantics.FailedExpansionEscapesAnArithmeticCommand (#7189).
 func TestAFailedExpansionInAnArithmeticCommandIsTheConstructs(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src, want string
 		status    int

@@ -10,6 +10,7 @@ import "testing"
 // the way a flag's argument's do (#5151, a chunk of D04parameter.ztst).
 // Measured 2026-10-02 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f`, `LC_ALL=C`).
 func TestTheRepeatCountIsAnExpressionInPairedDelimiters(t *testing.T) {
+	t.Parallel()
 	const setup = "f=/one/two/three/four; n=2\n"
 	for _, tc := range []struct{ src, want string }{
 		{`print -r -- ${f:fh} ${f:F.1.h} ${f:F+2+h}`, "/ /one/two/three /one/two\n"},

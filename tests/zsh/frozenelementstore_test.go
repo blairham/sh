@@ -12,6 +12,7 @@ import "testing"
 // interp.Semantics.ArithStoreIntoAFrozenTableIsTaken while `getopts` and
 // `${a[k]::=x}` are refused (#6826). Measured 2026-10-16 on zsh 5.9.2, `-f`.
 func TestAFrozenArrayKeepsItsElementsHere(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"(( )) indexed", `a=(1 2); readonly a; (( a[1]=5 )); echo "st=$?"; typeset -p a`,

@@ -20,6 +20,7 @@ import (
 // back as `1>&2`, which is bash's normalization and not this shell's. See
 // syntax.Layout.RedirectDescriptor for the three-column grid.
 func TestAListingSaysBackTheDefinitionsRedirections(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the chunk",
@@ -63,6 +64,7 @@ func TestAListingSaysBackTheDefinitionsRedirections(t *testing.T) {
 //	1>out      > out
 //	<&-        <&-        (the operator is not rewritten here either)
 func TestTheListingLeavesOffADefaultDescriptor(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ written, want string }{
 		{"print x >&2", "print x >&2"},
 		{"print x 1>&2", "print x >&2"},
@@ -98,6 +100,7 @@ func TestTheListingLeavesOffADefaultDescriptor(t *testing.T) {
 // nowhere to go without it. Measured 2026-09-29: with redirections the value
 // opens `{` and ends `} < in > out 2>&1`; without them it is the body alone.
 func TestTheFunctionsParameterKeepsTheBracesForRedirections(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"with redirections, braced",

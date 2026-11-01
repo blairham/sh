@@ -28,6 +28,7 @@ import (
 // in argv itself. The two test functions are deliberately kept apart so that a
 // change which fixes one and not the other cannot pass.
 func TestAnArrayOperandIsTracedWhereItWasWritten(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset a=(x y) b`, "> typeset a=( x y ) b\n"},
@@ -68,6 +69,7 @@ func TestAnArrayOperandIsTracedWhereItWasWritten(t *testing.T) {
 // The other surface: `-T`'s operands are **positional**, so the permutation put
 // the separator in the array half's place and it was refused as a name.
 func TestATieReadsItsOperandsAsWritten(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name, src, want string
@@ -117,6 +119,7 @@ func TestATieReadsItsOperandsAsWritten(t *testing.T) {
 // that had to stay still: the names are declared with the same attributes and
 // the same values, and a refusal still names the same operand.
 func TestMovingTheOperandDoesNotChangeWhatItDeclares(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the types", "typeset a=(1) b\n" + `print -r -- "${(t)a} ${(t)b}"` + "\n", "array scalar\n"},

@@ -33,6 +33,7 @@ func filesTree(t *testing.T) string {
 // file at its new name and a `zf_rm -f` that takes it away again are the
 // module.
 func TestZfMvMovesAndZfRmRemoves(t *testing.T) {
+	t.Parallel()
 	out, st := runZshWithFiles(t, filesTree(t), `zf_mv -f -- a moved
 print -r -- "mv=$? a=$([[ -e a ]] && print yes || print no) moved=$([[ -e moved ]] && print yes || print no)"
 zf_rm -f -- moved
@@ -48,6 +49,7 @@ print -r -- "rm=$? moved=$([[ -e moved ]] && print yes || print no)"`)
 // got as far as creating the file. Without it the same line is a diagnostic
 // and a status.
 func TestZfRmDashFIsSilentAboutWhatWasNeverThere(t *testing.T) {
+	t.Parallel()
 	out, st := runZshWithFiles(t, filesTree(t), `zf_rm nosuch 2>&1
 print -r -- "plain=$?"
 zf_rm -f nosuch 2>&1
@@ -68,6 +70,7 @@ print -r -- "forced-none=$?"`)
 // A directory is refused until `-r` asks for it, and then everything below it
 // goes before it does.
 func TestZfRmDescendsOnlyWhenAskedTo(t *testing.T) {
+	t.Parallel()
 	out, st := runZshWithFiles(t, filesTree(t), `zf_mkdir -p tree/under
 zf_mv -f -- a tree/under/deep
 zf_rm tree 2>&1
@@ -84,6 +87,7 @@ print -r -- "recursive=$? left=$([[ -e tree ]] && print yes || print no)"`)
 // `mkdir` and `rmdir`, including the mode that survives the umask and the two
 // sentences each of them has for a name it cannot use.
 func TestZfMkdirAndZfRmdir(t *testing.T) {
+	t.Parallel()
 	out, st := runZshWithFiles(t, filesTree(t), `zf_mkdir made
 print -r -- "made=$?"
 zf_mkdir made 2>&1
@@ -123,6 +127,7 @@ print -r -- "none=$?"`)
 // `-f` says so. A symbolic link holds the text it was given rather than where
 // that text resolved to, which is what makes a relative link relative.
 func TestZfLnLinksAndWillNotReplaceByDefault(t *testing.T) {
+	t.Parallel()
 	out, st := runZshWithFiles(t, filesTree(t), `zf_ln -s a link
 print -r -- "made=$? points=$(zstat -L +link link)"
 zf_ln -s a link 2>&1
@@ -149,6 +154,7 @@ print -r -- "none=$?"`)
 // Several sources and a directory to put them in, and the refusal when the
 // last operand is not one.
 func TestZfMvAndZfLnTakeADirectoryForTheirLastOperand(t *testing.T) {
+	t.Parallel()
 	out, st := runZshWithFiles(t, filesTree(t), `zf_mkdir into
 zf_mv a b into
 print -r -- "moved=$? a=$([[ -e into/a ]] && print yes || print no) b=$([[ -e into/b ]] && print yes || print no)"
@@ -167,6 +173,7 @@ print -r -- "one=$?"`)
 // The mode `chmod` takes is octal and nothing else, and `-R` reaches
 // everything under a directory.
 func TestZfChmodTakesAnOctalModeAndReachesDownWithDashR(t *testing.T) {
+	t.Parallel()
 	out, st := runZshWithFiles(t, filesTree(t), `zf_chmod 640 a
 zstat -s +mode a
 zf_chmod u+x a 2>&1
@@ -198,6 +205,7 @@ zstat -s +mode tree/under/deep`)
 // measured table and for why both of the manual's promises are kept by holding
 // each directory open rather than by naming it again.
 func TestTheParanoidLetterRefusesASymlinkedComponent(t *testing.T) {
+	t.Parallel()
 	dir := filesParanoidTree(t)
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -298,6 +306,7 @@ print -r -- "typo=$?"`,
 // a question no script could answer — and then failed with `directory not
 // empty`, because the entry it asked about was still there.
 func TestARemovalNeverAsksAboutASymbolicLink(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "target"), []byte("t"), 0o444); err != nil {
 		t.Fatal(err)
@@ -396,6 +405,7 @@ func filesParanoidCopy(t *testing.T, from string) string {
 // `chown` and `chgrp` name what they could not find, and `sync` takes nothing
 // at all.
 func TestZfChownAndZfChgrpAndZfSync(t *testing.T) {
+	t.Parallel()
 	out, st := runZshWithFiles(t, filesTree(t), `zf_chown nosuchuser a 2>&1
 print -r -- "user=$?"
 zf_chgrp nosuchgroup a 2>&1
@@ -421,6 +431,7 @@ print -r -- "extra=$?"`)
 // `cd`. A builtin that reached for the process's would move and unlink files
 // beside whatever program embedded this shell.
 func TestTheFileBuiltinsFollowTheShellsOwnDirectory(t *testing.T) {
+	t.Parallel()
 	out, st := runZshWithFiles(t, filesTree(t), `zf_mkdir -p sub
 zf_mv -f -- a sub/inner
 cd sub
@@ -450,6 +461,7 @@ print -r -- "removed=$? left=$([[ -e renamed ]] && print yes || print no)"`)
 // wrong on. It matters because a container runs tests as root by default,
 // which is how this was found.
 func TestZfRmAsksBeforeRemovingWhatItCannotWrite(t *testing.T) {
+	t.Parallel()
 	if os.Geteuid() == 0 {
 		t.Skip("the superuser can write a mode-0400 file, so there is nothing to ask about")
 	}

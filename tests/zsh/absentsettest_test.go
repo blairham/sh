@@ -23,6 +23,7 @@ import (
 // with no rows in it, passing against a shell with the mechanism ripped out.
 // See absentProbeParam.
 func TestAskingWhetherAnUnimplementedParameterIsThere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the three spellings agree now",
@@ -62,6 +63,7 @@ func TestAskingWhetherAnUnimplementedParameterIsThere(t *testing.T) {
 // switched off — every row here carries a value out of the name, and the
 // first two carry the `+` as well.
 func TestReadingAnUnimplementedParameterStillRefuses(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`print -r -- "[${+zshabsentprobe#a}]"`,
 		`print -r -- "[${+zshabsentprobe%a}]"`,

@@ -35,6 +35,7 @@ import (
 // only come from zsh's table, against three that could only come from the
 // substrate's.
 func TestSetOListsThisDialectsOwnTable(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "set +o")
 	if st != 0 {
 		t.Fatalf("status = %d, want 0", st)
@@ -79,6 +80,7 @@ func TestSetOListsThisDialectsOwnTable(t *testing.T) {
 // namespace default *off*, where the state and the deviation are the same
 // value and a row cannot tell them apart.
 func TestARowsStateIsItsDeviationFromZshsDefault(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "set +o")
 	if st != 0 {
 		t.Fatalf("status = %d, want 0", st)
@@ -111,6 +113,7 @@ func TestARowsStateIsItsDeviationFromZshsDefault(t *testing.T) {
 // other, in both directions. This is what makes the listing above a fact
 // about the shell rather than a second table that happens to be longer.
 func TestSetOAndSetoptAreOneNamespace(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `set -o autocd; echo "st=$?"; setopt`)
 	if !strings.Contains(out, "st=0\n") || !strings.Contains(out, "autocd\n") || st != 0 {
 		t.Errorf("out %q status %d, want `set -o autocd` visible to a bare `setopt`", out, st)
@@ -130,6 +133,7 @@ func TestSetOAndSetoptAreOneNamespace(t *testing.T) {
 // the same namespace. `set -o Err_Exit` is one question in zsh and an unknown
 // name in every other shell.
 func TestSetOTakesThisDialectsSpellings(t *testing.T) {
+	t.Parallel()
 	for _, spelling := range []string{"Err_Exit", "ERREXIT", "e_r_r_e_x_i_t"} {
 		out, st := runZsh(t, t.TempDir(), `set -o `+spelling+`; echo "st=$?"; [[ -o errexit ]]; echo "c=$?"`)
 		if !strings.Contains(out, "st=0\n") || !strings.Contains(out, "c=0\n") || st != 0 {
@@ -142,6 +146,7 @@ func TestSetOTakesThisDialectsSpellings(t *testing.T) {
 // has that will not move — different sentences, both at 1, both ending the
 // script, which is what `set` does here and `setopt` does not.
 func TestSetORefusesTwoDifferentWays(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "set -o zzznosuch\necho after")
 	if want := "zsh:set:1: no such option: zzznosuch\n"; out != want {
 		t.Errorf("out = %q, want exactly %q — nothing after it", out, want)
@@ -167,6 +172,7 @@ func TestSetORefusesTwoDifferentWays(t *testing.T) {
 // the other spelling are *not* fatal, because `setopt` is not a special
 // builtin. One namespace, two builtins, and only one of them stops a script.
 func TestSetoptStillCarriesOnPastItsOwnRefusal(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "setopt zzznosuch\necho after")
 	if !strings.Contains(out, "zsh:setopt:1: no such option: zzznosuch\n") ||
 		!strings.Contains(out, "after\n") || st != 0 {
@@ -184,6 +190,7 @@ func TestSetoptStillCarriesOnPastItsOwnRefusal(t *testing.T) {
 // under their borrowed spellings — were `can't change option` at 1 until
 // #1739. Real zsh grants every one of the seven, measured a name at a time.
 func TestTheEightBashNamesAreStillAccepted(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, want string
 		status     int
@@ -229,6 +236,7 @@ func TestTheEightBashNamesAreStillAccepted(t *testing.T) {
 // to choose a tokenizer, and one told the option is on splits the line
 // comment-aware and classifies a bare `ls` as a comment.
 func TestInteractiveCommentsDefaultsOffLikeZsh(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `[[ -o interactivecomments ]]; echo "c=$?"`)
 	if !strings.Contains(out, "c=1\n") || st != 0 {
 		t.Errorf("out %q status %d, want `[[ -o interactivecomments ]]` to answer 1", out, st)

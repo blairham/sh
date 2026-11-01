@@ -13,6 +13,7 @@ import (
 // TestBindkeyMakesAndNamesKeymaps is `bindkey -N` and `bindkey -A`, each row
 // measured 2026-10-05 on zsh 5.9.2 under `zsh -f` (#5969). See keymaps.go.
 func TestBindkeyMakesAndNamesKeymaps(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{"bindkey -N mymap emacs; echo st=$?; bindkey -l mymap; bindkey -M mymap '^A'", "st=0\nmymap\n\"^A\" beginning-of-line\n"},
 		{"bindkey -N mymap emacs; bindkey -M mymap '^Xq' undo; bindkey -M emacs '^Xq'", "\"^Xq\" undefined-key\n"},
@@ -40,6 +41,7 @@ func TestBindkeyMakesAndNamesKeymaps(t *testing.T) {
 
 // TestBindkeyNewAndLinkRefusals: each status 1, measured on zsh 5.9.2.
 func TestBindkeyNewAndLinkRefusals(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{"bindkey -N foo nosuch", "zsh:bindkey:1: no such keymap `nosuch'\n"},
 		{"bindkey -A nosuch foo", "zsh:bindkey:1: no such keymap `nosuch'\n"},
@@ -60,6 +62,7 @@ func TestBindkeyNewAndLinkRefusals(t *testing.T) {
 // main is vi editing, and a key bound into it reaches the editor, where a key
 // bound only in emacs does not.
 func TestAMadeKeymapSelectedAsMainDrivesTheEditor(t *testing.T) {
+	t.Parallel()
 	r := bindkeyRunner(
 		t,
 		"bindkey -N myvi viins\nbindkey -A myvi main\nbindkey -M myvi '^Xw' undo\nbindkey -M emacs '^Xe' undo\n",

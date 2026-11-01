@@ -16,6 +16,7 @@ import (
 // emptied the array but still counted it as set, and after the assignment
 // `${(t)region_highlight}` was empty and `typeset -p` listed nothing.
 func TestAnUnsetRegionHighlightIsUnsetUntilAssigned(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `w() {
   region_highlight=('0 1 bold')
   unset region_highlight
@@ -40,6 +41,7 @@ zle -N w
 // and `$#` at 0 and no type, and `argv=(x y)` after it is `array-special`
 // again with both elements.
 func TestAnUnsetArgvIsUnsetUntilAssigned(t *testing.T) {
+	t.Parallel()
 	got, _, errs := runZshUTF8(t, `set -- a b c; unset argv; print -r -- "${+argv} $# [${(t)argv}]"
 argv=(x y); print -r -- "${+argv} $# [${(t)argv}] $*"`)
 	if want := "0 0 []\n1 2 [array-special] x y\n"; got != want || errs != "" {

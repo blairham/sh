@@ -10,6 +10,7 @@ import "testing"
 // unless `-s` is written. Measured 2026-10-16 on zsh 5.9.2, `-f`, under `env
 // -i PATH=/usr/bin:/bin` (#6787).
 func TestZmodloadRefusesAModuleNameBySpelling(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, want string
 		status    int

@@ -11,6 +11,7 @@ import "testing"
 // reads it afterwards (#5151, a chunk of D04parameter.ztst). Measured
 // 2026-10-03 on zsh 5.9.2 under `-f`.
 func TestAnAnonymousFunctionCallSetsUnderscore(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`print a b; () { print "[$_]" }`, "a b\n[]\n"},
 		{`print a b; () { print "[$_]" } x y`, "a b\n[y]\n"},

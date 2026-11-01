@@ -13,6 +13,7 @@ import "testing"
 //
 // Every row measured 2026-10-02 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f`).
 func TestAnArithmeticResultIsNeverSplit(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`IFS=2; printf '<%s>\n' $((11*11))`, "<121>\n"},
 		{`IFS=2; setopt shwordsplit; printf '<%s>\n' $((11*11)) $[11*11] $((11*11))x`, "<121>\n<121>\n<121x>\n"},

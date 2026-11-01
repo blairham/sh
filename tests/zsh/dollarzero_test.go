@@ -22,6 +22,7 @@ import (
 // TestDollarZeroFollowsTheSourcedFile walks the routes as behavior, since the
 // axis being set is not the same claim as the shell answering with it.
 func TestDollarZeroFollowsTheSourcedFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeFile(t, dir, "inc.sh", "echo \"in=[$0]\"\n")
 	writeFile(t, dir, "def.sh", "f() { echo \"fn=[$0]\"; }\n")
@@ -76,6 +77,7 @@ func TestDollarZeroFollowsTheSourcedFile(t *testing.T) {
 // TestTheAxisIsSet is the field, which is what the preset promises and what a
 // caller building its own Semantics reads.
 func TestTheAxisIsSet(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().DollarZeroNames; got != interp.DollarZeroIsTheInnermostCall {
 		t.Errorf("DollarZeroNames = %v, want the innermost call", got)
 	}
@@ -89,6 +91,7 @@ func TestTheAxisIsSet(t *testing.T) {
 // The prelude is what sets it, so this needs the prelude installed the way
 // the front end installs it rather than pasted on the front of the snippet.
 func TestZshArgzeroIsWhatDollarZeroWasBeforeAnythingMovedIt(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeFile(t, dir, "inc.sh", "echo \"in=[$0] az=[$ZSH_ARGZERO]\"\n")
 

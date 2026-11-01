@@ -97,6 +97,7 @@ func TestTheEvalContextSaysWhatTheShellIsInside(t *testing.T) {
 // names a sourced file and a function alike, and this names them with
 // different words.
 func TestASourcedFileIsItsOwnContextWord(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	inner := filepath.Join(dir, "inc.zsh")
 	const body = "print -r -- \"[$ZSH_EVAL_CONTEXT]\"\n" +
@@ -118,6 +119,7 @@ func TestASourcedFileIsItsOwnContextWord(t *testing.T) {
 // The control for every row above: without it they would all pass in a shell
 // that answered `toplevel` for the bottom of the stack whatever it was given.
 func TestTheCommandStringRouteNamesItself(t *testing.T) {
+	t.Parallel()
 	base := dialecttest.Base{Dir: t.TempDir(), Route: interp.RouteCommandString}
 	out, _, err := preset.Combined(t, base, `print -r -- "[$ZSH_EVAL_CONTEXT]"`)
 	if err != nil {
@@ -142,6 +144,7 @@ func TestTheCommandStringRouteNamesItself(t *testing.T) {
 // The second call of each name is the control: a stack that always ended in
 // the word, rather than ending in it for the load, passes every first row.
 func TestLoadingAFunctionIsOnTheStackOnce(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for name, text := range map[string]string{
 		// A body, which is what `-z` reads a file as.
@@ -197,6 +200,7 @@ func TestLoadingAFunctionIsOnTheStackOnce(t *testing.T) {
 // stub — `toplevel:shfunc:shfunc`, two frames — so the idiom did nothing
 // and the first call answered 1.
 func TestAHandWrittenLoadRunsUnderEval(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for name, text := range map[string]string{
 		"hs": "print -r -- \"hb [$ZSH_EVAL_CONTEXT] ${#funcstack} [$funcstack] [$*]\"\nreturn 3\n",

@@ -23,6 +23,7 @@ import (
 // 64-bit integer, saturates at LONG_MAX, truncates to -1, and leaves a width
 // of one.
 func TestAFieldBeyondAnIntWrapsHere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`printf '[%21474836470s]' x`, "[x         ]"},
 		{`printf '[%4294967306s]' x`, "[         x]"},

@@ -26,6 +26,7 @@ import (
 // Measured 2026-09-26 against zsh 5.9.2 (aarch64-apple-darwin25.4.0), run
 // `-f`; `go version -m` says *not a Go executable* for it.
 func TestAnArrayLiteralThroughASubscriptOnTheParametersSplices(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The four rows the report was filed with, and the count with each,
 		// because the count is what makes this a splice rather than a write.
@@ -79,6 +80,7 @@ func TestAnArrayLiteralThroughASubscriptOnTheParametersSplices(t *testing.T) {
 // read back correctly under `$argv`, which the producer answers ahead of, and
 // not at all under `$@`, `$1` or `$#`.
 func TestASpliceOfTheParametersIsVisibleThroughEverySpellingOfThem(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`set -- x y z; argv[2]=(p q); print -r -- "[$@] [$*] 1=$1 2=$2 3=$3 4=$4"`, "[x p q z] [x p q z] 1=x 2=p 3=q 4=z"},
 		{`set -- x y z; argv[2]=(p q); print -r -- "[${@[2]}][${@[3]}] [${argv[2]}]"`, "[p][q] [p]"},
@@ -100,6 +102,7 @@ func TestASpliceOfTheParametersIsVisibleThroughEverySpellingOfThem(t *testing.T)
 // one `a[0]=(p q)` gets and not the `attempt to assign array value to
 // non-array` this used to give, which said the wrong thing about the name.
 func TestASpliceOfTheParametersRefusesASubscriptBelowTheFirst(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`set -- x y z; argv[0]=(p q); echo after`, "argv: assignment to invalid subscript range"},
 		{`set -- x y z; argv[0,0]=(p); echo after`, "argv: assignment to invalid subscript range"},
@@ -123,6 +126,7 @@ func TestASpliceOfTheParametersRefusesASubscriptBelowTheFirst(t *testing.T) {
 // subscript, and the refused subscript moves with it: below the first is `-4`
 // rather than `0`, and zero is an ordinary parameter.
 func TestKshArraysMovesWhereASpliceOfTheParametersLands(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`setopt ksharrays; set -- x y z; argv[0]=(p q); print -r -- "n=$# [${argv[*]}]"`, "n=4 [p q y z]"},
 		{`setopt ksharrays; set -- x y z; argv[1]=(p q); print -r -- "n=$# [${argv[*]}]"`, "n=4 [x p q z]"},

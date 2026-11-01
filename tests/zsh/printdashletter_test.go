@@ -24,6 +24,7 @@ import (
 // rows that cannot decide anything, kept so the discriminating pair is not
 // mistaken for the whole measurement.
 func TestPrintReadsADashInsideABundleAsAnInertLetter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// Discriminating: the lone word ends the options.
 		{`print - -n x`, "-n x\n"},
@@ -59,6 +60,7 @@ func TestPrintReadsADashInsideABundleAsAnInertLetter(t *testing.T) {
 // the space after the two dashes rather than a dash. Naming the wrong
 // character sends the reader to the wrong part of the line.
 func TestPrintNamesTheCharacterItActuallyStoppedOn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`print "--- x ---"`, "zsh:print:1: bad option: - \n"},
 		{`print -n-Q x`, "zsh:print:1: bad option: -Q\n"},

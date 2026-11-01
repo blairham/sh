@@ -29,6 +29,7 @@ func arithLine(t *testing.T, expr string) string {
 // something that could not begin a value. Measured against zsh 5.9.2
 // (2026-09-05).
 func TestAMissingOperandNamesTheEndOrTheText(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"1+", "bad math expression: operand expected at end of string"},
 		{"~", "bad math expression: operand expected at end of string"},
@@ -46,6 +47,7 @@ func TestAMissingOperandNamesTheEndOrTheText(t *testing.T) {
 // rather than being the one byte, which is what makes it the *text* rather
 // than a token.
 func TestTheTextNamedRunsToTheEndOfTheExpression(t *testing.T) {
+	t.Parallel()
 	want := "bad math expression: operand expected at `&2+3'"
 	if got := arithLine(t, "1+&2+3"); got != arithLoc+want+"\n" {
 		t.Errorf("got %q, want %q", got, arithLoc+want+"\n")
@@ -56,6 +58,7 @@ func TestTheTextNamedRunsToTheEndOfTheExpression(t *testing.T) {
 // reads the offset alone: `${x:1+:2}` still ran out here where the shell that
 // names the whole range found a token.
 func TestASubstringOffsetIsReadAlone(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `x=abcdef; echo "${x:1+:2}"`)
 	want := "bad math expression: operand expected at end of string"
 	if !strings.Contains(out, want) {
@@ -68,6 +71,7 @@ func TestASubstringOffsetIsReadAlone(t *testing.T) {
 // expression could legally have stopped. Measured against zsh 5.9.2
 // (2026-09-07), by trying every ASCII punctuation byte in five positions.
 func TestAByteTheReaderRefusesAnswersForItself(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// Nothing read yet.
 		{"@", "bad math expression: illegal character: @"},
@@ -108,6 +112,7 @@ func TestAByteTheReaderRefusesAnswersForItself(t *testing.T) {
 // A byte this reader does *not* refuse keeps the sentence it had, in the same
 // shell that refuses the others — which is what makes the table a table.
 func TestAByteTheReaderAcceptsKeepsItsOwnSentence(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"%", "bad math expression: operand expected at `%'"},
 		{"1+", "bad math expression: operand expected at end of string"},

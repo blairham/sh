@@ -12,6 +12,7 @@ import "testing"
 // double-quoted expansion nothing is expanded (#5151, a chunk of
 // D04parameter.ztst). Measured 2026-10-03 on zsh 5.9.2 under `-f`.
 func TestTheSubstitutionModifiersReplacementExpandsWhereItLands(t *testing.T) {
+	t.Parallel()
 	const setup = "b=Q\n"
 	for _, tc := range []struct{ src, want string }{
 		{`a=(xax yay); print ${a:gs/a/${b}/}`, "xQx yQy\n"},

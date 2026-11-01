@@ -13,6 +13,7 @@ import "testing"
 // see interp/floatformat.go, and tests/ksh/floatformat_test.go for the
 // other reading of the same letter.
 func TestTheExponentLetterIsAFormat(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{"three significant figures", `typeset -E 3 a=3.14159; echo "$a"`, "3.14e+00\n"},
@@ -56,6 +57,7 @@ func TestTheExponentLetterIsAFormat(t *testing.T) {
 // The three questions this shell answers one way and ksh93 the other, each on
 // the row that discriminates them.
 func TestWhereTheNumericLettersPartFromKsh(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -108,6 +110,7 @@ func TestWhereTheNumericLettersPartFromKsh(t *testing.T) {
 // stored value was the rendering and `float -E3 f; float -F f` wrote `3.140`
 // for a name holding 3.14159265358979.
 func TestAFloatLetterDecidesHowItIsWrittenNotWhatItIs(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -226,6 +229,7 @@ func TestAFloatLetterDecidesHowItIsWrittenNotWhatItIs(t *testing.T) {
 // See Semantics.FloatLetterChangeRereadsTheRendering and
 // tests/ksh/floatletterreread_test.go (#4486).
 func TestAChangeOfFloatLetterKeepsTheNumber(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const x = "3.14159265358979"
 	for _, tc := range []struct{ name, src, want string }{
@@ -277,6 +281,7 @@ func TestAChangeOfFloatLetterKeepsTheNumber(t *testing.T) {
 // which is what `${#g}` counts and what a child is told, while `typeset -p g`
 // writes `inf` (#4662).
 func TestAFloatNameHoldsAnInfinityAndANaN(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a NaN", `float f; (( f = 0.0/0.0 )); typeset -p f`, "typeset -E f=nan\n"},

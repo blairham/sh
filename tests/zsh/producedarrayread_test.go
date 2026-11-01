@@ -35,6 +35,7 @@ import (
 // `${@%%:*}` is the one that was right, and a fix at the operator rather than
 // at the seam would have left them disagreeing.
 func TestReadingAProducedArrayDoesNotWriteIt(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, read, want string }{
 		{"a modifier through the (@) flag", `: ${(@)argv%%:*}`, "a:1 b:2"},
 		{"the same read spelled with @", `: ${@%%:*}`, "a:1 b:2"},

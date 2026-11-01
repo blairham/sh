@@ -19,6 +19,7 @@ import (
 //
 // Measured on zsh 5.9.2, 2026-09-27, `-f` from a script file.
 func TestAnEndBehindTheOffsetIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`v=abcdef; echo "[${v:1:-9}]"`, "substring expression: -3 < 1"},
 		{`v=abcdef; echo "[${v:0:-7}]"`, "substring expression: -1 < 0"},
@@ -38,6 +39,7 @@ func TestAnEndBehindTheOffsetIsRefused(t *testing.T) {
 // empty at 0 — in the reference and in bash alike — so what is refused is a
 // strictly smaller end and not a negative length.
 func TestAnEndAtOrInsideTheStartIsNotRefused(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `v=abcdef
 print "  inside=[${v:1:-2}]"
 print "  atstart=[${v:1:-5}]"
@@ -53,6 +55,7 @@ print "  after=$?"`)
 // it from being read as bash's rule about negative lengths on lists, since
 // this shell takes one that stays inside.
 func TestTheListSliceAsksTheSameBound(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `a=(p q r s t u)
 print "  inside=[${a[@]:1:-2}]"
 print "  behind=[${a[@]:1:-9}]"
@@ -75,6 +78,7 @@ print after`)
 // either fact alone is offset 0 against offset 1: those two are the only ones
 // whose end differs.
 func TestThePositionalSliceNamesItsOwnBound(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ off, want string }{
 		{"0", "substring expression: -2 < 0"},
 		{"1", "substring expression: -3 < 0"},

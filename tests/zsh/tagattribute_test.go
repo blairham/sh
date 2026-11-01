@@ -14,6 +14,7 @@ import "testing"
 // 2026-09-27 on zsh 5.9.2 under `-f` from a script file; see
 // dialect/zsh/parameters.go for the position and how it was pinned.
 func TestTheTraceAttributeHasAWord(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the headline", `typeset -t v=1; print -r -- ${(t)v}`, "scalar-tag\n"},
 		{"inside a function", `f(){ typeset -t w=1; print -r -- ${(t)w} }; f`, "scalar-local-tag\n"},

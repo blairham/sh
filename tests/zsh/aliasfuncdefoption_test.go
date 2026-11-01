@@ -32,6 +32,7 @@ import (
 // which runs without the alias expansion a script gets and so cannot see an
 // alias at a function name at all.
 func TestAliasFuncDefLetsAnAliasNameAFunction(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	const refused = "defining function based on alias `ga'\n"
 	for _, c := range []struct {

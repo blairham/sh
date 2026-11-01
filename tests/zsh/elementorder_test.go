@@ -19,6 +19,7 @@ import (
 // before VAL here untraced, the flag group's operand ran twice, and the
 // traced `globassign` write ran its value twice (#6604, #6605).
 func TestAnElementWriteExpandsItsValueFirst(t *testing.T) {
+	t.Parallel()
 	src := "s() { echo SUB >&2; echo \"$1\"; }\n" +
 		"v() { echo VAL >&2; }\n" +
 		"a=(1 2 3); typeset -A m\n" +

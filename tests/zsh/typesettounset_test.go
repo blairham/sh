@@ -11,6 +11,7 @@ import "testing"
 // backwards, and the emulations' own readings of that axis are its default in
 // each: on under sh and ksh, off under csh and zsh.
 func TestTypesetToUnset(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"the option", `setopt typesettounset; typeset X; integer i; typeset -a a; typeset -A m

@@ -15,6 +15,7 @@ import (
 // rc file that sets styles for a completion system this shell has not got runs
 // to the end, and the styles are there afterwards.
 func TestAStyleIsStoredAndSaidBack(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "zstyle ':completion:*' verbose yes; echo ok\nzstyle -L\n")
 	if st != 0 {
 		t.Errorf("status = %d, want 0", st)
@@ -29,6 +30,7 @@ func TestAStyleIsStoredAndSaidBack(t *testing.T) {
 // styles come out alphabetically whatever order they were set in, and the
 // patterns under each in the specificity order the lookup uses.
 func TestTheListingIsStyleThenPattern(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"zstyle ':b:*' sty B; zstyle ':a:*' sty A; zstyle ':c:*' other C\nzstyle -L\n")
 	want := "zstyle ':c:*' other C\nzstyle ':b:*' sty B\nzstyle ':a:*' sty A\n"
@@ -42,6 +44,7 @@ func TestTheListingIsStyleThenPattern(t *testing.T) {
 // one-component pattern eight characters long still sorts after a
 // three-component one two characters long.
 func TestMoreComponentsSortFirst(t *testing.T) {
+	t.Parallel()
 	for _, order := range []string{
 		"zstyle ':a:b:c:d:*' v 1; zstyle ':q:*' v 2; zstyle ':m:n:*' v 3\n",
 		"zstyle ':q:*' v 2; zstyle ':m:n:*' v 3; zstyle ':a:b:c:d:*' v 1\n",
@@ -63,6 +66,7 @@ func TestMoreComponentsSortFirst(t *testing.T) {
 // tie-break rather than the rule. `:x:y:z:*` has more components than the
 // exact `:a:b:c` and still wins.
 func TestAnExactPatternSortsBeforeAWildcardOne(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "zstyle 'a*b' v 1; zstyle 'a?b' v 2; zstyle 'ab' v 3\nzstyle -L\n")
 	if want := "zstyle ab v 3\nzstyle 'a*b' v 1\nzstyle 'a?b' v 2\n"; out != want {
 		t.Errorf("output = %q, want %q", out, want)
@@ -77,6 +81,7 @@ func TestAnExactPatternSortsBeforeAWildcardOne(t *testing.T) {
 // it is asserted from both insertion orders because an implementation that
 // simply took the first or the last one set would pass one of them.
 func TestTheMostSpecificPatternWins(t *testing.T) {
+	t.Parallel()
 	for _, order := range []string{
 		"zstyle ':a:*' v general; zstyle ':a:b:*' v specific\n",
 		"zstyle ':a:b:*' v specific; zstyle ':a:*' v general\n",
@@ -101,6 +106,7 @@ func TestTheMostSpecificPatternWins(t *testing.T) {
 // TestRetrievalReadsTheValues covers `-g`, `-s` and `-a` together, because the
 // three differ only in what shape the answer arrives in.
 func TestRetrievalReadsTheValues(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, _ := runZsh(t, dir, "zstyle ':a:*' v x y z\nzstyle -s ':a:b' v s; echo \"[$s]\"\n"+
 		"zstyle -s ':a:b' v d '-'; echo \"[$d]\"\nzstyle -a ':a:b' v arr; echo \"($arr)\"\n"+
@@ -125,6 +131,7 @@ func TestRetrievalReadsTheValues(t *testing.T) {
 // match, measured: `-g` given `:a:b` finds nothing when the style was set for
 // `:a:*`, where `-s` given the same context finds it.
 func TestGReadsThePatternRatherThanMatchingIt(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"zstyle ':a:*' v hello\nzstyle -g g ':a:b' v; echo \"g=$? ($g)\"\nzstyle -s ':a:b' v s; echo \"s=$? [$s]\"\n")
 	if want := "g=1 ()\ns=0 [hello]\n"; out != want {
@@ -136,6 +143,7 @@ func TestGReadsThePatternRatherThanMatchingIt(t *testing.T) {
 // 1 false and **2 for a style nobody set**, so a reader can tell "off" from
 // "unsaid" — and `-T`, which is the same test with the unsaid case true.
 func TestTheTestFormsHaveThreeStatuses(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"zstyle ':a:*' v true; zstyle ':a:*' w no\n"+
 			"zstyle -t ':a:b' v; echo \"true=$?\"\nzstyle -t ':a:b' w; echo \"false=$?\"\n"+
@@ -148,6 +156,7 @@ func TestTheTestFormsHaveThreeStatuses(t *testing.T) {
 // TestOnlyFourWordsAreTrue is measured rather than guessed: a style set to
 // something that is not one of them is false, not "set".
 func TestOnlyFourWordsAreTrue(t *testing.T) {
+	t.Parallel()
 	src := ""
 	for _, w := range []string{"true", "yes", "on", "1", "no", "off", "random", "0"} {
 		src += "zstyle ':a' v " + w + "; zstyle -t ':a' v; echo \"" + w + "=$?\"\n"
@@ -162,6 +171,7 @@ func TestOnlyFourWordsAreTrue(t *testing.T) {
 // TestDeleteTakesTheWholeTableOrPartOfIt covers `-d`'s three shapes, and that
 // a pattern nobody set is still 0 — deleting nothing is not a failure.
 func TestDeleteTakesTheWholeTableOrPartOfIt(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"zstyle ':a:*' v 1; zstyle ':a:*' w 2; zstyle ':b:*' x 3\n"+
 			"zstyle -d ':a:*' v; echo \"one=$?\"\nzstyle -L\n"+
@@ -176,6 +186,7 @@ func TestDeleteTakesTheWholeTableOrPartOfIt(t *testing.T) {
 // TestAnEvaluatedStyleIsRunWhenItIsRead is `-e`: the value is code that sets
 // `reply`, and it runs at lookup rather than at the time it was set.
 func TestAnEvaluatedStyleIsRunWhenItIsRead(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"n=one\nzstyle -e ':a:*' v 'reply=($n two)'\nn=changed\n"+
 			"zstyle -a ':a:b' v arr; echo \"($arr)\"\nzstyle -L\n")
@@ -188,6 +199,7 @@ func TestAnEvaluatedStyleIsRunWhenItIsRead(t *testing.T) {
 // TestTheBareCommandGroupsByStyle is the other listing shape, which is what a
 // person gets for typing the command with nothing after it.
 func TestTheBareCommandGroupsByStyle(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"zstyle\nzstyle ':b:*' sty B; zstyle ':a:*' sty A; zstyle ':c:*' other C\nzstyle\n")
 	want := "other\n        :c:* C\nsty\n        :b:* B\n        :a:* A\n"
@@ -200,6 +212,7 @@ func TestTheBareCommandGroupsByStyle(t *testing.T) {
 // that the quote set is not the metacharacter set: `~` sorts as exact and is
 // still quoted.
 func TestTheListingQuotesOnlyWhatNeedsIt(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"zstyle ':a:*' v 'hello world'\nzstyle ':b' w '%d {x}'\nzstyle ':c' y ''\n"+
 			"zstyle 'a~b' z 1\nzstyle ':d' q \"it's\"\nzstyle -L\n")
@@ -217,6 +230,7 @@ func TestTheListingQuotesOnlyWhatNeedsIt(t *testing.T) {
 // one says `invalid option`; `bindkey` says `bad option`, measured in both,
 // and a shared helper would quietly make them agree.
 func TestZstyleRefusesInItsOwnWords(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "zstyle -z ':a' v\n")
 	if !strings.Contains(out, "invalid option: -z") {
 		t.Errorf("output = %q, want the option refused this builtin's way", out)
@@ -238,6 +252,7 @@ func TestZstyleRefusesInItsOwnWords(t *testing.T) {
 // TestStylesAreASubshellsOwn is why the table lives in the Runner rather than
 // in a package variable: a clone must not write through to its parent.
 func TestStylesAreASubshellsOwn(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"zstyle ':y:*' w 1\n(zstyle ':x:*' v inner; zstyle -d ':y:*')\nzstyle -L\n")
 	if want := "zstyle ':y:*' w 1\n"; out != want {
@@ -249,6 +264,7 @@ func TestStylesAreASubshellsOwn(t *testing.T) {
 // assume: the context is matched against the pattern, and the style name is
 // compared for equality.
 func TestThePatternIsAPatternAndTheStyleIsNot(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"zstyle ':a:*' verbose yes\nzstyle -s ':a:b:c' verbose hit; echo \"[$hit]\"\n"+
 			"zstyle -s ':a:b:c' verb miss; echo \"[$miss]\"\n")
@@ -264,6 +280,7 @@ func TestThePatternIsAPatternAndTheStyleIsNot(t *testing.T) {
 // practice, so a handful of tied rows come out right by luck and the mutant
 // that drops the guarantee survives. Sixteen is past where that holds.
 func TestTiedPatternsKeepTheOrderTheyWereSetIn(t *testing.T) {
+	t.Parallel()
 	// Two component counts, interleaved, and enough of each that the sort has
 	// real work to do. Both halves matter. A run of rows that are *all* tied
 	// is a sort with nothing to compare, which every algorithm leaves alone —
@@ -289,6 +306,7 @@ func TestTiedPatternsKeepTheOrderTheyWereSetIn(t *testing.T) {
 // file that sets the same style twice — measured, the second set replaces the
 // value and does not move the row.
 func TestResettingAStyleKeepsItsPlace(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(),
 		"zstyle ':a:*' v 1; zstyle ':b:*' v 2; zstyle ':a:*' v 3\nzstyle -L\n")
 	if want := "zstyle ':a:*' v 3\nzstyle ':b:*' v 2\n"; out != want {
@@ -305,6 +323,7 @@ func TestResettingAStyleKeepsItsPlace(t *testing.T) {
 // than one, and treating it as an ordinary end-of-options marker gets two of
 // them wrong.
 func TestDashDashIsNotAnEndOfOptionsMarker(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			name: "a leading one is dropped and the style is set",
@@ -348,6 +367,7 @@ func TestDashDashIsNotAnEndOfOptionsMarker(t *testing.T) {
 // dashed word too long to have been an option is refused as an *argument*,
 // which is not the wording an unknown letter gets.
 func TestAnOperandTooManyIsItsOwnComplaint(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{"zstyle -g -- o p s\n", "too many arguments"},
 		{"zstyle -a -- p s arr\n", "too many arguments"},

@@ -13,6 +13,7 @@ import (
 // bash 5.3.20, dash 0.5.12, BusyBox ash 1.37.0 and ksh93u+ — see
 // Semantics.CaseWithoutACommandKeepsTheSubstitutionStatus (#6710).
 func TestACaseMatchingNothingIsZero(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), caseStatusRows)
 	if want := strings.ReplaceAll("0|0|0|0|m|0|0|0|0", "|", "\n") + "\n"; out != want {
 		t.Errorf("got %q\nwant %q", out, want)

@@ -38,6 +38,7 @@ import (
 // group of four parameters set through one seam, and a test that covered only
 // the new pair would not notice the old pair leaving.
 func TestTheFourIdentityParametersAreSetAtStartup(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		want int
@@ -72,6 +73,7 @@ func TestTheFourIdentityParametersAreSetAtStartup(t *testing.T) {
 // given `$EGID` is the same question `chgrp $EGID file` asks, with no
 // dependency on a group this machine happens to have.
 func TestAGroupIDReachesACommandAsAWord(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"GID", "EGID"} {
 		out, _, err := preset.Combined(t, dialecttest.Base{Dir: t.TempDir()},
 			`count() { print -r -- "argc=$# argv1=$1"; }; count $`+name+` file`)
@@ -100,6 +102,7 @@ func TestAGroupIDReachesACommandAsAWord(t *testing.T) {
 // It also parts this shell from bash, where the names are nothing special:
 // `env GID=999 bash --norc -c 'echo $GID'` writes 999.
 func TestTheEnvironmentCannotNameTheIdentityParameters(t *testing.T) {
+	t.Parallel()
 	base := dialecttest.Base{
 		Dir: t.TempDir(),
 		Env: []string{"UID=999", "EUID=999", "GID=999", "EGID=999"},
@@ -122,6 +125,7 @@ func TestTheEnvironmentCannotNameTheIdentityParameters(t *testing.T) {
 // in this shell, and a script that removes one gets an ordinary unset name
 // back.
 func TestUnsettingAGroupIDRemovesIt(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"GID", "EGID"} {
 		out, st, err := preset.Combined(t, dialecttest.Base{Dir: t.TempDir()},
 			`unset `+name+`; print -r -- "rc=$? [${`+name+`-no such parameter}]"`)

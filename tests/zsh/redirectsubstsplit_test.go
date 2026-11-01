@@ -15,6 +15,7 @@ import (
 // a target, while a parameter holding the same text is one name, and so is
 // a quoted substitution.
 func TestRedirectTargetSplitsACommandSubstitution(t *testing.T) {
+	t.Parallel()
 	cases := []struct{ src, want string }{
 		{"/bin/cat <$(print f1 f2)", "A\nB\n"},
 		{"IFS=:; /bin/cat <$(print f1:f2)", "A\nB\n"},

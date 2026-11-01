@@ -24,6 +24,7 @@ func parses(t *testing.T, src string) bool {
 }
 
 func TestGrammar(t *testing.T) {
+	t.Parallel()
 	// The option is on with nobody asking, which is what gates every nested
 	// text: measured 2026-09-12, an `eval`, a substitution, a sourced file
 	// and a trap body all expand under a `-c` string that expands nothing of
@@ -132,6 +133,7 @@ func TestGrammar(t *testing.T) {
 }
 
 func TestSemantics(t *testing.T) {
+	t.Parallel()
 	// zsh alone: the trap's own last command decides, so
 	// `trap "false; exit" 0` exits 1.
 	if got, want := zsh.Semantics().ExitInTrapReportsEarlierStatus, interp.No; got != want {
@@ -355,6 +357,7 @@ func TestSemantics(t *testing.T) {
 }
 
 func TestDiagnostics(t *testing.T) {
+	t.Parallel()
 	// The four lines `type` prints, each of them this shell's own words.
 	if got, want := diagTable(zsh.Diagnostics()).TypeKeyword, "%[1]s is a reserved word"; got != want {
 		t.Errorf("TypeKeyword = %q, want %q", got, want)
@@ -469,6 +472,7 @@ func TestWhatZshSaysAndWhereItSaysIt(t *testing.T) {
 }
 
 func TestDerivesFromTheStandardNotFromASibling(t *testing.T) {
+	t.Parallel()
 	posix := interp.PosixSemantics()
 	s := zsh.Semantics()
 	if s == posix {
@@ -479,6 +483,7 @@ func TestDerivesFromTheStandardNotFromASibling(t *testing.T) {
 // TestUnterminatedNamesTheLastTokenRead is zsh's view, which mentions neither
 // the construct nor what would have closed it.
 func TestUnterminatedNamesTheLastTokenRead(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"if", "parse error near `if'"},
 		{"if true; then echo x", "parse error near `x'"},
@@ -494,6 +499,7 @@ func TestUnterminatedNamesTheLastTokenRead(t *testing.T) {
 // TestBorrowedTextReplacesTheShellName is zsh's answer to both halves of the
 // naming question, and it calls eval's text something of its own.
 func TestBorrowedTextReplacesTheShellName(t *testing.T) {
+	t.Parallel()
 	d := zsh.Diagnostics()
 	for _, tc := range []struct {
 		what string
@@ -524,6 +530,7 @@ func arithRun(t *testing.T, src string) string {
 }
 
 func TestArithmeticFailuresQuoteNothing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"echo $((1 2))", "zsh:1: bad math expression: operator expected at `2'\n"},
 		{"echo $((1+))", "zsh:1: bad math expression: operand expected at end of string\n"},
@@ -543,6 +550,7 @@ func TestArithmeticFailuresQuoteNothing(t *testing.T) {
 // against zsh 5.9.2, where `echo two` never appears and the shell leaves at 1
 // (#1616).
 func TestAnUnreadableConditionOperandAbandonsTheInput(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		src   string
@@ -588,6 +596,7 @@ func TestAnUnreadableConditionOperandAbandonsTheInput(t *testing.T) {
 // expression that never *parsed* is the condition parser's complaint, and one
 // that failed while being *evaluated* is the builtin's.
 func TestWhoIsSpeakingInAConditionSplitsByWhenItFailed(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"test a b c", "zsh:1: condition expected: b"},
 		{"test -Q x", "zsh:test:1: unknown condition: -Q"},
@@ -613,6 +622,7 @@ func TestWhoIsSpeakingInAConditionSplitsByWhenItFailed(t *testing.T) {
 // TestAPatternThatIsNotOneNamesTheToken is the case-arm half of the
 // unexpected-token family: `;;&` is not zsh's, so it stops at the `&`.
 func TestAPatternThatIsNotOneNamesTheToken(t *testing.T) {
+	t.Parallel()
 	_, err := syntax.Parse("case a in a) echo x;;& esac", zsh.Dialect())
 	if got, want := diagTable(zsh.Diagnostics()).ParseFailure(err), "parse error near `&'"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -621,6 +631,7 @@ func TestAPatternThatIsNotOneNamesTheToken(t *testing.T) {
 
 // TestEveryTargetIsWritten is zsh's multios, and the axis nobody else sets.
 func TestEveryTargetIsWritten(t *testing.T) {
+	t.Parallel()
 	if got, want := zsh.Semantics().RedirectsUseEveryTarget, interp.Yes; got != want {
 		t.Errorf("got %v, want a command's output in every file it names", got)
 	}
@@ -632,6 +643,7 @@ func TestEveryTargetIsWritten(t *testing.T) {
 // controlling terminal — where the other three report the open's own reason.
 // Measured 2026-09-10 against zsh 5.9.2; see interp/noclobberopen.go.
 func TestNoclobberRefusalCoversAFailedOpen(t *testing.T) {
+	t.Parallel()
 	if !diagTable(zsh.Diagnostics()).NoclobberRefusalCoversAFailedOpen {
 		t.Error("a failed open under noclobber is reported as the open's reason, want the option's refusal")
 	}
@@ -640,6 +652,7 @@ func TestNoclobberRefusalCoversAFailedOpen(t *testing.T) {
 // TestPrintfAnswers: zsh stops the output at `\c`, which is the answer that
 // looks like ksh93's until the bytes are read.
 func TestPrintfAnswers(t *testing.T) {
+	t.Parallel()
 	s := zsh.Semantics()
 	if got, want := s.ReadTrailingEscapedSeparator,
 		interp.ReadTrailingEscapedSeparatorTrimmed; got != want {
@@ -686,6 +699,7 @@ func TestPrintfAnswers(t *testing.T) {
 // TestCdAnswers: zsh moves silently and names the reason before the operand,
 // which is the reverse of everyone else.
 func TestCdAnswers(t *testing.T) {
+	t.Parallel()
 	s, d := zsh.Semantics(), zsh.Diagnostics()
 	if got, want := s.CdDashPrintsTheDirectory, interp.No; got != want {
 		t.Errorf("CdDashPrintsTheDirectory = %v, want %v", got, want)
@@ -706,6 +720,7 @@ func TestCdAnswers(t *testing.T) {
 // TestGetoptsAnswers: zsh is the one that empties OPTARG rather than unsetting
 // it, and the one that carries on inside a word when OPTIND is assigned.
 func TestGetoptsAnswers(t *testing.T) {
+	t.Parallel()
 	s := zsh.Semantics()
 	if got, want := s.GetoptsClearsOptarg, interp.Yes; got != want {
 		t.Errorf("GetoptsClearsOptarg = %v, want %v", got, want)
@@ -719,6 +734,7 @@ func TestGetoptsAnswers(t *testing.T) {
 // items share a line, and it asks with the same two characters as the others
 // in the other order.
 func TestSelectMenuLayout(t *testing.T) {
+	t.Parallel()
 	if got, want := zsh.Semantics().SelectLayout, interp.SelectMenuColumns; got != want {
 		t.Errorf("SelectLayout = %v, want %v", got, want)
 	}
@@ -730,6 +746,7 @@ func TestSelectMenuLayout(t *testing.T) {
 // TestPipelineStatusName: zsh's name for the same record is the lowercase one,
 // and the uppercase name is nothing here.
 func TestPipelineStatusName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`false | true | false; echo "[${pipestatus[@]}]"`, "[1 0 1]"},
 		{`false | true | false; echo "[${PIPESTATUS[@]}]"`, "[]"},
@@ -762,6 +779,7 @@ func TestPipelineStatusName(t *testing.T) {
 // names and shapes of its own, and the bash-style array is nothing here —
 // measured: after a successful match the uppercase name stays unset.
 func TestRegexMatchLeavesTheBashNameAlone(t *testing.T) {
+	t.Parallel()
 	f, err := syntax.Parse(`[[ abcd =~ (b)(c) ]]; echo "st=$? [${BASH_REMATCH[@]}]"`, zsh.Dialect())
 	if err != nil {
 		t.Fatal(err)
@@ -790,6 +808,7 @@ func TestRegexMatchLeavesTheBashNameAlone(t *testing.T) {
 // docs/spec/semantics.md as measured, and was measured and never built — the
 // parser rejected `{ echo hi }`, which zsh runs.
 func TestCloseBraceIsReservedEverywhere(t *testing.T) {
+	t.Parallel()
 	if !zsh.Dialect().CloseBraceAlwaysReserved {
 		t.Error("zsh should reserve `}` wherever a word may stand")
 	}
@@ -824,6 +843,7 @@ func TestCloseBraceIsReservedEverywhere(t *testing.T) {
 // point on a whole float, so the same arithmetic reads differently from
 // ksh93's.
 func TestFloatFormatting(t *testing.T) {
+	t.Parallel()
 	if !zsh.Dialect().ArithFloat {
 		t.Error("zsh has floating point")
 	}
@@ -841,6 +861,7 @@ func TestFloatFormatting(t *testing.T) {
 
 // TestPatternGroups: which groups this shell reads, and where.
 func TestPatternGroups(t *testing.T) {
+	t.Parallel()
 	if zsh.Dialect().ExtendedPattern || zsh.Dialect().ExtendedPatternInCondition {
 		t.Error("zsh has no extended patterns; a quantifier before a group is an ordinary character")
 	}
@@ -854,6 +875,7 @@ func TestPatternGroups(t *testing.T) {
 // script is read a line at a time in all four, so this is about the command
 // string alone.
 func TestACommandStringIsReadWhole(t *testing.T) {
+	t.Parallel()
 	if !diagTable(zsh.Diagnostics()).CommandStringParsedWhole {
 		t.Error("zsh reads a command string whole")
 	}
@@ -866,6 +888,7 @@ func TestACommandStringIsReadWhole(t *testing.T) {
 // route: the same program in a file stops this shell too, which is why the
 // answer cannot live with the parse status.
 func TestAProgramOnStandardInputSurvivesAParseFailure(t *testing.T) {
+	t.Parallel()
 	if !diagTable(zsh.Diagnostics()).StdinProgramSurvivesAParseFailure {
 		t.Error("zsh reads on past a parse failure on standard input")
 	}
@@ -876,6 +899,7 @@ func TestAProgramOnStandardInputSurvivesAParseFailure(t *testing.T) {
 // The message is about a name that is *not* a builtin, so there is no builtin
 // speaking, and naming `builtin` there would be naming the wrong one.
 func TestTheRefusalOfANonBuiltinNamesNoBuiltin(t *testing.T) {
+	t.Parallel()
 	f, err := syntax.Parse(`builtin ls`, zsh.Dialect())
 	if err != nil {
 		t.Fatal(err)
@@ -927,6 +951,7 @@ func TestTheRefusalOfANonBuiltinNamesNoBuiltin(t *testing.T) {
 // This shell says nothing at all about a signal that ended a command, so it
 // has no wording for one.
 func TestAKilledCommandIsNotSaidAtAll(t *testing.T) {
+	t.Parallel()
 	if got := diagTable(zsh.Diagnostics()).KilledCommandNotice; got != "" {
 		t.Errorf("KilledCommandNotice = %q, want nothing — this shell stays quiet", got)
 	}
@@ -935,6 +960,7 @@ func TestAKilledCommandIsNotSaidAtAll(t *testing.T) {
 // A substitution's body is numbered from the file, whichever way it is
 // written.
 func TestASubstitutionsBodyIsNumberedFromTheFile(t *testing.T) {
+	t.Parallel()
 	if diagTable(zsh.Diagnostics()).BackquotedSubstitutionRestartsLines {
 		t.Error("backquotes are numbered from the file here, like $( )")
 	}
@@ -943,6 +969,7 @@ func TestASubstitutionsBodyIsNumberedFromTheFile(t *testing.T) {
 // This shell names the function a message came from rather than the file,
 // and counts the line within it.
 func TestDiagnosticsNameTheFunction(t *testing.T) {
+	t.Parallel()
 	if !diagTable(zsh.Diagnostics()).LocationNamesTheFunction {
 		t.Error("a message from inside a function is named for the function here")
 	}
@@ -952,6 +979,7 @@ func TestDiagnosticsNameTheFunction(t *testing.T) {
 // and standard input — drawn from zsh's own single-letter option namespace,
 // which shares almost nothing with the other shells'.
 func TestDollarDashStartupLetters(t *testing.T) {
+	t.Parallel()
 	if got, want := zsh.Semantics().DefaultOptionLetters, "569X"; got != want {
 		t.Errorf("DefaultOptionLetters = %q, want %q", got, want)
 	}
@@ -962,6 +990,7 @@ func TestDollarDashStartupLetters(t *testing.T) {
 // The `s` of the standard-input route is unanimous and comes from
 // Runner.Route, so there is no axis for it here.
 func TestDollarDashRouteLetters(t *testing.T) {
+	t.Parallel()
 	s := zsh.Semantics()
 	if got := s.CommandStringShowsCInDollarDash; got != interp.No {
 		t.Errorf("CommandStringShowsCInDollarDash = %v, want No", got)
@@ -978,6 +1007,7 @@ func TestDollarDashRouteLetters(t *testing.T) {
 // characters `cA`; and its strings are counted rather than terminated, so a
 // decoded NUL is a byte in the middle of a word rather than the end of one.
 func TestDollarSingleAnswers(t *testing.T) {
+	t.Parallel()
 	s := zsh.Semantics()
 	if got, want := s.DollarSingleBackslashC, interp.DollarSingleControlAbsent; got != want {
 		t.Errorf("DollarSingleBackslashC = %v, want %v", got, want)
@@ -1011,6 +1041,7 @@ func TestDollarSingleAnswers(t *testing.T) {
 // standard-input and `-s` routes alike; bash is the panel's holdout and this
 // preset takes the majority's answer, which is also the POSIX preset's (#482).
 func TestZshReadsTheProfileWithAScriptToRun(t *testing.T) {
+	t.Parallel()
 	if !zsh.Semantics().LoginProfileWhenNonInteractive {
 		t.Error("LoginProfileWhenNonInteractive = false, want true")
 	}
@@ -1025,6 +1056,7 @@ func TestZshReadsTheProfileWithAScriptToRun(t *testing.T) {
 // invocation and inside a script alike, which is why one value answers both
 // spellings (#483).
 func TestZshRefusesASetOptionAtOne(t *testing.T) {
+	t.Parallel()
 	if got := diagTable(zsh.Diagnostics()).SetInvalidOptionNameStatus; got != 1 {
 		t.Errorf("SetInvalidOptionNameStatus = %d, want 1", got)
 	}
@@ -1040,6 +1072,7 @@ func TestZshRefusesASetOptionAtOne(t *testing.T) {
 // It is the whole diagnostic rather than the wording, because the location is
 // what moves: ParseFailure says the same sentence either way.
 func TestAFunctionBodyThatNeverBeganIsLocatedByNameAlone(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"f() ;", "zsh: parse error near `;'\n"},
 		{"f()", "zsh: parse error near `()'\n"},
@@ -1065,6 +1098,7 @@ func TestAFunctionBodyThatNeverBeganIsLocatedByNameAlone(t *testing.T) {
 // `zsh -i script.sh` reports `569XZi`, so the interactive set is the same four
 // plus the line-editor letter. `i` comes from the runner.
 func TestDollarDashInteractiveStartupLetters(t *testing.T) {
+	t.Parallel()
 	if got, want := zsh.Semantics().InteractiveOptionLetters, "569XZ"; got != want {
 		t.Errorf("InteractiveOptionLetters = %q, want %q", got, want)
 	}
@@ -1077,6 +1111,7 @@ func TestDollarDashInteractiveStartupLetters(t *testing.T) {
 // on `-i script.sh`, `-i -c` and `-i -s`: `$-` loses its `m` and nothing is
 // written to either stream.
 func TestNothingIsSaidAboutJobControlAtStartup(t *testing.T) {
+	t.Parallel()
 	if got := diagTable(zsh.Diagnostics()).NoJobControlAtStartup; got != "" {
 		t.Errorf("NoJobControlAtStartup = %q, want empty — this shell says nothing", got)
 	}
@@ -1089,6 +1124,7 @@ func TestNothingIsSaidAboutJobControlAtStartup(t *testing.T) {
 // which is what this shell takes a job that is not there to be, and the same
 // number its own `wait` gives for the same question.
 func TestTheJobSpecThatNamesNothing(t *testing.T) {
+	t.Parallel()
 	if got := diagTable(zsh.Diagnostics()).NoSuchJob; got != "" {
 		t.Errorf("NoSuchJob = %q, want empty — the shared wording", got)
 	}
@@ -1110,6 +1146,7 @@ func TestTheJobSpecThatNamesNothing(t *testing.T) {
 // plausible string at status 0, so "no error" and "contains foo" both pass
 // against it.
 func TestABareArrayNameIsTheElements(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The bare name, unquoted: one field per element.
 		{`a=(one two); set -- $a; echo "n=$# [$1][$2]"`, "n=2 [one][two]"},
@@ -1192,6 +1229,7 @@ func TestABareArrayNameIsTheElements(t *testing.T) {
 // Every want is the exact field count and the exact values, because the bug
 // hands back the same characters in a different number of fields.
 func TestAnUnquotedListKeepsItsElementsWhole(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		// The element holds a separator, so a shell that split would give
@@ -1244,6 +1282,7 @@ func TestAnUnquotedListKeepsItsElementsWhole(t *testing.T) {
 // is `-w`; `-t` is a bad option here, and since #2180 its absence from the
 // optstring is the whole of how that is said.
 func TestTheKindLetterIsNotAmongTypesLetters(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().TypeOptions; strings.ContainsRune(got, 't') {
 		t.Errorf("TypeOptions = %q, want no kind letter: this shell refuses it", got)
 	}
@@ -1255,6 +1294,7 @@ func TestTheKindLetterIsNotAmongTypesLetters(t *testing.T) {
 // what the other four inherit — see TestTheStandardHasNoNameForTheCommand in
 // interp, which is the control for this row.
 func TestExportedArgv0NamesTheCommand(t *testing.T) {
+	t.Parallel()
 	if got, want := zsh.Semantics().ExportedArgv0NamesTheCommand, interp.Yes; got != want {
 		t.Errorf("ExportedArgv0NamesTheCommand = %v, want %v", got, want)
 	}

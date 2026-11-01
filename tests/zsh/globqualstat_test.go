@@ -22,6 +22,7 @@ import (
 // directory holding `d1/sub/x`, a regular file `f1`, a link `l1` to it, a link
 // `ld` to `d1` and a dangling link `dl`.
 func TestQualifiersAskTheFilesystemOnlyWhatTheyNeed(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "d1", "sub"), 0o755); err != nil {
 		t.Fatal(err)

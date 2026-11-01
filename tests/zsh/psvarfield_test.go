@@ -8,6 +8,7 @@ import "testing"
 // `%v` draws an element of `$psvar` (#5150). Measured 2026-10-01 on zsh 5.9.2
 // under `-c`; each row is what that shell wrote.
 func TestThePromptArrayElementField(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, c := range []struct{ src, want string }{
 		{"psvar=(caesar adsum jam forte); print -P '[%v][%1v][%2v][%4v][%5v][%0v]'", "[caesar][caesar][adsum][forte][][caesar]\n"},

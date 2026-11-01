@@ -14,6 +14,7 @@ import (
 // file under `env -i PATH=/usr/bin:/bin LC_ALL=C`) with the same three files;
 // each row is what that shell wrote.
 func TestTheKshStyleRunsTheFileAndThenTheFunctionItDefined(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	files := map[string]string{
 		"kf": "print \"loading $*\"\nkf() { print \"kf called $*\"; }\nprint \"loaded\"\n",

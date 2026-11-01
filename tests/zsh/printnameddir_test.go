@@ -34,6 +34,7 @@ func runZshHome(t *testing.T, dir, src string) (string, int) {
 // `print -D /tmp` is `/tmp` in the reference too, so a case without the
 // `hash -d` would agree for the wrong reason.
 func TestPrintNamedDirectory(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `hash -d foo=/tmp
 print -D /tmp/x
 print -D /tmp
@@ -49,6 +50,7 @@ print -D /var /tmp/a/b`)
 
 // Which entry wins, which is three separate rules and none of them obvious.
 func TestPrintNamedDirectoryChoosesTheEntry(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `hash -d foo=/tmp
 hash -d bar=/tmp/a
 print -D /tmp/a/b
@@ -69,6 +71,7 @@ print -D /tmp/d`)
 
 // Home beats a name for the same directory, and beats nothing deeper.
 func TestPrintNamedDirectoryAndHome(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZshHome(t, dir, `hash -d h=$HOME
 print -D $HOME/sub
@@ -85,6 +88,7 @@ print -D $HOME/sub/deep`)
 // pattern matches the operand as it was written, and the order the sort
 // produces is one only the abbreviated spellings have.
 func TestPrintNamedDirectoryHappensBetweenTheMatchAndTheSort(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `hash -d foo=/tmp
 print -D -o /var /tmp/x
 print -D -m '/tmp*' /tmp/x /var
@@ -98,6 +102,7 @@ print -D -f '[%s]\n' /tmp/x`)
 
 // And the letter is accepted rather than named as missing.
 func TestPrintNamedDirectoryLetterIsNotAlsoCalledMissing(t *testing.T) {
+	t.Parallel()
 	if got := diagTable(zsh.Diagnostics()).UnimplementedOptionLetters["print"]; strings.ContainsRune(got, 'D') {
 		t.Errorf("UnimplementedOptionLetters[print] = %q, which still claims -D is missing", got)
 	}

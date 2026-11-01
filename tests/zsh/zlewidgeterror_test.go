@@ -15,6 +15,7 @@ import (
 // zsh 5.9.2, `cf() { BUFFER=zz }` behind `zle -C` refuses the assignment and
 // the line stays — but its error is taken back all the same.
 func TestAFatalErrorInAWidgetGivesTheLineUp(t *testing.T) {
+	t.Parallel()
 	r, out := zleRunner(t, `d() { : ${nosuch?gone}; print -r -- unreached }
 zle -N d
 cf() { BUFFER=zz; print -r -- unreached }

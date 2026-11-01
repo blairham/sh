@@ -18,6 +18,7 @@ import "testing"
 // Runner.clearAttributesAReCreationDrops for the nine cells across the three
 // columns.
 func TestAReCreatedNameLosesTheExportAttribute(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a literal over an exported scalar",

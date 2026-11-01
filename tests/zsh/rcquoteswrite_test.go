@@ -18,6 +18,7 @@ import (
 // (aarch64-apple-darwin25.4.0), `-f`, 2026-09-26; every row runs in both
 // states and the *off* state is the control (#4625).
 func TestRcQuotesDecidesHowTheSingleQuotingFormsWriteAQuote(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, expr, on, off string }{
 		{"qq", `${(qq)v}`, `'p''q'`, `'p'\''q'`},
 		{"q+", `${(q+)v}`, `'p''q'`, `'p'\''q'`},
@@ -44,6 +45,7 @@ func TestRcQuotesDecidesHowTheSingleQuotingFormsWriteAQuote(t *testing.T) {
 // The listings write through the same decision, which is what keeps a value
 // from being spelled one way by `typeset -p` and another by `${(qq)}`.
 func TestRcQuotesReachesTheListings(t *testing.T) {
+	t.Parallel()
 	const src = `v="p'q"
 setopt rcquotes
 typeset -p v
@@ -69,6 +71,7 @@ typeset -p v`
 // empty pair, the escaped quote and another empty pair — and with it on as
 // one pair holding a doubled quote, four characters that read back as one.
 func TestRcQuotesWritesOnePairAroundTheWholeValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, value, on, off string }{
 		{"a lone quote", `\'`, `''''`, `''\'''`},
 		{"a trailing quote", `x\'`, `'x'''`, `'x'\'''`},
@@ -92,6 +95,7 @@ func TestRcQuotesWritesOnePairAroundTheWholeValue(t *testing.T) {
 // beside the read side: a value built from a doubled quote is written back
 // with one.
 func TestTheTwoHalvesOfRcQuotesCompose(t *testing.T) {
+	t.Parallel()
 	const src = "setopt rcquotes\nw=$(print -r -- 'x''y')\nprint -r -- \"[$w]\"\nprint -r -- ${(qq)w}\n"
 	out, st := runZsh(t, t.TempDir(), src)
 	if want := "[x'y]\n'x''y'\n"; st != 0 || out != want {

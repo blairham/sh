@@ -47,6 +47,7 @@ func drawn(candidates []repl.Candidate) string {
 }
 
 func TestCompaddSaysHowTheMatchesAreDrawn(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, call, want string }{
 		// `-d` replaces the drawn text outright. Measured: `compadd -d '(one
 		// two)' -- checkout cherry` with `che` typed lists `one  two` and
@@ -115,6 +116,7 @@ func TestCompaddSaysHowTheMatchesAreDrawn(t *testing.T) {
 // 'no matches here'` draws nothing at all. So `-x` is a completion system
 // saying something and `-X` heads a block that exists.
 func TestAMessageSurvivesAnEmptyBlockAndAnExplanationDoesNot(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, call, want string }{
 		{"a message with no matches", "compadd -J g -x 'a message'", "@|a message"},
 		{"an explanation with no matches", "compadd -J g -X 'a heading'", ""},
@@ -144,6 +146,7 @@ func TestAMessageSurvivesAnEmptyBlockAndAnExplanationDoesNot(t *testing.T) {
 // cannot be what identifies a block, which is the reason the headings are
 // stamped on at the end rather than when each call runs.
 func TestTwoCallsNamingOneBlockShareItAndBothAreHeard(t *testing.T) {
+	t.Parallel()
 	got := drawn(completionCandidatesFor(t, widgetOf(
 		"compadd -J gx -X 'first heading' -- checkout\n"+
 			"compadd -J gx -X 'second heading' -- cherry\n",
@@ -160,6 +163,7 @@ func TestTwoCallsNamingOneBlockShareItAndBothAreHeard(t *testing.T) {
 // Measured: `-X 'unnamed heading' -- alpha` then a plain `compadd -- beta`
 // draws the heading once over `alpha  beta`.
 func TestTwoUnnamedCallsShareOneBlock(t *testing.T) {
+	t.Parallel()
 	got := drawn(completionCandidatesFor(t, widgetOf(
 		"compadd -X 'unnamed heading' -- checkout\ncompadd -- cherry\n",
 	), "git che"))
@@ -177,6 +181,7 @@ func TestTwoUnnamedCallsShareOneBlock(t *testing.T) {
 // `SECOND` over `beta` and then `FIRST` over `alpha`. It was a no-op here
 // until there were blocks for it to order (#3232).
 func TestCompgroupsDecidesTheOrderTheBlocksAreDrawnIn(t *testing.T) {
+	t.Parallel()
 	src := widgetOf(
 		"compgroups second first\n" +
 			"compadd -J first  -X FIRST  -- checkout\n" +
@@ -206,6 +211,7 @@ func TestCompgroupsDecidesTheOrderTheBlocksAreDrawnIn(t *testing.T) {
 // sub/ab`, and so does `-W sub`; a prefix that `-P` holds back is not drawn,
 // so `-P sub/ aa ab` lists `aa  ab`. An empty row is one the editor trims.
 func TestAMatchThatIsNotAFileIsDrawnWhole(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, call, want string }{
 		{"a plain match", "compadd sub/aa sub/ab", "sub/aa sub/ab"},
 		{"under -W", "compadd -W sub sub/aa sub/ab", "sub/aa sub/ab"},

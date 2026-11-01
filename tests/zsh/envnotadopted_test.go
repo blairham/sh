@@ -29,6 +29,7 @@ func typeWordUnder(t *testing.T, name string) string {
 // (aarch64-apple-darwin25.4.0)`, which `go version -m` calls *not a Go
 // executable* — and every one of them carried an extra `export` here.
 func TestAnEntryThisShellDoesNotAdoptCarriesNoExport(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, want string }{
 		{"EGID", "integer-special"},
 		{"EUID", "integer-special"},
@@ -101,6 +102,7 @@ func TestTheNamesThatKeepTheExportKeepIt(t *testing.T) {
 // the shell's own value supersede it. Measured 2026-09-27 in one run with
 // `/usr/bin/env` as the child.
 func TestTheEntryItselfStillReachesAChild(t *testing.T) {
+	t.Parallel()
 	const read = `/usr/bin/env | /usr/bin/grep -a '^IFS=' | /usr/bin/od -c | /usr/bin/head -1`
 	for _, tc := range []struct{ name, src, want string }{
 		{"as inherited", read, `0000000 I F S = Z Z \n`},

@@ -13,6 +13,7 @@ import "testing"
 // the environment, is the one letter that does not show (#6698). zsh 5.9.2
 // `-fc`, measured 2026-10-15.
 func TestAPrefixToAProgramIsFoldedThroughTheNamesLetters(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"integer", `typeset -i v=3; v=2+2 /usr/bin/printenv v; echo "[$v]"`, "4\n[3]\n"},
 		{"integer over text", `typeset -i v; v=pre /usr/bin/printenv v`, "0\n"},
@@ -45,6 +46,7 @@ func TestAPrefixToAProgramIsFoldedThroughTheNamesLetters(t *testing.T) {
 // it are never expanded (`SIDE` is never written), the failure is catchable, and the script goes on
 // (#6698). zsh 5.9.2 `-fc`, measured 2026-10-15.
 func TestAPrefixToAProgramThatWillNotEvaluateIsTheCommandsFailure(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`typeset -i v; v=1+ w=$(echo SIDE >&2) /usr/bin/printenv v || echo "CAUGHT $?"; echo next`)
 	want := "zsh:1: bad math expression: operand expected at end of string\nCAUGHT 1\nnext\n"
@@ -58,6 +60,7 @@ func TestAPrefixToAProgramThatWillNotEvaluateIsTheCommandsFailure(t *testing.T) 
 // answers: zsh folds the case and pads the width on the read (#6698). zsh
 // 5.9.2 `-fc`, measured 2026-10-15.
 func TestAPrefixAppendJoinsWhatWasAssigned(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"case, listed", `typeset -u v=ab; v+=cd typeset -p v`, "typeset -u v=abcd\n"},
 		{"case, handed to a program", `typeset -u v=ab; v+=cd /usr/bin/printenv v`, "ABCD\n"},

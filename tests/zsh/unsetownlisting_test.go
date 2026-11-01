@@ -10,6 +10,7 @@ import "testing"
 // the next value still reaches a child. Measured 2026-10-03 on zsh 5.9.2
 // under `env -i PATH=/usr/bin:/bin`, `-f` (#5600).
 func TestARemovedShellOwnNameIsNoRowInAListing(t *testing.T) {
+	t.Parallel()
 	src := `export HOME=/x TERM=t; unset HOME TERM COLUMNS
 for form in + +x ''; do typeset $form | /usr/bin/grep -cE '^(HOME|TERM|COLUMNS)$|^(HOME|TERM|COLUMNS)='; done
 HOME=/y; typeset + | /usr/bin/grep -c '^HOME$'; /usr/bin/env | /usr/bin/grep '^HOME='`

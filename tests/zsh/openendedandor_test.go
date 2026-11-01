@@ -31,6 +31,7 @@ import (
 // parser takes the flag from whatever dialect it is handed, so a test that
 // only parsed would pass with this shell answering no.
 func TestThisShellTakesAnAndOrThatEndsWithItsOperator(t *testing.T) {
+	t.Parallel()
 	if !zsh.Dialect().OpenEndedAndOr {
 		t.Error("zsh takes an and-or list that ends with its operator")
 	}
@@ -42,6 +43,7 @@ func TestThisShellTakesAnAndOrThatEndsWithItsOperator(t *testing.T) {
 // answer 0 — and from an implicit failure, which would make `true &&`
 // non-zero.
 func TestADanglingOperatorIsDroppedRatherThanStoodIn(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		out  string
@@ -79,6 +81,7 @@ func TestADanglingOperatorIsDroppedRatherThanStoodIn(t *testing.T) {
 //	$ zsh -n s.sh       # ( : | )
 //	s.sh:1: parse error near `)'
 func TestAnOpenEndedPipelineIsRefusedHere(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"( : | )\n", "s.sh:1: parse error near `)'\n"},
 		{"{ : |\n}\n", "s.sh:2: parse error near `}'\n"},
@@ -105,6 +108,7 @@ func TestAnOpenEndedPipelineIsRefusedHere(t *testing.T) {
 //	$ zsh -n s.sh       # : &&\n&\n
 //	s.sh:2: parse error near `&'
 func TestADanglingOperatorStillRefusesWhatThisShellRefuses(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{": &&\n&\n", "s.sh:2: parse error near `&'\n"},
 		{": || & :\n", "s.sh:1: parse error near `&'\n"},

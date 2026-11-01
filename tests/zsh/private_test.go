@@ -26,6 +26,7 @@ import (
 // one feature, this shell has it, and so it loads — which is the ordinary
 // rule at the top of zmodload.go rather than anything special to this module.
 func TestTheModuleThatCarriesPrivateLoads(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `zmodload zsh/param/private; print "st=$?"
 zmodload -lF zsh/param/private
 zmodload -e zsh/param/private; print "e=$?"`)
@@ -45,6 +46,7 @@ zmodload -e zsh/param/private; print "e=$?"`)
 // arrives at the same place a script can see. See interp/privatebuiltin.go
 // for the one word of divergence that leaves standing.
 func TestPrivateIsThereWithoutTheZmodloadLine(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `v=9
 g() { print "g=[$v]" }
 f() { private v=1; g; print "f=[$v]" }
@@ -64,6 +66,7 @@ print "top=[$v]"`)
 // evidence: without it, five lines agreeing about a word this engine could be
 // writing for every local would read exactly the same.
 func TestAPrivateDescribesWithHideAndSpecial(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `zmodload zsh/param/private
 f1() { private v=1;    print "  ${(t)v}" }
 f2() { private -i n=5; print "  ${(t)n}" }
@@ -88,6 +91,7 @@ f1; f2; f3; f4; f5; f6`)
 // where there is not. The second is what says the callee is not looking at
 // the private through a hole.
 func TestACalleeSeesTheOuterNameAndNotThePrivate(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `zmodload zsh/param/private
 v=9
 g() { print "  ${(t)v} [$v]"; typeset -p v; print "  gp=$?" }
@@ -110,6 +114,7 @@ f`)
 // which is the pair rather than either alone: a listing that wrote neither
 // would pass the first half for the wrong reason entirely.
 func TestOnlyTheDashPListingPassesOverAPrivate(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `zmodload zsh/param/private
 f() { private v=1; local w=2; typeset -p v; print "  st=$?"; typeset | grep -E '^local [vw]=' }
 f`)
@@ -123,6 +128,7 @@ f`)
 // rules — and the one that is fatal is not the one that reads as the more
 // serious of the two.
 func TestPrivateRefusals(t *testing.T) {
+	t.Parallel()
 	// A write to a name a caller's private displaced nothing under: fatal,
 	// status 1, and the function's own name in the location.
 	out, st := answersRun(t, `zmodload zsh/param/private
@@ -159,6 +165,7 @@ print "after"`)
 // have written a global under a word whose whole purpose is a binding local
 // to one call.
 func TestPrivateRefusesTheLettersItsOwnMeaningRulesOut(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `zmodload zsh/param/private
 f() { private -g v; print "  g=$?"; private -f v; print "  f=$?"; private -n v; print "  n=$?" }
 f`)
@@ -197,6 +204,7 @@ f`)
 // The `typeset -a` row is the control that says this is the second
 // declaration word's and not the literal's: it was right throughout.
 func TestAPrivateDeclarationTakesAnArrayLiteral(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `zmodload zsh/param/private
 f1() { private q=(1 2);       print "  1 ${(t)q} n=${#q} [$q]" }
 f2() { private -a q=(1 2);    print "  2 ${(t)q} n=${#q} [$q]" }
@@ -228,6 +236,7 @@ private topq=(1 2); print "  8 ${(t)topq} n=${#topq}"`)
 // Measured 2026-09-27, `f() { 'private' q=(1 2); print no }` is
 // `f: unknown file attribute: 1` with the `print` never reached.
 func TestAQuotedPrivateIsNotADeclarationUtility(t *testing.T) {
+	t.Parallel()
 	out, _ := answersRun(t, `zmodload zsh/param/private
 f() { 'private' q=(1 2); print "reached" }
 f`)
@@ -247,6 +256,7 @@ f`)
 // three and four are the controls that say the refusal is about the kind
 // rather than about a literal over a private at all.
 func TestAPrivateStillKeepsTheKindItsDeclarationGave(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct {
 		name string
 		src  string
@@ -288,6 +298,7 @@ f1; f2`)
 // is the whole of it, because the rule is a set membership and a handful of
 // cells would not say which set.
 func TestAPrivateSlotTakesOneKind(t *testing.T) {
+	t.Parallel()
 	const (
 		typeRefusal = "(anon):typeset: at: can't change type of a special parameter\n"
 		taken       = "ok "
@@ -364,6 +375,7 @@ f1; f2; f3`)
 // **container** keeps it, where an ordinary local is retyped by the identical
 // line in both shells (#4862).
 func TestAPrivateContainerIsNotRetypedByAValue(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `zmodload zsh/param/private
 f1() { private -a at; at=plain;           print "  1 ${(t)at} n=${#at} [$at]" }
 f2() { private -a at; at=$(echo "x y");   print "  2 ${(t)at} n=${#at} [$at]" }
@@ -418,6 +430,7 @@ f`)
 // location — where the *bare* assignment keeps the sentence it always had
 // (#4863).
 func TestADeclarationWordNamesItselfRefusingALiteralOverAPrivate(t *testing.T) {
+	t.Parallel()
 	for _, word := range []string{"local", "typeset", "declare", "readonly", "export"} {
 		for _, letter := range []string{"", "-a "} {
 			out, st := answersRun(t, `zmodload zsh/param/private
@@ -467,6 +480,7 @@ f1; f2; f3; f4; f5`)
 // two lines that differ only in what the slot would do with the value (#4862,
 // #4863).
 func TestTheValueDecidesBeforeTheKindLetter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a literal the slot will not take is the assign sentence",

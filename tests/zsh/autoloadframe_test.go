@@ -28,6 +28,7 @@ import (
 // function per session. `$funcstack` is read by real prompt and completion
 // code to find out where it is.
 func TestAnAutoloadedFunctionsFirstCallIsNotADeeperOne(t *testing.T) {
+	t.Parallel()
 	t.Run("the stack on the first call and the second", func(t *testing.T) {
 		fp := fpathDir(t, map[string]string{
 			"fstk": `print "n=${#funcstack[@]} stack=${funcstack[*]} zero=$0"`,
@@ -83,6 +84,7 @@ func TestAnAutoloadedFunctionsFirstCallIsNotADeeperOne(t *testing.T) {
 // and nothing has defined since, asked before the resolution takes the stub's
 // body away.
 func TestAHandWrittenResolutionStillRunsInsideItsStub(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{
 		"myf": "print -r -- \"BODY args=<$*> deep=$(( ${#funcstack[@]} > 1 )) secret=$secret\"\nreturn 7\n",
 	})

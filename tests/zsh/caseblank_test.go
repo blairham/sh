@@ -16,6 +16,7 @@ import "testing"
 // would parse every row and match half of them. `(a b)` against `a  b` and
 // `(a  b)` against `a  b` are the pair that says so.
 func TestABlankInAParenthesizedCasePattern(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the pattern matches its subject", `case 'a b' in (a b) printf hit;; (*) printf no;; esac`, "hit"},
@@ -66,6 +67,7 @@ func TestABlankInAParenthesizedCasePattern(t *testing.T) {
 // this is a rule about the parenthesized form rather than "a word may follow
 // a pattern". Without this the flag would read as a much larger claim.
 func TestOnlyAParenthesizedCaseListTakesTheBlank(t *testing.T) {
+	t.Parallel()
 	if _, err := parseZsh(`case 'a b' in a b) echo hit;; esac`); err == nil {
 		t.Error("an arm with no paren parsed, want the parse error that shell gives")
 	}
@@ -74,6 +76,7 @@ func TestOnlyAParenthesizedCaseListTakesTheBlank(t *testing.T) {
 // And an operator after the blanks is still an operator: `(a >b)` is
 // “parse error near `>'“ there rather than a pattern with a space on it.
 func TestAnOperatorStillEndsACasePattern(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`case x in (a >b) echo hit;; esac`,
 		`case x in (a &b) echo hit;; esac`,

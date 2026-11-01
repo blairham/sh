@@ -16,6 +16,7 @@ import (
 // `zsh -f -i` with the lines on standard input; under `-c` neither shell
 // writes anything.
 func TestPushdAndPopdPrintTheStackWhenInteractive(t *testing.T) {
+	t.Parallel()
 	const pre = "HOME=/nonexistent; cd /\n"
 	for _, tc := range []struct {
 		name, src, want string

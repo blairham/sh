@@ -11,6 +11,7 @@ import "testing"
 //
 // Measured 2026-10-16 on zsh 5.9.2, from a file (#6723).
 func TestAControlCharacterInArithmeticIsAnIllegalCharacter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`[[ $'a\x01' -eq 1 ]]`, "zsh:1: bad math expression: illegal character: ^A\n"},
 		{`let $'1 \x7f'`, "zsh:1: bad math expression: illegal character: ^?\n"},
@@ -31,6 +32,7 @@ func TestAControlCharacterInArithmeticIsAnIllegalCharacter(t *testing.T) {
 //
 // Measured 2026-10-16 on zsh 5.9.2 `-f`, from a file (#6724).
 func TestAnEscapeTheShellLacksIsDropped(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, out, errs string }{
 		{`print -P 'x%Qy'; print st=$?`, "xy\nst=0\n", ""},
 		{`print -P 'x%J%,%;y'; print st=$?`, "xy\nst=0\n", ""},

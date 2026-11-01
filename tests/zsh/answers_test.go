@@ -58,6 +58,7 @@ func answersRun(t *testing.T, src string) (string, int) {
 // Without the field the reparse happens under the core, where `repeat` is
 // not a keyword and there is no such command.
 func TestTheHelperRunsUnderThisDialectAndNotTheCore(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `eval 'repeat 2 echo hi'`)
 	if strings.TrimSpace(out) != "hi\nhi" || st != 0 {
 		t.Errorf("answersRun = %q status %d, want two lines of hi: the runner was not told the dialect",
@@ -66,6 +67,7 @@ func TestTheHelperRunsUnderThisDialectAndNotTheCore(t *testing.T) {
 }
 
 func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
+	t.Parallel()
 	s := zsh.Semantics()
 	for _, tc := range []struct {
 		axis string
@@ -181,12 +183,14 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 
 // The invocation answers this preset gives that are not Answers.
 func TestPlusSignedCommandStringNaming(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().PlusSignedCommandStringIsDollarZero; got != false {
 		t.Errorf("PlusSignedCommandStringIsDollarZero = %v, want false", got)
 	}
 }
 
 func TestDiagnosticAnswersTheInterpTestsRelyOn(t *testing.T) {
+	t.Parallel()
 	d := zsh.Diagnostics()
 	// Lazy rather than QuoteShell since #2695. This shell drops the empty
 	// `''` segments that closing and reopening a quoted run leaves, so
@@ -258,6 +262,7 @@ func TestDiagnosticAnswersTheInterpTestsRelyOn(t *testing.T) {
 // `case "[" in [) …` ends real zsh at 1 and `[[ "[" == [ ]]` ends it at 2
 // (#3398).
 func TestBadPatternIsFatal(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src  string
 		want int
@@ -293,6 +298,7 @@ func TestBadPatternIsFatal(t *testing.T) {
 // script carries on, a `.` of the same file reports 126 and the script carries
 // on, and the same pattern in a function body still ends the script (#3398).
 func TestARefusedPatternInsideAnEvalEndsTheEval(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `eval 'case "[" in [) echo hit;; esac'; echo "st=$?"; echo after`)
 	if !strings.Contains(out, "bad pattern: [") {
 		t.Errorf("got %q", out)
@@ -315,6 +321,7 @@ func TestARefusedPatternInsideAnEvalEndsTheEval(t *testing.T) {
 // TestEqualsExpansionComposite: `=cmd` becomes a path here, and a name that
 // resolves to nothing is reported without a colon and abandons the script.
 func TestEqualsExpansionComposite(t *testing.T) {
+	t.Parallel()
 	if got, _ := answersRun(t, `echo =ls`); !strings.HasSuffix(strings.TrimSpace(got), "/ls") {
 		t.Errorf("=ls should expand to a path, got %q", got)
 	}
@@ -334,6 +341,7 @@ func TestEqualsExpansionComposite(t *testing.T) {
 // `for` iteration made — with the name-and-line prefix, and without the
 // trailing space it puts on an assignment that stands alone as a command.
 func TestTraceShowsTheForAssignment(t *testing.T) {
+	t.Parallel()
 	out, _ := answersRun(t, `set -x; for i in 1 2; do echo $i; done`)
 	if !strings.Contains(out, "> i=1\n") || strings.Contains(out, "for i in") {
 		t.Errorf("got %q, want an assignment and no header", out)
@@ -342,6 +350,7 @@ func TestTraceShowsTheForAssignment(t *testing.T) {
 
 // TestWordings runs the failures whose sentences are this shell's own.
 func TestWordings(t *testing.T) {
+	t.Parallel()
 	out, _ := answersRun(t, `readonly r=1; r=2`)
 	if !strings.Contains(out, "read-only variable: r") {
 		t.Errorf("readonly: got %q, want it to contain %q", out, "read-only variable: r")
@@ -353,6 +362,7 @@ func TestWordings(t *testing.T) {
 // names the builtin in the location prefix instead, so its wordings carry no
 // name at all.
 func TestNoTestWordingSpellsItsOwnName(t *testing.T) {
+	t.Parallel()
 	d := zsh.Diagnostics()
 	for _, w := range []struct{ field, text string }{
 		{"TestUnaryExpected", d.TestUnaryExpected},
@@ -375,6 +385,7 @@ func TestNoTestWordingSpellsItsOwnName(t *testing.T) {
 // hand it the local's value. The attribute is the local's to lose — the outer
 // name is exported again the moment the function returns.
 func TestALocalDoesNotCarryTheExportAttribute(t *testing.T) {
+	t.Parallel()
 	out, _ := answersRun(
 		t,
 		`export FOO=bar; f() { local FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f; /usr/bin/env | grep '^FOO='`,
@@ -432,6 +443,7 @@ func TestAHangupEndsTheShellWithoutKillingIt(t *testing.T) {
 // Reading it as a glob is what made the failure `no matches found`, which
 // points a person at globbing rather than at arithmetic (#900).
 func TestTheOtherArithmeticSpelling(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a sum", `echo $[1+1]`, "2\n"},
 		{"a name", `x=5; echo $[x*2]`, "10\n"},
@@ -461,6 +473,7 @@ func TestTheOtherArithmeticSpelling(t *testing.T) {
 // not the same question as `a+=(x)`, which every shell with arrays agrees
 // about (#1502).
 func TestAScalarAppendedToAnArrayAddsANewElement(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `a=(1 2); a+=x; printf '[%s]' "${a[@]}"; echo " n=${#a[@]}"`)
 	if want := "[1][2][x] n=3\n"; out != want || st != 0 {
 		t.Errorf("got %q at %d, want %q at 0", out, st, want)
@@ -478,6 +491,7 @@ func TestAScalarAppendedToAnArrayAddsANewElement(t *testing.T) {
 // count is what is asserted, because it is the count that separates this
 // answer from the other two.
 func TestAnArrayLetterOverAScalarDiscardsTheValue(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"the array letter", `typeset -a b`},
 		{"the table letter", `typeset -A b`},
@@ -503,6 +517,7 @@ func TestAnArrayLetterOverAScalarDiscardsTheValue(t *testing.T) {
 // word and storing nothing looks identical on the line itself, and that is
 // the wrong answer #1541 is about.
 func TestAnAssignmentThroughAnExpansionNamesAPositionalAndNotAList(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `set --; printf "<%s>" ${1:=abc}; printf "|one=%s" "$1"`)
 	if out != "<abc>|one=abc" || st != 0 {
 		t.Errorf("the positional = %q (status %d), want it stored at 0", out, st)
@@ -532,6 +547,7 @@ func TestAnAssignmentThroughAnExpansionNamesAPositionalAndNotAList(t *testing.T)
 // silent zero on a name nothing declared and `invalid subscript` on one that
 // is set, and here it is the refusal either way.
 func TestAnEmptyParameterSubscriptIsInvalid(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`a=(5 6 7); echo "[${a[]}]"`,
 		`s=hi; echo "[${s[]}]"`,
@@ -552,6 +568,7 @@ func TestAnEmptyParameterSubscriptIsInvalid(t *testing.T) {
 // The three-way axis is a form rather than an Answer, so it is pinned here
 // beside the table rather than in it.
 func TestTheDuplicationTargetErrorForm(t *testing.T) {
+	t.Parallel()
 	if got := preset.Semantics().DuplicationTargetError; got != interp.DuplicationTargetErrorEndsTheShellOnABuiltin {
 		t.Errorf("DuplicationTargetError = %v, want %v", got, interp.DuplicationTargetErrorEndsTheShellOnABuiltin)
 	}
@@ -575,6 +592,7 @@ func TestTheDuplicationTargetErrorForm(t *testing.T) {
 // and its pair. What is asserted here is this dialect's half: the wording,
 // and that the shell stops.
 func TestAnUnclosedBareSubscriptIsInvalid(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		`a=(xx yy zz); printf "<%s>" $a[1 2]`,
 		`a=(xx yy zz); printf "<%s>" $a[`,
@@ -596,6 +614,7 @@ func TestAnUnclosedBareSubscriptIsInvalid(t *testing.T) {
 // line — a refusal that fired on any of these would be a shell that cannot
 // print a bracket.
 func TestWhatIsNotAnUnclosedBareSubscript(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`a=(xx yy zz); printf "<%s>" "${a}[1"`, "<xx yy zz[1>"},
 		{`a=(xx yy zz); printf "<%s>" "$a]1["`, "<xx yy zz]1[>"},

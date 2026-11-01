@@ -17,6 +17,7 @@ import "testing"
 // is one sentence for twelve rows, and two of them — `\101` and `\0101` — are
 // the ones an implementation gets wrong while looking right on the other ten.
 func TestTheEscapeFlagReadsThisShellsEscapeSet(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name, value, opts, want string
@@ -102,6 +103,7 @@ func TestTheEscapeFlagReadsThisShellsEscapeSet(t *testing.T) {
 // the second argument is empty, so a reading that assigned would lose the `o`
 // and answer `X\101Y`.
 func TestTheEscapeFlagsArgumentsUnion(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an empty argument takes nothing away", `${(g:o:g::)v}`, "aAb"},
@@ -127,6 +129,7 @@ func TestTheEscapeFlagsArgumentsUnion(t *testing.T) {
 // reduces, and reading the two the other way round leaves the `a%%b` that
 // `${(g::)v}` alone answers.
 func TestTheEscapeFlagRunsBeforeThePromptEscapes(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{"the reading makes what the prompt step reduces", `${(%g::)v}`, "a%b"},
@@ -147,6 +150,7 @@ func TestTheEscapeFlagRunsBeforeThePromptEscapes(t *testing.T) {
 // position, with this shell's wording — the same shape a `(Z)` option letter
 // gets, and not the by-name refusal an unbuilt flag letter gets.
 func TestTheEscapeFlagsBadOptionLetterIsThisShellsFlagsError(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(t, dir, `v=x; print -rn -- "${(g:x:)v}"`)
 	// The rest of the word, closing quote and all — see ParamExpr.FlagsErrTail.

@@ -61,6 +61,7 @@ func TestTheArrayZipOperatorsAreThisDialects(t *testing.T) {
 // `x`. The answer stays a list: quoting picks the operand's shape, not the
 // result's.
 func TestAQuotedZipJoinsTheLeftAndStaysAList(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the left joins, and the answer is still two fields",

@@ -9,6 +9,7 @@ import "testing"
 // Every row measured 2026-10-02 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f`);
 // they are the shapes zsh's own B03print asks about (#5143).
 func TestPrintfReadsArgumentPositionsAPassAtATime(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`printf '%2$s %1$s\n' a b`, "b a\n"},
 		{`printf '%2$d%1$d\n' 1 2 3 4`, "21\n43\n"},
@@ -39,6 +40,7 @@ func TestPrintfReadsArgumentPositionsAPassAtATime(t *testing.T) {
 // interp.Semantics.PrintfVTakesAnElementPerPass, and `print -v` beside it.
 // Same shell, same day.
 func TestPrintfIntoAnArrayTakesAnElementPerPass(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`typeset -a foo; printf -v foo '%s' a b c; typeset -p foo`, "typeset -a foo=( a b c )\n"},
 		{`typeset -a foo; printf -v foo '%s\n' a b; typeset -p foo`, "typeset -a foo=( $'a\\n' $'b\\n' )\n"},
@@ -66,6 +68,7 @@ func TestPrintfIntoAnArrayTakesAnElementPerPass(t *testing.T) {
 // TestPrintExpandsTabs is `print -x n` and `print -X n`, and the two other
 // B03print fronts beside them. Same shell, same day.
 func TestPrintExpandsTabs(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`print -x4 $'\tone\ttwo\n\t\tx\ty'`, "    one\ttwo\n        x\ty\n"},
 		{`print -X4 $'\tone\ttwo\n\t\tx\ty'`, "    one two\n        x   y\n"},

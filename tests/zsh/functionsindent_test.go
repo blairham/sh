@@ -21,6 +21,7 @@ import (
 const twoLevelFunction = "g() { if true; then print a; print b; fi; }\n"
 
 func TestFunctionsIndentWritesTheLevelsAsSpaces(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), twoLevelFunction+`functions -x 2 g`)
 	want := "g () {\n  if true\n  then\n    print a\n    print b\n  fi\n}\n"
 	if out != want || st != 0 {
@@ -38,6 +39,7 @@ func TestFunctionsIndentWritesTheLevelsAsSpaces(t *testing.T) {
 
 // Zero suppresses the indentation altogether, and so does anything below it.
 func TestFunctionsIndentOfNoneAtAll(t *testing.T) {
+	t.Parallel()
 	flush := "g () {\nif true\nthen\nprint a\nprint b\nfi\n}\n"
 	for _, src := range []string{`functions -x 0 g`, `functions -x0 g`, `functions -x -1 g`} {
 		out, st := runZsh(t, t.TempDir(), twoLevelFunction+src)
@@ -51,6 +53,7 @@ func TestFunctionsIndentOfNoneAtAll(t *testing.T) {
 // sentences for what reads as one fault. A word that is not a number is the
 // number's own complaint; no word at all is the option reader's.
 func TestFunctionsIndentTakesItsNumber(t *testing.T) {
+	t.Parallel()
 	two := "g () {\n  if true\n  then\n    print a\n    print b\n  fi\n}\n"
 	for _, c := range []struct{ src, want string }{
 		// Attached, and attached behind another letter's bundle.
@@ -73,6 +76,7 @@ func TestFunctionsIndentTakesItsNumber(t *testing.T) {
 // The letter is accepted rather than named as missing, which is the invariant
 // the paired tables carry: a letter in both is refused while it works.
 func TestFunctionsIndentLetterIsNotAlsoCalledMissing(t *testing.T) {
+	t.Parallel()
 	if !strings.ContainsRune(zsh.Semantics().FunctionsOptions, 'x') {
 		t.Error("FunctionsOptions does not spell -x")
 	}

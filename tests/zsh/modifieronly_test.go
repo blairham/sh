@@ -42,6 +42,7 @@ var modifierOnlyRows = []struct{ name, src, want string }{
 // where it was** (#5137). See the no-redirection half of the commandless rule
 // in interp.Runner.simple.
 func TestAModifierAloneRunsNothing(t *testing.T) {
+	t.Parallel()
 	for _, c := range modifierOnlyRows {
 		t.Run(c.name, func(t *testing.T) {
 			out, _ := runZsh(t, t.TempDir(), c.src)
@@ -57,6 +58,7 @@ func TestAModifierAloneRunsNothing(t *testing.T) {
 // is to do to it (#5136), every row stands as it was — a line where nothing
 // ran has nothing to take the value back.
 func TestAModifierAloneKeepsItsPrefixWithoutTheRoster(t *testing.T) {
+	t.Parallel()
 	bare := preset
 	bare.Semantics = func() interp.Semantics {
 		s := zsh.Semantics()

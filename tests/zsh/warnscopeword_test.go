@@ -16,6 +16,7 @@ import "testing"
 // one name, and an element written plainly and by arithmetic — so a rule keyed
 // on the type passes half of each pair and fails the other.
 func TestScopeLintWordFollowsTheArithmeticRoute(t *testing.T) {
+	t.Parallel()
 	const on = "setopt localoptions warn_nested_var warn_create_global"
 	set := func(kind, name string) string {
 		return "f: " + kind + " parameter " + name + " set in enclosing scope in function f\n"

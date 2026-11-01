@@ -38,6 +38,7 @@ func runRegex(t *testing.T, src string) (string, int) {
 // two were byte-identical over exactly these rows — so a second engine
 // written behind the condition would show up here and nowhere else.
 func TestTheRegexConditionIsTheRegexOperatorUnderAnotherName(t *testing.T) {
+	t.Parallel()
 	for _, expr := range []string{
 		`b`, `^b`, `a|z`, `a+`, `(a)(b)(c)`, `(z)?(b)`, `a{1,2}`, `\d`, `B`, `x`, `a.c`,
 	} {
@@ -63,6 +64,7 @@ func TestTheRegexConditionIsTheRegexOperatorUnderAnotherName(t *testing.T) {
 // leftmost-longest rather than leftmost-first: `a|z` against `abc` takes `a`
 // at position 1, and `a.c` takes the whole subject.
 func TestWhatTheRegexConditionAnswers(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ expr, want string }{
 		{`b`, "r=0 M=[b] m=[] MB=2 ME=2\n"},
 		{`^b`, "r=1 M=[] m=[] MB= ME=\n"},
@@ -92,6 +94,7 @@ func TestWhatTheRegexConditionAnswers(t *testing.T) {
 // so an operator with nothing in front of it falls through to the refusal it
 // always had.
 func TestTheRegexConditionNeedsAnOperandInFrontOfIt(t *testing.T) {
+	t.Parallel()
 	out, st := runRegex(t, `[[ -regex-match abc ]]; print never`)
 	if want := "zsh:1: unknown condition: -regex-match\n"; out != want {
 		t.Errorf("out = %q, want %q", out, want)
@@ -107,6 +110,7 @@ func TestTheRegexConditionNeedsAnOperandInFrontOfIt(t *testing.T) {
 // entry lands with the condition, which matters most for this kind of
 // feature: a condition has no call site to refuse at.
 func TestTheRegexModuleLoadsWithItsOneCondition(t *testing.T) {
+	t.Parallel()
 	out, st := runRegex(t, "zmodload zsh/regex\nprint l=$?\nzmodload -lF zsh/regex\nzmodload")
 	want := "l=0\n+C:regex-match\nzsh/main\nzsh/regex\n"
 	if out != want || st != 0 {

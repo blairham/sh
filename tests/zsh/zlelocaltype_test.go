@@ -24,6 +24,7 @@ import (
 //
 // Measured against zsh 5.9.2 inside an ordinary `zle -N` widget.
 func TestTheLineParametersSayLocalInTheirType(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		want string
@@ -69,6 +70,7 @@ func TestTheLineParametersSayLocalInTheirType(t *testing.T) {
 // the spelling rather than by opening a scope — would pass every row up there
 // and fail this one.
 func TestTheTypeIsTheCallsAndNotTheNames(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"BUFFER", "CURSOR", "region_highlight"} {
 		t.Run(name, func(t *testing.T) {
 			got := zleParam(t, fmt.Sprintf(`print -r -- "[${(t)%s}] [${+%s}]"`, name, name))

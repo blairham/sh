@@ -29,6 +29,7 @@ import (
 // the body: the file was refused before the name was ever defined. This shell
 // wrote BEFORE and `ok` and then stopped, at status 1.
 func TestAnAutoloadFileWithAnUnclosedSubstitutionIsNotAFunction(t *testing.T) {
+	t.Parallel()
 	call := func(t *testing.T, body string) (string, int) {
 		t.Helper()
 		fp := fpathDir(t, map[string]string{"g": body})
@@ -99,6 +100,7 @@ func TestAnAutoloadFileWithAnUnclosedSubstitutionIsNotAFunction(t *testing.T) {
 // containment boundary on the autoload call path would have made them carry
 // on where zsh does not.
 func TestAnAutoloadFileWhoseSubstitutionIsReadAtExpansionStillEndsTheScript(t *testing.T) {
+	t.Parallel()
 	for _, body := range []string{
 		"print ok\nv=$(if)\n",          // `)` ends the substitution; the body fails later
 		"print ok\nv=`echo hi; for`\n", // the older spelling's scan has no grammar in it
@@ -123,6 +125,7 @@ func TestAnAutoloadFileWhoseSubstitutionIsReadAtExpansionStillEndsTheScript(t *t
 // refused file. Each measured on zsh 5.9.2: the script reaches its last line
 // in all three.
 func TestTheRoutesThatAlreadyCarriedOnStillDo(t *testing.T) {
+	t.Parallel()
 	t.Run("a sourced file", func(t *testing.T) {
 		dir := t.TempDir()
 		fp := fpathDir(t, map[string]string{"inc": "v=$(echo hi; for)\n"})

@@ -13,6 +13,7 @@ import (
 // terminal flushes what it has queued when the interrupt arrives, and what
 // comes back is a screen that never existed. Here, real zsh draws no mark.
 func TestEditorStyle(t *testing.T) {
+	t.Parallel()
 	const want = ""
 	if got := zsh.EditorStyle().Interrupt; got != want {
 		t.Errorf("Interrupt = %q, want %q", got, want)
@@ -23,6 +24,7 @@ func TestEditorStyle(t *testing.T) {
 // rows as well as the matches, echoes the key, and takes the first key it is
 // given as the answer.
 func TestEditorStyleAsksBeforeALargeListing(t *testing.T) {
+	t.Parallel()
 	s := zsh.EditorStyle()
 	if got, want := s.ListQuery, "zsh: do you wish to see all %[1]d possibilities (%[2]d lines)? "; got != want {
 		t.Errorf("ListQuery = %q, want %q", got, want)
@@ -41,6 +43,7 @@ func TestEditorStyleAsksBeforeALargeListing(t *testing.T) {
 // keystroke at a time. These are the five places where the same key does
 // something different from bash, and all five are on the daily path.
 func TestEditorStyleWords(t *testing.T) {
+	t.Parallel()
 	s := zsh.EditorStyle()
 	// This shell's own WORDCHARS default, and checked a character at a time
 	// by pressing the key: `M-b` on `echo /usr/local/bin` goes to the front
@@ -73,6 +76,7 @@ func TestEditorStyleWords(t *testing.T) {
 // line read back out of the shell's own history file. All three are
 // disagreements with bash rather than absences.
 func TestEditorStyleUndoAndLastArgument(t *testing.T) {
+	t.Parallel()
 	s := zsh.EditorStyle()
 	// `echo abcdef` typed a character at a time and then one `^_` leaves
 	// `echo abcde` here; bash leaves an empty line.

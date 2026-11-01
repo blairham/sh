@@ -14,6 +14,7 @@ import (
 // `%~`, `print -D` and `(D)` already follow. Measured 2026-10-05 on zsh 5.9.2
 // (/opt/homebrew/bin/zsh, -f), from /tmp with /usr pushed.
 func TestDirsDrawsTheStackByThePromptsRule(t *testing.T) {
+	t.Parallel()
 	out, st := runZshPrelude(t, t.TempDir(), `cd /tmp; pushd -q /usr
 HOME=/; dirs
 HOME=/usr/; dirs

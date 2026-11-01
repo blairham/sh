@@ -16,6 +16,7 @@ import "testing"
 // under it read as an ordinary group and the words after that group had
 // nowhere to go.
 func TestANamelessFunctionsBodyMayStandOnALaterLineHere(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{"a newline between the two", "function\n" + `{ printf "n=%d" $#; } a b`, "n=2"},
@@ -48,6 +49,7 @@ func TestANamelessFunctionsBodyMayStandOnALaterLineHere(t *testing.T) {
 // is given positional parameters of its own so that the count row can tell an
 // empty call from an inherited one — with none, both readings answer 0.
 func TestTheNoArgumentSpellingIsACallAndNotAGroup(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{

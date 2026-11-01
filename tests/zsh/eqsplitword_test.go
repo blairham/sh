@@ -12,6 +12,7 @@ import "testing"
 // D04parameter.ztst). Measured 2026-10-02 on zsh 5.9.2
 // (`/opt/homebrew/bin/zsh -f`, `LC_ALL=C`).
 func TestAnEqualsSplitOverAnOperatorWordSplitsTheWordAsItExpands(t *testing.T) {
+	t.Parallel()
 	const setup = "set A 'b c'; v='x y'\nl() { print -rn -- \"$#:\"; for w; print -rn -- \"<$w>\"; print }\n"
 	for _, tc := range []struct{ src, want string }{
 		{`l ${=1+"$@"}`, "2:<A><b c>\n"},

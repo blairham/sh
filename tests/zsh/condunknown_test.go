@@ -21,6 +21,7 @@ import (
 // Measured on zsh 5.9.2, 2026-09-14 and again 2026-09-15, over `-c` and from
 // a script file, with `env -i PATH=/usr/bin:/bin`.
 func TestASurplusOperandIsRefusedWhenTheConditionRuns(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		status          int
@@ -95,6 +96,7 @@ func TestASurplusOperandIsRefusedWhenTheConditionRuns(t *testing.T) {
 //
 // Measured on zsh 5.9.2, 2026-09-22, over `-c` with `LC_ALL=C`.
 func TestAnUnknownConditionIsRefusedWhenTheConditionRuns(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		status          int
@@ -177,6 +179,7 @@ func TestAnUnknownConditionIsRefusedWhenTheConditionRuns(t *testing.T) {
 // that says the word is not a connective inside `[[ ]]`, which is the trap:
 // in the `[` builtin it is `and`.
 func TestTheOlderSpellingOfTheExistenceTest(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(t, dir, "[[ -a "+dir+" ]]; echo dir=$?\n"+
 		"[[ -a "+dir+"/nosuch ]]; echo miss=$?\n"+
@@ -205,6 +208,7 @@ func TestTheOlderSpellingOfTheExistenceTest(t *testing.T) {
 // Measured on zsh 5.9.2, 2026-09-25, over `-c` under `env -i
 // PATH=/usr/bin:/bin LC_ALL=C` and from a script file alike.
 func TestAnUnknownInfixConditionIsRefusedWhenTheConditionRuns(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		status          int
@@ -275,6 +279,7 @@ func TestAnUnknownInfixConditionIsRefusedWhenTheConditionRuns(t *testing.T) {
 // written. All three are the group refusal this shell already made and none of
 // them runs a line — measured beside the rows above on zsh 5.9.2, 2026-09-25.
 func TestWhatAnInfixConditionNameIsNot(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"a name with no operand behind it", `[[ x -zz ]]`,

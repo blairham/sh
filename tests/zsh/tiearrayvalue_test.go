@@ -17,6 +17,7 @@ import "testing"
 // from a script file under `env -i PATH=/usr/bin:/bin`), output compared byte
 // for byte (#6468).
 func TestAScriptTieHalfKeepsItsKindAgainstAValue(t *testing.T) {
+	t.Parallel()
 	const tie = "typeset -T FOO=a:b foo; "
 	const show = `; print -r -- "[${(t)foo}] [${(t)FOO}] [$FOO]"`
 	const refused = "zsh:1: FOO: attempt to assign array value to non-array\n"
@@ -59,6 +60,7 @@ func TestAScriptTieHalfKeepsItsKindAgainstAValue(t *testing.T) {
 // over the slots that had it on the bare literal only: one of the shell's own
 // scalars and a private. Measured as above.
 func TestAFixedScalarSlotRefusesAnArrayOnEveryRoad(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"set -A HOME x y; echo after", "zsh:1: HOME: attempt to assign array value to non-array\n"},
 		{"read -A HOME <<< x; echo after", "zsh:1: HOME: attempt to assign array value to non-array\n"},

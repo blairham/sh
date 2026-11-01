@@ -16,6 +16,7 @@ import (
 // 2026-10-15 on zsh 5.9.2 with `-fc`; the rows are on interp's
 // parseGlobSize.
 func TestTheSizeQualifier(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, n := range []int{0, 1, 512, 513, 1024, 1025} {
 		name := filepath.Join(dir, "s"+strconv.Itoa(n))
@@ -50,6 +51,7 @@ func TestTheSizeQualifier(t *testing.T) {
 // An expression in a qualifier's subscript that will not read is worded as
 // the same expression is in an array's subscript (#6613).
 func TestAQualifierSubscriptIsWordedAsAnExpression(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "f"), nil, 0o600); err != nil {
 		t.Fatal(err)

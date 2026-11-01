@@ -16,6 +16,7 @@ import "testing"
 // `-f`, 2026-09-30; on main before this change every row but the controls
 // read `csh` and did not run the `-c` string.
 func TestEveryEmulateModeWordNamesAnEmulation(t *testing.T) {
+	t.Parallel()
 	rows := []struct{ word, want string }{
 		{"bash", "sh"},
 		{"b", "sh"},

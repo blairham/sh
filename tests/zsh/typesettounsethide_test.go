@@ -14,6 +14,7 @@ import "testing"
 // Every row measured 2026-10-02 on zsh 5.9.2 (`/opt/homebrew/bin/zsh -f`).
 // The emulation rows are the same under `emulate sh` and `emulate ksh`.
 func TestALocalHidesTheCallersValueUnderTypesetToUnset(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`setopt typesettounset; g=1; f() { local g; echo ${g-UNSET}; }; f; echo $g`, "UNSET\n1\n"},
 		{`setopt typesettounset; g=1; f() { typeset g; print $+g; }; f`, "0\n"},

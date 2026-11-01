@@ -16,6 +16,7 @@ import "testing"
 // letter split's do; and a nested `=` split keeps its bare fields unquoted
 // until a `(Q)` there makes them values too.
 func TestNestedAndSplitEmptiesAreBare(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `IFS=:; u=a::b:; b=(x '' y); e=; d=:
 show() { printf '%s:' $#; for x in "$@"; do printf '<%s>' "$x"; done; print; }
 show "${(@q)${b[@]}}"

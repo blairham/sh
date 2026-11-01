@@ -18,6 +18,7 @@ import (
 // below runs the two words on one line: a shell with the rule in five of six
 // places looks exactly like a shell with the rule.
 func TestReadonlyInsideAFunctionIsLocal(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `b() { readonly B=1; }; b; printf 'readonly [%s]\n' "${B-unset}"
 f() { export F=1; }; f; printf 'export   [%s]\n' "${F-unset}"`)
 	want := "readonly [unset]\nexport   [1]\n"
@@ -30,6 +31,7 @@ f() { export F=1; }; f; printf 'export   [%s]\n' "${F-unset}"`)
 // leaked name: writing to a readonly ends a non-interactive shell here, so
 // without the scope a function that declares one is callable exactly once.
 func TestAFunctionDeclaringAReadonlyIsCallableTwice(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `rf() { readonly RF=fixed; printf 'inside [%s]\n' "$RF"; }
 rf
 rf
@@ -44,6 +46,7 @@ printf 'after [%s]\n' "${RF-unset}"`)
 // land in the local rather than in the caller, which is the opposite of what
 // a `readonly` that only freezes needs.
 func TestAReadonlyArrayLiteralLandsInTheLocal(t *testing.T) {
+	t.Parallel()
 	out, st := answersRun(t, `k() { readonly -a R=(a b); printf 'in=[%s]\n' "${R[*]}"; }
 k
 printf 'out=[%s]\n' "${R[*]-unset}"`)

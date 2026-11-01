@@ -77,6 +77,7 @@ func widgetOf(body string) string {
 // `compadd checkout cherry cherry-pick commit`: the key offers the three that
 // begin with what was typed, and `commit` is not among them.
 func TestACompletionWidgetsFunctionSuppliesTheCandidates(t *testing.T) {
+	t.Parallel()
 	got := completionFor(t,
 		widgetOf("compadd checkout cherry cherry-pick commit"), "git che")
 	want := []string{"checkout", "cherry", "cherry-pick"}
@@ -95,6 +96,7 @@ func TestACompletionWidgetsFunctionSuppliesTheCandidates(t *testing.T) {
 // used to hand the key to its own completion and list `always  auto`. A plain
 // widget makes no claim about completion and still answers with no opinion.
 func TestAWidgetThatOffersNothingAnswersNothing(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src string
 		want      []repl.Candidate
@@ -128,6 +130,7 @@ func TestAWidgetThatOffersNothingAnswersNothing(t *testing.T) {
 // parameter this shell set on some other runner, or after the call, would pass
 // an assertion made outside and still be invisible where it is needed.
 func TestTheParametersACompletionWidgetsFunctionReads(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, line, want string }{
 		// Measured: `words` holds the words as typed, `CURRENT` is one-based,
 		// `PREFIX` is the word and `SUFFIX` is empty.
@@ -191,6 +194,7 @@ func TestTheParametersACompletionWidgetsFunctionReads(t *testing.T) {
 // those functions stop on, and the failure is silent — the assignment goes
 // somewhere and the next read finds the old value.
 func TestCompstateAndTheWordAreWritableByTheFunction(t *testing.T) {
+	t.Parallel()
 	got := completionFor(t, widgetOf(
 		"PREFIX=ch; compstate[insert]=menu; words=(one two); CURRENT=2; "+
 			`compadd -U -- "PREFIX=$PREFIX insert=$compstate[insert] `+
@@ -212,6 +216,7 @@ func TestCompstateAndTheWordAreWritableByTheFunction(t *testing.T) {
 // would connect to the Tab that left it there, and `$words` is a name a
 // script is entitled to use for something else.
 func TestTheCompletionParametersAreGoneAfterwards(t *testing.T) {
+	t.Parallel()
 	r := bindkeyRunner(t, widgetOf("compadd checkout"))
 	zsh.RunCompletion(r, t.Context(), "probewid", repl.Completion{
 		Line: "git che", Point: 7, Start: 4, Word: "che", Dir: r.Dir,
@@ -243,6 +248,7 @@ func TestTheCompletionParametersAreGoneAfterwards(t *testing.T) {
 // computil_test.go; what is left here is the refusal about the *place*,
 // which is only reached by a call that satisfies the count.
 func TestTheseBuiltinsRefuseOutsideACompletion(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"compadd x", "compadd", "compadd -Z x", "compset -p 1",
 	} {
@@ -272,6 +278,7 @@ func TestTheseBuiltinsRefuseOutsideACompletion(t *testing.T) {
 // both halves are asserted, because a change that registered the module
 // wholesale would pass the second and be a silent success about the builtins.
 func TestTheModuleGateMovedWithTheBuiltins(t *testing.T) {
+	t.Parallel()
 	out, _ := answersRun(t, `zmodload -F zsh/complete b:compadd; echo "named=$?"`+"\n"+
 		`zmodload -F zsh/complete b:compset; echo "set=$?"`+"\n"+
 		`zmodload zsh/complete; echo "whole=$?"`)

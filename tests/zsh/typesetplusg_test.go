@@ -11,6 +11,7 @@ import "testing"
 // it is without the letter; a `-m` line reaches the matches where they are
 // unless `+g` is written, and then makes fresh locals of them.
 func TestPlusGIsLocalAndDecidesWhetherMatchingMakesLocals(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `for flags in '+g' '-h +g' '-i +g' '-h' '-i' '-h -g'; do
   for form in "-m x*" x; do
     unset x; x=1

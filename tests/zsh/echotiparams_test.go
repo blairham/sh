@@ -15,6 +15,7 @@ import (
 // `echoti cup 3` is `\e[4;1H`, and a bare `echoti cup` writes the language
 // without the `$<5>` (#5150).
 func TestEchotiComputesParametersAndDropsPadding(t *testing.T) {
+	t.Parallel()
 	const stringCursorAddress = 10 // cup
 	dir := terminfofixture.Database(t, terminfofixture.Description{
 		Name: fixtureTerm, StrCount: stringCursorAddress + 1,

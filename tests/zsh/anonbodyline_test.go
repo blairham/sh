@@ -22,6 +22,7 @@ import "testing"
 // it is what the reference writes for a brace body, byte for byte. The two
 // spellings differ and only one of them was modeled.
 func TestANonBracketedBodyKeepsTheCallersLineNumbering(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -67,6 +68,7 @@ func TestANonBracketedBodyKeepsTheCallersLineNumbering(t *testing.T) {
 // `PS4` is set to `%i` alone so the trace rows grade the number and nothing
 // around it.
 func TestTheBodysLineReachesTheTraceAndTheDiagnostic(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name, src, want string
@@ -123,6 +125,7 @@ func TestTheBodysLineReachesTheTraceAndTheDiagnostic(t *testing.T) {
 // where the reference names the script, for both spellings alike, and that is
 // a fault of its own rather than anything this measures.
 func TestTheDefinitionsOwnLineDoesNotMoveWithIt(t *testing.T) {
+	t.Parallel()
 	const read = `print -r -- "D=${funcsourcetrace[1]##*:}"`
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src string }{
@@ -146,6 +149,7 @@ func TestTheDefinitionsOwnLineDoesNotMoveWithIt(t *testing.T) {
 // that is itself renumbered, and the answer is nought in each, because nought
 // is what the frame around it calls that line.
 func TestItIsTheCallersNumberingAndNotTheScripts(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{
@@ -179,6 +183,7 @@ func TestItIsTheCallersNumberingAndNotTheScripts(t *testing.T) {
 // A rule read off the `()` rows alone would have said "an unbracketed body is
 // never renumbered", which is wrong in half the grammar.
 func TestOnlyTheParenthesisedHeaderKeepsTheCallersNumbering(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, src, want string }{
 		{

@@ -44,6 +44,7 @@ func compinitFixture(t *testing.T) string {
 // not, and compdef's own forms (#5393). Nothing here reads zsh's function
 // files; the probe calls them.
 func TestTheShippedCompinit(t *testing.T) {
+	t.Parallel()
 	fix := compinitFixture(t)
 	out, _ := runShipped(t, `fpath=(`+fix+` $fpath); autoload -Uz compinit; compinit -D -u; echo st=$?
 for k in foo bar qq x newcmd; do print -r -- "$k=${_comps[$k]-unset}"; done
@@ -68,6 +69,7 @@ compdef _g g1=svc; print $_comps[g1] $_services[g1]`)
 // nor `-i` and no terminal aborts and takes itself away, where `-i` leaves the
 // directory out. Recorded from zsh 5.9.2 on 2026-10-02 (#5393).
 func TestTheShippedCompauditRefusesAnInsecureDirectory(t *testing.T) {
+	t.Parallel()
 	fix := compinitFixture(t)
 	insecure := filepath.Join(t.TempDir(), "insec")
 	if err := os.Mkdir(insecure, 0o755); err != nil {
@@ -97,6 +99,7 @@ autoload -Uz compinit; compinit -D -i; echo st=$? ${_comps[insfoo]-unset} ${_com
 // what its options name, ignoring the word, between the prefix and the
 // suffix. Recorded from zsh 5.9.2 on 2026-10-02 (#5393).
 func TestTheShippedBashcompinit(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, f := range []string{"fa", "fb"} {
 		if err := os.WriteFile(filepath.Join(dir, f), nil, 0o644); err != nil {
@@ -171,6 +174,7 @@ probe
 // found` and the assignment to `_lastcomp` a subscript error, the two
 // failures zsh's own `_main_complete` hit on every Tab (#6210).
 func TestTabAfterTheShippedCompinitRunsAMainCompleteThatReadsItsState(t *testing.T) {
+	t.Parallel()
 	fix := compinitFixture(t)
 	body := "#autoload\neval \"$_comp_setup\"\nlocal -a none; none=( " + fix + "/nomatch*_* )\n" +
 		"_lastcomp[seen]=1\ncompadd -- \"matched${#none}\"\n"

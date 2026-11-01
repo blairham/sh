@@ -29,6 +29,7 @@ func fpathDir(t *testing.T, files map[string]string) string {
 // is a function at once**, and the call is what reads the file. The file's
 // contents are the function's *body*, so its `$*` is the call's arguments.
 func TestAutoloadDefinesTheNameAtOnceAndReadsTheFileOnTheCall(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"myfunc": `print -r -- "myfunc ran with [$*]"`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 autoload -Uz myfunc
@@ -54,6 +55,7 @@ typeset -f myfunc`)
 // where `nosuchfn` is written, and the stub that did the looking is not a
 // frame anybody can open (#1994).
 func TestAutoloadFailsAtTheCallAndNotAtTheDeclaration(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `fpath=()
 autoload -Uz nosuchfn
 print -r -- "decl st=$?"
@@ -67,6 +69,7 @@ print -r -- "call st=$?"`)
 
 // `$fpath` is searched in order and the first file wins.
 func TestAutoloadTakesTheFirstFileOnFpath(t *testing.T) {
+	t.Parallel()
 	first := fpathDir(t, map[string]string{"pick": `print -r -- FIRST`})
 	second := fpathDir(t, map[string]string{"pick": `print -r -- SECOND`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+first+` `+second+`)
@@ -86,6 +89,7 @@ pick`)
 // A directory on `$fpath` that has no such file is a search that goes on
 // rather than a failure, which is what makes a stale entry harmless.
 func TestAutoloadWalksPastADirectoryWithoutTheFile(t *testing.T) {
+	t.Parallel()
 	empty := t.TempDir()
 	real := fpathDir(t, map[string]string{"later": `print -r -- FOUND`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+empty+` /nonexistent-dir `+real+`)
@@ -99,6 +103,7 @@ later`)
 // `+X` resolves now and does **not** run, which is the difference between the
 // two signs of the same letter.
 func TestPlusXResolvesWithoutRunning(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"noisy": `print -r -- RAN`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 autoload -Uz noisy
@@ -123,6 +128,7 @@ noisy`)
 // (2026-10-03) with this script byte for byte: the same eight lines and an
 // exit of 1. This shell reported and ran on until then.
 func TestTheTwoSignsOfXAreTwoCommands(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `fpath=()
 autoload +X
 print -r -- "1 plus-none st=$?"
@@ -158,6 +164,7 @@ print -r -- "5 never"`)
 // The line after it still runs, with `$?` holding what the body returned.
 // So `-X` is not a return: it is a load, a call, and a status.
 func TestMinusXResolvesTheFunctionItIsInsideAndRunsIt(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"inner": `print -r -- LOADED`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 inner() { builtin autoload -X; print -r -- "after st=$?"; }
@@ -177,6 +184,7 @@ typeset -f inner`)
 // positional parameters have to come from the call being replaced. A body run
 // with no arguments looks right in every test that does not print `$*`.
 func TestMinusXRunsTheBodyWithTheCallsArgumentsAndStatus(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{
 		"inner": "print -r -- \"BODY [$*] n=$#\"\nreturn 7\n",
 	})
@@ -199,6 +207,7 @@ print -r -- "call st=$?"`)
 // A fix that did the second answers everything above identically and this one
 // with an empty value.
 func TestMinusXRunsTheBodyInsideTheStubsScope(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"inner": `print -r -- "sees [$secret]"`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 inner() { local secret=hidden; builtin autoload -X; }
@@ -216,6 +225,7 @@ inner`)
 // The parse error itself, as zsh 5.9.2 writes it — `badfn:1: parse error
 // near 'fi'` — at the function's name and the file's own line (#5148).
 func TestAFileThatIsNotAFunctionBodyIsItsOwnComplaint(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"badfn": "if then fi fi\n"})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 autoload -Uz badfn
@@ -238,6 +248,7 @@ print -r -- "call st=$?"`)
 // TestMinusXResolvesTheFunctionItIsInsideAndRunsIt — so this row says which
 // function was replaced *and* that the right one ran.
 func TestMinusXResolvesTheInnermostFunction(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"inner": `print -r -- INNER`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 inner() { builtin autoload -X; print -r -- "after st=$?"; }
@@ -257,6 +268,7 @@ typeset -f outer`)
 // has been called is an ordinary function and this builtin has nothing left
 // to say about it.
 func TestBareAutoloadListsOnlyTheNamesStillWaiting(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"loaded": `print -r -- x`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 autoload -Uz loaded pending
@@ -282,6 +294,7 @@ autoload`)
 // missing, and the rest are `bad option`. `-k` has left the missing ones: the
 // ksh style is built (#5140), and its rows are in autoloadksh_test.go.
 func TestAutoloadLetters(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `autoload -Uz ok1 2>&1
 print -r -- "1 Uz st=$?"
 autoload -t f 2>&1
@@ -312,6 +325,7 @@ print -r -- "5 Q st=$?"`)
 // and the relative half is still refused — see
 // TestAutoloadOfAnAbsolutePathDefinesItsBaseName.
 func TestAnAbsoluteAutoloadPathIsNoFunctionButItsBaseNameIs(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"direct": `print -r -- BYPATH`})
 	path := filepath.Join(fp, "direct")
 	for _, letters := range []string{"-Uz", "-rUz", "-RUz"} {
@@ -332,6 +346,7 @@ direct`)
 // what a caller sees, because `add-zsh-hook` hands its letters straight to
 // `autoload`. Measured 2026-09-12 on zsh 5.9.2 (#2149).
 func TestAutoloadRefusesTheTwoStylesTogether(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `autoload -k kf 2>&1
 print -r -- "1 k st=$?"
 autoload -Uzk kf 2>&1
@@ -359,6 +374,7 @@ print -r -- "5 kU st=$?"`)
 // that cost two diagnostics, because the refused declaration was followed by
 // a call to a name nothing had defined.
 func TestTheDeclarationAndCallAPluginManagerWrites(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{
 		"is-at-least": `[[ $1 == 5.1 ]] && return 0; return 1`,
 	})
@@ -387,6 +403,7 @@ is-at-least 5.1 && print -r -- NEW || print -r -- OLD`)
 // bare listing — a shell that kept the record while keeping the body would
 // pass the first two and list a function it had not marked.
 func TestAutoloadLeavesAFunctionThatIsAlreadyDefined(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"myfunc": `print -r -- "from the file"`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 myfunc() { print -r -- "the body it already had" }
@@ -410,6 +427,7 @@ print -r -- "listing ends"`)
 // the opposite case by construction, since the function it replaces is the one
 // it is running inside and that always has a body.
 func TestResolveNowRefusesAFunctionThatIsAlreadyDefined(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"myfunc": `print -r -- "from the file"`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 myfunc() { print -r -- "the body it already had" }
@@ -428,6 +446,7 @@ myfunc`)
 // accepted and ignored: a plugin manager that moves `$fpath` between
 // declaring a name and calling it means the earlier file.
 func TestDashRFixesThePathAtTheDeclaration(t *testing.T) {
+	t.Parallel()
 	first := fpathDir(t, map[string]string{"f": `print -r -- FIRST`})
 	second := fpathDir(t, map[string]string{"f": `print -r -- SECOND`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+first+`)
@@ -451,6 +470,7 @@ f`)
 // What `-r` fixes is the *path*, not the contents: the file is still read at
 // the call, so an edit made after the declaration is the body that runs.
 func TestDashRFixesThePathAndNotTheContents(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"f": `print -r -- ORIGINAL`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 autoload -r f
@@ -472,6 +492,7 @@ f`)
 // no external commands. The measurement is recorded on autoloadFixPath; what
 // is asserted here is the half of it this harness can say.
 func TestAFixedPathNeedsNoFurtherSearch(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"g": `print -r -- FIXED`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 autoload -r g
@@ -488,6 +509,7 @@ print -r -- "call st=$?"`)
 // about it: what is left behind is an ordinary deferred autoload, which the
 // call then resolves against whatever `$fpath` says by then.
 func TestDashRIsSilentAboutANameItCannotResolve(t *testing.T) {
+	t.Parallel()
 	later := fpathDir(t, map[string]string{"f": `print -r -- LATER`})
 	out, st := runZsh(t, t.TempDir(), `fpath=()
 autoload -r f
@@ -503,6 +525,7 @@ f`)
 // `-R` is the same declaration with that failure reported, at the
 // declaration and about the function rather than the builtin.
 func TestDashRCapitalReportsANameItCannotResolve(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `fpath=()
 autoload -R nosuchfn 2>&1
 print -r -- "decl st=$?"`)
@@ -515,6 +538,7 @@ print -r -- "decl st=$?"`)
 // A plain declaration after a `-r` one says "search at the call" and is
 // taken at its word — the earlier fixed path does not go on answering.
 func TestAPlainDeclarationForgetsAFixedPath(t *testing.T) {
+	t.Parallel()
 	first := fpathDir(t, map[string]string{"f": `print -r -- FIRST`})
 	second := fpathDir(t, map[string]string{"f": `print -r -- SECOND`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+first+`)
@@ -538,6 +562,7 @@ f`)
 // asked for: a plain declaration is a bare `-X`, `-Uz` is `-XUz`, and the
 // order is zsh's canonical one rather than the one that was written.
 func TestAStubListsAsTheLettersItWasGiven(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"af": `print A`, "bf": `print B`, "cf": `print C`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 autoload af
@@ -562,6 +587,7 @@ print -r -- "st=$?"`)
 // to print zsh's words while the stub still behaves some other way. Here the
 // listing's own words are handed back to the shell.
 func TestTheListedStubIsABodyThatRuns(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"hf": `print -r -- "HF ran [$*]"`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 hf() {
@@ -581,6 +607,7 @@ functions hf`)
 // tree holds no comments — so the marker cannot be arranged by giving the
 // stub a cleverer body, and a name that has been called loses it.
 func TestTheUndefinedMarkerIsNotAComment(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"df": `print D`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 ef() {
@@ -601,6 +628,7 @@ functions df`)
 // indentation, without the marker and without the emulation letter. Measured
 // — `autoload -Uz f` lists as `-XUz` and reads back as `-XU`.
 func TestAStubReadsBackThroughTheAssociationWithoutTheEmulationLetter(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"gf": `print G`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 autoload -Uz gf
@@ -617,6 +645,7 @@ print -r -- "[${functions[gf]}]"`)
 // it is. The control is in the row, because the wording that matters is the
 // *difference* between the two.
 func TestAnUndefinedFunctionSaysItIsOne(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"jf": `print J`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 autoload -Uz jf
@@ -635,6 +664,7 @@ type jf`)
 // the stub still runs: the operand replaces the search rather than joining
 // it, which is what makes a fixed path fixed.
 func TestAFixedPathIsWrittenIntoTheStub(t *testing.T) {
+	t.Parallel()
 	first := fpathDir(t, map[string]string{"lf": `print FIRST`})
 	second := fpathDir(t, map[string]string{"lf": `print SECOND`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+first+`)
@@ -657,6 +687,7 @@ lf`)
 // where this test asserted `nf:builtin:` until #1968 — the expectation had
 // recorded the defect rather than the shell.
 func TestMinusXTakesOneDirectoryAndNoMore(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"mf": `print FROM_FPATH`, "nf": `print N`})
 	other := fpathDir(t, map[string]string{"mf": `print FROM_OPERAND`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
@@ -675,6 +706,7 @@ print -r -- "st=$?"`)
 // and the opposite of what this builtin's own note claimed until it was
 // asked.
 func TestPlusXWithNoOperandsLists(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"pf": `print P`})
 	out, st := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 autoload -Uz pf
@@ -707,6 +739,7 @@ print -r -- "st=$?"`)
 // reaches for the process's cwd finds nothing here and passes in a test that
 // happens to run from the right place.
 func TestARelativeFpathEntryIsResolvedAgainstTheShellsDirectory(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	fns := filepath.Join(dir, "fns")
 	if err := os.MkdirAll(fns, 0o755); err != nil {
@@ -745,6 +778,7 @@ print -r -- "st=$?"`)
 // autoloaded one by dropping the builtin from every location would pass half
 // of this and lose `zsh:cd:1:` everywhere else.
 func TestADiagnosticFromAnAutoloadedBodyIsNotTheBuiltinsFunc(t *testing.T) {
+	t.Parallel()
 	fp := fpathDir(t, map[string]string{"errf": "print -r -- one\nnosuchcmd_abc\n"})
 	out, _ := runZsh(t, t.TempDir(), `fpath=(`+fp+`)
 autoload -Uz errf
@@ -778,6 +812,7 @@ plainf`)
 // declaration writes is `builtin autoload -X`, so every complaint from a
 // resolution came out named after `builtin` (#1968).
 func TestBuiltinNamesTheBuiltinItRanInTheLocation(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `builtin cd /nope/nope
 builtin shift 5
 builtin nosuchbuiltin`)
@@ -805,6 +840,7 @@ builtin nosuchbuiltin`)
 // after the move is the consequence: an implementation that recorded an
 // absolute path and looked it up relatively again would pass the first.
 func TestAFixedPathIsRecordedAbsoluteSoItSurvivesACd(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	fns := filepath.Join(dir, "fns")
 	if err := os.MkdirAll(fns, 0o755); err != nil {
@@ -839,6 +875,7 @@ print -r -- "st=$?"`)
 // found` written in the same places: that was already byte-identical, so these
 // locations existed and this route was not reaching them.
 func TestAMissingFunctionFileIsLocatedAtTheCall(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	t.Run("inside a function, the line within it", func(t *testing.T) {
@@ -912,6 +949,7 @@ print -r -- tail`)
 // by the third probe — `unsetopt function_argzero` turns the row into the
 // script's own path, which no reading about stubs would predict.
 func TestAMissingFunctionFileAtTheTopOfAScriptNamesTheFunction(t *testing.T) {
+	t.Parallel()
 	out := runZshScriptFile(t, `print -r -- before
 autoload -Uz zzmissing
 zzmissing

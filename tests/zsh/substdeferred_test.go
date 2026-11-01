@@ -10,6 +10,7 @@ import "testing"
 // modifier and case flag has, so they see what those did to the names
 // (#5612). Measured 2026-10-03 on zsh 5.9.2 under `-f`.
 func TestASubstitutionsReplacementExpandsAfterTheRestOfTheExpansion(t *testing.T) {
+	t.Parallel()
 	const setup = "s=xa.y; b=Q\n"
 	for _, tc := range []struct{ src, want string }{
 		{`print ${(U)s:s/a/$b/} ${(C)s:s/a/$b/} ${s:s/a/$b/:u} ${(U)s:s/a/${b}/}`, "X.Y X.Y X.Y X.Y\n"},

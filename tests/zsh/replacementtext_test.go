@@ -30,6 +30,7 @@ func replacementDir(t *testing.T) string {
 // `x=abcd; print -r -- "${(U)x//b/*}"` is `A*CD`, and `a=(ab cb); print -r --
 // "${(U)a[@]//b/*}"` is `A* C*` (#1337).
 func TestAFlaggedReplacementIsLiteralText(t *testing.T) {
+	t.Parallel()
 	dir := replacementDir(t)
 	for _, tc := range []struct{ src, want string }{
 		{`x=abcd; print -r -- "${(U)x//b/*}"`, "A*CD"},
@@ -49,6 +50,7 @@ func TestAFlaggedReplacementIsLiteralText(t *testing.T) {
 // glob the *result* — and both halves follow from axes already recorded, so
 // the row exists to say the replacement itself contributed no pattern.
 func TestAReplacementSurvivesAnUnquotedExpansion(t *testing.T) {
+	t.Parallel()
 	dir := replacementDir(t)
 	for _, tc := range []struct{ src, want string }{
 		{`x=abcd; print -r -- ${x//b/*}`, "a*cd"},

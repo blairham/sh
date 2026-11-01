@@ -11,6 +11,7 @@ import "testing"
 // was cut inside of (#5151, the chunk of D04parameter.ztst that suite marks
 // as failing). Measured 2026-10-03 on zsh 5.9.2 under `-f`.
 func TestAReplacementsSlashIsFoundWithoutRegardToQuotes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`x=a/b; print -r -- ${x//'/'/'\'} ${x//'/'/X} ${x//"/"/X} "${x/'/'/X}"`, "a/b a/b a/b a/b\n"},
 		{`x="a'b/c"; print -r -- ${x//'/'/X}`, "a/Xb/c\n"},

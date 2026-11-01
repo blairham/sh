@@ -14,6 +14,7 @@ import (
 // Every row prints the status and what it reads. Measured on zsh 5.9.2, `-f`,
 // 2026-09-30; on main before this change every row but the controls differed.
 func TestEmulateReadsLettersAfterTheModeAsSetDoes(t *testing.T) {
+	t.Parallel()
 	const read = "[[ -o longlistjobs ]] && print llj; [[ -o sunkeyboardhack ]] && print skh; " +
 		"[[ -o localoptions ]] && print lo; [[ -o nullglob ]] && print ng; " +
 		"[[ -o autopushd ]] && print apd; [[ -o markdirs ]] && print md; " +
@@ -85,6 +86,7 @@ func TestEmulateReadsLettersAfterTheModeAsSetDoes(t *testing.T) {
 // caller that turns `alwayslastprompt` off, calls a sticky function that
 // turns it on, and reads it — `on` is "the same emulation, not entered".
 func TestAnEmulateLetterIsItsNameInTheStickyIdentity(t *testing.T) {
+	t.Parallel()
 	rows := []struct{ name, outer, inner, want string }{
 		{"-G is -o nullglob", "zsh -G", "zsh -o nullglob", "on"},
 		{"-F is +o glob", "zsh -F", "zsh +o glob", "on"},

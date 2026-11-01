@@ -26,6 +26,7 @@ import "testing"
 // written after it": `builtin` is on the same roster and a redirection
 // changes nothing for it.
 func TestAPrefixOnExecGoesAwayOnceExecIsRedirecting(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, cmd, want string }{
 		// The roster keeps it: nothing is written after the word.
 		{"a bare exec keeps it", "exec", "x=v"},
@@ -69,6 +70,7 @@ func TestAPrefixOnExecGoesAwayOnceExecIsRedirecting(t *testing.T) {
 // redirection takes effect, so its standard error reaches the terminal.
 // `x=plain exec >log` behaves identically.
 func TestTheChunkWithItsSubstitution(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st, errs := runZshSplit(t, dir,
 		"( x=43\n"+

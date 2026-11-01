@@ -10,6 +10,7 @@ import "testing"
 // a chunk of D04parameter.ztst). Measured 2026-10-02 on zsh 5.9.2
 // (`/opt/homebrew/bin/zsh -f`, `LC_ALL=C`).
 func TestTheIFlagPicksWhichMatchASearchingTrimTakes(t *testing.T) {
+	t.Parallel()
 	const setup = "s=aXbXc; n=1\n"
 	for _, tc := range []struct{ src, want string }{
 		{`print -r -- ${(SI:1:)s#X*} ${(SI:2:)s#X*} ${(SI:3:)s#X*}`, "abXc aXbc aXbXc\n"},

@@ -9,6 +9,7 @@ import "testing"
 // are arrays to shift, and the positional parameters are left alone when any
 // name is given. Measured 2026-09-09 against zsh 5.9.2.
 func TestShiftTakesArrayNamesAsOperands(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name string
@@ -61,6 +62,7 @@ func TestShiftTakesArrayNamesAsOperands(t *testing.T) {
 // A scalar `q=5` is a count; an array `q=(5)` is a name, and gets shifted like
 // any other. Measured 2026-09-09.
 func TestShiftTellsACountFromANameByType(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(t, dir,
 		`q=5; a=(1 2 3 4 5 6); shift q a; print -r -- "[${(j:,:)a}][$q]"`)
@@ -77,6 +79,7 @@ func TestShiftTellsACountFromANameByType(t *testing.T) {
 // Naming an array leaves the positional parameters where they are — the two
 // readings of `shift` do not run together.
 func TestShiftWithANameLeavesThePositionalParameters(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`set -- p1 p2 p3; a=(1 2 3); shift a; print -r -- "[$*][${(j:,:)a}]"`)
 	if want := "[p1 p2 p3][2,3]\n"; out != want || st != 0 {
@@ -88,6 +91,7 @@ func TestShiftWithANameLeavesThePositionalParameters(t *testing.T) {
 // the operand turning out to name an array. A count in front of a name that
 // does not exist still shifts nothing. Measured 2026-09-09.
 func TestShiftWithAnyOperandLeavesThePositionalParameters(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name string
@@ -111,6 +115,7 @@ func TestShiftWithAnyOperandLeavesThePositionalParameters(t *testing.T) {
 // A first word that is a *scalar* is the count, though, and it shifts the
 // positional parameters like a literal one — including overrunning them.
 func TestShiftReadsAScalarFirstWordAsACount(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(t, dir, `set -- x y z; s=1; shift s; print -r -- "[$*] st=$?"`)
 	if want := "[y z] st=0\n"; out != want || st != 0 {
@@ -127,6 +132,7 @@ func TestShiftReadsAScalarFirstWordAsACount(t *testing.T) {
 // behind the count are passed over in silence, and an association has no order
 // to shift off the front of, so it goes the same way.
 func TestShiftLeavesANameThatIsNotAnArrayAlone(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name string
@@ -164,6 +170,7 @@ func TestShiftLeavesANameThatIsNotAnArrayAlone(t *testing.T) {
 // 2026-09-09 — note the message names `$#` even though the operand is an
 // array, and that only one line is printed for the one name that overran.
 func TestShiftReportsACountPastTheEndOfANamedArray(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	tooMany := "zsh:shift:1: shift count must be <= $#\n"
 	for _, tc := range []struct {

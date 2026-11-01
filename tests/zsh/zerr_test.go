@@ -34,6 +34,7 @@ func TestZERRNamesTheErrCondition(t *testing.T) {
 // everywhere, so a shell without the convention takes this line, defines the
 // function, never calls it, and says nothing at all.
 func TestATrapFunctionIsTheHandler(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `TRAPZERR() { echo caught; }; false; echo done`)
 	if st != 0 || out != "caught\ndone\n" {
 		t.Errorf("out %q status %d, want the function to have been called as the handler", out, st)
@@ -110,6 +111,7 @@ func TestEitherSpellingRemovesTheOther(t *testing.T) {
 // `TRAP…` function for the same condition replaces the first rather than
 // sitting beside it, so only the later name is still defined.
 func TestASecondTrapFunctionForOneConditionReplacesTheFirst(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`TRAPERR() { echo E; }; TRAPZERR() { echo Z; }; false; echo ---; functions`)
 	want := "Z\n---\nTRAPZERR () {\n\techo Z\n}\n"
@@ -123,6 +125,7 @@ func TestASecondTrapFunctionForOneConditionReplacesTheFirst(t *testing.T) {
 // a TRAP-prefixed name whose suffix is no condition is an ordinary function
 // that is still callable by that name.
 func TestATrapFunctionNameIsReadCaseSensitivelyAndOnlyForRealConditions(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`trapzerr() { echo z; }; TRAPFOO() { echo f; }; false; TRAPFOO; echo done`)
 	if st != 0 || out != "f\ndone\n" {
@@ -175,6 +178,7 @@ func TestATrapFunctionIsCalledAsAFunction(t *testing.T) {
 // every non-zero status would fail. The same gate `set -e` uses: a status
 // being tested is not a failure.
 func TestZERRIsSuppressedWhereAFailureIsTested(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`TRAPZERR() { echo Z; }; if false; then :; fi; while false; do :; done; `+
 			`false && echo a; ! true; false | true; echo done`)
@@ -191,6 +195,7 @@ func TestZERRIsSuppressedWhereAFailureIsTested(t *testing.T) {
 // handler rather than an exit hook — with the option on the handler runs
 // first and the script then stops.
 func TestZERRFiresWithAndWithoutErrExit(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `setopt errexit; TRAPZERR() { echo Z; }; false; echo unreached`)
 	if st != 1 || out != "Z\n" {
 		t.Errorf("out %q status %d, want the handler and then the stop", out, st)
@@ -202,6 +207,7 @@ func TestZERRFiresWithAndWithoutErrExit(t *testing.T) {
 // that boundary in this dialect, so the failure inside fires and the subshell
 // command's own failure fires again outside.
 func TestATrapFunctionFiresInsideASubshell(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `TRAPZERR() { echo Z; }; (false); echo done`)
 	if st != 0 || out != "Z\nZ\ndone\n" {
 		t.Errorf("out %q status %d, want both sides of the boundary to fire", out, st)

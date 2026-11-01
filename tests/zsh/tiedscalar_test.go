@@ -15,6 +15,7 @@ import (
 // The whole of the tie, in both directions, and it has to be both: a
 // one-directional mirror passes half of these.
 func TestATieReflectsInBothDirections(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -T SCA sca
 SCA=a:b:c
 print -r -- "1 arr=[${(j:|:)sca}] n=${#sca}"
@@ -34,6 +35,7 @@ print -r -- "5 SCA=[$SCA]"`)
 
 // The separator is the third operand, and it is used both ways.
 func TestATieUsesTheSeparatorItWasGiven(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -T S2 s2 '#'
 S2=a#b#c
 print -r -- "split=[${(j:|:)s2}]"
@@ -49,6 +51,7 @@ print -r -- "join=[$S2]"`)
 // shell has, and the tie itself goes too — a later assignment to the scalar
 // is a plain scalar again.
 func TestUnsettingEitherHalfUnsetsBoth(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -T U1 u1
 U1=a:b
 unset U1
@@ -71,6 +74,7 @@ print -r -- "3 untied n=${#u3} U3=[$U3]"`)
 // A value on the declaration, on either half. The array's arrives by the
 // ordinary operand-assignment path and the scalar's is part of the word.
 func TestATieTakesAValueOnEitherHalf(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -T B1 b1=(one two)
 print -r -- "1 B1=[$B1] b1=[${(j:|:)b1}]"
 typeset -T B2=x:y b2
@@ -86,6 +90,7 @@ print -r -- "2 st=$? b2=[${(j:|:)b2}]"`)
 // follow, and what makes `PATH=…; typeset -T PATH path` fill `path` rather
 // than emptying both.
 func TestATieReadsBackAValueTheScalarAlreadyHeld(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `V=one:two:three
 typeset -T V v
 print -r -- "n=${#v} [${(j:|:)v}] V=[$V]"`)
@@ -100,6 +105,7 @@ print -r -- "n=${#v} [${(j:|:)v}] V=[$V]"`)
 // name to itself and naming something that is not a name both end the
 // script, while the other three are reported and run on.
 func TestTheTieRefusals(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -T X 2>&1
 print -r -- "1 st=$?"
 typeset -T S s
@@ -123,6 +129,7 @@ print -r -- "reached"`)
 // And the two that end the script, each on its own because neither reaches
 // the line after it.
 func TestTyingANameToItselfEndsTheScript(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -T A A 2>&1
 print -r -- "reached"`)
 	want := "zsh:typeset:1: can't tie a variable to itself: A\n"
@@ -137,6 +144,7 @@ print -r -- "reached"`)
 // name, so `typeset -T R r=(a b) ':'` arrives as `R`, `:`, `r` and a
 // positional reading would tie `R` to `:`.
 func TestATieHalfThatIsNotAName(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -T A ':' 2>&1
 print -r -- "reached"`)
 	want := "zsh:typeset:1: not valid in this context: :\n"
@@ -156,6 +164,7 @@ print -r -- "reached"`)
 // be told. The listing is where that shows, and `T` comes last of all the
 // letters.
 func TestTheTieListsBackWithTheLettersItsHalvesHave(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -TUx A1 a1
 a1=(p q p)
 typeset -p A1 a1
@@ -178,6 +187,7 @@ typeset -p D1 d1`)
 // `-U` and `-T` together, which is the spelling a plugin manager writes:
 // the array dedupes and the scalar is the joined survivors.
 func TestAUniqueTieJoinsOnlyTheSurvivors(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -gxTU TU tu
 tu=(a b a)
 print -r -- "TU=[$TU] tu=[${(j:|:)tu}]"`)
@@ -191,6 +201,7 @@ print -r -- "TU=[$TU] tu=[${(j:|:)tu}]"`)
 // plain assignments — not in `typeset -p`'s shape. Filtered to the names the
 // case invents, because the rest of a listing is the machine's.
 func TestBareDashTListsTheTies(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -T ZA za
 za=(1 2)
 typeset -T ZB zb '#'
@@ -223,6 +234,7 @@ func hasWholeZshLine(out, line string) bool {
 // the tie as much as the values. The tie is not in the variable tables, so
 // the scope's save-and-restore does not carry it and it is undone by hand.
 func TestAFunctionLocalTieIsGoneOnReturn(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `fn() { typeset -T L1 l1; L1=a:b; print -r -- "in=[${(j:|:)l1}]"; }
 fn
 print -r -- "out L1=[${L1-UNSET}] l1=[${l1+SET}]"
@@ -239,6 +251,7 @@ print -r -- "untied n=${#l1}"`)
 // one a readonly name always gets — fatal here, so neither run reaches the
 // line after it.
 func TestAReadonlyTieRefusesBothHalves(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -Tr R1 r1
 R1=x
 print -r -- "reached"`)
@@ -263,6 +276,7 @@ print -r -- "reached"`)
 // zsh 5.9.2 under `-f` from a script file; this shell took the line and
 // listed the pair back as `typeset -rT S s=( v )` (#4503).
 func TestATieOverAFrozenScalarRefusesAndEndsTheScript(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -r S=v
 typeset -T S s 2>&1
 print -r -- "st=$?"
@@ -276,6 +290,7 @@ typeset -p S`)
 // And the three rows that say which name the refusal is about and where it
 // stands among the others.
 func TestWhichHalfOfATieAFreezeRefuses(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		status          int
@@ -326,6 +341,7 @@ func TestWhichHalfOfATieAFreezeRefuses(t *testing.T) {
 // status 0, so a script that believed it had untied a pair carried on with
 // the pair still tied (#4598). Measured 2026-09-26 on zsh 5.9.2 under `-f`.
 func TestThePlusFormOfTheTieLetterIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		status          int
@@ -390,6 +406,7 @@ func TestThePlusFormOfTheTieLetterIsRefused(t *testing.T) {
 // lifted: `arr` is still `-ar` afterwards, and a literal or an append a script
 // writes to it is still refused and still fatal.
 func TestATieOverAFrozenArrayIsTakenAndWritesThroughIt(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -ar arr=(1 2)
 typeset -T SS arr
 print "tie=$? SS=[$SS] arr=[${arr[*]}]"
@@ -410,6 +427,7 @@ typeset -p SS arr`
 // and not about arrays: a frozen **scalar** half is written through by an
 // assignment to the array.
 func TestAnArrayWriteReachesAFrozenTiedScalar(t *testing.T) {
+	t.Parallel()
 	const src = `typeset -T S1 s1
 typeset -r S1
 s1=(x y)
@@ -427,6 +445,7 @@ typeset -p S1 s1`
 // And the four refusals that keep the exemption on the mirror alone. Each one
 // is measured to end the script, so the row is what did *not* run.
 func TestTheWritesATiedFreezeStillRefuses(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{
 			"a literal over the frozen array half",

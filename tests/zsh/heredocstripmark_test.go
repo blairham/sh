@@ -23,6 +23,7 @@ import "testing"
 // The bodies are already written at column 0 here; the operator was the only
 // thing wrong.
 func TestAListingDropsTheHereDocumentStripMark(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			"the chunk: two of them on one line",
@@ -57,6 +58,7 @@ func TestAListingDropsTheHereDocumentStripMark(t *testing.T) {
 // and mean the same thing, but `eval`ing a listing is how the chunk checks
 // itself and the round trip is the assertion that matters.
 func TestTheListingReadsBackAsTheSameFunction(t *testing.T) {
+	t.Parallel()
 	// `read` rather than `cat`: the runner's PATH is a temp directory, so
 	// an external command would fail for a reason that has nothing to do
 	// with the listing.
@@ -73,6 +75,7 @@ func TestTheListingReadsBackAsTheSameFunction(t *testing.T) {
 // printer and so gets it for free — asserted rather than assumed, because
 // #5127 is the front where the two surfaces needed separate fixes.
 func TestTheFunctionsParameterDropsItToo(t *testing.T) {
+	t.Parallel()
 	out, st, _ := runZshSplit(t, t.TempDir(),
 		"f() {\n\tcat <<-x <<-y\n\tfoo\n\tx\n\tbar\n\ty\n}\nprint -r -- $functions[f]\n")
 	const want = "\tcat <<x <<y\nfoo\nx\nbar\ny\n"

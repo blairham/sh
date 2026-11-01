@@ -10,6 +10,7 @@ import "testing"
 // while `(#)` alone writes the byte and `nomultibyte` takes any (#5151, a
 // chunk of D04parameter.ztst). Measured 2026-10-03 on zsh 5.9.2 under `-f`.
 func TestACharacterCodeTheLocaleHasNoneForIsReportedUnderX(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`LC_ALL=C; (: ${(#X):-0x80}); echo st=$?`, "zsh:1: character not in range\nst=1\n"},
 		{`LANG=POSIX; x=128; (: ${(#X)x}); echo st=$?`, "zsh:1: character not in range\nst=1\n"},

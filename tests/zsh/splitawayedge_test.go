@@ -21,6 +21,7 @@ import "testing"
 // `-f`. The field count is asserted beside the fields: a boundary that was
 // lost reads back as the same characters.
 func TestShwordsplitMakesABlankElementABoundary(t *testing.T) {
+	t.Parallel()
 	const probe = `w(){ printf '%d' $#; printf '[%s]' "$@"; }` + "\n"
 	for _, tc := range []struct{ name, src, want string }{
 		// The option on: the blank element is separators, so it is a

@@ -64,6 +64,7 @@ func sortDir(t *testing.T) string {
 // everything behind it in the section, a sort included: `*(^@om)` is the
 // oldest first.
 func TestTheSortQualifiersOrderTheMatches(t *testing.T) {
+	t.Parallel()
 	dir := sortDir(t)
 	for _, tc := range []struct{ src, want string }{
 		{`print -r -- *(on)`, "a a10 a9 b c d l"},
@@ -107,6 +108,7 @@ func TestTheSortQualifiersOrderTheMatches(t *testing.T) {
 // TestNoSortIsTheDirectorysOrder is `oN`: the order the directory gave, read
 // here from the directory itself, so the row cannot pass by being sorted.
 func TestNoSortIsTheDirectorysOrder(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, n := range []string{"m", "b", "y", "a", "q", "c", "x", "k"} {
 		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {
@@ -134,6 +136,7 @@ func TestNoSortIsTheDirectorysOrder(t *testing.T) {
 
 // TestAnUnknownSortSpecifierIsRefused: the reference's own sentence, fatal.
 func TestAnUnknownSortSpecifierIsRefused(t *testing.T) {
+	t.Parallel()
 	dir := sortDir(t)
 	for _, src := range []string{`print -r -- *(ox); print after`, `print -r -- *(o); print after`, `print -r -- *(O); print after`} {
 		out, st := runZsh(t, dir, "cd "+dir+"\n"+src)

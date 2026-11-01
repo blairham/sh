@@ -19,6 +19,7 @@ import (
 // to nothing — the arrow did nothing whatever (#2435).
 
 func TestTheSearchingWalkIsANameThisShellKnows(t *testing.T) {
+	t.Parallel()
 	for name, want := range map[string]repl.Widget{
 		"up-line-or-search":   repl.WidgetPreviousHistoryMatching,
 		"down-line-or-search": repl.WidgetNextHistoryMatching,
@@ -42,6 +43,7 @@ func TestTheSearchingWalkIsANameThisShellKnows(t *testing.T) {
 // And the listing says them back, which is the half a `bindkey` with no
 // operands has to answer for.
 func TestTheSearchingWalkIsListedBack(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "bindkey '^G' up-line-or-search\nbindkey '^G'\n")
 	if st != 0 {
 		t.Fatalf("status %d, output %q", st, out)

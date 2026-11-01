@@ -23,6 +23,7 @@ import (
 //
 // `shift 5` is the control: zsh survives it, so it was never in question.
 func TestAUsageRefusalIsAnErrorConditionToAnAlwaysBlock(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src, want  string
 		wantStatus int

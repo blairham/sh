@@ -17,6 +17,7 @@ import (
 // 2026-09-26; the option *off* is the control on every row and already
 // agreed (#4624).
 func TestPosixStringsEndsADollarSingleStringAtItsNul(t *testing.T) {
+	t.Parallel()
 	const show = "show() { local v=$1; local i; " +
 		"for (( i = 1; i <= $#v; i++ )); do c=$v[$i]; printf '%s ' $(( [#16] #c )); done; print }\n"
 	for _, tc := range []struct{ name, src, want string }{
@@ -60,6 +61,7 @@ func TestPosixStringsEndsADollarSingleStringAtItsNul(t *testing.T) {
 // uses it was defined. The pair holds the state at the definition fixed at
 // the opposite value in each direction.
 func TestPosixStringsIsReadWhenTheStringIsExpanded(t *testing.T) {
+	t.Parallel()
 	const src = "show() { local v=$1; local i; " +
 		"for (( i = 1; i <= $#v; i++ )); do c=$v[$i]; printf '%s ' $(( [#16] #c )); done; print }\n" +
 		"f() { v=a$'b\\0c'd; show $v }\n" +
@@ -74,6 +76,7 @@ func TestPosixStringsIsReadWhenTheStringIsExpanded(t *testing.T) {
 // The emulations turn it on by their own defaults, which is the row that says
 // the name is wired to the emulation table as well as to `setopt`.
 func TestPosixStringsFollowsTheEmulation(t *testing.T) {
+	t.Parallel()
 	const src = `emulate sh
 [[ -o posixstrings ]] && print sh=on || print sh=off
 emulate zsh

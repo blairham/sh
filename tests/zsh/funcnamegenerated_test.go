@@ -24,6 +24,7 @@ import (
 // Measured on zsh 5.9.2, 2026-09-25, from a script file under `env -i
 // PATH=/usr/bin:/bin LC_ALL=C`, in a directory holding `ax` and `bx`.
 func TestAFunctionNameIsMatchedAgainstTheFilesystem(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		status          int

@@ -35,6 +35,7 @@ const (
 // folded into the population `autoload` already walks rather than written a
 // second time.
 func TestTheMarkingLetterIsTheListingABareAutoloadWrites(t *testing.T) {
+	t.Parallel()
 	pre := markedFixture(t)
 	bare, _ := runZsh(t, t.TempDir(), pre+"autoload\n")
 	if bare != f1Stub+f2Stub {
@@ -52,6 +53,7 @@ func TestTheMarkingLetterIsTheListingABareAutoloadWrites(t *testing.T) {
 // letter, and the two letters together are a **union** rather than an
 // intersection: `-uU` is `-u`'s answer and not `-U`'s.
 func TestTheMarkingLettersNarrowTheListingAndCombineAsAUnion(t *testing.T) {
+	t.Parallel()
 	pre := markedFixture(t)
 	for _, c := range []struct{ word, want string }{
 		{"functions -u", f1Stub + f2Stub},
@@ -73,6 +75,7 @@ func TestTheMarkingLettersNarrowTheListingAndCombineAsAUnion(t *testing.T) {
 // +U -u` names them too, so neither of the two signs an engine already tracks
 // answers this: it is the letter's own.
 func TestAMarkingLetterUnderAPlusNamesItsFunctions(t *testing.T) {
+	t.Parallel()
 	pre := markedFixture(t)
 	for _, c := range []struct{ word, want string }{
 		{"functions +U", "f2\n"},
@@ -96,6 +99,7 @@ func TestAMarkingLetterUnderAPlusNamesItsFunctions(t *testing.T) {
 // because the line never reached a marking, and the word that complains is
 // the word that was written.
 func TestAMarkingLetterUnderAPlusIsRefusedByTheOneLetterThatRefusesIt(t *testing.T) {
+	t.Parallel()
 	pre := markedFixture(t)
 	for _, c := range []struct{ word, speaker string }{
 		{"functions +u", "functions"},
@@ -137,6 +141,7 @@ func TestAMarkingLetterUnderAPlusIsRefusedByTheOneLetterThatRefusesIt(t *testing
 // narrowing and not an absent one, which is the one thing a hook returning a
 // slice cannot say by itself.
 func TestANarrowedListingWithNothingInItIsEmptyAndNotTheWholeTable(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), "g() { print g; }\nfunctions -u\necho st=$?\n")
 	if out != "st=0\n" {
 		t.Errorf("functions -u = %q (status %d), want nothing and 0", out, st)

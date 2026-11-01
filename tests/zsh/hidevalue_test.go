@@ -19,6 +19,7 @@ import "testing"
 // Diagnostics.UnimplementedOptionLetters under dialect/ksh.
 
 func TestTypesetHHidesTheValueAndNothingElse(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -H h=hid
 echo "read=[$h]"
 typeset -p h`)
@@ -31,6 +32,7 @@ typeset -p h`)
 // `+H` puts the value back — and it is the round trip that shows the value was
 // never touched, only withheld.
 func TestTypesetPlusHShowsTheValueAgain(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -iH n=5
 typeset -p n
 typeset +H n
@@ -44,6 +46,7 @@ typeset -p n`)
 // The bundled spellings scripts actually write. The attributes still speak in
 // the listing; only the value is missing, a table's and an array's alike.
 func TestTypesetHOnCompoundNames(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -gAH m
 m[k]=v
 echo "elem=[${m[k]}]"
@@ -63,6 +66,7 @@ typeset -p a`)
 // assignment alone — each of them short of the value, where an ordinary name
 // on the next line still carries one.
 func TestTypesetHReachesTheOtherListings(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -xH ex=E
 typeset -rH ro=R
 typeset -x ex2=E2
@@ -97,6 +101,7 @@ export`)
 // one: the hidden name is written with no `=` at all. Filtered to two names
 // the script invents, because the rest of the listing is the machine's.
 func TestBareSetWritesAHiddenNameWithoutItsValue(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -H zzh=hid
 zzv=plain
 set`)
@@ -116,6 +121,7 @@ set`)
 
 // `local` reads the letter too — the same set under both names here.
 func TestLocalReadsTheHidingLetter(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `f() { local -H l=L; typeset -p l; echo "read=[$l]"; }
 f`)
 	want := "typeset l\nread=[L]\n"
@@ -133,6 +139,7 @@ f`)
 // which is not the same as leaving it alone: `5+2` becomes 7 under `-i` and
 // `MiXeD` becomes `MIXED` under `-u`.
 func TestAnAttributeAddedToANameKeepsAndRefoldsItsValue(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `h=hid
 typeset -H h
 typeset +H h
@@ -157,6 +164,7 @@ echo "x=[$x]"`)
 // about a name the declaration creates, and the local a function's shadow
 // makes is created however much the caller held.
 func TestAValuelessDeclarationOfANewNameIsStillEmpty(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `typeset -x fresh
 echo "fresh=[${fresh-UNSET}]"
 outer=5
@@ -178,6 +186,7 @@ echo "after=[$outer]"`)
 // Measured 2026-09-10 on zsh 5.9.2 with `-f`. See
 // interp.Semantics.ExportLetterDeclaresAGlobal (#1698).
 func TestTheExportLetterUnderTypesetDeclaresAGlobal(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `outer=5
 function f { typeset -x outer; echo "in=[${outer-UNSET}]"; }
 f

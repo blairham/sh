@@ -26,6 +26,7 @@ import (
 // here, and is `0` rather than empty, so the refusal is not "there is nothing
 // to measure" (#2415).
 func TestALengthOverTheBangNameIsRefusedHere(t *testing.T) {
+	t.Parallel()
 	if !zsh.Dialect().ParamLengthRefusesTheBangName {
 		t.Error("zsh has no length over `$!`")
 	}

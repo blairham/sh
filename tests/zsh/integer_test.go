@@ -28,6 +28,7 @@ import (
 //	integer n=3       st=0 n=3
 //	integer -r r=5    st=0 r=5
 func TestIntegerDeclaresAnIntegerHere(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `integer n=3; echo "A st=$? n=$n"
 n=5+2; echo "B n=$n"
 integer -r r=5; echo "C st=$? r=$r"
@@ -47,6 +48,7 @@ integer k; echo "D k=[$k]"`)
 // answers 7, and `typeset -p n` says a plain `typeset n=5` against ksh93's
 // `typeset -l -i n=5`.
 func TestAPlusFormOnIntegerRemovesTheAttributeHere(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().IntegerPlusFormTakesAttributesOff; got != interp.Yes {
 		t.Errorf("IntegerPlusFormTakesAttributesOff = %v, want Yes", got)
 	}
@@ -64,6 +66,7 @@ integer m=5; typeset -p m`)
 // that reused DeclareOptions would accept `integer -A m`, an associative
 // array in no shell that has the word.
 func TestIntegerTakesFewerLettersThanTypesetHere(t *testing.T) {
+	t.Parallel()
 	s := zsh.Semantics()
 	if s.IntegerOptions == s.DeclareOptions {
 		t.Fatalf("IntegerOptions and DeclareOptions are both %q; this shell narrows "+
@@ -96,6 +99,7 @@ func TestIntegerTakesFewerLettersThanTypesetHere(t *testing.T) {
 // `16#FF` here — upper case, where ksh93 writes `16#ff` — and the value the
 // shell holds *is* those five characters.
 func TestAnOutputBaseIsRead(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().IntegerAttributeTakesABase; got != interp.Yes {
 		t.Errorf("IntegerAttributeTakesABase = %v, want Yes", got)
 	}
@@ -114,6 +118,7 @@ func TestAnOutputBaseIsRead(t *testing.T) {
 // This shell counts in upper case and stops at 36, so a base outside two to
 // thirty-six is refused by name and the declaration is not made.
 func TestAnOutOfRangeOutputBaseIsRefused(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`typeset -i64 a=100`, "invalid base (must be 2 to 36 inclusive): 64"},
 		{`typeset -i1 a=5`, "invalid base (must be 2 to 36 inclusive): 1"},
@@ -133,6 +138,7 @@ func TestAnOutOfRangeOutputBaseIsRefused(t *testing.T) {
 // output base from the radix prefix of the value assigned to it, and it
 // sticks — a later plain `5` under a name that learned 16 is `16#5`.
 func TestAnOutputBaseIsLearnedFromTheValue(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().IntegerBaseComesFromTheValueAssigned; got != interp.Yes {
 		t.Errorf("IntegerBaseComesFromTheValueAssigned = %v, want Yes", got)
 	}
@@ -156,6 +162,7 @@ func TestAnOutputBaseIsLearnedFromTheValue(t *testing.T) {
 // A negative value puts the sign in front of the magnitude here, where ksh93
 // prints the sixty-four-bit two's complement.
 func TestANegativeValueInAnOutputBaseKeepsItsSign(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "typeset -i16 h=-255\necho \"[$h]\"")
 	if out != "[-16#FF]\n" {
 		t.Errorf("got %q, want %q", out, "[-16#FF]\n")
@@ -166,6 +173,7 @@ func TestANegativeValueInAnOutputBaseKeepsItsSign(t *testing.T) {
 // decoded to decimal — the one place this shell writes the number rather than
 // the text it is holding.
 func TestTheOutputBaseSaysItselfBack(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), "typeset -i16 a=255\ntypeset -p a\nb=0x10\ntypeset -i b\ntypeset -p b")
 	want := "typeset -i16 a=255\ntypeset -i16 b=16\n"
 	if out != want {
@@ -178,6 +186,7 @@ func TestTheOutputBaseSaysItselfBack(t *testing.T) {
 // name rather than falling through to the bare declaration listing and
 // answering with the whole parameter table.
 func TestIntegerWithNoNamesIsNamedAsMissingHere(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `integer nn=1
 integer`)
 	if !strings.Contains(out, "integer:2: a listing is not implemented yet") {
@@ -195,6 +204,7 @@ integer`)
 // word declaring, `n=*` is the character, and without it the `*` matches the
 // file next to it and the arithmetic reads a number.
 func TestIntegerIsADeclaringBuiltinHere(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "7"), nil, 0o600); err != nil {
 		t.Fatal(err)
@@ -229,6 +239,7 @@ func TestIntegerIsADeclaringBuiltinHere(t *testing.T) {
 // The reason the word is on the release bar, end to end: the three lines
 // this shell's own `add-zsh-hook` opens with.
 func TestTheLinesAddZshHookOpensWith(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(), `f() {
   integer del list help
   echo "del=[$del] list=[$list] help=[$help]"
@@ -245,6 +256,7 @@ f`)
 // listing says `-i10` back, and a later bare `typeset -i` leaves the base a
 // name already has where it was.
 func TestBaseTenIsABaseOfItsOwn(t *testing.T) {
+	t.Parallel()
 	if got := zsh.Semantics().IntegerBaseTenIsNoBase; got != interp.No {
 		t.Errorf("IntegerBaseTenIsNoBase = %v, want No", got)
 	}
@@ -270,6 +282,7 @@ func TestBaseTenIsABaseOfItsOwn(t *testing.T) {
 // writes a value in. Measured: `b=10#5` lists as `typeset -i10 b=5` while
 // `$b` is a plain `5`.
 func TestALearnedOutputBaseSaysItselfBack(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{"typeset -i c; c=0x10; typeset -p c", "typeset -i16 c=16\n"},
 		{"typeset -i b; b=10#5; typeset -p b; echo \"[$b]\"", "typeset -i10 b=5\n[5]\n"},

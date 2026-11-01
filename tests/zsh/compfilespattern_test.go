@@ -12,6 +12,7 @@ import (
 // the answer is handed back through `compadd -QU` so the test reads exactly
 // what the builtin left.
 func TestCompfilesBuildsThePatternAndNarrows(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, body, want string }{
 		{
 			"the word becomes a pattern",

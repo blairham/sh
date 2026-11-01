@@ -11,6 +11,7 @@ import "testing"
 //
 // Measured 2026-10-02 on zsh 5.9.2, `-f -c` (#5145).
 func TestForceFloatAndFractionGroups(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"constants", "setopt force_float; print $(( 3/4 )) $(( 0x100/0x200 )) $(( 0x30/0x10 )) $(( 3 ))", "0.75 0.5 3. 3.\n"},
 		{"names", "setopt force_float; x=5; integer i=7; print $(( x/2 )) $(( i/2 ))", "2.5 3.5\n"},

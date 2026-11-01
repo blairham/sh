@@ -23,6 +23,7 @@ import (
 //
 // Measured against zsh 5.9.2 on 2026-09-07.
 func TestTheTryAlwaysBlockRuns(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		// The three spellings the issue measured, all of which failed
 		// identically before — which is what said the keyword was the cause
@@ -80,6 +81,7 @@ func TestTheTryAlwaysBlockRuns(t *testing.T) {
 // left at 1. Separated from the table above because these rows assert the
 // dialect's own wording alongside the control flow.
 func TestAnErrorConditionRunsTheTryAlwaysCleanup(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{
 			"f(){ { readonly r=1; r=2; } always { echo A; }; echo NOT-REACHED; }; f",
@@ -111,6 +113,7 @@ func TestAnErrorConditionRunsTheTryAlwaysCleanup(t *testing.T) {
 // The shapes this shell refuses, which is what makes the keyword positional
 // rather than reserved.
 func TestTheTryAlwaysBlockHasABoundary(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		// A separator, of either kind, takes the keyword away.
 		"{ echo t; }\nalways { echo a; }\n",
@@ -157,6 +160,7 @@ func TestTheTryAlwaysBlockHasABoundary(t *testing.T) {
 // difference is written in one: at the top level the two answers agree, and
 // the last group below is that control.
 func TestErrexitStoppingIsNotAnExit(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, want string
 		status    int
@@ -201,6 +205,7 @@ func TestErrexitStoppingIsNotAnExit(t *testing.T) {
 // failure mode this repository cares about most: `$TRY_BLOCK_ERROR` is a
 // plausible answer to a different question at status 0 with no diagnostic.
 func TestTheTryBlockParametersAreReadAndWritten(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		src, want string
 		status    int

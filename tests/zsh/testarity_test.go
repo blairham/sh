@@ -29,6 +29,7 @@ import (
 // sentences. `test` behaves the same under its own name, which is the row
 // that says the name is the word that was typed.
 func TestWhatARefusedBracketSaysIsReadFromTheSegmentsWordCounts(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ name, expr, want string }{
 		// Two words. The first must be an operator, and a word spelled like
@@ -92,6 +93,7 @@ func TestWhatARefusedBracketSaysIsReadFromTheSegmentsWordCounts(t *testing.T) {
 // The same rule under the other name the builtin is called by, which is what
 // says the location carries the word that was typed rather than a fixed one.
 func TestTheSegmentRuleReadsTestUnderItsOwnName(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ expr, want string }{
 		{"-n foo scrimble", "zsh:test:1: too many arguments"},
@@ -120,6 +122,7 @@ func TestTheSegmentRuleReadsTestUnderItsOwnName(t *testing.T) {
 // the sentence the ordinary reading made, which is how one column's wording
 // is added without taking the rest of its `test` with it.
 func TestTheSegmentRuleLeavesReadableListsAndEvaluationFailuresAlone(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name, src, want string

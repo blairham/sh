@@ -50,6 +50,7 @@ func describedAt(t *testing.T, switches, line string) string {
 // Where an option's argument may be written decides what the cursor is
 // standing in, and that is the whole rule.
 func TestDescribingAnOptionsOwnArgument(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, line, want string }{
 		// The word under the cursor holds the argument, attached.
 		{"an attached argument being written", "cmd -fval", "file|_files|option-f-1"},
@@ -93,6 +94,7 @@ func TestDescribingAnOptionsOwnArgument(t *testing.T) {
 // are what say the reading is that narrow: `-e=-` needs the same `=` and *is*
 // read as an option, and `-f+` puts the cursor in its own argument.
 func TestAnOptionNameThatStillNeedsItsSeparator(t *testing.T) {
+	t.Parallel()
 	line := reported(t, `comparguments -i '' : `+optArgSpecs+`
 		local -a l; typeset -A oa
 		comparguments -W l oa 0
@@ -117,6 +119,7 @@ func TestAnOptionNameThatStillNeedsItsSeparator(t *testing.T) {
 // `-an` is the row that says it is still the form deciding — `-n[next]` has
 // no argument to attach.
 func TestAnOptionArgumentInsideAStack(t *testing.T) {
+	t.Parallel()
 	const stackSpecs = `'-a[plain]' '-n[next]:nx:_n' '-o=[out]:out:_o' ` +
 		`'-e=-[eqd]:ed:_e' '-d-[dir]:dir:_d' '-f+[file]:file:_f' '1:first:(x y)'`
 	for _, c := range []struct{ name, line, want string }{
@@ -147,6 +150,7 @@ func TestAnOptionArgumentInsideAStack(t *testing.T) {
 // a 0 from `-D` sitting behind a 1 from `-i` is an argument nothing will ever
 // ask for. Measured — `cmd -f x<TAB>` is 0 from both.
 func TestTheInitStatusAgreesWithTheDescription(t *testing.T) {
+	t.Parallel()
 	for _, line := range []string{"cmd -f x", "cmd -f ", "cmd -fval", "cmd -o="} {
 		got := reported(t, `comparguments -i '' : `+optArgSpecs+`
 			local i=$?
@@ -168,6 +172,7 @@ func TestTheInitStatusAgreesWithTheDescription(t *testing.T) {
 // earlier occurrences gave it; an occurrence with nothing to add adds
 // nothing, not even a separator.
 func TestWhatAnOptionCollectsInOptArgs(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, line, want string }{
 		{"no value yet", "cmd -T ", "-T ''"},
 		{"one, and the second still empty", "cmd -T a ", "-T 'a:'"},

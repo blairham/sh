@@ -62,6 +62,7 @@ func TestAProducedParameterNamesItsType(t *testing.T) {
 // `ARGC` carry neither word, so a fix that marked everything special would
 // fail here rather than pass.
 func TestAModuleParameterCarriesBothHidingAttributes(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct {
 		name, decl, want string

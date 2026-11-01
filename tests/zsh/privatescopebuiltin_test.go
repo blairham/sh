@@ -22,6 +22,7 @@ import (
 // under `env -i PATH=/usr/bin:/bin`, from `-c` and from a script file), the
 // sentence compared byte for byte (#6515).
 func TestAPrivateScopeRefusalThroughABuiltinIsLocatedAsTheFunction(t *testing.T) {
+	t.Parallel()
 	const pre = "zmodload zsh/param/private; f() { private v=1; g; }; g() { "
 	const want = "g: v: can't change parameter attribute\n"
 	for _, tc := range []struct {

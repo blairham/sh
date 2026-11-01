@@ -29,6 +29,7 @@ import (
 // reports *not a Go executable* and on this shell's own binary reports
 // `github.com/blairham/sh/cmd/zsh`, so the two are different programs.
 func TestEqualsOptionSwitchesTheExpansionOffAndOnAgain(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, on, off string
 		// found is whether the `on` state is a prefix the run's own path is
@@ -71,6 +72,7 @@ func TestEqualsOptionSwitchesTheExpansionOffAndOnAgain(t *testing.T) {
 // The option is remembered and reported whichever way it is spelled, which is
 // the half it already had as a recorded name and must keep.
 func TestEqualsOptionIsReportedBack(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`[[ -o equals ]] && print -r -- on`, "on"},
 		{"unsetopt equals\n[[ -o equals ]] || print -r -- off", "off"},

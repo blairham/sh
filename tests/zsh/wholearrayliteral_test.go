@@ -16,6 +16,7 @@ import (
 // Measured 2026-10-16 on zsh 5.9.2 under `-c`, each row byte for byte. The
 // directory holds two files so a globbed `*` would show.
 func TestAWholeArraySubscriptTakesALiteralAsTheWholeName(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ src, want string }{
 		{`a=(1 2); a[@]=(p $(echo VAL)); echo st=$?; typeset -p a`, "st=0\ntypeset -a a=( p VAL )"},
 		{`touch f1 f2; a=(1 2); a[*]=(p q); echo st=$?; typeset -p a`, "st=0\ntypeset -a a=( p q )"},

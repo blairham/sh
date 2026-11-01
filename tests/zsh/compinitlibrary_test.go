@@ -24,6 +24,7 @@ import (
 //     it (#6184) — `zle -lL` lists them — and with none found, nothing is;
 //   - an `#autoload +X` file is loaded on the spot by its path (#6186).
 func TestTheShippedCompinitOverAnInstalledLibrary(t *testing.T) {
+	t.Parallel()
 	lib := t.TempDir()
 	if err := os.Chmod(lib, 0o755); err != nil {
 		t.Fatal(err)
@@ -65,6 +66,7 @@ local -a w; w=(${(f)"$(zle -lL)"}); print ${#${(M)w:#* _main_complete}}`)
 // And with no `_main_complete` anywhere on the search, Tab keeps this shell's
 // own completion: no widget is put on a function that is not there.
 func TestTheShippedCompinitBindsNothingWithoutMainComplete(t *testing.T) {
+	t.Parallel()
 	out, _ := runShipped(
 		t,
 		`autoload -Uz compinit; compinit -D -u; local -a w; w=(${(f)"$(zle -lL)"}); print ${#${(M)w:#* _main_complete}}`,
@@ -80,6 +82,7 @@ func TestTheShippedCompinitBindsNothingWithoutMainComplete(t *testing.T) {
 // zshcompsys(1) says. Every row recorded from zsh 5.9.2 under `-f -c`,
 // 2026-10-05, `bindkey '^I'` after `compinit -D`.
 func TestTheShippedCompinitMovesTabWhenTheCompleterExpands(t *testing.T) {
+	t.Parallel()
 	lib := t.TempDir()
 	if err := os.Chmod(lib, 0o755); err != nil {
 		t.Fatal(err)

@@ -10,6 +10,7 @@ import "testing"
 // shape the subscript takes, with the unfrozen control splicing. Measured
 // 2026-10-27 on zsh 5.9.2, `-c` (#6833).
 func TestAFrozenArrayRefusesTheSplice(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{"one element", `b=(x y); readonly b; b[1]=(p); echo after`, "zsh:1: read-only variable: b\n"},
 		{"a declaration's", `b=(x y); readonly b; typeset b[1]=(p); echo after`, "zsh:1: read-only variable: b\n"},

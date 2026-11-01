@@ -21,6 +21,7 @@ import (
 // is not found — which is the row that keeps the keying from swallowing every
 // dotfile.
 func TestWhenceNamesEachKindOfAlias(t *testing.T) {
+	t.Parallel()
 	const defs = `alias -g UP='| tr a-z A-Z'; alias cmd='echo hi'; alias -s txt='cat -n'; `
 	for _, c := range []struct {
 		src, want string
@@ -97,6 +98,7 @@ func TestWhenceNamesEachKindOfAlias(t *testing.T) {
 // from. The exhaustive table is interp's, where the axes can be moved; this
 // is the live dialect, which is what says the axes are actually set.
 func TestTheAliasLettersAreOnInThisDialect(t *testing.T) {
+	t.Parallel()
 	const defs = `alias -g UP='| tr a-z A-Z'; alias cmd='echo hi'; alias -s txt=cat; `
 	for _, c := range []struct{ src, want string }{
 		{`alias -L`, "alias -g UP='| tr a-z A-Z'\nalias cmd='echo hi'\n"},
@@ -117,6 +119,7 @@ func TestTheAliasLettersAreOnInThisDialect(t *testing.T) {
 // The refusals, which are the half that says the letters are the shell's own
 // rather than accepted-and-ignored.
 func TestTheAliasLetterRefusals(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		src, want string
 		status    int
@@ -151,6 +154,7 @@ func TestTheAliasLetterRefusals(t *testing.T) {
 // interleave: the lines are read with standard error dropped, and the
 // warnings with standard output dropped.
 func TestAnAliasNameHoldingAnEqualsHasNoDefiningLine(t *testing.T) {
+	t.Parallel()
 	const warn = "invalid alias '%s' encountered while printing aliases\n"
 	three := `aliases[x=y]=z; aliases[a=b]=w; aliases[ok]=v; `
 	for _, c := range []struct {
@@ -197,6 +201,7 @@ func TestAnAliasNameHoldingAnEqualsHasNoDefiningLine(t *testing.T) {
 // Each row lists the table afterwards, because the failure being guarded is a
 // definition that happened, and a status alone would not show one.
 func TestAliasLLooksUpAnOperandHoldingAnEquals(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src, want string
 	}{

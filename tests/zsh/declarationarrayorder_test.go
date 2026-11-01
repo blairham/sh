@@ -11,6 +11,7 @@ import "testing"
 // Measured 2026-10-02 on zsh 5.9.2, B02typeset's `can set empty array`
 // (#5142).
 func TestAnArrayOperandIsStoredBeforeALaterOperandOnItsName(t *testing.T) {
+	t.Parallel()
 	out, _ := runZsh(t, t.TempDir(), `fn() {
   typeset g=() g[1]=yes g[2]=no; print -l ${(t)g} $g
   typeset y=(a b) y[1]=c; print -r -- $y

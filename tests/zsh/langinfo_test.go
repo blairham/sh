@@ -57,6 +57,7 @@ const loadLangInfo = "zmodload zsh/langinfo; "
 // canonicalized would fail the third row here and a shell that hardcoded
 // `UTF-8` would fail four of the seven.
 func TestTheCodesetIsTheOneKeyAnsweredUnderEveryLocale(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ locale, want string }{
 		{"", "US-ASCII"},
 		{"C", "US-ASCII"},
@@ -84,6 +85,7 @@ func TestTheCodesetIsTheOneKeyAnsweredUnderEveryLocale(t *testing.T) {
 // TestTheCodesetFollowsLcCtypeUnderLcAllAndOverLang is the precedence, which
 // is one variable's over another's and not a single name being read.
 func TestTheCodesetFollowsLcCtypeUnderLcAllAndOverLang(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, assign, want string }{
 		{"LANG alone", "LANG=en_US.UTF-8", "UTF-8"},
 		{"LC_CTYPE beats LANG", "LANG=en_US.ISO8859-1\nLC_CTYPE=en_US.UTF-8", "UTF-8"},
@@ -111,6 +113,7 @@ func TestTheCodesetFollowsLcCtypeUnderLcAllAndOverLang(t *testing.T) {
 // whose C value is *empty* are here: an empty answer and a refused one are
 // different things, and only a case that asks for one can tell them apart.
 func TestTheCLocaleIsAnsweredKeyForKey(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ key, want string }{
 		{"DAY_1", "Sunday"},
 		{"ABDAY_7", "Sat"},
@@ -148,6 +151,7 @@ func TestTheCLocaleIsAnsweredKeyForKey(t *testing.T) {
 // the answer a caller could not tell from a real one — and the refusal names
 // the parameter, the key, and what is missing.
 func TestALocaleThisShellCannotSpeakForRefusesTheKeyByName(t *testing.T) {
+	t.Parallel()
 	got := langInfo(t, "LC_ALL=fr_FR.UTF-8\n"+`print -r -- "[$langinfo[DAY_1]]"`)
 	want := "zsh:2: langinfo[DAY_1]: no locale data for this locale\n"
 	if got != want {
@@ -162,6 +166,7 @@ func TestALocaleThisShellCannotSpeakForRefusesTheKeyByName(t *testing.T) {
 // here: `$+langinfo[DAY_1]` is the question "is there anything to read", and
 // `${langinfo[DAY_1]-…}` is a script saying what to use when there is not.
 func TestTheSetTestAndADefaultAreAnsweredRatherThanRefused(t *testing.T) {
+	t.Parallel()
 	got := langInfo(t, "LC_ALL=fr_FR.UTF-8\n"+
 		`print -r -- "${+langinfo[DAY_1]} [${langinfo[DAY_1]-fallback}]"`)
 	if want := "0 [fallback]\n"; got != want {
@@ -178,6 +183,7 @@ func TestTheSetTestAndADefaultAreAnsweredRatherThanRefused(t *testing.T) {
 // cannot speak for — refuses only that category's keys, so the two halves of
 // each row are what makes the split visible.
 func TestEachLocaleCategoryDecidesItsOwnKeys(t *testing.T) {
+	t.Parallel()
 	const read = `print -r -- "[${langinfo[D_FMT]-refused}]"` + "\n" +
 		`print -r -- "[${langinfo[RADIXCHAR]-refused}]"` + "\n" +
 		`print -r -- "[${langinfo[YESEXPR]-refused}]"` + "\n" +
@@ -230,6 +236,7 @@ func TestEachLocaleCategoryDecidesItsOwnKeys(t *testing.T) {
 // a view from a snapshot taken early — a snapshot taken late passes a test
 // that reads only once.
 func TestLangInfoIsAViewAndNotASnapshot(t *testing.T) {
+	t.Parallel()
 	got := langInfo(t, "LC_ALL=en_US.UTF-8\n"+
 		`print -r -- "[$langinfo[CODESET]]"`+"\n"+
 		"LC_ALL=C\n"+
@@ -265,6 +272,7 @@ func TestLangInfoIsAViewAndNotASnapshot(t *testing.T) {
 // not a behavior, so this shell gives them the table-level answer as the
 // nearest defined neighbor and the choice is recorded rather than graded.
 func TestLangInfoIsFrozenByKeyAndNotReadonly(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		// The elements are frozen, and the refusal names the **key**.
 		{
@@ -328,6 +336,7 @@ func TestLangInfoIsFrozenByKeyAndNotReadonly(t *testing.T) {
 // the reference names the key. Measured 2026-09-28 on zsh 5.9.2 under the
 // harness above.
 func TestAHiddenShadowLiftsTheFreezeAndPlusHPutsItBack(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"a shadow takes an element write",
@@ -364,6 +373,7 @@ func TestAHiddenShadowLiftsTheFreezeAndPlusHPutsItBack(t *testing.T) {
 // Without this, dropping the freeze from every produced table would pass the
 // grid above.
 func TestTerminfoIsStillReadonlyAndRefusesByTheParametersName(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		`zmodload zsh/terminfo; print -r -- "${(t)terminfo}"`+"\n"+
 			`terminfo[cols]=x; print -r -- unreached`)
@@ -376,6 +386,7 @@ func TestTerminfoIsStillReadonlyAndRefusesByTheParametersName(t *testing.T) {
 // TestTheLangInfoModuleLoadsAndListsItsOneFeature: `zmodload zsh/langinfo` is
 // the line #1618 quotes, and it is silence and status 0 now.
 func TestTheLangInfoModuleLoadsAndListsItsOneFeature(t *testing.T) {
+	t.Parallel()
 	out, st := runZsh(t, t.TempDir(),
 		"zmodload zsh/langinfo && zmodload -lF zsh/langinfo\n")
 	if want := "+p:langinfo\n"; out != want || st != 0 {

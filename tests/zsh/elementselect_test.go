@@ -13,6 +13,7 @@ import (
 // only place that is allowed — and it is worth having, because a flag nothing
 // turns on is a construct nobody can write.
 func TestTheElementSelectionOperatorsAreThisDialects(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		src  string
@@ -61,6 +62,7 @@ func TestTheElementSelectionOperatorsAreThisDialects(t *testing.T) {
 // The offset is untouched in the dialect that gained the operators, which is
 // where a widened disambiguation would actually be felt.
 func TestTheOffsetStillWorksInThisDialect(t *testing.T) {
+	t.Parallel()
 	const src = `v=abcdef; printf "[%s][%s][%s][%s]" "${v:2}" "${v:2:2}" "${v: -2}" "${v:-alt}"`
 	if out, _ := runZsh(t, t.TempDir(), src); out != "[cdef][cd][ef][abcdef]" {
 		t.Errorf("got %q, want %q", out, "[cdef][cd][ef][abcdef]")

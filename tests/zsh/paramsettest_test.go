@@ -17,6 +17,7 @@ import (
 // `$functions` are all it, and none of them is a question the core grammar
 // can ask on its own. Measured 2026-09-06 on zsh 5.9.2.
 func TestTheSetTestFlagIsThisDialects(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, tc := range []struct{ src, want string }{
 		{`v=1; printf "[%s]" ${+v}`, `[1]`},
@@ -74,6 +75,7 @@ func TestTheSetTestFlagIsThisDialects(t *testing.T) {
 // answered `0` because the shell had already given up would look identical
 // without the second half.
 func TestTheSetTestFlagDoesNotTripNounset(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	out, st := runZsh(t, dir, `set -u; printf "[%s]" ${+NOPE} ${+0}; printf "[alive]"`)
 	if out != `[0][1][alive]` || st != 0 {
@@ -104,6 +106,7 @@ func TestTheSetTestFlagDoesNotTripNounset(t *testing.T) {
 // and it is deferred to the run the way every unreadable expansion is in this
 // dialect: in a branch never taken it is no error at all.
 func TestTheSetTestFlagRefusesEverythingButANameAndDefersIt(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	for _, src := range []string{
 		`printf "[%s]" ${+}`,

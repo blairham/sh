@@ -183,10 +183,13 @@ func TestAnEmptyShadowAnswersAsTheFullRoadDoes(t *testing.T) {
 	}
 }
 
-// emptyShadowGlobalLines are declarations the route must leave alone however
-// they are spelled: `-g`, which makes no binding, beside a valueless and a
-// valued plain operand on lines of their own, read back after the return.
+// emptyShadowGlobalLines are the lines only the other spellings ask about:
+// `-g`, which makes no binding, beside a plain operand on a line of its own;
+// and a POSIX-form function called from a `function`-form one — written `pc
+// ()` so emptyShadowSpelled leaves it in that form — which in the dialect
+// whose POSIX-form bodies have no scope declares into the caller's.
 const emptyShadowGlobalLines = `gl() { local -g ga gb=1; local gc=2; show ga gb gc; }; gl; show ga gb gc
+function kc { local kz; pc; show kz kq; }; pc () { local kz kq=in; show kz kq; }; kc; show kz kq
 `
 
 // emptyShadowSpelled is emptyShadowScript with every `local` written as word,

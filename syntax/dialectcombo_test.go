@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/internal/oracle"
+	"github.com/blairham/sh/internal/testenv"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -260,7 +261,7 @@ const raceProbeCases = 100
 // still walk the whole corpus.
 func casesFor(index int) []oracle.Case {
 	n := len(oracle.Corpus)
-	if !raceDetector || n <= raceProbeCases {
+	if !testenv.RaceDetector || n <= raceProbeCases {
 		return oracle.Corpus
 	}
 	start := (index * raceProbeCases) % n

@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/blairham/sh/internal/testenv"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -45,7 +46,7 @@ func listReaderRunner(tb testing.TB, prog string) (*interp.Runner, func()) {
 // deterministic.
 func bytesPerElement(t *testing.T, prog, base string) float64 {
 	t.Helper()
-	if raceDetector {
+	if testenv.RaceDetector {
 		// Measured on the Linux race leg: 121, 102 and 217 bytes an element
 		// for rows that measure 103, 84 and 176 without the detector. The
 		// bounds are for the build that ships; the leg without -race holds

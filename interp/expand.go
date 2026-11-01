@@ -6711,18 +6711,23 @@ func spanByLength(value, pattern string, op syntax.ParamOp, o patternOpts,
 	// with `${(M)e##\(*\)(:add|:del)}`, and on a 359-byte group that was every
 	// prefix handed to the matcher, each a full walk of the `*`: about 1.35ms
 	// an expansion here against under 25us in zsh 5.9.2 (#7275). One pass
-	// from the start says no end is reachable, and the matcher is not asked.
+	// from the start says no end is reachable, and the matcher is asked once.
 	//
 	// **Only where the end is free to move.** An unflagged suffix trim pins
 	// it to the end of the value, so each start has one candidate and the
 	// pass would cost what the one match it could skip costs.
+	//
+	// **And only once the matcher has said no.** The pass reads the subject
+	// from the start onwards, which a trim whose first candidate matches
+	// never needed to: `${v##*/}` asks about the longest prefix the edge
+	// literals admit and takes it, and building the set first made that trim
+	// about 40% slower over a 40-byte path. So the first question is asked
+	// as it always was, and the set is built at the first miss — which is
+	// where the walk starts asking questions whose answer may be no.
+	reachable := !bounded && (prefix || search)
+	var rs *reachSet
 	var reach *reachEnds
-	if !bounded && (prefix || search) {
-		if r, ok := newReachSet(pattern, o); ok {
-			defer r.release()
-			reach = newReachEnds(r, value, stops)
-		}
-	}
+	defer func() { rs.release() }()
 
 	// The `I` flag: which match, counted one per starting position in the
 	// direction the search runs. See matchIndexFlag for the rows.
@@ -6787,6 +6792,17 @@ func spanByLength(value, pattern string, op syntax.ParamOp, o patternOpts,
 					found, firstLo, firstHi, firstM = true, lo, hi, m
 				}
 				break
+			}
+			if reachable {
+				// The first miss, so the analysis is built — once, whatever it
+				// answers — and asked about this start before the next end.
+				reachable = false
+				if r, ok := newReachSet(pattern, o); ok {
+					rs, reach = r, newReachEnds(r, value, stops)
+					if !reach.from(lo) {
+						break
+					}
+				}
 			}
 		}
 		if a == final {

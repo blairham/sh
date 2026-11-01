@@ -142,9 +142,11 @@ func TestAnAlternationTrimTakesTheEndTheOperatorAsksFor(t *testing.T) {
 }
 
 // **The point of the change, counted rather than timed**: F-Sy-H's trim asks
-// the matcher about no piece at all of a group that has no `:add` or `:del`
-// after it, and about one piece of a group that has, whichever operator and
-// search it is spelled with.
+// the matcher about one piece of a group that has no `:add` or `:del` after
+// it, and about two at most of a group that has, whichever operator and
+// search it is spelled with. The first question is the one every trim asks
+// before the analysis is built, and its miss is what builds it; the second
+// is the match.
 //
 // It used to ask about every prefix — 359 of them on this group, each a full
 // walk of the `*` — because the edge literals refuse a pattern holding a `|`
@@ -175,13 +177,13 @@ func TestAnAlternationTrimAsksOnlyWhereAMatchCanEnd(t *testing.T) {
 		{syntax.ParamTrimSuffix, true},
 		{syntax.ParamTrimSuffixLong, true},
 	} {
-		if n := count(fshGroup, tc.op, tc.search, true); n != 0 {
-			t.Errorf("op %v search=%v: the trim asked the matcher about %d pieces of a group nothing can match",
-				tc.op, tc.search, n)
+		if n := count(fshGroup, tc.op, tc.search, true); n != 1 {
+			t.Errorf("op %v search=%v: the trim asked the matcher about %d pieces of a group nothing can match, "+
+				"want 1", tc.op, tc.search, n)
 		}
-		if n := count(fshGroup+":add", tc.op, tc.search, true); n != 1 {
-			t.Errorf("op %v search=%v: the trim asked the matcher about %d pieces of a group with one match, want 1",
-				tc.op, tc.search, n)
+		if n := count(fshGroup+":add", tc.op, tc.search, true); n < 1 || n > 2 {
+			t.Errorf("op %v search=%v: the trim asked the matcher about %d pieces of a group with one match, "+
+				"want 1 or 2", tc.op, tc.search, n)
 		}
 		if n := count(fshGroup, tc.op, tc.search, false); n < len(fshGroup) {
 			t.Errorf("op %v search=%v: with the analysis off the trim asked about %d pieces, want every prefix "+

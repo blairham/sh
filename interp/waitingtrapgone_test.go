@@ -79,7 +79,8 @@ func TestAWaitingSignalWhoseTrapWasResetIsResentWhereTheDialectSaysSo(t *testing
 // the second arrival of a condition whose own handler reset its trap.
 func TestAnUnansweredResentSignalIsAskedOnlyWhereATrapWentAway(t *testing.T) {
 	out, errs, _ := killRun(t, waitingTrapGone("trap - USR2"), waitingTrapGoneSem(Unspecified), waitingTrapGoneDiag)
-	if out != "HUP\nafter\n" || !strings.Contains(errs, "what a waiting signal does once an earlier handler took its trap away") {
+	const axis = "what a waiting signal does once an earlier handler took its trap away"
+	if out != "HUP\nafter\n" || !strings.Contains(errs, axis) {
 		t.Errorf("got %q, %q; want HUP after and the axis refused by name", out, errs)
 	}
 	for _, tc := range []struct{ name, src, want string }{

@@ -27,9 +27,10 @@ const waitingTrapGoneProbe = "trap \"echo HUP; trap - USR2\" HUP; trap \"echo US
 
 func TestAWaitingSignalWhoseTrapWasResetDoesWhatEachDialectDoes(t *testing.T) {
 	usr2 := int(syscall.SIGUSR2)
+	const warn = "bash: line 2: warning: run_pending_traps: "
 	bash := "HUP\n" +
-		fmt.Sprintf("bash: line 2: warning: run_pending_traps: bad value in trap_list[%d]: 0x0\n", usr2) +
-		fmt.Sprintf("bash: line 2: warning: run_pending_traps: signal handler is SIG_DFL, resending %d (SIGUSR2) to myself\n", usr2)
+		fmt.Sprintf(warn+"bad value in trap_list[%d]: 0x0\n", usr2) +
+		fmt.Sprintf(warn+"signal handler is SIG_DFL, resending %d (SIGUSR2) to myself\n", usr2)
 	for _, tc := range []struct {
 		name, want string
 		status     int

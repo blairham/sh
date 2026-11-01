@@ -1,24 +1,28 @@
 name: Release
 
-# A `v*` tag is the whole trigger, which is this tree's release convention:
-# green CI on main → tag → this workflow → the tap is updated. The release
-# itself is blairham/.github's go-release.yml: the tests, GoReleaser (one
-# archive per platform carrying all six binaries, and the Homebrew formula),
-# keyless cosign over checksums.txt (`signs` in .goreleaser.yaml), and SLSA
-# build provenance for the archives. The signing
-# identity is go-release.yml itself; SECURITY.md shows how to verify it.
+# A release is release-please's: merging its release pull request tags vX.Y.Z
+# and calls this workflow (release-please.yml). The release itself is
+# blairham/.github's go-release.yml: GoReleaser (one archive per platform
+# carrying all six binaries, and the Homebrew formula), keyless cosign over
+# checksums.txt (`signs` in .goreleaser.yaml), and SLSA build provenance for
+# the archives. The notes are the tag's CHANGELOG.md section, which
+# release-please wrote. The signing identity is go-release.yml itself;
+# SECURITY.md shows how to verify it.
 #
-# `workflow_dispatch` re-runs a tag that already exists, for the case where
-# the release job itself failed and nothing about the tree needs to change,
-# or renders a dry run with nothing published.
+# Pushing a tag by hand releases nothing: there is one path to a release. Run
+# it by hand (workflow_dispatch) only to redo a release from a tag that exists,
+# or for a dry run with nothing published.
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_call:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.0.40). Must already exist."
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release (e.g. v0.0.0). Must already exist. Leave empty for a dry run."
+        description: "Tag to release (e.g. v0.0.40). Must already exist. Leave empty for a dry run."
         required: false
         type: string
       dry-run:
@@ -32,8 +36,34 @@ permissions:
   contents: read
 
 jobs:
+  # The version is release-please's answer, not a number someone typed: the
+  # tag must be the version its manifest records at that tag, so a release can
+  # only be the bump its commits call for. A dry run builds whatever it is
+  # given and skips this.
+  version:
+    name: Version is release-please's
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: inputs.dry-run != true
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - name: The tag is the version release-please recorded
+        if: inputs.dry-run != true
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          want="v$(jq -r '."."' .release-please-manifest.json)"
+          if [ "$TAG" != "$want" ]; then
+            echo "::error::the tag is $TAG but .release-please-manifest.json at it records $want; release by merging release-please's pull request"
+            exit 1
+          fi
+
   release:
     name: Release
+    needs: version
     permissions:
       contents: write # the GitHub release and its assets
       # Keyless cosign and the provenance attestations both sign with the
@@ -44,16 +74,14 @@ jobs:
     with:
       tag: ${{ inputs.tag }}
       snapshot: ${{ inputs.dry-run == true }}
-      # No CHANGELOG.md here (overrides/sh.yml in blairham/.github): the notes
-      # are GoReleaser's, shaped by `changelog:` and `release.header` in
-      # .goreleaser.yaml.
-      release-notes: generated
-      # A build, not the tests. A tag only ever goes on a `main` commit whose CI
-      # run is already green, so re-running `go test -race ./...` here repeated
-      # that run on the same tree and was about 12 of a release's 25 minutes --
-      # `interp` alone passed go test's 10m package timeout at v0.0.37. The
-      # gate for a release is CI on the tagged commit; this only confirms the
-      # module compiles before GoReleaser starts.
+      # A build, not the tests. What is released is the merge of
+      # release-please's pull request, whose required checks ran on `main` as
+      # it stood when release-please last rebuilt it (it does so on every
+      # push), and CI runs on the merge commit as well. Re-running
+      # `go test -race ./...` here repeated that work and was about 12 of a
+      # release's 25 minutes -- `interp` alone passed go test's 10m package
+      # timeout at v0.0.37. This only confirms the module compiles before
+      # GoReleaser starts.
       test-command: go build ./...
     secrets:
       HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

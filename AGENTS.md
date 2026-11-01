@@ -399,10 +399,27 @@ tidy-up.
 
 ## Release
 
-GoReleaser on a `v*` tag, per the parent tree: green CI on `main` → tag →
-`.github/workflows/release.yml` → `blairham/homebrew-tap` updated. One
-archive per platform carrying all six binaries, Linux and macOS only —
-every route into this program is a POSIX one. The first tag was `v0.0.0`.
+**release-please, not a hand-pushed tag** — a departure from the parent
+tree's tag flow. Every push to `main` updates one standing release pull
+request, `chore(main): release X.Y.Z`, carrying the next version and its
+`CHANGELOG.md` section (`release-please.yml`, `release-please-config.json`,
+`.release-please-manifest.json`). **Merging it is the release**:
+release-please tags `vX.Y.Z` and creates the GitHub release, and the same run
+calls `release.yml` → `go-release.yml` → GoReleaser → `blairham/homebrew-tap`
+updated. The pull request waits until somebody merges it, so releases stay
+batched. Never tag by hand, and never edit the manifest or `CHANGELOG.md`: a
+pushed tag releases nothing, and `release.yml` refuses a tag the manifest does
+not record. One archive per platform carrying all six binaries, Linux and
+macOS only — every route into this program is a POSIX one. The first tag was
+`v0.0.0`, and every tag through `v0.0.39` was pushed by hand.
+
+The version is computed, not chosen. Until `v1.0.0`, `feat` and `fix` both
+bump the patch and a breaking change bumps the minor — the `0.0.x` line the
+hand-cut tags used — from the pull request titles since the last release (see
+*Pull request titles*). release-please runs on the `blairham-release` GitHub
+App's token (`RELEASE_APP_CLIENT_ID` variable, `RELEASE_APP_PRIVATE_KEY`
+secret), because a pull request opened with `GITHUB_TOKEN` never triggers
+workflows, so its required checks would never report.
 
 Every binary's `version` is a var rather than a const so the tag can be
 stamped over it with `-X main.version=`; it is what `--acp` reports to a
@@ -435,8 +452,7 @@ and `codeql.yml` are **rendered** from that repository's `baseline/` by `make
 sync REPO=sh`. Do not edit them here: a weekly drift check reports any
 difference. Where sh must differ — golangci-lint as a CI job rather than a
 hook, gofumpt by `go tool`, forbidigo, the gosec rules a shell trips by design,
-the throttled concurrency and timeout, generated release notes rather than a
-`CHANGELOG.md` — the departure is an entry with its reason in that repository's
+the throttled concurrency and timeout — the departure is an entry with its reason in that repository's
 `overrides/sh.yml`, and changing one is a decision for the maintainer, not a
 tidy-up. The baseline linters and formatters sh does not run yet are listed
 there as pending and adopted one per pull request, each once the whole tree is
@@ -588,6 +604,52 @@ fault shows only in a real terminal, use the pty harness and say so.
 - **Tests**: `go test -race ./...`. Tests never touch real user state —
   redirect via `t.TempDir()` + `t.Setenv`.
 - **Commits carry no AI-attribution trailers.**
+
+## Pull request titles
+
+**Every pull request title is a Conventional Commit**, because the title is
+the changelog entry and the version bump. Merges are squashes with the title
+as the commit subject (the repository's squash title is `PR_TITLE`),
+release-please reads that subject, and the required `PR title` check
+(`.github/workflows/pr-title.yml`) fails a title it cannot parse —
+release-please would otherwise skip the change without a word.
+
+The subsystem the old subjects led with is now the **scope**: `interp: …` is
+`fix(interp): …`. The type is what somebody using the shell would notice:
+
+- `fix` — the shell now does what the shell it models does, or stops doing
+  something wrong. Most pull requests here. Listed under *Fixed*.
+- `feat` — something the shell could not do at all: a builtin, an option, a
+  flag, a protocol verb. Listed under *Added*.
+- `perf` — the same answer, sooner or smaller. Listed under *Performance*.
+- `revert` — undoing an earlier merge. Listed under *Reverted*.
+- `test`, `docs`, `ci`, `build`, `refactor`, `chore`, `style` — nothing a
+  user of the shell can see: the instruments, the spec, the workflows, the
+  corpus. Left out of the changelog.
+
+Two subsystems are joined with a slash, `fix(interp/ksh): …`: the check's
+scope takes letters, digits and `_./-`, not a comma or a space. A breaking
+change to the public API (`syntax`, `interp`, `driver`, a dialect package) is
+`feat!:` or `fix!:`.
+
+**Never put an issue number straight after the type** — `fix: #NNNN …` —
+because `fix` is one of GitHub's closing keywords (see *CI and merging*). The
+pull request number GitHub appends to the subject is harmless.
+
+**When a commit with no Conventional subject reaches `main` anyway** — a title
+edited after auto-merge fired, say — the `PR title` check on release-please's
+own pull request names it and fails the release. The fix goes in the
+*merged* pull request's body, not in history: add a block
+
+    BEGIN_COMMIT_OVERRIDE
+    fix(interp): what the change did
+    END_COMMIT_OVERRIDE
+
+and re-run the check. release-please reads the text between the markers in
+place of the subject, starting at the **first** opening marker anywhere in
+the body, so never write that marker in a body for any other reason, quoted
+or not. Separate several messages with a blank line. History before
+release-please was set up is not held to any of this.
 
 ## Licensing and file headers
 
@@ -780,6 +842,7 @@ states none survives every review there is.
     Dialect sweep (0/2)
     Dialect sweep (1/2)
     Analyze
+    PR title
 
 **A branch does not have to be up to date with `main` first.**
 `required_status_checks.strict` is **`false`** — read off the API on
@@ -2574,7 +2637,7 @@ rebase somebody else has to do.
 
 The last steps of every task, in this order:
 
-    gh pr create ...                        # `Closes #NNNN` in the *body*
+    gh pr create --title 'fix(<scope>): …'  # see *Pull request titles*; `Closes #NNNN` in the *body*
     gh pr merge --squash --delete-branch --auto
     gh pr view   --json state,mergedAt      # MERGED
     gh issue view <n> --json state          # CLOSED

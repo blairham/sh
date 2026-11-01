@@ -3375,6 +3375,11 @@ func Semantics() interp.Semantics {
 	// goes on with no USR2. Measured 2026-11-01 on 5.9.2; see
 	// interp/waitingtrapgone.go (#7170).
 	s.WaitingSignalWithoutItsTrapIsResent = interp.No
+	// And one that arrived again while it waited runs once per arrival:
+	// `kill -USR1 $$ $$` is `T T after`, as are two `/bin/kill`s 0.2 s apart
+	// during one `/bin/sleep`. Measured 2026-11-01 on 5.9.2; see
+	// interp/waitingsignalagain.go (#7166).
+	s.WaitingSignalArrivingAgainRunsOnce = interp.No
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.Yes
 	// A pipeline whose last element ran here is judged once, by its status,
 	// unless that element is a compound whose body judged itself: `true | {

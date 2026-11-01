@@ -215,3 +215,14 @@ func gatedKills(t *testing.T, src string) []int {
 	defer mu.Unlock()
 	return append([]int(nil), aimed...)
 }
+
+// A body's own signal that arrives again while it waits runs its handler once
+// per arrival, as the shell's does: interp.Semantics'
+// WaitingSignalArrivingAgainRunsOnce (#7166). Measured 2026-11-01 on zsh 5.9.2
+// under `-c`, `T T after`.
+func TestABodysOwnSignalArrivingAgainRunsItsHandlerEachTime(t *testing.T) {
+	got := runZshAnchored(t, `( trap 'print -r -- T' USR1; p=$sysparams[pid]; kill -USR1 $p $p; print -r -- after )`)
+	if want := "T\nT\nafter\n"; got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+}

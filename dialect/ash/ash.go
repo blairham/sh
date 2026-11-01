@@ -1985,6 +1985,11 @@ func Semantics() interp.Semantics {
 	// 2026-11-01 on BusyBox 1.38.0 in `busybox:latest`; see
 	// interp/waitingtrapgone.go (#7170).
 	s.WaitingSignalWithoutItsTrapIsResent = interp.No
+	// And one that arrived again while it waited runs once: `kill -USR1 $$
+	// $$` is `T after`, as are two `/bin/kill`s 0.2 s apart during one
+	// `/bin/sleep`. Measured 2026-11-01 on BusyBox 1.38.0 in
+	// `busybox:latest`; see interp/waitingsignalagain.go (#7166).
+	s.WaitingSignalArrivingAgainRunsOnce = interp.Yes
 	s.ErrTrapFiresForAnErrorTheShellGaveUpOver = interp.No
 	// The ERR trap stays in the frame that set it, and errtrace carries it
 	// into a function but not into a subshell. Measured 2026-10-03 in the

@@ -28250,9 +28250,9 @@ TERM INT HUP` all run HUP INT TERM USR1 in a bash 5.3 `read` — because they
 have all landed by the time the read stops.
 
 Asked only where two different conditions with a handler are in one batch.
-Not answered here: the three sorting columns run a condition that arrived
-twice once, and zsh once per arrival (#7166); this axis keeps both arrivals,
-side by side.
+How often a condition that arrived twice runs is
+`WaitingSignalArrivingAgainRunsOnce` (#7166); this axis keeps both arrivals,
+side by side, for it.
 
 **`WaitingSignalWithoutItsTrapIsResent`** — bash yes · dash, ash, ksh93, zsh
 no
@@ -28297,6 +28297,41 @@ command the batch waited for, which for a pipeline is the pipeline's own: the
 line record now moves onto a pipeline whose elements all ran in copies, which
 also puts a ksh93 or zsh handler's `$LINENO` after one on the pipeline's line,
 as both shells do.
+
+**`WaitingSignalArrivingAgainRunsOnce`** — bash, dash, ash, ksh93 yes · zsh no
+
+How often the handler of a signal runs when the signal arrived again while it
+was already waiting: after it arrived, before its handler had a turn. Five
+columns run it once for all of those arrivals; zsh runs it once per arrival.
+The noun is *waiting* — not the number of signals sent, the one `kill` that
+sent them, or where they came from. Measured 2026-11-01 under `-c`, each shell
+in a process group of its own, `trap "echo T" USR1` in front of each row:
+
+| row | bash 5.3.20 · 3.2.57 · ksh93u+ · dash · BusyBox ash 1.38.0 | zsh 5.9.2 |
+| --- | --- | --- |
+| `kill -USR1 $$ $$; echo after` | T after | T T after |
+| `kill -USR1 0 $$; echo after` | T after | T T after |
+| `kill -USR1 0; kill -USR1 0; echo after` | T T after | T T after |
+| two `/bin/kill -USR1 $$` 0.2 s apart from a job, during one `/bin/sleep 1` | T after | T T after |
+| the same, the second during a second `/bin/sleep` | T T after | T T after |
+
+The last two rows hold the sender fixed and change only whether the shell had
+a turn to run the handler between the arrivals, which is what moves the
+answer; the first against the fourth changes the sender from one builtin to two
+processes and moves nothing. Two different signals waiting both run, each once
+in the five: USR1, USR2 and USR1 again from `/bin/kill` during one `/bin/sleep`
+run `U1 U2` in bash, dash and ash and `U2 U1` in ksh93 (`WaitingHandlersRun`),
+and `U1 U2 U1` in zsh. A forked body answers the same way: `( trap … USR1; kill
+-USR1 <own pid> <own pid> )` runs it once in bash with `$BASHPID` and twice in
+zsh with `$sysparams[pid]`.
+
+Not a child's state change, which this shell raises once per child reaped. bash
+5.3 and ksh93 run a CHLD handler once per child as well — three background
+children ending during one `/bin/sleep` are `C C C C` and `C C C` — while dash
+and ash run it once there, which is not modeled.
+
+Asked only where one batch of waiting arrivals holds a condition with a handler
+more than once.
 
 **`ReadHandlersRun`** — bash when a wait is interrupted · zsh, ksh93 as soon
 as they arrive · dash, ash after the read

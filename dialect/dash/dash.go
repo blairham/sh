@@ -1756,6 +1756,11 @@ func Semantics() interp.Semantics {
 	// runs nothing, whether the trap was reset or ignored. Measured
 	// 2026-11-01; see interp/waitingtrapgone.go (#7170).
 	s.WaitingSignalWithoutItsTrapIsResent = interp.No
+	// And one that arrived again while it waited runs once: `kill -USR1 $$
+	// $$` is `T after`, as are two `/bin/kill`s 0.2 s apart during one
+	// `/bin/sleep`. Measured 2026-11-01; see interp/waitingsignalagain.go
+	// (#7166).
+	s.WaitingSignalArrivingAgainRunsOnce = interp.Yes
 	// unanswered ArithStoreRefusalIsAnError: there are no arrays to store an
 	// element of.
 	// unanswered PrintfQuoteOfNoArgumentIsEmpty: `%q` is `invalid

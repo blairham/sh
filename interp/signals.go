@@ -1513,13 +1513,21 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 		if r.inbox != nil {
 			pending = append(pending, r.inbox.take()...)
 		}
-		pending, ok := r.orderWaitingHandlers(pending, func(name string) bool {
-			return r.traps[name] != ""
-		})
+		handled := func(name string) bool { return r.traps[name] != "" }
+		pending, ok := r.orderWaitingHandlers(pending, handled)
+		if !ok {
+			return
+		}
+		// One that arrived again while it waited, the dialect's way. See
+		// waitingsignalagain.go.
+		turns, ok := r.arrivingAgainRunsOnce(pending, handled)
 		if !ok {
 			return
 		}
 		for _, name := range pending {
+			if turns.again(name) {
+				continue
+			}
 			if body, ok := r.traps[name]; ok && body != "" {
 				r.runTrapHandler(ctx, name, body)
 			}
@@ -1544,11 +1552,16 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 		return
 	}
 	s := r.sigs()
-	pending, ok := r.orderWaitingHandlers(r.takePending(), func(name string) bool {
+	handled := func(name string) bool {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		return s.traps[name] != ""
-	})
+	}
+	pending, ok := r.orderWaitingHandlers(r.takePending(), handled)
+	if !ok {
+		return
+	}
+	turns, ok := r.arrivingAgainRunsOnce(pending, handled)
 	if !ok {
 		return
 	}
@@ -1563,6 +1576,12 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 			origin, s.origins[name] = q[0], q[1:]
 		}
 		s.mu.Unlock()
+		if turns.again(name) {
+			// Folded into the turn its condition already had, with its
+			// origin spent as that turn's was: the queue is one per
+			// arrival. See waitingsignalagain.go.
+			continue
+		}
 		firstTurn := had[name]
 		delete(had, name)
 		if !ok || body == "" {
@@ -1594,7 +1613,8 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 // answer, and nothing is then run.
 //
 // The sort is stable, so a condition that is in a batch twice keeps both
-// arrivals, next to each other. Whether it should is #7166's question.
+// arrivals, next to each other. How many of them run is
+// Semantics.WaitingSignalArrivingAgainRunsOnce's to say, asked after this.
 func (r *Runner) orderWaitingHandlers(arrivals []string, handled func(string) bool) ([]string, bool) {
 	if !severalHandled(arrivals, handled) {
 		return arrivals, true

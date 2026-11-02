@@ -3,7 +3,10 @@
 
 package interp
 
-import "syscall"
+import (
+	"context"
+	"syscall"
+)
 
 // A signal a script aims at **the pid the running shell answers as its own**
 // is delivered to that shell's traps.
@@ -213,8 +216,10 @@ func (r *Runner) selfSignaledBody(key string) {
 // So every row is the body's own `kill $BASHPID`, answered once the copy has
 // finished: the copy posts the signal on the body's process, and the body
 // settles it through signalThisBody at its next moment between commands —
-// the same switch, on the goroutine that owns the table it reads. Not a
-// dialect split, so nothing asks a Semantics axis.
+// or, where the copy was an element of a pipeline, as its wait for the
+// pipeline ends (answerCopiesAsAPipelineEnds) — the same switch, on the
+// goroutine that owns the table it reads. Not a dialect split, so nothing
+// asks a Semantics axis.
 //
 // Only while the body is running. Once its process has ended the number names
 // nothing a copy can reach, and the send is what it always was.
@@ -297,6 +302,60 @@ func (r *Runner) settleCopiesSignals() bool {
 		}
 	}
 	return false
+}
+
+// A copy that is an element of a pipeline the body runs is answered **as the
+// body's wait for the pipeline ends**, and not at the body's next command.
+//
+// Waiting for its next command put the handler after the rest of an and-or
+// list, outside a redirection the pipeline was inside, and nowhere at all
+// where the pipeline was the last thing a simple-command element ran (#7354).
+// Measured 2026-11-02 under `-c`, each shell in a process group of its own,
+// the body's pid from `$BASHPID`, `$sysparams[pid]` or a child's `$PPID`:
+//
+//	( trap "echo U" USR1; p=<pid>; { kill -USR1 $p; } | /bin/cat && echo a )
+//	        U, a         bash 5.3.20, bash 3.2.57, zsh 5.9.2, dash;
+//	                     here, before: a, U
+//	( trap "echo U >&2" USR1; p=<pid>
+//	  eval '{ kill -USR1 $p; } | /bin/cat' 2>/dev/null; echo b )
+//	        b            the same four: inside the `eval`'s redirection;
+//	                     here, before: U, b
+//	… { { kill -USR1 $p; } | /bin/cat; } 2>/dev/null; echo b
+//	        b            the same four, inside a group's too
+//	eval 'trap "echo U" USR1; p=<pid>; { kill -USR1 $p; } | /bin/cat' | /bin/cat
+//	        U            all five, ksh93u+ included; here, before: nothing
+//	( trap 'echo U $?' USR1; p=<pid>; false
+//	  { kill -USR1 $p; } | (/bin/cat; exit 3); echo st=$? )
+//	        U 3, st=3    the same four, zsh too: the handler sees the
+//	                     pipeline's status, not the one from before it
+//
+// ksh93u+ runs a `( … )` in its own process, so it reaches only the element
+// row. Not a dialect split, so nothing asks a Semantics axis.
+//
+// **A pipeline, and not every copy.** A lone `( … )` copy is a split: with
+// it last in `{ … } 2>/dev/null` or `eval '…' 2>/dev/null`, zsh runs the
+// handler inside both redirections, bash 5.3 and 3.2 outside both, and dash
+// outside the group's and inside the `eval`'s. A `$( … )` copy's handler sees
+// `$?` from before the command in zsh and the substitution's in bash and dash,
+// which is the shape Semantics.HandlersRunAsASubstitutionEnds has at the top.
+// Neither is this rule's, and both still settle between commands.
+//
+// The arrival is the one the copy left on the body's process and it settles
+// through settleCopiesSignals, as at the next command; only the moment moves.
+
+// answerCopiesAsAPipelineEnds runs, as a pipeline the body waited for ends,
+// the handlers for what copies of the body aimed at it, and dies of what
+// they aimed at it untrapped. The handler sees the pipeline's status, in the
+// dialect whose handler between commands sees the one from before the command
+// too, since that is where this one was measured.
+func (r *Runner) answerCopiesAsAPipelineEnds(ctx context.Context) {
+	if !r.inSubshell || r.ctl != controlNone || !r.copiesSignaled() {
+		return
+	}
+	before := r.statusBefore
+	r.statusBefore = r.status
+	r.runPendingTraps(ctx)
+	r.statusBefore = before
 }
 
 // A **group** kill aimed at that same number — `kill -- -$BASHPID`, `kill

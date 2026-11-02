@@ -181,6 +181,53 @@ func TestABodyRunsTheHandlerForItsOwnSignalAsKillReturns(t *testing.T) {
 	}
 }
 
+// A pipeline element that signals the body's `$BASHPID` has the body's handler
+// run as the body's wait for the pipeline ends — before an and-or list goes
+// on, inside a redirection the pipeline is inside, and before a body that is
+// one simple command ends, where it used to wait for a next command that never
+// came and was lost (#7354).
+//
+// Measured 2026-11-02 under `-c`, each shell in a process group of its own,
+// against bash 5.3.20 and 3.2.57 (3.2 reading the pid back from a child's
+// `$PPID`); zsh 5.9.2 and dash agree on every row, and ksh93u+ on the one it
+// can reach, the simple-command element. Each row's want is what they wrote.
+func TestAPipelineCopysSignalToTheBodyIsAnsweredAsTheWaitEnds(t *testing.T) {
+	const elem = `{ kill -USR1 $p; } | /bin/cat`
+	for _, c := range []struct{ name, src, want string }{
+		{
+			"before the and-or list goes on",
+			`( trap 'echo U' USR1; p=$BASHPID; ` + elem + ` && echo a ); echo out=$?`,
+			"U\na\nout=0\n",
+		},
+		{
+			"in a job's body",
+			`( trap 'echo U' USR1; p=$BASHPID; ` + elem + ` && echo a ) & wait $!; echo out=$?`,
+			"U\na\nout=0\n",
+		},
+		{
+			"inside the eval's redirection",
+			`( trap 'echo U >&2' USR1; p=$BASHPID; eval '` + elem + `' 2>/dev/null; echo b ); echo out=$?`,
+			"b\nout=0\n",
+		},
+		{
+			"before a simple-command element ends",
+			`eval 'trap "echo U" USR1; p=$BASHPID; ` + elem + `' | /bin/cat; echo out=$?`,
+			"U\nout=0\n",
+		},
+		{
+			"seeing the pipeline's status",
+			`( trap 'echo U $?' USR1; p=$BASHPID; false; { kill -USR1 $p; } | (/bin/cat; exit 3); echo st=$? )`,
+			"U 3\nst=3\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := runBashAnchored(t, c.src); got != c.want {
+				t.Errorf("%s\n got %q\nwant %q", c.src, got, c.want)
+			}
+		})
+	}
+}
+
 // A **group** kill at `$BASHPID` is refused as no such process, from wherever
 // in the subshell it is sent, and nothing is signaled (#7238).
 //

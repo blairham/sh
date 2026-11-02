@@ -2129,6 +2129,8 @@ func Semantics() interp.Semantics {
 	// reference to write through (#3173).
 	// unanswered DeclarationThroughAReferenceNamesTheOperand: there is no
 	// reference for a declaration to be redirected through (#3173).
+	// unanswered DeclarationThroughAReferenceMakesTheTargetLocal: the same
+	// missing letter, so there is no reference for a function to hold (#7352).
 	// unanswered ExportOrReadonlyTakesAReferenceToAnElement: the same missing
 	// letter, and the `(P)` flag this shell does have is an expansion rather
 	// than a name, so neither builtin can be handed a reference at all.

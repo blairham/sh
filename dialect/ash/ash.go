@@ -1034,6 +1034,8 @@ func Semantics() interp.Semantics {
 	// `typeset` to write the letters on (#3171).
 	// unanswered RefusedReferenceAimIsFatal: no references to aim (#7085).
 	// unanswered ContainerWriteThroughAReferenceNamesTheReference: no references.
+	// unanswered DeclarationThroughAReferenceMakesTheTargetLocal: no
+	// references, and no `typeset` to declare through one (#7352).
 	// unanswered DeclarationOperandSplitsAfterTheSubscript: no arrays, so no
 	// operand has a subscript to hold an `=`.
 	// unanswered DeclarationThroughAReferenceNamesTheOperand: the same wall

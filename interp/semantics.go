@@ -3000,6 +3000,38 @@ type Semantics struct {
 	// question and keeps its own answer.
 	ContainerWriteThroughAReferenceNamesTheReference Answer
 
+	// DeclarationThroughAReferenceMakesTheTargetLocal decides whose binding a
+	// declaration inside a function writes when it follows a reference the
+	// function holds itself: Yes makes the target a local of the call, so the
+	// write goes away with it; No writes the target the reference reaches,
+	// wherever that binding is.
+	//
+	// Measured 2026-11-02 from `-c` under `env -i PATH=/usr/bin:/bin`, with
+	// `x=0` first and `echo x=$x` after the call (#7352):
+	//
+	//	                                               bash 5.3.20  ksh93u+
+	//	f() { declare -n m=x; declare m=3; }; f        x=0          —
+	//	function f { typeset -n m=x; typeset m=3; }    —            x=3
+	//	the same with `typeset -i m=3+1`               x=0          x=4, `-i`
+	//	the same with `typeset m; m=5`                 x=0          x=5
+	//
+	// The reference is followed in both: bash lists `declare -- x="3"` inside
+	// the call. Only the binding differs. The key is the reference being the
+	// function's own. A reference the function did not make is not followed
+	// at all, since the declaration's fresh binding drops it: with `typeset
+	// -n m=x` at the top level, `function f { typeset m=3; }` leaves `x=0` and
+	// a local `m=3` in ksh93u+, as the same pair does in bash. See
+	// Runner.declarationThroughAReferenceShadowsTheTarget.
+	//
+	// bash's answer is pinned by the corpus row
+	// declare/a-declaration-over-the-calls-own-reference, and by
+	// TestADeclarationThroughAFunctionsOwnReferenceMakesTheTargetLocal.
+	//
+	// unpinned ksh: the corpus row's body is POSIX-form, where this shell's
+	// `typeset` makes no local either way; pinned by
+	// TestADeclarationThroughAFunctionsOwnReferenceStoresThroughIt.
+	DeclarationThroughAReferenceMakesTheTargetLocal Answer
+
 	// DeclarationOperandSplitsAfterTheSubscript looks for a declaration
 	// operand's `=` after its subscript's closing bracket, so an `=` inside
 	// the subscript is part of the key. No cuts the operand at its first `=`.

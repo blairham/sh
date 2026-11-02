@@ -80,6 +80,10 @@ func permissive() Semantics {
 	s.IndirectionIsTheSubscriptFlag = No
 	s.ExportedCompoundReachesAChildAsItsFirstValue = No
 	s.SubscriptedOperandCarriesTheAttributes = Yes
+	// A declaration through a function's own reference, at bash's answer:
+	// the target is made a local of the call. The other answer is ksh93's,
+	// pinned in tests/ksh/namerefownlocal_test.go (#7352).
+	s.DeclarationThroughAReferenceMakesTheTargetLocal = Yes
 	// The reach a negative subscript makes past an array's first element, at
 	// the silent reading — which is what every suite here counting off the
 	// end of an array on the way to something else was written against. The

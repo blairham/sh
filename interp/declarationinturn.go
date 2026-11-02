@@ -156,6 +156,22 @@ func (r *Runner) operandsAreLocalsOfTheCall(argv []string) bool {
 	return r.typesetDeclaresALocalHere()
 }
 
+// operandMakesAFreshLocal reports whether the declaration utility argv names
+// is about to give name a binding of the running function's own that it does
+// not have yet — the binding that comes with no attributes, and so with no
+// reference the name held. A name the function has declared already is
+// redeclared and keeps what it carries: measured 2026-11-02 on ksh93u+, `x=0;
+// function f { typeset -n m=x; typeset m=3; }; f` leaves `x=3`, where the
+// same body under a top-level `typeset -n m=x` makes a local `m=3` and leaves
+// `x=0` (#7352). See Runner.shadow.
+func (r *Runner) operandMakesAFreshLocal(name string, argv []string) bool {
+	if !r.operandsAreLocalsOfTheCall(argv) {
+		return false
+	}
+	sc := r.scopes[len(r.scopes)-1]
+	return sc == nil || !sc.shadowsValue(name)
+}
+
 // declarationOperandsStoredInTurn reads the axis. Read and not asked, because
 // the question is put to every `typeset x=1` there is: a vector that leaves
 // it unanswered gets the answer four of the five columns give, which is also
@@ -333,7 +349,7 @@ func (r *Runner) storeOperandInTurn(argv []string, turn *operandsInTurn) []strin
 			old, _ := r.getVar(name)
 			held = old + value
 		}
-		turn.held.hold(r, name, held)
+		r.holdOperandInTurn(turn, name, held, argv)
 		if r.tracing() {
 			// Under the variable a reference lands it in, where the utility
 			// stores through one. See interp/xtracenameref.go (#7102).
@@ -385,6 +401,42 @@ func (r *Runner) storeOperandInTurn(argv []string, turn *operandsInTurn) []strin
 		argv[len(argv)-1] = base + "[" + at + "]" + op + value
 	}
 	return argv
+}
+
+// holdOperandInTurn holds a whole-name operand's value where the operands
+// behind it will read it: in the variable a reference lands it in, where the
+// utility stores through the reference, and under the name itself otherwise —
+// with the reference taken off while it is held, where the utility is about
+// to give the name a fresh local, since that binding is no reference.
+//
+// Measured 2026-11-02 on ksh93u+ from `-c` under `env -i PATH=/usr/bin:/bin`,
+// with `x=0` first (#7352):
+//
+//	typeset -n m=x; typeset m=3 v=$m                       v=3, x=3
+//	function f { typeset -n m=x; typeset m=3 v=$m; }       v=3, x=3
+//	typeset -n m=x; function f { typeset m=3 v=$m; }       v=3, x=0
+//
+// This shell held the value in the reference's own cell and read `$m`
+// through the reference, so `v` came to 0 in all three. A reference aimed
+// at an element is left as it was, since nothing has measured it.
+func (r *Runner) holdOperandInTurn(turn *operandsInTurn, name, value string, argv []string) {
+	if !r.isNameref(name) {
+		turn.held.hold(r, name, value)
+		return
+	}
+	if r.operandMakesAFreshLocal(name, argv) {
+		turn.held.hold(r, name, value)
+		r.unsetNameref(name)
+		return
+	}
+	if r.operandStoresThroughTheReference(name, argv) {
+		target, cycle, aimed := r.namerefWalk(name)
+		if _, _, element := operandSubscriptOf(target); aimed && !cycle && !element {
+			turn.held.hold(r, target, value)
+			return
+		}
+	}
+	turn.held.hold(r, name, value)
 }
 
 // declarationWithAssignmentWords is c where it is a declaration utility in the

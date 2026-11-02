@@ -102,9 +102,10 @@ func (a *procAnchor) leads(pid int) bool {
 // The arrival goes on the body's own pending list rather than the shared one,
 // for the reason writeSignalAbsorbed puts a broken pipe there: the process
 // never had this signal, and the handler that answers it is the one the body
-// set. See Runner.runPendingTraps, which drains that list between the body's
-// commands — so the handler runs before the `kill` line's own status is read,
-// which is the measured order in both references.
+// set. `kill` drains that list as it returns, as it drains the shell's (see
+// biKill) — so the handler runs before the `kill` line's own status is read,
+// which is the measured order in both references, and before a body whose
+// last command the `kill` was has ended (#7345).
 func (r *Runner) signalThisBody(name string, sig syscall.Signal) error {
 	key := trapKey(name, sig)
 	body, trapped := r.trapTable()[key]

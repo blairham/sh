@@ -271,7 +271,7 @@ func biKill(r *Runner, ctx context.Context, args []string) int {
 		// here rather than at the next command. See selfaimeddeath.go.
 		return r.status
 	}
-	if !r.inSubshell && r.ctl == controlNone {
+	if r.ctl == controlNone {
 		// What the shell just sent itself is handled before `kill` returns,
 		// and so before the next command of an and-or list: measured
 		// 2026-10-02, `trap 'echo T' USR1; kill -USR1 $$ && echo a` writes T
@@ -284,6 +284,34 @@ func biKill(r *Runner, ctx context.Context, args []string) int {
 		// signal is taken after kill has finished. zsh's handler sees the
 		// status from before the statement instead, which is an axis that
 		// reads statusBefore and not this.
+		//
+		// **A forked body is no different**, and it was left out: what it
+		// sends its own pid goes on the body's own list (signalThisBody),
+		// and that list was drained only at the body's next moment between
+		// commands. A body whose `kill` was its last command — a pipeline
+		// element or a `&` job that is one simple command, `eval 'trap …;
+		// kill -USR1 $BASHPID' | cat` — has no such moment, and the handler
+		// never ran (#7345). Measured 2026-11-02 under `-c`, each shell in
+		// a process group of its own, the body's pid from `$BASHPID`,
+		// `$sysparams[pid]` or a child's `$PPID`:
+		//
+		//	eval 'trap "echo U" USR1; kill -USR1 <pid>' | cat
+		//	        U          bash 5.3.20, bash 3.2.57, zsh 5.9.2, ksh93u+,
+		//	                   dash; here, before: nothing
+		//	( trap "echo U" USR1; kill -USR1 <pid> && echo a )
+		//	        U, a       all five; here, before: a, U
+		//	eval 'trap "echo U >&2" USR1; kill -USR1 <pid>' 2>/dev/null | cat
+		//	        nothing    all five: the handler runs inside the
+		//	                   `eval`'s redirection, so as `kill` returns
+		//	trap "echo T" USR1; kill -USR1 <pid> | cat
+		//	        T          zsh, whose element keeps the parent's traps
+		//	eval 'trap "echo E >&2" USR1; kill -USR1 0' | :
+		//	        E          all five, beside the shell's own handler
+		//
+		// So the rule is the top level's, and nothing asks a Semantics
+		// axis. A signal aimed at `$$` from a body is still the shell's to
+		// answer and is not on the body's list, so the body runs none of
+		// the shell's handlers here — see Runner.runPendingTraps.
 		r.status = st
 		r.runPendingTraps(ctx)
 	}

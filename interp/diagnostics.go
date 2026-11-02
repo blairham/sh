@@ -10477,6 +10477,21 @@ type Diagnostics struct {
 	// answers the two differently: it wraps a `(( ))` command in spaced
 	// parentheses and writes a loop header's parts with none at all.
 	TraceArithForPart TraceArithSpelling
+	// TraceArithForEmptyInitializerAndStep traces the initializer and the
+	// step of `for ((init; cond; post))` when nothing is in them, as a line
+	// holding the prefix alone, where false traces an empty part not at all.
+	// The condition is not traced when it is empty either way. Measured
+	// 2026-11-02 on zsh 5.9.2 under `-f -c`, `set -x` in front (#7117):
+	//
+	//	for ((;0;)) do :; done                 `+zsh:1> `, then `+zsh:1> 0`
+	//	for ((;;)) do break; done              `+zsh:1> `, then `+zsh:1> break`
+	//	for ((i=0;;)) do break; done           `+zsh:1> i=0`, `+zsh:1> break`
+	//	for ((i=0;i<2;)) do (( i++ )); done    `+zsh:1> ` after each body
+	//	for ((  ;0;  )) do :; done             `+zsh:1> `, then `+zsh:1> 0`
+	//
+	// GNU bash 5.3.20 is a third answer and is not this field: it writes an
+	// empty part, the condition included, as `(( 1 ))`.
+	TraceArithForEmptyInitializerAndStep bool
 	// ArithForPartText is how much of a `for (( ))` header part this dialect
 	// keeps once it has read it, which is not a trace question even though a
 	// trace is one of the two things that quote it back — a complaint blames

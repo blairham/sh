@@ -1090,6 +1090,43 @@ func (r *Runner) holdConditionLine(more string) func() {
 	}
 }
 
+// holdArithCommandLine holds an arithmetic command's line open as `((` while
+// its expression expands, and hands back what closes it, which reports the
+// front of the line a complaint wrote, or nothing.
+//
+// The same buffered stream as the `[[ … ]]` line's above, with less on the
+// line: nothing of the expression is written until it has expanded. Measured
+// 2026-11-02 on zsh 5.9.2 under `-f -c`, both streams on one pipe (#7108):
+//
+//	(( $(echo 1) ))                  `+zsh:1> ((+zsh:1> echo 1`, then
+//	                                 `+zsh:1> ((  1  ))`
+//	(( $(echo 1) + $(echo 2) ))      `+zsh:1> ((+zsh:1> echo 1`,
+//	                                 `+zsh:1> ((+zsh:1> echo 2`, the line
+//	x=$( (( $(echo 1) )) )           each behind `+zsh:1> x=`, in a group too
+//	(( $((1/0)) ))                   `+zsh:1> ((`, the complaint, `   ))`
+//	(( ${q?b} ))                     `+zsh:1> ((` and the complaint, and the
+//	                                 shell ends there
+//
+// A child's handed text is carried as a `case` arm's line carries it — see
+// Runner.openTraceLineCarryingTheInherited. Read on
+// Semantics.TraceAssignmentListIsWrittenAsItGoes, as the `[[` line is.
+func (r *Runner) holdArithCommandLine() func() string {
+	if !r.tracing() || r.sem().TraceAssignmentListIsWrittenAsItGoes != Yes {
+		return func() string { return "" }
+	}
+	text := r.tracePrefix() + "(("
+	line := r.openTraceLineCarryingTheInherited(text)
+	outer := r.openTrace
+	r.openTrace = line
+	return func() string {
+		r.openTrace = outer
+		if line.pending == "" {
+			return text
+		}
+		return ""
+	}
+}
+
 // traceCondOperand renders a condition operand that is a value rather than a
 // pattern.
 //
@@ -1115,6 +1152,13 @@ func (r *Runner) traceCondOperand(s string) string {
 // source — because that is what the shells print and because it is already in
 // hand: expanding it again to print it would run a substitution in it twice.
 func (r *Runner) traceArithCommand(text string, spelling TraceArithSpelling) {
+	r.traceArithCommandBehind("", text, spelling)
+}
+
+// traceArithCommandBehind is traceArithCommand for a line whose front a
+// complaint has written already, so the line goes on from there. See
+// Runner.holdArithCommandLine.
+func (r *Runner) traceArithCommandBehind(written, text string, spelling TraceArithSpelling) {
 	if !r.tracing() {
 		return
 	}
@@ -1132,7 +1176,7 @@ func (r *Runner) traceArithCommand(text string, spelling TraceArithSpelling) {
 	default:
 		line = "(( " + text + " ))"
 	}
-	r.tracef("%s%s\n", r.tracePrefix(), line)
+	r.tracef("%s\n", strings.TrimPrefix(r.tracePrefix()+line, written))
 }
 
 // traceCaseHeader writes what `case` prints before it tries its arms.

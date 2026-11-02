@@ -608,6 +608,12 @@ func (r *Runner) settleLiteralOperandsBefore(
 	argv []string,
 	turn *operandsInTurn,
 ) bool {
+	if r.openTrace != nil {
+		// A literal operand hands on the text a child was handed as an
+		// operand written as a scalar assignment does. See
+		// Runner.expandADeclarationsAssignArg (#7118).
+		defer r.handedTextWrittenBeforeACopy()()
+	}
 	for _, a := range c.Assigns {
 		if !a.Operand || (w != nil && !w.Pos().After(a.Pos())) {
 			continue

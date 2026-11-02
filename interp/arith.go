@@ -3590,7 +3590,11 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 		// the text's own first. See Runner.inArithCommandText (#3810).
 		putBackLine := r.inArithCommandText(c.Pos())
 		failedBefore := r.expansionHasFailed()
+		// The line is held open as `((` while the text expands, where the
+		// trace stream is buffered. See Runner.holdArithCommandLine.
+		held := r.holdArithCommandLine()
 		tree, text, perr := r.arithTreeOver(c.Parsed, c.Expr, arithTextWritten)
+		written := held()
 		putBackLine.undo()
 		expansionFailed := r.expansionFailedHere(failedBefore)
 		if expansionFailed && r.ask(r.sem().FailedExpansionEscapesAnArithmeticCommand,
@@ -3605,8 +3609,12 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 		// where the shells put it: `(( $(echo 1) ))` traces the substitution
 		// first and then `((  1  ))`. Before the parse, so an expression that
 		// will not parse is still reported as having been reached — a trace
-		// that skips what failed is the gap #2126 is about.
-		r.traceArithCommand(text, r.diag().TraceArithCommand)
+		// that skips what failed is the gap #2126 is about. A complaint that
+		// wrote the held line's front leaves the rest to go on from there,
+		// unless it is a request to stop that the shell is leaving on.
+		if written == "" || !r.traceLineLeftOpenByTheFailure() {
+			r.traceArithCommandBehind(written, text, r.diag().TraceArithCommand)
+		}
 		if expansionFailed {
 			// The text would not expand, which has been reported where it
 			// failed: what it left is not the expression the script wrote,

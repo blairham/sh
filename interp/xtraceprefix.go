@@ -429,7 +429,7 @@ func (r *Runner) prefixTraceWordsReaching(assigns []*syntax.Assign, d *Diagnosti
 		}
 		orig := a
 		if throughReferences {
-			a = r.tracedThroughTheReference(a)
+			a = r.tracedThroughTheReference(a, nil)
 		}
 		e := r.prefixGlobTraced(orig)
 		if sub, ok := r.prefixSubscriptTraced(orig); ok {

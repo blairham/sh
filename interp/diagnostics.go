@@ -10512,9 +10512,10 @@ type Diagnostics struct {
 	// TraceAssignmentNamesTheReferencedVariable writes an assignment through
 	// a name reference under the variable the store lands in: `typeset -n
 	// m=x; m=1` traces `+ x=1`, and `n[k]=1` through `n` aimed at a table
-	// `a` traces `+ a[k]=1`. ksh93 alone; bash writes the word as the
-	// script spelled it, and zsh 5.9.2 has no references. See
-	// interp/xtracenameref.go.
+	// `a` traces `+ a[k]=1`, and so is a declaration's operand the utility
+	// stores through the reference: `typeset m=3` traces `+ x=3`. ksh93
+	// alone; bash writes the word as the script spelled it, and zsh 5.9.2 has
+	// no references. See interp/xtracenameref.go.
 	TraceAssignmentNamesTheReferencedVariable bool
 	// TracePrefixRepeatsAtIndirection repeats the trace prefix's first
 	// character once per level of indirection — an `eval`, a sourced file, a

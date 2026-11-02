@@ -3,7 +3,11 @@
 
 package interp
 
-import "github.com/blairham/sh/syntax"
+import (
+	"strings"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // An assignment through a name reference, as `set -x` writes it.
 //
@@ -39,32 +43,98 @@ import "github.com/blairham/sh/syntax"
 // bash 5.3.20 writes the word as written in every row, `m=1` and `e[k]=1`
 // alike. See Diagnostics.TraceAssignmentNamesTheReferencedVariable.
 //
-// A declaration's operand through a reference is not here: whether it lands
-// in the reference's variable depends on whether the utility makes a local or
-// re-aims the reference, and ksh93 writes it accordingly (#7102).
+// A declaration's operand is written the same way where the utility stores
+// it through the reference: measured 2026-11-02 against the same ksh93u+,
+// from `-c` under `env -i PATH=/usr/bin:/bin`, with `x=0; typeset -n m=x`
+// first (#7102):
+//
+//	typeset m=3                   `+ x=3`, `+ typeset m`
+//	export m=4; readonly m=6      `+ x=4`, `+ export m`; `+ x=6`, …
+//	typeset -i m=2+2              `+ x=2+2`, `+ typeset -i m`
+//	typeset +n m=5                `+ x=5` — the value goes through first
+//	typeset -a m=(1 2)            `+ x=( 1 2 )`, `+ typeset -a m`
+//	typeset -A m=([k]=v)          `+ x[k]=v`
+//	typeset o[1+1]=z              `+ b[2]=z`, `o` aimed at an array `b`
+//	g() { typeset m=7; }; g       `+ x=7` — a POSIX-form body makes no local
+//	function f { export m=4; }    `+ x=4` — nor does `export`
+//
+// and as the script spelled it where the operand does not go through the
+// reference at all — it re-aims it, or it makes a local of the running
+// function, whose fresh binding no reference reaches:
+//
+//	typeset -n m=y; nameref m=y   `+ m=y`, `+ typeset -n m`
+//	function f { typeset m=7; }   `+ m=7`, `+ typeset m`
+//
+// bash 5.3.20 writes `declare m=3` and `export m=4` through `declare -n m=x`
+// as it always has, on the command's own line. See
+// Runner.operandStoresThroughTheReference.
 
 // tracedThroughTheReference is a traced assignment under the name its store
 // lands in, in the dialect that writes it so, and the assignment itself
-// everywhere else: a name that is no reference, one aimed at nothing or round
-// a loop, and an element written through a reference that is itself aimed at
-// an element, which nothing has measured.
-func (r *Runner) tracedThroughTheReference(a *syntax.Assign) *syntax.Assign {
-	if a == nil || a.Operand || !r.diag().TraceAssignmentNamesTheReferencedVariable || !r.isNameref(a.Name) {
+// everywhere else. operandOf is the declaration utility's words where a is
+// one of its operands, and nil for an assignment of the shell's own; an
+// operand handed over without them is left as written, since only the words
+// say whether its store goes through the reference. See
+// Runner.nameTracedThroughTheReference.
+func (r *Runner) tracedThroughTheReference(a *syntax.Assign, operandOf []string) *syntax.Assign {
+	if a == nil || (a.Operand && operandOf == nil) {
 		return a
 	}
-	target, cycle, aimed := r.namerefWalk(a.Name)
-	if cycle || !aimed || target == a.Name {
+	whole := a.Index == nil && len(a.Leading) == 0 && !a.IsArray
+	name := r.nameTracedThroughTheReference(a.Name, whole, operandOf)
+	if name == a.Name {
 		return a
 	}
 	named := *a
-	if base, sub, ok := operandSubscriptOf(target); ok {
-		if a.Index != nil || len(a.Leading) > 0 || a.IsArray {
-			return a
-		}
-		d := r.diag()
-		named.Name = base + "[" + r.traceQuote(sub, d.TraceQuoting, d.TraceMetacharacters) + "]"
-		return &named
-	}
-	named.Name = target
+	named.Name = name
 	return &named
+}
+
+// nameTracedThroughTheReference is the name a traced store to name is written
+// under: the variable a reference lands it in, in the dialect that writes it
+// so, and name itself everywhere else — a name that is no reference, one aimed
+// at nothing or round a loop, a declaration's operand the utility does not
+// store through the reference, and an element written through a reference
+// that is itself aimed at an element, which nothing has measured. whole says
+// the store writes the whole variable rather than an element or a literal of
+// it; operandOf is as tracedThroughTheReference has it.
+func (r *Runner) nameTracedThroughTheReference(name string, whole bool, operandOf []string) string {
+	if !r.diag().TraceAssignmentNamesTheReferencedVariable || !r.isNameref(name) {
+		return name
+	}
+	target, cycle, aimed := r.namerefWalk(name)
+	if cycle || !aimed || target == name {
+		return name
+	}
+	if operandOf != nil && !r.operandStoresThroughTheReference(operandOf) {
+		return name
+	}
+	base, sub, ok := operandSubscriptOf(target)
+	if !ok {
+		return target
+	}
+	if !whole {
+		return name
+	}
+	d := r.diag()
+	return base + "[" + r.traceQuote(sub, d.TraceQuoting, d.TraceMetacharacters) + "]"
+}
+
+// operandStoresThroughTheReference reports whether the declaration utility
+// argv names stores an operand through the reference its name holds. It does
+// not where it carries the reference letter under a minus — `typeset -n
+// m=y`, and `nameref`, which is that — since the operand then re-aims the
+// reference, nor where it makes the name a local of the running function.
+// ksh93u+ writes `typeset -n +n m=8` as `+ m=8` too, so any minus `n` among
+// the letters counts.
+func (r *Runner) operandStoresThroughTheReference(argv []string) bool {
+	for _, w := range argv[min(traceDeclarationUtilityWord(argv)+1, len(argv)):] {
+		if w == "--" || len(w) < 2 || (w[0] != '-' && w[0] != '+') {
+			break
+		}
+		if w[0] == '-' && strings.ContainsRune(w[1:], 'n') {
+			return false
+		}
+	}
+	return !r.operandsAreLocalsOfTheCall(argv)
 }

@@ -101,20 +101,20 @@ func (r *Runner) answerArrivalsAsThePipelineEnds(ctx context.Context) {
 // handler a command late, or never — in 174 of 1000 on Linux at idle and 54
 // of 1000 on macOS with every core busy, and in none with a sender that
 // lingers. A probe of this wait found the arrival still on its way in 195
-// runs of 1000, and those were the late ones.
+// runs of 1000 on Linux, about as many as had been late.
 //
 // So "a child this shell waited for has ended" is a barrier: what the
 // runtime had received by then is on the channel before the shell looks. It
-// costs a lock and a map lookup where no handler is set, and two loads more
-// where one is and nothing is on its way; it waits only for an arrival the
-// runtime already has, so one sent later is answered where it lands, as
+// costs a lock and a map lookup where no handler is set, and a subscription
+// taken and dropped where one is; it waits only while an arrival the runtime
+// already has is on its way, so one sent later is answered where it lands, as
 // before.
 //
 // A signal the kernel has given a thread that has yet to run its handler is
 // not the runtime's yet, and nothing here can see it: the kernel picks the
-// thread, and a shell of one thread is always the one it picks. Measured over
-// the same 1000 runs with this barrier, that is 0 at idle on both platforms and
-// 1 or 2 with every core busy.
+// thread, and a shell of one thread is always the one it picks. With this
+// barrier the same runs came to 1 in 3000 at idle on Linux and 5 in 1000 with
+// every core busy, and none in 1000 on macOS either way (#7380).
 //
 // Only the shell at the top: it is the one whose handlers the process runs.
 // And with no window open that ignores signals on the whole process, since

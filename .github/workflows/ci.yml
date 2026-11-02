@@ -117,7 +117,7 @@ jobs:
       os: '["ubuntu-latest","macos-latest"]'
       golangci-lint-hook: false
       test-command: >-
-        if [ "$RUNNER_OS" = Linux ]; then bash .github/racetimeline.sh -race -timeout 30m ./...; else go test -skip='^TestNoDialectCombinationPanics$' ./...; fi
+        if [ "$RUNNER_OS" = Linux ]; then bash .github/racetimeline.sh -race -timeout 30m ./interp ./syntax ./tests/zsh ./tests/cross ./cmd/zsh/tests ./tests/bash ./tests/ksh ./internal/cmd/coverage ./internal/startupcost ./internal/oracle ./driver ./internal/treecodec ./repl ./internal/axissweep ./internal/boundary ./internal/parsecache ./internal/plugin ./tests/ash ./...; else go test -skip='^TestNoDialectCombinationPanics$' ./...; fi
         && make sandbox
 
   # Change detection alone, for the jobs below. `code` is go-ci's own answer

@@ -126,55 +126,80 @@ func TestTheWalkAgreesWithTheKernel(t *testing.T) {
 		{"a name that is not there under a link", "toc/absent"},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			path := dir
-			if tc.path != "" {
-				path = filepath.Join(dir, tc.path)
-				if strings.HasSuffix(tc.path, "/") {
-					path += "/"
-				}
-				if strings.Contains(tc.path, "//") || strings.Contains(tc.path, "/./") {
-					// filepath.Join would clean these away, and they are the
-					// subject.
-					path = dir + "/" + tc.path
-				}
+	// Every case twice: as the walk is, and with each descriptor it makes moved
+	// out of the way as it is made (see Raise), which has to change where the
+	// descriptors are and nothing else — the same name, the same errno.
+	for _, raised := range []bool{false, true} {
+		for _, tc := range cases {
+			name := tc.name
+			if raised {
+				name += ", raised"
 			}
-			wantName, wantNamed, wantErr := oracle(t, path, os.O_RDONLY)
-			r, gotErr := walkOpen(path, os.O_RDONLY, 0, nil)
-			if r.File != nil {
-				defer func() { _ = r.File.Close() }()
-			}
+			t.Run(name, func(t *testing.T) { walkAgreesWithTheKernel(t, dir, tc.path, raised) })
+		}
+	}
+}
 
-			if (wantErr == nil) != (gotErr == nil) {
-				t.Fatalf("the kernel says %v and the walk says %v", wantErr, gotErr)
-			}
-			if wantErr != nil {
-				if k, g := errnoOf(wantErr), errnoOf(gotErr); k != g {
-					t.Errorf("the kernel refused with %v and the walk with %v", k, g)
-				}
-				var pathErr *fs.PathError
-				if !errors.As(gotErr, &pathErr) {
-					t.Fatalf("the walk's error is %T, want *fs.PathError as os.OpenFile gives", gotErr)
-				}
-				if pathErr.Op != "open" || pathErr.Path != path {
-					t.Errorf("the walk's error is %q on %q, want an open error naming the path as written",
-						pathErr.Op, pathErr.Path)
-				}
-				return
-			}
-			if !wantNamed {
-				// The platform has no name for it. There is nothing to compare
-				// and Open's fallback is what covers it; see its own test.
-				return
-			}
-			if r.Name != wantName {
-				t.Errorf("the walk reached %q, the kernel says %q", r.Name, wantName)
-			}
-			if got := r.File.Name(); got != path {
-				t.Errorf("File.Name() = %q, want the path as written %q — a script is shown this", got, path)
-			}
-		})
+// walkAgreesWithTheKernel is one case of TestTheWalkAgreesWithTheKernel.
+func walkAgreesWithTheKernel(t *testing.T, dir, tcPath string, raised bool) {
+	path := dir
+	if tcPath != "" {
+		path = filepath.Join(dir, tcPath)
+		if strings.HasSuffix(tcPath, "/") {
+			path += "/"
+		}
+		if strings.Contains(tcPath, "//") || strings.Contains(tcPath, "/./") {
+			// filepath.Join would clean these away, and they are the
+			// subject.
+			path = dir + "/" + tcPath
+		}
+	}
+	wantName, wantNamed, wantErr := oracle(t, path, os.O_RDONLY)
+	tr := &testRaise{}
+	var raise Raise
+	if raised {
+		raise = tr.raise()
+	}
+	r, gotErr := walkOpenRaised(path, os.O_RDONLY, 0, nil, raise)
+	if r.File != nil {
+		defer func() { _ = r.File.Close() }()
+		if n := fdOf(t, r.File); raised != (n >= raiseFloor) || r.Raised != raised {
+			t.Errorf("the file is on %d with Raised %v, for a walk raised %v", n, r.Raised, raised)
+		}
+	}
+	for _, fd := range tr.moved {
+		if fdOpen(fd) && (r.File == nil || fd != fdOf(t, r.File)) {
+			t.Errorf("the walk left its %d open", fd)
+		}
+	}
+
+	if (wantErr == nil) != (gotErr == nil) {
+		t.Fatalf("the kernel says %v and the walk says %v", wantErr, gotErr)
+	}
+	if wantErr != nil {
+		if k, g := errnoOf(wantErr), errnoOf(gotErr); k != g {
+			t.Errorf("the kernel refused with %v and the walk with %v", k, g)
+		}
+		var pathErr *fs.PathError
+		if !errors.As(gotErr, &pathErr) {
+			t.Fatalf("the walk's error is %T, want *fs.PathError as os.OpenFile gives", gotErr)
+		}
+		if pathErr.Op != "open" || pathErr.Path != path {
+			t.Errorf("the walk's error is %q on %q, want an open error naming the path as written",
+				pathErr.Op, pathErr.Path)
+		}
+		return
+	}
+	if !wantNamed {
+		// The platform has no name for it. There is nothing to compare
+		// and Open's fallback is what covers it; see its own test.
+		return
+	}
+	if r.Name != wantName {
+		t.Errorf("the walk reached %q, the kernel says %q", r.Name, wantName)
+	}
+	if got := r.File.Name(); got != path {
+		t.Errorf("File.Name() = %q, want the path as written %q — a script is shown this", got, path)
 	}
 }
 

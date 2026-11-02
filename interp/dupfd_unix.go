@@ -140,17 +140,9 @@ func (r *Runner) raiseScriptFile(f *os.File) *os.File {
 	}
 	moved := -1
 	if cerr := conn.Control(func(fd uintptr) {
-		got, err := fcntlInt(int(fd), syscall.F_DUPFD_CLOEXEC, privateCopyFloor)
-		if err != nil {
-			return
+		if got, ok := intoTheBand(int(fd)); ok {
+			moved = got
 		}
-		if got >= kernelFirstTable {
-			// The band is full, and a copy above it would grow the kernel's
-			// table. See privateCopyFloor.
-			_ = syscall.Close(got)
-			return
-		}
-		moved = got
 	}); cerr != nil || moved < 0 {
 		return f
 	}
@@ -166,6 +158,24 @@ func (r *Runner) raiseScriptFile(f *os.File) *os.File {
 	raised := os.NewFile(uintptr(moved), f.Name())
 	_ = f.Close()
 	return raised
+}
+
+// intoTheBand answers a close-on-exec duplicate of fd in privateCopyFloor's
+// band, or false where the band is full or the kernel refused. The original is
+// the caller's to close: raiseScriptFile's is an *os.File's, and a Gate's
+// walk closes its own (see openGatedRaised).
+func intoTheBand(fd int) (int, bool) {
+	got, err := fcntlInt(fd, syscall.F_DUPFD_CLOEXEC, privateCopyFloor)
+	if err != nil {
+		return -1, false
+	}
+	if got >= kernelFirstTable {
+		// The band is full, and a copy above it would grow the kernel's
+		// table. See privateCopyFloor.
+		_ = syscall.Close(got)
+		return -1, false
+	}
+	return got, true
 }
 
 // openRegularRaised opens a path that names a regular file, or nothing yet,
@@ -197,13 +207,17 @@ func (r *Runner) raiseScriptFile(f *os.File) *os.File {
 //
 // Asked with a stat of the path's own, not through Runner.stat: this is the
 // shell choosing how to open, not a probe the script wrote, and the open that
-// follows is recorded as what it is. Not with a Gate, whose questions are put
-// from inside the open and after it, which is no place to be holding
-// something every start waits on; not with `set -C`, for openRaised's reason;
-// and not in a dialect without process substitution, where nothing parks.
+// follows is recorded as what it is. A runner with a Gate opens through the
+// Gate's walk instead, which looks and holds a descriptor at a time rather
+// than across the whole open — see openGatedRaised. Not with `set -C`, for
+// openRaised's reason; and not in a dialect without process substitution,
+// where nothing parks.
 func (r *Runner) openRegularRaised(ctx context.Context, a *Action, path string, flags int) (*os.File, bool, error) {
-	if flags&os.O_EXCL != 0 || r.Gate != nil || !r.lang().ProcessSubstitution {
+	if flags&os.O_EXCL != 0 || !r.lang().ProcessSubstitution {
 		return nil, false, nil
+	}
+	if r.Gate != nil {
+		return r.openGatedRaised(ctx, a, path, flags)
 	}
 	st, err := opened.AtHeld(path, os.Stat)
 	if err == nil && !st.Mode().IsRegular() || err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -253,6 +267,42 @@ func (r *Runner) openRegularHeld(ctx context.Context, a *Action, path string, fl
 		whileAFileIsLow(path, f)
 	}
 	return r.raiseScriptFile(f), true, nil
+}
+
+// openGatedRaised is openRegularRaised for a runner with a Gate, where the
+// open is a walk: a descriptor for every directory on the way, each on the
+// lowest free number, then the file. A body's park found them there and
+// stepped over them, as it stepped over the file openRegularRaised opens —
+// `10 21 11` where `10 11 12` was free, as far as eleven numbers past, in 90
+// runs of 300 on darwin with a Gate that allows everything (#7341).
+//
+// The lock openRegularRaised holds from the open to the move cannot be held
+// here, because the Gate's policy is asked from inside the walk — before a
+// creation, and again after the open when the name led elsewhere — and a
+// policy is an embedder's code, which must never run inside something every
+// start waits on. So the walk takes the lock a descriptor at a time instead:
+// each directory and the file are opened and moved into the band inside it,
+// and the policy is asked between, when nothing of the walk's is low. The
+// opens made inside are non-blocking, and the file is looked at from the
+// directory the walk holds before it is opened, so a FIFO or a device is
+// opened outside the lock as it is with no Gate, and one swapped in after the
+// look is refused or opened at once rather than waited on. See opened.Raise.
+//
+// Always done here, so a Gate's open never takes the ordinary road: what the
+// walk could not move — the fallback for a link it cannot follow — is moved
+// after, as the ordinary road moves everything.
+func (r *Runner) openGatedRaised(ctx context.Context, a *Action, path string, flags int) (*os.File, bool, error) {
+	f, raised, err := r.openGatedRaising(ctx, a, path, flags, opened.Raise{
+		Hold: transientFds.RLocker(),
+		Up:   intoTheBand,
+	})
+	if err != nil {
+		return nil, true, err
+	}
+	if !raised {
+		f = r.raiseScriptFile(f)
+	}
+	return f, true, nil
 }
 
 // betweenAFilesStatAndOpen and whileAFileIsLow are nil outside a test: the

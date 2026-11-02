@@ -1494,7 +1494,10 @@ func (r *Runner) applyRedirList(
 //
 // **And a regular file, which is the other open that cannot wait** — made
 // non-blocking so that it cannot wait even when the name has become something
-// else since it was looked at. See Runner.openRegularRaised (#7335).
+// else since it was looked at. See Runner.openRegularRaised (#7335). Under a
+// Gate the open is a walk whose policy is asked from inside it, so the lock is
+// taken a descriptor at a time rather than across it: see
+// Runner.openGatedRaised (#7341).
 func (r *Runner) openRaised(ctx context.Context, a *Action, path string, flags int) (*os.File, bool, error) {
 	if _, pipe := r.ownPipeDirection(path); pipe && flags&os.O_EXCL == 0 {
 		transientFds.RLock()

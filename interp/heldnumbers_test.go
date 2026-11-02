@@ -511,6 +511,19 @@ func runOwnDescriptorsAllowingErrors(t *testing.T, own OwnDescriptorNumbers, src
 // shell's input given, where stdin is not nil.
 func runOwnDescriptorsReading(t *testing.T, own OwnDescriptorNumbers, src string, stdin io.Reader) (string, string) {
 	t.Helper()
+	return runOwnDescriptorsGated(t, own, src, stdin, nil)
+}
+
+// runOwnDescriptorsGated is runOwnDescriptorsReading with gate as the
+// runner's Gate, where it is not nil.
+func runOwnDescriptorsGated(
+	t *testing.T,
+	own OwnDescriptorNumbers,
+	src string,
+	stdin io.Reader,
+	gate Gate,
+) (string, string) {
+	t.Helper()
 	d := syntax.Core()
 	d.ProcessSubstitution = true
 	d.FdVariableRedirections = true
@@ -530,7 +543,7 @@ func runOwnDescriptorsReading(t *testing.T, own OwnDescriptorNumbers, src string
 	out, errs := &strings.Builder{}, &strings.Builder{}
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
-		Stdin: stdin, Stdout: out, Stderr: errs,
+		Stdin: stdin, Stdout: out, Stderr: errs, Gate: gate,
 	})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)

@@ -71,6 +71,10 @@ type Reached struct {
 	// it, which is the duplication Elsewhere already goes out of its way to
 	// avoid for a path somebody spelled carelessly.
 	Asked bool
+	// Raised reports that File was made by a walk given a Raise, and so has
+	// been through its Up already. False for the fallback open, which is not
+	// the walk's.
+	Raised bool
 }
 
 // walkOpen opens path by resolving it a component at a time, and reports the
@@ -88,7 +92,13 @@ type Reached struct {
 // diagnostic that changed shape under a policy would tell it a policy was
 // there.
 func walkOpen(path string, flags int, perm fs.FileMode, ask func(string) error) (Reached, error) {
-	w := &walk{}
+	return walkOpenRaised(path, flags, perm, ask, Raise{})
+}
+
+// walkOpenRaised is walkOpen with every descriptor the walk makes put through
+// raise as it is made. See Raise.
+func walkOpenRaised(path string, flags int, perm fs.FileMode, ask func(string) error, raise Raise) (Reached, error) {
+	w := &walk{raise: raise}
 	defer w.close()
 	fail := func(err error) (Reached, error) {
 		pathErr := &fs.PathError{Op: "open", Path: path, Err: err}
@@ -124,7 +134,7 @@ func walkOpen(path string, flags int, perm fs.FileMode, ask func(string) error) 
 		full = wd + "/" + full
 	}
 
-	rootfd, err := openRoot(traverseFlags() | syscall.O_CLOEXEC)
+	rootfd, err := w.openRoot(traverseFlags() | syscall.O_CLOEXEC)
 	if err != nil {
 		return fail(err)
 	}
@@ -172,10 +182,13 @@ func walkOpen(path string, flags int, perm fs.FileMode, ask func(string) error) 
 			openErr error
 			asked   bool
 		)
-		if last && ask != nil && flagsHere&syscall.O_CREAT != 0 {
+		switch {
+		case last && ask != nil && flagsHere&syscall.O_CREAT != 0:
 			fd, asked, openErr = w.createChecked(comp, flagsHere, perm, ask)
-		} else {
-			fd, openErr = openat(w.top(), comp, flagsHere|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, uint32(perm.Perm()))
+		case last:
+			fd, openErr = w.openFinal(comp, flagsHere|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, uint32(perm.Perm()))
+		default:
+			fd, openErr = w.openThrough(comp, flagsHere|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, uint32(perm.Perm()))
 		}
 		if openErr == nil {
 			if !last {
@@ -232,11 +245,11 @@ func walkOpen(path string, flags int, perm fs.FileMode, ask func(string) error) 
 
 	// Nothing left to open by name: the target is the directory the walk ended
 	// in, which is `/` itself, or a path ending in `.`, `..` or a slash.
-	fd, err := openat(w.top(), ".", flags|syscall.O_DIRECTORY|syscall.O_CLOEXEC, uint32(perm.Perm()))
+	fd, err := w.openFinal(".", flags|syscall.O_DIRECTORY|syscall.O_CLOEXEC, uint32(perm.Perm()))
 	if err != nil {
 		return fail(err)
 	}
-	return Reached{File: os.NewFile(uintptr(fd), path), Name: w.name()}, nil
+	return Reached{File: os.NewFile(uintptr(fd), path), Name: w.name(), Raised: w.raise.on()}, nil
 }
 
 // maxLinkBytes is the buffer a symbolic link's target is read into: PATH_MAX
@@ -261,6 +274,7 @@ type walk struct {
 	dirs  []int
 	names []string
 	links int
+	raise Raise
 }
 
 func (w *walk) top() int { return w.dirs[len(w.dirs)-1] }
@@ -332,7 +346,7 @@ func (w *walk) reached(fd int, comp, requested string) Reached {
 	// process a non-blocking descriptor, and a shell's whole job is handing
 	// descriptors to children. Left blocking, a child inherits exactly what it
 	// inherits today.
-	return Reached{File: os.NewFile(uintptr(fd), requested), Name: name}
+	return Reached{File: os.NewFile(uintptr(fd), requested), Name: name, Raised: w.raise.on()}
 }
 
 // createChecked opens a final component that the caller's flags allow to be
@@ -388,7 +402,7 @@ func (w *walk) createChecked(
 	// two are one flag — "fail if it exists" is a condition on the creating —
 	// and a probe that kept it would refuse the very case it is probing for.
 	probe := (flags &^ (syscall.O_CREAT | syscall.O_EXCL)) | syscall.O_NOFOLLOW | syscall.O_CLOEXEC
-	fd, err = openat(w.top(), comp, probe, 0)
+	fd, err = w.openFinal(comp, probe, 0)
 	if err == nil {
 		if flags&syscall.O_EXCL != 0 {
 			// The caller asked for the creation to be the whole point. It
@@ -405,14 +419,14 @@ func (w *walk) createChecked(
 	if refusal := ask(w.wouldReach(comp)); refusal != nil {
 		return -1, false, refused{refusal}
 	}
-	fd, err = openat(w.top(), comp, flags|syscall.O_EXCL|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, uint32(perm.Perm()))
+	fd, err = w.openFinal(comp, flags|syscall.O_EXCL|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, uint32(perm.Perm()))
 	if err == syscall.EEXIST && flags&syscall.O_EXCL == 0 {
 		// Something else created it between the probe and this call. The
 		// creation that was allowed did not happen, so what is here now is a
 		// file that was already there — the case the descriptor check decides,
 		// reached exactly as it would have been without the race. asked stays
 		// false so that check is made.
-		fd, err = openat(w.top(), comp, probe, 0)
+		fd, err = w.openFinal(comp, probe, 0)
 		return fd, false, err
 	}
 	return fd, err == nil, err

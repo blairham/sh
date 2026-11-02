@@ -4068,6 +4068,13 @@ func Semantics() interp.Semantics {
 	// -a b=([0]=z [-5]=x [2]=q)` is `subscript out of range` and leaves `(z)`
 	// (#6852). See interp.Semantics.RefusedPlacementKeepsWhatTheLiteralPlaced.
 	s.RefusedPlacementKeepsWhatTheLiteralPlaced = interp.Yes
+	// unanswered AppendingSubscriptedLiteralStoresFromTheFirstPosition: no
+	// literal reaches it here. A subscript is read only where the first
+	// element carries one, and a bare element behind it is refused while the
+	// program is read; a literal opening with a bare element keeps a later
+	// `[k]=v` as text. Measured 2026-11-01 on ksh93u+, `b=(7 8 9); b+=(x
+	// [4]=y)` is `typeset -a b=(7 8 9 x '[4]=y')` and `b+=([4]=z x)` is a
+	// syntax error with `x' unexpected` (#7079).
 	// The comma is the operator here too, and there are no ranges for the
 	// question to be about (#2160).
 	s.SubscriptExpressionStopsAtASeparator = interp.No

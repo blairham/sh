@@ -30,6 +30,7 @@ ash   AliasInvalidNameFatal
 ash   AliasNameCheckReachesALookup
 ash   AnchoredEmptyReplacementPattern
 ash   AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
+ash   AppendingSubscriptedLiteralStoresFromTheFirstPosition
 ash   ArithDivisionByZeroYieldsAValue
 ash   ArithFloatOverflowIsZero
 ash   ArithIntegerOperatorRefusesFloat
@@ -421,6 +422,7 @@ dash  AliasInvalidNameFatal
 dash  AliasNameCheckReachesALookup
 dash  AnchoredEmptyReplacementPattern
 dash  AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
+dash  AppendingSubscriptedLiteralStoresFromTheFirstPosition
 dash  ArithDivisionByZeroYieldsAValue
 dash  ArithEmptyBaseDigits
 dash  ArithFloatOverflowIsZero
@@ -803,6 +805,7 @@ dash  SubstringCountsBytes
 dash  OptindUnsetInACallStaysUnbound
 dash  FdMoveSuffixMustBeWritten
 
+ksh   AppendingSubscriptedLiteralStoresFromTheFirstPosition
 ksh   ArithSubscriptSkippedWhenNameUnset
 ksh   ArrayAssignmentUpdatesPipelineStatus
 ksh   AssignmentUpdatesPipelineStatus

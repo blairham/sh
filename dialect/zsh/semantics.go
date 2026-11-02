@@ -3754,6 +3754,11 @@ func Semantics() interp.Semantics {
 	// [1+]=x 3)` both leave `( 7 )` for an exit trap to read (#6852). See
 	// interp.Semantics.RefusedPlacementKeepsWhatTheLiteralPlaced.
 	s.RefusedPlacementKeepsWhatTheLiteralPlaced = interp.No
+	// And an appending literal holding any `[k]=v` is a run of element stores
+	// from the first position: measured 2026-11-01 on 5.9.2, `b=(7 8 9);
+	// b+=(x [5]=y)` is `( x 8 9 '' y )` (#7079). See
+	// interp.Semantics.AppendingSubscriptedLiteralStoresFromTheFirstPosition.
+	s.AppendingSubscriptedLiteralStoresFromTheFirstPosition = interp.Yes
 	// Measured 2026-10-16 (#6781): see
 	// interp.Semantics.DeclarationOperandSplitsAfterTheSubscript.
 	s.DeclarationOperandSplitsAfterTheSubscript = interp.No

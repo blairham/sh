@@ -680,6 +680,17 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appe
 			// appending to `a[0]=x a[5]=y` puts the next element at 6, which
 			// is where the end is.
 			next = old.pastTheEnd()
+			if len(parsed) > 0 && !parsed[0].subscripted && placesBySubscript(parsed) &&
+				r.ask(r.sem().AppendingSubscriptedLiteralStoresFromTheFirstPosition,
+					"an appending literal with a subscripted element storing from the first position") {
+				// Unless the literal names a place for any of its elements,
+				// in the column that reads such a literal as a run of element
+				// stores into the array: the bare elements in front of the
+				// first subscripted one then start at the first position.
+				// Asked only where a bare element leads, since a literal that
+				// opens with a subscript places the same either way (#7079).
+				next = 0
+			}
 		default:
 			a, next = r.appendedOverAScalar(name)
 		}

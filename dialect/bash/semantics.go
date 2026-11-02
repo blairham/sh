@@ -3402,6 +3402,12 @@ func Semantics() interp.Semantics {
 	// leaves `([0]="1")` (#6852). See
 	// interp.Semantics.RefusedPlacementKeepsWhatTheLiteralPlaced.
 	s.RefusedPlacementKeepsWhatTheLiteralPlaced = interp.Yes
+	// An appending literal's bare elements go after the last element even
+	// where the literal holds a subscripted one: measured 2026-11-01, `b=(7 8
+	// 9); b+=(x [4]=y)` is `([0]="7" [1]="8" [2]="9" [3]="x" [4]="y")` on
+	// 5.3.20 and 3.2.57 alike (#7079). See
+	// interp.Semantics.AppendingSubscriptedLiteralStoresFromTheFirstPosition.
+	s.AppendingSubscriptedLiteralStoresFromTheFirstPosition = interp.No
 	// The comma inside a subscript is the arithmetic operator here, as it is
 	// everywhere else: measured 2026-09-12, `a=(p q r s); i="2,3";
 	// ${a[$i]}` is the *third* element, which is the operator's right

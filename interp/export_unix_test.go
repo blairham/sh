@@ -5,6 +5,8 @@
 
 package interp
 
+import "os"
+
 // WhenAWishMissesForTest has f called with each wish's number between the
 // kernel refusing it and the park asking whose it is, until restore is
 // called. See afterAWishMissed.
@@ -28,4 +30,20 @@ func ClaimForASiblingForTest(fd int) (drop func()) {
 func BetweenClaimAndLookForTest(f func(fd int)) (restore func()) {
 	betweenClaimAndLook = f
 	return func() { betweenClaimAndLook = nil }
+}
+
+// BetweenAFilesStatAndOpenForTest has f called with the path between a
+// redirection's look at a regular file and its open, until restore is called.
+// See betweenAFilesStatAndOpen.
+func BetweenAFilesStatAndOpenForTest(f func(path string)) (restore func()) {
+	betweenAFilesStatAndOpen = f
+	return func() { betweenAFilesStatAndOpen = nil }
+}
+
+// WhileAFileIsLowForTest has f called with the path and the descriptor
+// between a redirection's open of a regular file and its move, until restore
+// is called. See whileAFileIsLow.
+func WhileAFileIsLowForTest(f func(path string, fd int)) (restore func()) {
+	whileAFileIsLow = func(path string, file *os.File) { f(path, int(file.Fd())) }
+	return func() { whileAFileIsLow = nil }
 }

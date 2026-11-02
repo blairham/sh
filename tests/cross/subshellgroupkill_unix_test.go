@@ -530,6 +530,120 @@ func TestACommandSubstitutionLeadsNoGroupUnderTheMonitor(t *testing.T) {
 	}
 }
 
+// **A body forked inside a forked body leads no process group, unless the
+// body that forks it turned the monitor on itself** (#7329). A fork keeps the
+// option and runs no job control under it, so the noun is the monitor of the
+// shell that forks, and only the shell itself and a body that ran `set -m`
+// after its own fork have one.
+//
+// Measured 2026-11-01, bash 5.3.20 with `$BASHPID` and 3.2.57 with the number
+// read back from a child (`p=$(exec /bin/sh -c 'echo $PPID')`), with no
+// terminal and the shell in a process group of its own, zsh 5.9.2 with
+// `$sysparams[pid]` on a pseudo-terminal, which agree in every row:
+//
+//	set -m; ( ( p=<pid>; kill -0 -- -$p; echo k=$? ); : ); echo outer $?
+//	        no such process, k=1; here, before: k=0
+//	set -m; ( set -m; ( … ); : )                 k=0: a job again
+//	( set -m; ( … ); : ), no `set -m` outside     k=0
+//	set -m; ( set +m; ( … ); : )                 no such process, k=1
+//	set -m; ( set +m; set -m; ( … ); : )         k=0
+//	set -m; ( ( … ) & wait; : )                  k=1; here, before: k=0
+//	set -m; ( { …; } | /bin/cat; : )             k=1; here, before: k=0
+//	set -m; ( set -m; ( ( … ); : ); : )          k=1: the middle body did not
+//	        turn it on; here, before: k=0
+//	set -m; echo $( ( … ) )                      k=1; here, before: k=0
+//	set -m; ( … ) & wait, and ( … ) | /bin/cat   k=0: the parentheses are
+//	        the fork, not a body inside it
+//
+// bash keeps `m` in `$-` at every depth, and zsh drops it below the first.
+// dash agrees on the first row and turns job control back on for none of the
+// others: `set -m; ( set -m; ( … ); : )` is no such process there, with the
+// number read back from a child, and `set -m; trap 'echo T' USR1; ( set -m; (
+// kill -USR1 0; echo in2 ); echo in1 )` reaches both bodies, where bash and
+// zsh write `in1` and out=0. Neither shape is reachable here in dash, which
+// has no parameter for the body's own number, and the group kill is #7331's.
+func TestABodyForkedInsideAForkedBodyLeadsAGroupOnlyUnderItsOwnMonitor(t *testing.T) {
+	bashRefusal := regexp.MustCompile(`^bash: line 1: kill: \(-[0-9]+\) - No such process\n$`)
+	zshRefusal := regexp.MustCompile(`^zsh:kill:1: kill -[0-9]+ failed: no such process\n$`)
+	const (
+		bashOwn = `p=$BASHPID; kill -0 -- -$p; echo k=$?`
+		zshOwn  = `p=$sysparams[pid]; kill -0 -$p; echo k=$?`
+		zshSet  = `zmodload zsh/system; `
+		outer   = `; echo outer $?`
+	)
+	for _, c := range []struct {
+		name, dialect, script, out string
+		// refusal is the shape stderr must have, nil for nothing at all.
+		refusal  *regexp.Regexp
+		terminal bool
+	}{
+		{
+			"bash/a subshell's subshell", "bash", `set -m; ( ( ` + bashOwn + ` ); : )` + outer,
+			"k=1\nouter 0\n", bashRefusal, false,
+		},
+		{
+			"bash/the monitor turned on again inside", "bash", `set -m; ( set -m; ( ` + bashOwn + ` ); : )` + outer,
+			"k=0\nouter 0\n", nil, false,
+		},
+		{
+			"bash/the monitor turned on inside alone", "bash", `( set -m; ( ` + bashOwn + ` ); : )` + outer,
+			"k=0\nouter 0\n", nil, false,
+		},
+		{
+			"bash/the monitor turned off inside", "bash", `set -m; ( set +m; ( ` + bashOwn + ` ); : )` + outer,
+			"k=1\nouter 0\n", bashRefusal, false,
+		},
+		{
+			"bash/a background job inside", "bash", `set -m; ( ( ` + bashOwn + ` ) & wait; : )` + outer,
+			"k=1\nouter 0\n", bashRefusal, false,
+		},
+		{
+			"bash/a pipeline inside", "bash", `set -m; ( { ` + bashOwn + `; } | /bin/cat; : )` + outer,
+			"k=1\nouter 0\n", bashRefusal, false,
+		},
+		{
+			"bash/a body that did not turn it on itself", "bash",
+			`set -m; ( set -m; ( ( ` + bashOwn + ` ); : ); : )` + outer, "k=1\nouter 0\n", bashRefusal, false,
+		},
+		{
+			"bash/a background subshell", "bash", `set -m; ( ` + bashOwn + ` ) & wait` + outer,
+			"k=0\nouter 0\n", nil, false,
+		},
+		{
+			"bash/a subshell as a pipeline's first element", "bash", `set -m; ( ` + bashOwn + ` ) | /bin/cat` + outer,
+			"k=0\nouter 0\n", nil, false,
+		},
+		{
+			"zsh/a subshell's subshell", "zsh", zshSet + `set -m; ( ( ` + zshOwn + ` ); : )` + outer,
+			"k=1\nouter 0\n", zshRefusal, true,
+		},
+		{
+			"zsh/the monitor turned on again inside", "zsh",
+			zshSet + `set -m; ( set -m; ( ` + zshOwn + ` ); : )` + outer, "k=0\nouter 0\n", nil, true,
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			run := runInAGroup
+			if c.terminal {
+				run = runOnATerminal
+			}
+			ws, out, errs := run(t, c.dialect, c.script)
+			if ws.Signaled() || ws.ExitStatus() != 0 {
+				t.Errorf("ended %v, want an exit at 0 (stderr %q)", ws, errs)
+			}
+			if out != c.out {
+				t.Errorf("wrote %q, want %q (stderr %q)", out, c.out, errs)
+			}
+			if c.refusal == nil && errs != "" {
+				t.Errorf("wrote %q to stderr, want nothing", errs)
+			}
+			if c.refusal != nil && !c.refusal.MatchString(errs) {
+				t.Errorf("wrote %q to stderr, want the refusal %s", errs, c.refusal)
+			}
+		})
+	}
+}
+
 // unchecked is a row whose stderr is not this test's question: a notice for
 // a body other than the parentheses the shell ran — the inner parentheses,
 // named by the ones around them, or a pipeline element — which is a gap of

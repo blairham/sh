@@ -2771,6 +2771,14 @@ type Runner struct {
 	// (Semantics.MonitorNeedsATerminal). Distinct from JobControl, which is
 	// the front end saying there is a *person* to report jobs to.
 	monitor bool
+	// monitorInherited says the monitor this runner holds is the one the
+	// body it runs was forked with, and has not been set since. A real
+	// shell's fork keeps the option and runs no job control under it, so
+	// what such a body forks leads no process group of its own, until the
+	// body runs `set -m` itself (#7329). Set at each fork, by forkProcess,
+	// and cleared by `set -m` and `set +m`; the shell's own is never set.
+	// Read only there, for Process.monitored.
+	monitorInherited bool
 	// tracksCommands is command tracking — the option bash lists as hashall
 	// and ksh93 as trackall, `set -h` in both. It is permission to remember
 	// where commands were found, and since #2554 there is a table behind it:

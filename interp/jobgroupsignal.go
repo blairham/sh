@@ -117,7 +117,8 @@ func (r *Runner) theJobAGroupKillReaches(pid int) *Process {
 }
 
 // theBodyTheShellForked is the outermost body around this runner: the one the
-// shell itself forked, which is the only one job control was on for.
+// shell itself forked, which is the only one job control was on for unless a
+// body inside it ran `set -m` — #7331's split, which this walk does not see.
 func (r *Runner) theBodyTheShellForked() *Process {
 	var top *Process
 	for p := r.process; p != nil; p = p.outer {

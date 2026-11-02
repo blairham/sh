@@ -2394,6 +2394,31 @@ which is the group the substitution is in. ksh93u+ forks neither, and the
 number read back from a child is the shell's own. Here the own-number row
 was k=0 under the monitor, the placeholder's group answering (#7324).
 
+What makes a body a job is the monitor **of the shell that forks it**, and
+a forked body has none of its own: it keeps the option — bash and dash
+still show `m` in `$-` there, zsh drops it — and runs no job control under
+it until it says `set -m` itself. Measured 2026-11-01, bash 5.3.20 with
+`$BASHPID` and 3.2.57 with the number read back from a child, with no
+terminal, zsh 5.9.2 with `$sysparams[pid]` on a pseudo-terminal:
+
+    set -m; ( ( p=<pid>; kill -0 -$p; echo k=$? ); : )
+                                 bash, zsh: no such process, k=1
+    set -m; ( set -m; ( … ); : )  k=0
+    ( set -m; ( … ); : )          k=0, no `set -m` outside
+    set -m; ( set +m; set -m; ( … ); : )   k=0
+    set -m; ( set -m; ( ( … ); : ); : )    no such process: the middle
+                                 body did not turn it on
+    set -m; ( ( … ) & wait; : )   and `( { …; } | cat; : )`: no such process
+    set -m; ( … ) & wait          and `( … ) | cat`: k=0, the parentheses
+                                 being the fork rather than a body in it
+
+dash answers the first row as both do and turns job control back on in no
+forked body: `set -m; ( set -m; ( … ); : )` is no such process there, and
+`set -m; trap 'echo T' USR1; ( set -m; ( kill -USR1 0; echo in2 ); echo
+in1 )` reaches both bodies, where bash and zsh write `in1` and out=0. So
+the own-number rows are not a split here, where dash cannot name the
+number, and the group kill is (#7331). Here every nested row was k=0 (#7329).
+
 The lesson is about the instrument: a corpus records what a shell does,
 and it cannot record a *sometimes*. Anything measured has to be
 deterministic first, or the measurement is of the machine rather than of

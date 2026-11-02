@@ -49,8 +49,10 @@ type Process struct {
 	arrivals []bodyArrival
 	posted   atomic.Bool
 
-	// monitored records that the body was forked while the monitor was on,
-	// which is when a real shell can have made it a group of its own.
+	// monitored records that the body was forked by a shell running job
+	// control — the shell itself with the monitor on, or a body that ran `set
+	// -m` after its own fork (Runner.monitorInherited, #7329) — which is when
+	// a real shell can have made it a group of its own.
 	// Without it the group a placeholder leads is this shell's arrangement
 	// and no reference's, and a script aiming a group kill at it is refused.
 	// See aimedAtAGroupNoForkLeads. On the process rather than the anchor,
@@ -149,8 +151,13 @@ func (p *Process) ended() bool {
 func (c *Runner) forkProcess() func() {
 	// The process the clone inherited is the one it was forked from, and
 	// the clone has not run anything yet, so its monitor is still the one of
-	// the shell that forked it.
-	p := &Process{outer: c.process, monitored: c.monitor}
+	// the shell that forked it — which ran job control under it only where
+	// the monitor was its own: the shell itself, or a body that ran `set -m`
+	// after it was forked (#7329).
+	p := &Process{outer: c.process, monitored: c.monitor && !c.monitorInherited}
 	c.process = p
+	// And this body runs none of its own, keeping the option all the same,
+	// until it says `set -m` itself. See Runner.monitorInherited.
+	c.monitorInherited = true
 	return p.exit
 }

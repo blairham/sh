@@ -931,6 +931,13 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// And it is a job, which under the monitor is a process group of its
 	// own in every dialect. See jobgroupsignal.go.
 	sub.process.job = aJob
+	if theForkIsTheParentheses(st) {
+		// And `( … ) &` forks once, so the parentheses' own clone is forked
+		// under this shell's job control and not under the none a forked
+		// body has: `set -m; ( p=$BASHPID; kill -0 -- -$p ) &` is 0 in
+		// bash. See Runner.monitorInherited (#7329).
+		sub.monitorInherited = r.monitorInherited
+	}
 	// A background job keeps the parent's trap listing in one shell fewer
 	// than a pipeline element does, so it is its own kind of boundary.
 	sub.retagTrapBoundary(trapContextBackground)

@@ -2260,6 +2260,13 @@ func Semantics() interp.Semantics {
 	// where bash makes the pair and warns at the read. See
 	// Semantics.NamerefCycleIsRefused.
 	s.NamerefCycleIsRefused = interp.Yes
+	// And a write that would aim a reference at a word that is no name ends
+	// the shell, whichever route made it. Measured 2026-11-01 on ksh93u+
+	// 2012-08-01 from script files: `typeset -n m; m=1` and `x=0; typeset -n
+	// m=x; for m in 1; do :; done` each write `p.sh: line 1: 1: invalid
+	// variable name` and the next line never runs; inside `( … )` only the
+	// subshell ends (#7085). See interp.Semantics.RefusedReferenceAimIsFatal.
+	s.RefusedReferenceAimIsFatal = interp.Yes
 	// And the array refusal comes **before** both of those, on a name that
 	// really holds an array rather than one merely carrying the attribute:
 	// measured 2026-09-16 on ksh93u+, `r=(a b); typeset -n r='not a name'`

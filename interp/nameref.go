@@ -4,7 +4,6 @@
 package interp
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 	"unicode"
@@ -627,12 +626,18 @@ func (r *Runner) referenceIsThisCallsOwn(name string) bool {
 // `after`, where the `read` and `declare` spellings both do. See
 // selfNamerefAssignment, whose two lines these are.
 //
-// The wording is written out rather than taken from [Diagnostics] for
-// namerefArrayLiteralTarget's reason: only a dialect that spells references
-// reaches it, and of those only bash reaches it *here* — ksh93 refuses the
-// aim at the declaration and ends the script, so it has no assignment left
-// to make.
+// **The sentence is the declaration's ordinary one** — see
+// namerefBadTargetWording, asked for the ordinary route — because ksh93
+// reaches here too, and says what it says about any bad name. Measured
+// 2026-11-01 on ksh93u+ 2012-08-01, script files under `env -i
+// PATH=/usr/bin:/bin`: `typeset -n m; m=1`, `m=a=b`, `m="a b"` and a `for m
+// in 1` over an aimed `m` are each `p.sh: line 1: <word>: invalid variable
+// name`, with no backquotes, where this used to write bash's sentence in every
+// column (#7085). It is the sentence a member path's shape draws at the
+// declaration (#3933). And it ends the shell there, which is
+// Semantics.RefusedReferenceAimIsFatal.
 func (r *Runner) refuseNamerefAim(value string, form assignForm) {
+	sentence := r.namerefBadTargetWording(value, true)
 	// Who made the write, which is what the sentence names. Two routes reach
 	// here with no builtin running and neither was named: `(( r = 1 ))`,
 	// where the *construct* names itself as it names its own arithmetic —
@@ -645,14 +650,17 @@ func (r *Runner) refuseNamerefAim(value string, form assignForm) {
 	}
 	switch {
 	case speaker != "":
-		r.diagf("%s: `%s': not a valid identifier\n", speaker, value)
+		sentence = speaker + ": " + sentence
 	case r.arithCommand > 0:
-		r.diagf("%s\n", r.diag().arithConstructFailure("((",
-			fmt.Sprintf("`%s': not a valid identifier", value)))
-	default:
-		r.diagf("`%s': not a valid identifier\n", value)
+		sentence = r.diag().arithConstructFailure("((", sentence)
 	}
-	r.status, r.assignFailed = 1, true
+	r.assignFailed = true
+	if r.sem().RefusedReferenceAimIsFatal == Yes {
+		r.fatal("%s\n", sentence)
+		return
+	}
+	r.diagf("%s\n", sentence)
+	r.status = 1
 	if form == assignedAlone {
 		r.abandonTheCommand()
 	}
@@ -1965,14 +1973,16 @@ func (r *Runner) exportedNamerefs() []string {
 // is, and whether the dialect has a second one at all, is
 // Diagnostics.NamerefEmptyTargetIsAnOrdinaryBadName — an empty wording there
 // means the dialect has only the one, which is ksh93 and is why none of this
-// moves that column.
+// moves that column. A dialect that words **neither** has said nothing about
+// which sentence is its one, so each route keeps the substrate's own: the
+// ordinary route the ordinary sentence. That is what an assignment's refused
+// aim wrote before it asked here (#7085).
 func (r *Runner) namerefBadTargetWording(target string, ordinary bool) string {
-	if ordinary {
-		if w := r.diag().NamerefEmptyTargetIsAnOrdinaryBadName; w != "" {
-			return Wording(w, "`%[1]s': not a valid identifier", target)
-		}
+	d := r.diag()
+	if ordinary && (d.NamerefEmptyTargetIsAnOrdinaryBadName != "" || d.NamerefBadTarget == "") {
+		return Wording(d.NamerefEmptyTargetIsAnOrdinaryBadName, "`%[1]s': not a valid identifier", target)
 	}
-	return Wording(r.diag().NamerefBadTarget,
+	return Wording(d.NamerefBadTarget,
 		"%[1]s: invalid variable name for name reference", target)
 }
 

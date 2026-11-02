@@ -2780,6 +2780,36 @@ type Semantics struct {
 	// under either answer and asks nothing.
 	NamerefTargetResolvedWhenAimed Answer
 
+	// RefusedReferenceAimIsFatal ends the shell when a write that would
+	// **aim** a name reference is refused because the word is no possible
+	// name — `typeset -n m; m=1`, or a `for` over a reference reaching such
+	// a word. See Runner.refuseNamerefAim.
+	//
+	// Measured 2026-11-01 from script files under `env -i PATH=/usr/bin:/bin`
+	// with a scratch HOME, each line followed by `echo next` on the next:
+	//
+	//	                                      ksh93u+     bash 5.3.20  bash -o posix
+	//	typeset -n m; m=1; echo st=$?         shell ends  line given   shell ends
+	//	                                                  up, next
+	//	x=0; typeset -n m=x; for m in 1; do   shell ends  st=1, next   st=1, next
+	//	  :; done; echo st=$?
+	//	typeset -n m; typeset m=1; echo t=$?  shell ends  t=1, next    t=1, next
+	//	typeset -n m; (m=1); echo sub=$?      sub=1, next sub=1, next  —
+	//
+	// So in ksh93 it is the refusal and not the route that ends the shell —
+	// the bare assignment and the loop agree — and a subshell confines it as
+	// it confines any fatal error. In bash it is never this refusal: bash in
+	// POSIX mode ends on the bare assignment and carries on after the loop
+	// and the declaration, which is POSIX's rule for a failed assignment
+	// statement and not anything about references. That is also why this is
+	// not BadNameToDeclarationFatal, which the same mode turns on and which
+	// would end that column's loop.
+	//
+	// Read as a plain comparison rather than asked: carrying on is what every
+	// vector did before the axis existed, and a vector with no references in
+	// it never reaches the question.
+	RefusedReferenceAimIsFatal Answer
+
 	// DeclarationThroughAReferenceNamesTheOperand speaks a refusal a
 	// declaration reaches **through a name reference** under the name the
 	// script wrote, rather than under the cell the redirect led to.

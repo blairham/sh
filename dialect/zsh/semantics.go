@@ -2113,6 +2113,8 @@ func Semantics() interp.Semantics {
 	// beside another one. Measured 2026-09-18 on zsh 5.9.2, `typeset -ni
 	// r=v` is `typeset: bad option: -n` at 1 — the complaint names the
 	// missing letter and never reaches a question about the pair (#3171).
+	// unanswered RefusedReferenceAimIsFatal: no references to aim — the
+	// `-n` letter is a bad option here, as above (#7085).
 	// unanswered ContainerWriteThroughAReferenceNamesTheReference: there is no
 	// reference to write through (#3173).
 	// unanswered DeclarationThroughAReferenceNamesTheOperand: there is no

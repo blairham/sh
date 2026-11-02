@@ -372,11 +372,27 @@ func (r *Runner) settleCopiesSignals() bool {
 // bash makes a `( … )` a group again and a `$( … )` still none, so it is the
 // kind of body that decides and not the depth. ksh93u+ forks neither, and the
 // number read back from a child is the shell's own (#7324).
+//
+// And "with the monitor off" means **the monitor of the shell that forks the
+// body**, which a forked body does not have: it keeps the option and runs no
+// job control under it until it says `set -m` itself. Measured 2026-11-01,
+// bash 5.3.20 and 3.2.57 with no terminal, zsh 5.9.2 on a pseudo-terminal:
+//
+//	set -m; ( ( p=<pid>; kill -0 -$p; echo k=$? ); : )   no such process;
+//	        here, before: k=0
+//	set -m; ( set -m; ( … ); : )                         k=0
+//	set -m; ( set -m; ( ( … ); : ); : )                  no such process
+//
+// So Process.monitored is set from Runner.monitorInherited at the fork, and a
+// `( … )` that is a `&` job's or a pipeline element's whole body is that fork
+// and not one inside it (#7329). dash turns job control back on in no forked
+// body, `set -m` or not, which is #7331's split.
 
 // aimedAtAGroupNoForkLeads reports that pid names, as a process group, the
 // group this body or one it was copied from leads here and would not lead in
-// a shell that forks: a body forked with the monitor off, a `$( … )`, or the
-// one the shell forked under the monitor as something that leads no group.
+// a shell that forks: a body forked by a shell running no job control, a `$(
+// … )`, or the one the shell forked under the monitor as something that leads
+// no group.
 func (r *Runner) aimedAtAGroupNoForkLeads(pid int) bool {
 	if pid >= allProcesses {
 		return false

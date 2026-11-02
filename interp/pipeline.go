@@ -592,6 +592,13 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		if i == 0 {
 			sub.process.job = aPipelineLeader
 		}
+		if commandIsParenthesized(p.Cmds[i]) {
+			// And a `( … )` standing as the element is this fork, so its own
+			// clone is forked under this shell's job control and not under
+			// the none a forked body has. See Runner.monitorInherited
+			// (#7329).
+			sub.monitorInherited = r.monitorInherited
+		}
 		release := releaseFds[i]
 		// And its hold on the tables it shares with this shell, which the
 		// element is done reading by then. See sharedtable.go.

@@ -1320,6 +1320,7 @@ func (r *Runner) SetInteractiveJobNotices() {
 func (r *Runner) setMonitor(on bool, spelling string) bool {
 	if !on {
 		r.monitor = false
+		r.monitorInherited = false
 		return true
 	}
 	if !r.Terminal && r.ask(r.sem().MonitorNeedsATerminal, "`set -m` in a shell with no terminal") {
@@ -1345,7 +1346,11 @@ func (r *Runner) setMonitor(on bool, spelling string) bool {
 	if r.unspecified {
 		return false
 	}
+	// Set inside a forked body, it is the body's own now, and what the body
+	// forks after it is a job — even where the body was forked with it on.
+	// See Runner.monitorInherited.
 	r.monitor = true
+	r.monitorInherited = false
 	return true
 }
 

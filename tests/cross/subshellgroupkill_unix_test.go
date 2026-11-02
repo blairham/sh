@@ -234,6 +234,119 @@ func TestACommandKilledByASignalTheShellTrapsIsReportedBare(t *testing.T) {
 	}
 }
 
+// **Under the monitor, a `( … )` or a background job is a process group of its
+// own**, so a group kill inside it reaches that group and not the shell, whose
+// handler does not run (#7246).
+//
+// Measured 2026-11-01, each shell in a process group of its own and no
+// terminal, against bash 5.3.20 and bash 3.2.57, and on a pseudo-terminal
+// against zsh 5.9.2 and dash, which agree with bash where they grant `set -m`
+// and cannot be reached here because they do not grant it without one:
+//
+//	set -m; trap 'echo T' USR1; (kill -USR1 0; echo in); echo out=$?
+//	        the bare notice, out=158, no T; here, before: T as well
+//	…with `(set +m; …)` inside                   the same: the fork decides
+//	trap 'echo T' USR1; (set -m; kill -USR1 0; echo in); echo out=$?
+//	        T, out=158: forked without the monitor, in the shell's group
+//	…with `kill -USR1 -$BASHPID`                 the first row; here,
+//	        before: in, out=0
+//	…with `kill -USR1 -$$`                        in, T, out=0: the shell's
+//	        group, which the body is not in; here, before: T, out=158
+//	set -m; trap 'echo T' USR1; ( (kill -USR1 0; echo in2); echo in1 )
+//	        the bare notice for the outer parentheses, out=158, no T
+//	set -m; trap 'echo T' USR1; (kill -USR1 0; echo in) & wait $!
+//	        out=158, nothing else; here, before: T as well
+//	set -m; (kill -USR1 0; echo in); echo out=$?   and TERM
+//	        the notice, out=158 (143); here, before: nothing, the whole
+//	        shell killed
+//
+// ksh93u+ runs a `( … )` in its own process, so there is no job to be a group
+// and it writes T and out=286 as without the monitor; its background job is a
+// group of its own, and writes no T.
+func TestAJobForkedUnderTheMonitorIsAGroupOfItsOwn(t *testing.T) {
+	usr1 := int(syscall.SIGUSR1)
+	died := "out=" + strconv.Itoa(128+usr1) + "\n"
+	diedKsh := "out=" + strconv.Itoa(256+usr1) + "\n"
+	const trapped = `set -m; trap 'echo T' USR1; `
+	for _, c := range []struct {
+		name, dialect, script, out, notice, command string
+	}{
+		{
+			"bash/to group 0", "bash", trapped + `(kill -USR1 0; echo in); echo out=$?`,
+			died, "bare", "( kill -USR1 0; echo in )",
+		},
+		{
+			"bash/the monitor turned off inside", "bash", trapped + `(set +m; kill -USR1 0; echo in); echo out=$?`,
+			died, "bare", "( set +m; kill -USR1 0; echo in )",
+		},
+		{
+			"bash/the monitor turned on inside", "bash",
+			`trap 'echo T' USR1; (set -m; kill -USR1 0; echo in); echo out=$?`,
+			"T\n" + died, "bare", "( set -m; kill -USR1 0; echo in )",
+		},
+		{
+			"bash/to the body's own group", "bash", trapped + `(kill -USR1 -$BASHPID; echo in); echo out=$?`,
+			died, "bare", "( kill -USR1 -$BASHPID; echo in )",
+		},
+		{
+			"bash/to the shell's group", "bash", trapped + `(kill -USR1 -$$; echo in); echo out=$?`,
+			"in\nT\nout=0\n", "", "",
+		},
+		{
+			"bash/the subshell around it", "bash", trapped + `( (kill -USR1 0; echo in2); echo in1 ); echo out=$?`,
+			died, "bare", "( ( kill -USR1 0; echo in2 ); echo in1 )",
+		},
+		{
+			"bash/a background job", "bash", trapped + `(kill -USR1 0; echo in) & wait $!; echo out=$?`,
+			died, "", "",
+		},
+		{
+			"bash/untrapped TERM", "bash", `set -m; (kill -TERM 0; echo in); echo out=$?`,
+			"out=143\n", unchecked, "",
+		},
+		{
+			"ksh/to group 0", "ksh", trapped + `(kill -USR1 0; echo in); echo out=$?`,
+			"T\n" + diedKsh, "", "",
+		},
+		{
+			"ksh/to the shell's group", "ksh", trapped + `(kill -USR1 -$$; echo in); echo out=$?`,
+			"T\n" + diedKsh, "", "",
+		},
+		{
+			// The notice is `wait`'s, which is not this row's question.
+			"ksh/a background job", "ksh", trapped + `(kill -USR1 0; echo in) & wait $!; echo out=$?`,
+			diedKsh, unchecked, "",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			ws, out, errs := runInAGroup(t, c.dialect, c.script)
+			if ws.Signaled() || ws.ExitStatus() != 0 {
+				t.Errorf("ended %v, want an exit at 0 (stderr %q)", ws, errs)
+			}
+			if out != c.out {
+				t.Errorf("wrote %q, want %q (stderr %q)", out, c.out, errs)
+			}
+			checkGroupKillNotice(t, errs, c.notice, c.command)
+		})
+	}
+	// Untrapped, the subshell dies of it and the shell, which is not in its
+	// group, writes the located notice and carries on.
+	t.Run("bash/untrapped", func(t *testing.T) {
+		const command = "( kill -USR1 0; echo in )"
+		ws, out, errs := runInAGroup(t, "bash", `set -m; `+command+`; echo out=$?`)
+		if ws.Signaled() || ws.ExitStatus() != 0 {
+			t.Errorf("ended %v, want an exit at 0 (stderr %q)", ws, errs)
+		}
+		if out != died {
+			t.Errorf("wrote %q, want %q (stderr %q)", out, died, errs)
+		}
+		if !strings.Contains(errs, ": line 1: ") || !strings.Contains(errs, "User defined signal 1") ||
+			!strings.HasSuffix(errs, command+"\n") {
+			t.Errorf("wrote %q, want the located notice for %s", errs, command)
+		}
+	})
+}
+
 // unchecked is a row whose stderr is not this test's question: a notice for
 // a body other than the parentheses the shell ran — the inner parentheses,
 // named by the ones around them, or a pipeline element — which is a gap of

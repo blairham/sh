@@ -327,12 +327,12 @@ func (r *Runner) settleCopiesSignals() bool {
 // body is forked, by the monitor of the shell that forks it, and not by the
 // monitor at the `kill`: turned on inside the body it makes no group, and
 // turned off inside a body forked under it leaves the group standing. So the
-// anchor records the monitor at the fork (procAnchor.monitored), and a body
-// forked under the monitor keeps its group and every answer it had — in
-// interactive zsh, on a terminal, both `( … )` and `<(…)` answer `kill -0
-// -$sysparams[pid]` with 0, which is the shape the scripts procanchor.go was
-// written for spend the number on. What bash does with that group under `set
-// -m` is #7246's and not this rule's.
+// body's process records the monitor at the fork (Process.monitored), and a
+// body forked under the monitor keeps its group — in interactive zsh, on a
+// terminal, both `( … )` and `<(…)` answer `kill -0 -$sysparams[pid]` with 0,
+// which is the shape the scripts procanchor.go was written for spend the
+// number on. Who a signal to that group reaches is jobgroupsignal.go's
+// question and not this rule's (#7246).
 //
 // The refusal is ESRCH with nothing sent and the gate not asked, for the
 // reason aimsAJobSpecAtItsGroup gives the same answer: the target is absent by
@@ -340,8 +340,8 @@ func (r *Runner) settleCopiesSignals() bool {
 // placeholder. Signal 0 included, since `kill -0 -$p` is the same refusal in
 // both references. Not a dialect split, so nothing asks a Semantics axis. The
 // group is this body's or one it was copied from, found out through the
-// anchors, and whether that body is still running does not matter: it never
-// had a group to signal.
+// bodies' processes and the anchor each one has, and whether that body is
+// still running does not matter: it never had a group to signal.
 
 // aimedAtAGroupNoForkLeads reports that pid names, as a process group, the
 // group this body or one it was copied from leads here and would not lead in
@@ -350,9 +350,9 @@ func (r *Runner) aimedAtAGroupNoForkLeads(pid int) bool {
 	if pid >= allProcesses {
 		return false
 	}
-	for a := r.bodyAnchor; a != nil; a = a.outer {
-		if a.leads(-pid) {
-			return !a.monitored
+	for p := r.process; p != nil; p = p.outer {
+		if p.anchor.leads(-pid) {
+			return !p.monitored
 		}
 	}
 	return false

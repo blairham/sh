@@ -141,9 +141,6 @@ func (r *Runner) procSub(ctx context.Context, span syntax.Span) (string, bool) {
 	// And it is that process a copy of the body reaches through the group
 	// id, not the group's lifetime. See selfkillbody.go.
 	sub.process.anchor = keep.anchor
-	if keep.anchor != nil {
-		keep.anchor.monitored = r.monitor
-	}
 
 	// And where its *output* goes, for the dialect that does not wait for the
 	// body: held rather than written straight through, unless the body holds

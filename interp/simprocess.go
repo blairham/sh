@@ -48,6 +48,20 @@ type Process struct {
 	// command it runs.
 	arrivals []bodyArrival
 	posted   atomic.Bool
+
+	// monitored records that the body was forked while the monitor was on,
+	// which is when a real shell can have made it a group of its own.
+	// Without it the group a placeholder leads is this shell's arrangement
+	// and no reference's, and a script aiming a group kill at it is refused.
+	// See aimedAtAGroupNoForkLeads. On the process rather than the anchor,
+	// because a body is forked under the monitor or not whether or not a
+	// front end supplied ProcessAnchor.
+	monitored bool
+	// job records that a real shell forks this body as a job of its own: a
+	// `( … )` the dialect does not run in its own process, or a background
+	// job's body. Forked by the shell itself under the monitor, such a body
+	// leads a process group the shell is not in. See jobgroupsignal.go.
+	job bool
 }
 
 // Process answers which process this runner's code would be running in. Nil
@@ -105,8 +119,10 @@ func (p *Process) ended() bool {
 // what ends it. Called beside the anchor at each of the five places a real
 // shell forks; see Runner.anchorForkedBody.
 func (c *Runner) forkProcess() func() {
-	// The process the clone inherited is the one it was forked from.
-	p := &Process{outer: c.process}
+	// The process the clone inherited is the one it was forked from, and
+	// the clone has not run anything yet, so its monitor is still the one of
+	// the shell that forked it.
+	p := &Process{outer: c.process, monitored: c.monitor}
 	c.process = p
 	return p.exit
 }

@@ -8644,6 +8644,16 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 		if err != nil {
 			return err
 		}
+		// What a copy the left side ran aimed at this shell, answered before
+		// the list goes on and showing the left side's status. See
+		// answerCopiesAsTheWaitEnds. A handler that ended the shell ends the
+		// list; a left side that stopped on its own is judged below as before.
+		if r.ctl == controlNone {
+			r.answerCopiesAsTheWaitEnds(ctx, r.status)
+			if r.ctl != controlNone {
+				return nil
+			}
+		}
 		if x.Op == syntax.TokAndAnd && r.status == 0 && r.finishedConditionAbandoned &&
 			r.ctl == controlExit && r.abandon == abandonError &&
 			r.ask(r.sem().AndAfterAFinishedConditionFails,
@@ -8799,8 +8809,8 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 			r.line = r.pipelineLine(p)
 		}
 		// What an element aimed at the body this pipeline runs in, answered
-		// as the wait for it ends. See answerCopiesAsAPipelineEnds.
-		r.answerCopiesAsAPipelineEnds(ctx)
+		// as the wait for it ends. See answerCopiesAsTheWaitEnds.
+		r.answerCopiesAsTheWaitEnds(ctx, r.status)
 	}
 	if p.Negated && r.negationInverts() {
 		// `!` applies to the whole pipeline and inverts its status.
@@ -9123,7 +9133,13 @@ func (r *Runner) dispatch(ctx context.Context, c syntax.Command, fired bool) err
 		set := r.errTrapIsSet()
 		r.execSerial = 0
 		serial := r.stmtSerial
+		began := r.status
 		err := r.simple(ctx, x, fired)
+		// What a `$( … )` in it aimed at this shell, answered as it ends and
+		// inside whatever redirection it is in. See answerCopiesAsTheWaitEnds.
+		if err == nil {
+			r.answerCopiesAsTheWaitEnds(ctx, began)
+		}
 		// What a function body, an `eval` or a `.` ended on is theirs; the
 		// command reporting it is not an arithmetic command.
 		r.arithZeroLeft = false

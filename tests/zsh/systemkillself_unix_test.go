@@ -308,3 +308,57 @@ func TestAPipelineCopysSignalToTheBodyIsAnsweredAsTheWaitEnds(t *testing.T) {
 		}
 	}
 }
+
+// A lone `( … )` or a `$( … )` that signals the body's `$sysparams[pid]` has
+// the body's handler run before an and-or list goes on, a `$( … )`'s inside
+// the `eval` it was in, and before a body that is one simple command ends,
+// where it used to wait for a next command that never came and was lost
+// (#7358). A `( … )` copy's handler sees the copy's status; a `$( … )`'s sees
+// the one from before the command, as the handler between commands does.
+//
+// Measured 2026-11-02 under `-c` against zsh 5.9.2 in a process group of its
+// own; bash 5.3.20, bash 3.2.57 and dash agree on every row but the `$( … )`
+// status, where they show the command's, and the last, where they run the
+// handler after the group's redirection is put back. Each row's want is what
+// zsh wrote; the last is the split's, and stays where it was.
+func TestASubshellOrSubstitutionCopysSignalToTheBodyIsAnsweredBeforeTheListGoesOn(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{
+			`( trap 'print -r -- U' USR1; p=$sysparams[pid]; ( kill -USR1 $p ) && print -r -- a ); print -r -- out=$?`,
+			"U\na\nout=0\n",
+		},
+		{
+			`( trap 'print -r -- U $?' USR1; p=$sysparams[pid]; false; ( kill -USR1 $p; exit 3 ) || print -r -- a$? )`,
+			"U 3\na3\n",
+		},
+		{
+			`( trap 'print -r -- U' USR1; p=$sysparams[pid]; x=$(kill -USR1 $p; print -r -- s) && print -r -- a$x )`,
+			"U\nas\n",
+		},
+		{
+			`( trap 'print -r -- U $?' USR1; p=$sysparams[pid]; false; x=$(kill -USR1 $p; exit 3) || print -r -- a$? )`,
+			"U 1\na3\n",
+		},
+		{
+			`( trap 'print -r -- U >&2' USR1; p=$sysparams[pid]; ` +
+				`eval 'x=$(kill -USR1 $p)' 2>/dev/null; print -r -- b )`,
+			"b\n",
+		},
+		{
+			`eval 'trap "print -r -- U" USR1; p=$sysparams[pid]; ( kill -USR1 $p )' | /bin/cat; print -r -- out=$?`,
+			"U\nout=0\n",
+		},
+		{
+			`eval 'trap "print -r -- U" USR1; p=$sysparams[pid]; x=$(kill -USR1 $p)' | /bin/cat; print -r -- out=$?`,
+			"U\nout=0\n",
+		},
+		{
+			`( trap 'print -r -- U >&2' USR1; p=$sysparams[pid]; { ( kill -USR1 $p ) } 2>/dev/null; print -r -- b )`,
+			"b\n",
+		},
+	} {
+		if got := runZshAnchored(t, c.src); got != c.want {
+			t.Errorf("%s\n got %q\nwant %q", c.src, got, c.want)
+		}
+	}
+}

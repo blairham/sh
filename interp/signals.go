@@ -1350,7 +1350,7 @@ func (r *Runner) arrivalMark() int {
 // (#2227). nil is the common case and needs no guard — a receive on a nil
 // channel is never ready, so a caller with no second way out cannot take one.
 func (r *Runner) awaitOrTrap(done, giveUp <-chan struct{}) (sig syscall.Signal, trapped, gaveUp bool) {
-	return r.awaitOrArrivalFor(done, giveUp, r.pendingTrap, r.aBodysTrappedArrival)
+	return r.awaitOrArrivalFor(done, giveUp, r.pendingTrap, r.anArrivalEndsABodysWait)
 }
 
 // awaitOrArrival is awaitOrTrap with the question of which arrival ends the

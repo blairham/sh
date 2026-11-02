@@ -44,11 +44,26 @@ import "strings"
 // `x=1 +zsh:1> true`, and `x=1 builtin command true` is one prompt, as `x=1
 // command true` is. See Runner.tracePrefixRepeatsBeforeTheCommand.
 //
-// Not modeled here. `exec 3>/dev/null`, `exec -a` with no command, `exec -x`
-// and a `builtin` naming no builtin write no line at all there; this writes one
-// (#7097). A program is traced under the name ARGV0 gives it too (#7120), and
-// the name `exec -a` gives reaches the programs a function it names or a
-// substitution among its words starts (#7121).
+// And where the scan leaves nothing to run, there is no line. A modifier with
+// no command behind it, or one that refuses what is behind it, writes nothing,
+// and a prefix in front is written with no newline, so the next line finishes
+// it. Measured 2026-11-02 on zsh 5.9.2 under the same flags (#7097):
+//
+//	exec 3>/dev/null; echo ok          `echo ok`, and no line for `exec`
+//	builtin exec 3>/dev/null; echo ok  `echo ok` alone
+//	exec -a; exec -a zz; exec -x …     the refusal alone
+//	exec -c 3>/dev/null                the refusal alone
+//	builtin nosuch; builtin f          the refusal alone, `f` a function
+//	builtin --; builtin -x             the refusal alone
+//	x=1 exec 3>/dev/null; echo ok      `x=1 +zsh:1> echo ok`, one line
+//	x=1 exec 3>/dev/null               `x=1 `, at the exit, with no newline
+//	x=1 builtin nosuch                 the refusal alone, and no `x=1`
+//
+// bash 5.3 and ksh93 have no modifier class and write `exec` and `builtin
+// nosuch` as any other command. Not modeled here: a program is traced under
+// the name ARGV0 gives it too (#7120), and the name `exec -a` gives reaches
+// the programs a function it names or a substitution among its words starts
+// (#7121).
 
 // precommandTrace is what the precommand scan made of a traced command's
 // leading words.
@@ -62,6 +77,11 @@ type precommandTrace struct {
 	named bool
 	// throughCommand says `command` ended the scan.
 	throughCommand bool
+	// runsNothing says the modifiers leave nothing to run, so the command
+	// has no line: none is left behind them, as in `exec 3>/dev/null`, or
+	// one of them refuses what is, as `builtin nosuch` does. refused says
+	// it is the second, which writes no prefix either.
+	runsNothing, refused bool
 }
 
 // precommandTraceScan reads a traced command's leading precommand modifiers.
@@ -84,6 +104,9 @@ scan:
 		}
 		switch m {
 		case PrecommandTransparent, PrecommandRedirectionForm:
+			if r.modifierRefuses(words, i, dash) {
+				return precommandTrace{runsNothing: true, refused: true}
+			}
 			j := i + 1
 			if words[i] == "exec" {
 				var o execTraceOption
@@ -120,6 +143,11 @@ scan:
 		}
 	}
 	t.out = i
+	if i > 0 && i >= len(words) && !t.throughCommand {
+		// Modifiers with no command behind them, which is `exec`'s
+		// redirection form: `exec 3>/dev/null`.
+		t.runsNothing = true
+	}
 	if i >= len(words) || !t.named && !dash {
 		t.name, t.named = "", false
 		return t
@@ -143,6 +171,34 @@ scan:
 		t.name, t.named = "-"+cmd, true
 	}
 	return t
+}
+
+// modifierRefuses reports whether the modifier at words[i] refuses what
+// stands behind it, so that nothing runs: a `builtin` naming no builtin, and
+// an `exec` whose option words cannot be read, which the dialect that reads
+// them ahead of the line refuses there. See Runner.refuseExecWithoutACommand
+// and biBuiltin, whose refusals these are.
+func (r *Runner) modifierRefuses(words []string, i int, dash bool) bool {
+	rest := words[i+1:]
+	switch words[i] {
+	case "builtin":
+		if len(rest) == 0 || rest[0] == "-" {
+			// Nothing behind it is not a refusal, and a lone dash is eaten.
+			return false
+		}
+		if _, ok := r.lookupBuiltin(rest[0]); ok {
+			return false
+		}
+		_, presented := r.presentedPreludeDecl(rest[0])
+		return !presented
+	case "exec":
+		if dash || r.sem().ExecOptionsRequireACommand != Yes {
+			return false
+		}
+		refusal, _ := r.execOptionRefusal(rest)
+		return refusal != execOptionsRead
+	}
+	return false
 }
 
 // execTraceOption is what `exec`'s options say about the name a program is

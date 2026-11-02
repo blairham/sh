@@ -893,7 +893,8 @@ func Diagnostics() interp.Diagnostics {
 		// external.
 		TracePrefixAssignment: interp.TracePrefixOnTheCommandLineRepeatingThePrefix,
 		// The command behind `command`, `builtin` and `exec` is written
-		// without them. See interp/xtraceprecommand.go (#6967).
+		// without them, and one that leaves nothing to run is not written.
+		// See interp/xtraceprecommand.go (#6967, #7097).
 		TraceLeavesOutPrecommandModifiers: true,
 		// The subject and the arm's patterns, once per arm it tries, where
 		// bash prints the header as written once and the other two print

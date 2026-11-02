@@ -2091,6 +2091,24 @@ class and write the words. The field is
 `Diagnostics.TraceLeavesOutPrecommandModifiers`, and interp/xtraceprecommand.go
 carries the panel (#6967).
 
+Where the scan leaves nothing to run, there is no line. Measured 2026-11-02 on
+the same zsh under the same flags:
+
+    exec 3>/dev/null; echo ok                 +zsh:1> echo ok
+    builtin exec 3>/dev/null; echo ok         +zsh:1> echo ok
+    exec -a; exec -a zz; exec -x /bin/echo    the refusal alone
+    builtin nosuch; builtin --; builtin -x    the refusal alone
+    x=1 exec 3>/dev/null; echo ok             +zsh:1> x=1 +zsh:1> echo ok
+    x=1 exec 3>/dev/null                      +zsh:1> x=1 , and no newline
+    x=1 builtin nosuch                        the refusal alone
+
+So a modifier with no command behind it writes nothing, nor does one that
+refuses what is behind it. A prefix in front of the first is written with no
+newline and the next line finishes it; in front of the second it is not
+written at all. bash 5.3.20 and ksh93u+ trace `+ exec` and `+ builtin nosuch`
+as they trace any command, and ksh93 adds `+ 3> /dev/null` on a line of its
+own. The same field decides it (#7097).
+
 **The structure is not what this document said it was.** It said "every
 simple command to stderr, expanded, before it runs, and compound commands
 not traced", and the second half is false: every shell that has `[[ … ]]`

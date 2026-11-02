@@ -88,7 +88,35 @@ func (r *Runner) keepWhatAFailedLiteralStored(
 		// What an append would have built on, which is the name as an array
 		// with none of the literal in it: empty where it was unset, its
 		// scalar at element zero where it held one.
-		a, _ := r.appendedOverAScalar(name)
+		a, held := r.appendedOverAScalar(name)
+		if _, declared := r.declarationOf(name); held == 0 && declared {
+			// But a name the shell had declared and given no value — one a
+			// listing writes a row for with no `=` — is left an array that
+			// is declared and not assigned, as `declare -a` would leave it,
+			// and lists the same way: the emptiness is not what moves it,
+			// the assignment is. Measured 2026-11-01 on bash 5.3.20 from a
+			// file, each line followed by `b=(1 $((1/0)) 3)` and then
+			// `declare -p b`:
+			//
+			//	declare b                  declare -a b
+			//	declare -i b               declare -ai b
+			//	declare -x b               declare -ax b
+			//	export b                   declare -ax b
+			//	local b                    declare -a b
+			//	declare b=                 declare -a b=([0]="")
+			//	unset b                    declare -a b=()
+			//	declare b; b=1; unset b    declare -a b=()
+			//
+			// The `local` row read from a subshell's exit trap, by an `eval`
+			// in the function, since the failure ends the call. A global
+			// `unset` takes the declaration away and a local's leaves it
+			// (see attrUnsetLeftItDeclared), so the last row inside a
+			// function is `declare -a b`. bash 3.2.57 holds the empty string
+			// at element zero for the valueless rows, which is not the
+			// column (#7316). See compounddeclaredonly.go.
+			r.markIndexed(name)
+			return
+		}
 		r.storeArray(name, a)
 	}
 }

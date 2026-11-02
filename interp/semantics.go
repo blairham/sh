@@ -5603,10 +5603,10 @@ type Semantics struct {
 	// dialect here claims it — see FailedOperandLeavesTheLettersKind. See
 	// Runner.keepWhatAFailedLiteralStored (#7078).
 	//
-	// One row is not reached yet: bash leaves a name declared with no value
-	// an array that is declared and not assigned — `declare b; b=(1
-	// $((1/0)))` lists `declare -a b` — where this leaves it `declare -a
-	// b=()`, as it does an unset one.
+	// A name declared with no value is left an array that is declared and
+	// not assigned, as the declaration left it: `declare b; b=(1 $((1/0)))`
+	// lists `declare -a b`, where an unset name lists `declare -a b=()`
+	// (#7316).
 	//
 	// Asked only once a bare literal has failed over a name that is not an
 	// array; dash and BusyBox ash have no array literal.

@@ -73,6 +73,39 @@ const failedBareScript = "row() { ( trap 'typeset -p b 2>/dev/null; echo .' EXIT
 	"row 'b=(7); b=(1 $((1/0)) 3)'\n" +
 	"row 'unset b; typeset -a b=(1 $((1/0)))'\n"
 
+// Over a name declared with no value, a bare literal that fails leaves an
+// array that is declared and not assigned — its letters kept, a local and a
+// global alike — which lists with no `=()`. The controls: an empty value is
+// element zero, and an unset name, or one a global `unset` took the
+// declaration from, is an empty array. Measured 2026-11-01 on bash 5.3.20
+// from a file, this script, byte for byte; bash 3.2.57 lists the first three
+// rows `'([0]="")'`. We listed the first five `=()` (#7316).
+func TestAFailedBareLiteralOverAValuelessNameLeavesItDeclared(t *testing.T) {
+	t.Parallel()
+	checkFailedKeep(t, failedValuelessScript,
+		"declare -a b\n.\n"+
+			"declare -ai b\n.\n"+
+			"declare -ax b\n.\n"+
+			"declare -ax b\n.\n"+
+			"declare -a b\n.\n"+
+			"declare -a b=([0]=\"\")\n.\n"+
+			"declare -a b=()\n.\n"+
+			"declare -a b=()\n.\n")
+}
+
+// failedValuelessScript fails a bare literal over a name declared with no
+// value, each row in a subshell of its own — and so inside a function, where
+// a plain `declare` is a local — and lists what is left of the name.
+const failedValuelessScript = "row() { ( trap 'typeset -p b 2>/dev/null; echo .' EXIT; eval \"$1\" ) 2>/dev/null; }\n" +
+	"row 'declare b; b=(1 $((1/0)) 3)'\n" +
+	"row 'declare -i b; b=(1 $((1/0)) 3)'\n" +
+	"row 'declare -x b; b=(1 $((1/0)) 3)'\n" +
+	"row 'export b; b+=(1 $((1/0)))'\n" +
+	"row 'declare -g b; b=(1 $((1/0)) 3)'\n" +
+	"row 'declare b=; b=(1 $((1/0)) 3)'\n" +
+	"row 'unset b; b=(1 $((1/0)) 3)'\n" +
+	"row 'declare -g b; b=1; unset b; b=(1 $((1/0)) 3)'\n"
+
 // failedTableScript appends to and assigns a table whose literal fails, each
 // row in a subshell of its own, and reads the keys back in a fixed order so
 // that no row depends on the order a table lists its keys in.

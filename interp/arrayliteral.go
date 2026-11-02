@@ -622,7 +622,19 @@ func (r *Runner) literalShapeReadsSubscripts(elems []*syntax.ArrayElem) bool {
 // cause since #3502 precisely because the give-up it leads to differs. The
 // flag is read rather than re-derived, so there is one answer to "was it the
 // subscript" and not two.
-func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appendTo bool) {
+//
+// startOver is what re-creating the name takes off it, where the dialect
+// re-creates it — nil where it does not. It runs once the words have
+// expanded and before anything is placed, so the words still see the name as
+// it was and a literal that fails takes nothing off it. Measured 2026-11-01
+// from a file on ksh93u+ 2012-08-01 and zsh 5.9.2 under -f, the two columns
+// that re-create: `typeset -i b=5; b=(1 $((1/0)) 3)` leaves `typeset -i b=5`
+// in both, as do `-x`, `-l`, `-u`, `-F`, `-R`, `-L` and `-Z`, and a valueless
+// `typeset -i b` stays `typeset -i b` in ksh93 — where taking the letters
+// first had left the value without them and the valueless name gone (#7317).
+// The words see the letters too: `export b=s; b=("$(printenv b)")` stores
+// `s` in both.
+func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appendTo bool, startOver func()) {
 	if !r.scopeWarningsAreOff() {
 		// The array half of the two opt-in scope lints, and it is here rather
 		// than at the store because the store is shared with every element
@@ -641,6 +653,9 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appe
 		// evidence about the shape either.
 		r.keepWhatAFailedLiteralStored(name, elems, parsed, failedLiteral{appendTo: appendTo})
 		return
+	}
+	if startOver != nil {
+		startOver()
 	}
 	if r.literalSubscriptIsAKey(name, parsed) {
 		// The subscript is text rather than an expression, and a literal

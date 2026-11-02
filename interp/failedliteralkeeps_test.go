@@ -187,3 +187,61 @@ func failedBareSem(makes Answer) Semantics {
 	s.DeclarePrintReportsAMissingName = Yes
 	return s
 }
+
+// Over a name declared with no value, the array a failed bare literal makes
+// is declared and not assigned — a listing writes it with no `=()` — where
+// the axis says so; an empty value is element zero, and an unset name an
+// empty array. No leaves each name as it was (#7316).
+func TestAFailedBareLiteralOverAValuelessNameLeavesItDeclared(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ src, makes, leaves string }{
+		{"typeset b\nb=(1 $((1/0)) 3)\n", `declare -a b`, `declare -- b`},
+		{"typeset -i b\nb=(1 $((1/0)) 3)\n", `declare -ai b`, `declare -i b`},
+		{"typeset b\nb+=(1 $((1/0)))\n", `declare -a b`, `declare -- b`},
+		{"b=\nb=(1 $((1/0)) 3)\n", `declare -a b=([0]="")`, `declare -- b=""`},
+		{"unset b\nb=(1 $((1/0)) 3)\n", `declare -a b=()`, "absent"},
+	} {
+		for _, makes := range []Answer{Yes, No} {
+			sem := failedBareSem(makes)
+			// A valueless declaration recorded and left unset, and the
+			// letter kept by the literal, as in the column that answers yes.
+			sem.DeclaredNameWithoutValueIsEmpty = No
+			sem.ValuelessDeclarationRecordsTheName = Yes
+			sem.ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = No
+			sem.AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = No
+			src := "trap 'typeset -p b 2>/dev/null || echo absent' EXIT\n" + c.src
+			out, _ := run(t, src, withSem(sem))
+			want := c.leaves
+			if makes == Yes {
+				want = c.makes
+			}
+			if got := trapReadBack(out); got != want {
+				t.Errorf("%q, makes an array=%v: read back %q, want %q", c.src, makes, got, want)
+			}
+		}
+	}
+}
+
+// A bare literal that re-creates its name takes the letters off only once
+// its words have expanded, so one that fails leaves the name with them, and
+// the words see them; one that expands still takes them off (#7317).
+func TestAFailedLiteralThatReCreatesTheNameKeepsItsLetters(t *testing.T) {
+	t.Parallel()
+	sem := failedBareSem(No)
+	sem.ArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = Yes
+	sem.AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver = Yes
+	for _, c := range []struct{ src, want string }{
+		{"typeset -i b=5\nb=(1 $((1/0)) 3)\n", `declare -i b="5"`},
+		{"typeset -i b=5\nb+=(1 $((1/0)))\n", `declare -i b="5"`},
+		{"export b=s\nb=(1 $((1/0)) 3)\n", `declare -x b="s"`},
+		{"typeset -i b\nb=(1 $((1/0)) 3)\n", `declare -i b`},
+		{"typeset -i b=5\nb=(1 2)\n", `declare -a b=([0]="1" [1]="2")`},
+		{"typeset -i b=5\nb=(\"$(typeset -p b)\")\n", `declare -a b=([0]="declare -i b=\"5\"")`},
+	} {
+		src := "trap 'typeset -p b 2>/dev/null || echo absent' EXIT\n" + c.src
+		out, _ := run(t, src, withSem(sem))
+		if got := trapReadBack(out); got != c.want {
+			t.Errorf("%q: read back %q, want %q", c.src, got, c.want)
+		}
+	}
+}

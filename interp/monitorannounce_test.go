@@ -9,6 +9,7 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 
 	. "github.com/blairham/sh/interp"
 )
@@ -195,12 +196,31 @@ func TestBgOnAJobThatIsAlreadyRunning(t *testing.T) {
 // The wait is released by the continue rather than by a timer, so the test
 // asserts the causal order and does not race it: the second wait returns only
 // once `fg` has sent SIGCONT.
+//
+// # Why `fg` runs as a second part
+//
+// The shape is a job that was stopped *before* `fg` looked, and the stop is
+// taken on the job's own goroutine, which nothing in `true &` then `fg` puts
+// ahead of `fg`. At GOMAXPROCS=1 `fg` sometimes looked first: it found no
+// note, called the job running and continued it, and the canned stop was
+// handed out after that — a stop of a job `fg` had already resumed, which `fg`
+// rightly reported as Stopped at 128+SIGSTOP. That is the failure #7294
+// caught on a macOS runner, 21 runs in 10000 here, every one at
+// `-test.cpu 1`.
+//
+// So `fg` waits for the note. The goroutine asks again only after it has
+// recorded the stop it was handed — see Runner.waitForBackgroundProcess —
+// which makes the second ask the moment the job is stopped as far as the shell
+// can know, and `fg` is run on the same shell after that and not before.
+// Nothing runs in between that could take the note instead: with fg's own
+// noticeStoppedJob removed, this fails every time.
 func TestFgNoticesAJobStoppedFromOutside(t *testing.T) {
-	var once sync.Once
+	var once, noteOnce sync.Once
 	resumed := make(chan struct{})
+	noted := make(chan struct{})
 	first := make(chan struct{}, 1)
 	first <- struct{}{}
-	out, st, _ := jobSessionWith(t, &fakeJobs{}, echoCmd+" &\nfg", true, func(r *Runner) {
+	_, _, r := jobSessionWith(t, &fakeJobs{}, echoCmd+" &", true, func(r *Runner) {
 		dg := *r.Diagnostics
 		dg.JobResumedInForeground = "[%[1]d]  %[2]s %-11[4]s%[3]s"
 		dg.JobContinued = "continued"
@@ -214,6 +234,8 @@ func TestFgNoticesAJobStoppedFromOutside(t *testing.T) {
 				return Wait{Signal: syscall.SIGSTOP, Stopped: true}, nil
 			default:
 			}
+			// Asked again, so the stop above has been noted.
+			noteOnce.Do(func() { close(noted) })
 			<-resumed
 			return Wait{}, nil
 		}
@@ -224,6 +246,12 @@ func TestFgNoticesAJobStoppedFromOutside(t *testing.T) {
 			return nil
 		}
 	})
+	select {
+	case <-noted:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the job was handed a stop and never waited again, so it never noted it")
+	}
+	out, st, _ := jobRun2(t, r, "fg")
 	if want := "[1]  + continued  " + echoCmd; lastLine(out) != want {
 		t.Errorf("fg said %q, want its last line to be %q — the stop was never taken", out, want)
 	}

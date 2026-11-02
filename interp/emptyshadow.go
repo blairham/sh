@@ -170,3 +170,85 @@ func (r *Runner) declareOverNothing(sc *scope, name, value string, hasValue bool
 		f.inherit || r.LocalInheritsTheOuterValue(), false)
 	r.markADeclaredNameForAllexport(name, born, true)
 }
+
+// emptyShadowReturnsPlainly reports whether a scope's return may put name back
+// through returnAnEmptyShadow: its record is the empty shadow exactly as
+// takeAnEmptyShadow writes it — and as Runner.shadow writes it when every read
+// found nothing — with each record saying "there was none", and the call left
+// the name holding at most a scalar.
+//
+// A record saying "none" for every kind is a return that takes everything off
+// the name: the value, every attribute — each one is either cleared outright
+// or put back as the "none" that was saved — the attribute payloads, what a
+// produced parameter was assigned and the export copy. A name holding none of
+// the last three — kept in tables of their own — is left by that return with
+// nothing but the value and the attributes to take away. Only one step reads
+// the name rather than clearing it, the parameter that follows a restored
+// value, and it reads it after the value and the declared-empty record have
+// gone and before anything else has; returnAnEmptyShadow keeps that order.
+// The array and table drops find no slot here, the tables find no entry, and
+// the producer and the compound namespace are keyed on records this one does
+// not have.
+//
+// So the return is one clear of the attributes where the full road asks a
+// dozen records one at a time, which was most of the ~65 ns a name the full
+// return cost (#6373). A body that filled the name with an array or a table
+// leaves it to the full road, since that step reads the name between drops.
+func (r *Runner) emptyShadowReturnsPlainly(rec *shadowRecord, name string) bool {
+	// Each record's "none" is its bit clear, except the attributes', whose
+	// answer is the set itself: a shadow over a name carrying only a bare
+	// declaration saved that, and the full return puts it back.
+	if !emptyShadowShortcut || rec.has != freshShadowRecords|compoundShadowRecords || rec.bits != 0 ||
+		rec.attrs != (nameAttributes{}) || r.memberNamesInUse {
+		return false
+	}
+	if c := r.cell(name); c != nil && c.has&^slotScalar != 0 {
+		return false
+	}
+	// And none of the tables outside the cell the full return empties: the
+	// attribute payloads, what a produced parameter was assigned, and the
+	// copy of an export a child is still handed. A fresh local has none of
+	// them, and asking is cheaper than emptying them.
+	if _, ok := r.integerBase[name]; ok {
+		return false
+	}
+	if _, ok := r.floatPrecision[name]; ok {
+		return false
+	}
+	if _, ok := r.floatExact[name]; ok {
+		return false
+	}
+	if _, ok := r.fieldWidth[name]; ok {
+		return false
+	}
+	if _, ok := r.caseListing[name]; ok {
+		return false
+	}
+	if _, ok := r.nameref[name]; ok {
+		return false
+	}
+	if _, ok := r.assigned[name]; ok {
+		return false
+	}
+	_, held := r.envCopyHeld[name]
+	return !held
+}
+
+// everyCellAttr is every attribute a cell holds.
+const everyCellAttr cellAttrs = 1<<cellAttrCount - 1
+
+// returnAnEmptyShadow is restoreShadowedName for a name
+// emptyShadowReturnsPlainly accepted: the steps of the full return that change
+// anything, with the one that reads the name in the place the full return
+// reads it — the value goes and the record that a declaration gave it; the
+// parameter that follows a restored value is told so; then every attribute
+// goes — and the record is forgotten as the full return forgets it.
+func (r *Runner) returnAnEmptyShadow(rec *shadowRecord, name string) {
+	r.emptyReturns++
+	r.varsDel(name)
+	r.attrClear(name, attrDeclaredEmpty)
+	r.ignoredNamesRestored(name)
+	r.setAttrs(name, everyCellAttr, 0)
+	rec.has, rec.bits = 0, 0
+	rec.value, rec.array, rec.assoc, rec.attrs, rec.assigned, rec.exportedOn = "", nil, nil, nameAttributes{}, "", false
+}

@@ -5848,6 +5848,10 @@ type Runner struct {
 	// name with nothing to shadow, so a test can show the route is reached.
 	// See emptyshadow.go.
 	emptyShadows int
+	// emptyReturns counts the names a scope's return put back through the
+	// one step an empty shadow over a still-plain name needs, so a test can
+	// show that route is reached. See emptyshadow.go.
+	emptyReturns int
 	// heldSubscriptFailure, where it is set, receives the sentence about a
 	// subscript that would not evaluate in place of the shell writing it, for
 	// the one caller that words it as its own. See testIsSetSubscriptFailed.

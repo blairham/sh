@@ -1718,6 +1718,13 @@ func (r *Runner) restoreShadowedName(sc *scope, name string) {
 	if rec == nil {
 		return
 	}
+	// A shadow that saved nothing, over a name the call left holding at most
+	// a plain value, is put back by taking the value away: every other step
+	// below would find nothing to undo. See emptyshadow.go.
+	if r.emptyShadowReturnsPlainly(rec, name) {
+		r.returnAnEmptyShadow(rec, name)
+		return
+	}
 	if rec.holds(recValue) {
 		if rec.bit(recValue) {
 			r.varsPut(name, rec.value)

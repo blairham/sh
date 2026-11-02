@@ -13,3 +13,7 @@ func SetEmptyShadowShortcutForTest(on bool) (was bool) {
 
 // EmptyShadowsForTest is how many `local` operands took that route.
 func EmptyShadowsForTest(r *Runner) int { return r.emptyShadows }
+
+// EmptyReturnsForTest is how many names a scope's return put back through
+// the route for an empty shadow over a still-plain name.
+func EmptyReturnsForTest(r *Runner) int { return r.emptyReturns }

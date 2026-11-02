@@ -21102,6 +21102,31 @@ the listing there, ksh93 and dash do not. `trap 'echo x' USR1; trap |
 cat` prints the trap in bash and zsh and nothing in the other two — the
 shape issue #339 measured.
 
+**`PipelineElementKeepsTheTraps`** — bash no · dash no · ksh93 no · zsh yes · ash no
+
+Keeps the parent's signal traps working in a pipeline element the shell
+forks, where the listing axis above keeps only a picture of them: a
+handler set before the pipeline runs inside the element for a signal the
+element is sent, and the element carries on. `trap 'echo T' USR1; { kill
+-USR1 <the element's pid>; echo in; } | cat` writes `T` and `in` through
+the pipe in zsh 5.9.2 and nothing in bash 5.3.20, bash 3.2.57, ksh93u+
+2012-08-01, dash or BusyBox ash 1.37.0, whose element dies of the default
+action. Measured 2026-11-02 under `-c`, each shell in a process group of its
+own, the element's pid read as the parent pid of a child it started, and as
+`$BASHPID` or `$sysparams[pid]` where the shell has one; with the signal
+ignored instead, every column's element writes `in`.
+
+In zsh the noun is the element and not its shape: a brace group, a function
+call, a `while`, an `if`, a simple command and a middle element all run the
+handler, for USR1, TERM, INT and HUP, and a `TRAPUSR1` function stands in for
+a `trap` the same way. A `( … )` element is a subshell and resets its handled
+traps; a background job, a command substitution and a process substitution
+keep nothing; the EXIT trap does not cross. Being the element's own table
+shows in the listing too: `{ trap '' USR2; trap; } | cat` lists the parent's
+USR1 beside USR2 in zsh, where bash's picture is dropped by the change
+(#7327). Asked only behind the listing axis's yes, at an element that is not
+`( … )`, and only where the parent holds a handler.
+
 **`SubshellHidesInheritedIgnoredTraps`** — bash no · dash no · ksh93 no · zsh yes
 
 Drops an *inherited* ignore from the child's listing while the signal

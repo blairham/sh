@@ -224,6 +224,7 @@ func TestSemantics(t *testing.T) {
 		// listed like any other trap.
 		{"SubshellKeepsTrapListing", s.SubshellKeepsTrapListing, interp.Yes},
 		{"PipelineElementKeepsTrapListing", s.PipelineElementKeepsTrapListing, interp.Yes},
+		{"PipelineElementKeepsTheTraps", s.PipelineElementKeepsTheTraps, interp.No},
 		{"BackgroundJobKeepsTrapListing", s.BackgroundJobKeepsTrapListing, interp.Yes},
 		{"KeptTrapListingIncludesExit", s.KeptTrapListingIncludesExit, interp.Yes},
 		{"SubshellHidesInheritedIgnoredTraps", s.SubshellHidesInheritedIgnoredTraps, interp.No},

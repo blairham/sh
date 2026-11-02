@@ -3,7 +3,12 @@
 
 package interp
 
-import "context"
+import (
+	"context"
+	"maps"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // How traps cross into a subshell.
 //
@@ -136,6 +141,54 @@ func (r *Runner) retagTrapBoundary(ctx trapContext) {
 	if len(r.trapContexts) != 0 {
 		r.trapContexts[len(r.trapContexts)-1] = ctx
 	}
+}
+
+// keepTheParentsTraps gives a pipeline element the parent's signal traps as
+// its own, in the dialect whose element keeps them working rather than only
+// listing them: a handler the parent set answers a signal the element is
+// sent, from inside the element, and the element carries on. See
+// Semantics.PipelineElementKeepsTheTraps for the rows.
+//
+// The working state is the element's whole table, ignores and handlers
+// alike, and a `TRAP…` function stands for its signal as it does in the
+// parent. Nothing in it is inherited in the sense a subshell's ignore is,
+// since nothing was put back on the way in, so the listing reads the table
+// rather than a picture of the parent's, and a change to one trap leaves
+// the others listed. The EXIT trap and the pseudo-conditions are not
+// signals and keep the subshell's answers.
+//
+// Not for a `( … )` element: the parentheses are the fork, and a subshell
+// puts its handled traps back whatever the boundary it stands at. And asked
+// only behind the listing axis's yes, where the parent holds a handler, so a
+// dialect that clears the listing — or a pipeline with nothing trapped —
+// never hears the question.
+func (c *Runner) keepTheParentsTraps(r *Runner, cmd syntax.Command) {
+	if commandIsParenthesized(cmd) || r.sem().PipelineElementKeepsTrapListing != Yes {
+		return
+	}
+	parent := r.trapTable()
+	handled := false
+	for _, action := range parent {
+		if action != "" {
+			handled = true
+			break
+		}
+	}
+	if !handled || !c.ask(c.sem().PipelineElementKeepsTheTraps, "a pipeline element keeping the parent's signal traps") {
+		return
+	}
+	maps.Copy(c.traps, parent)
+	clear(c.inheritedIgnored)
+	for cond, fname := range r.trapFuncs {
+		if cond == "EXIT" || r.pseudoTrapSlot(cond) != nil {
+			continue
+		}
+		if c.trapFuncs == nil {
+			c.trapFuncs = map[string]string{}
+		}
+		c.trapFuncs[cond] = fname
+	}
+	c.trapsModified()
 }
 
 // trapTable is the signal traps this runner answers for: its own when it

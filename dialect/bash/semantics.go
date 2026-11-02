@@ -2997,6 +2997,10 @@ func Semantics() interp.Semantics {
 	// `(trap)` still lists the trap.
 	s.SubshellKeepsTrapListing = interp.Yes
 	s.PipelineElementKeepsTrapListing = interp.Yes
+	// A picture and not the traps: `trap 'echo T' USR1; { kill -USR1
+	// $BASHPID; echo in; } | cat` runs no handler and the element dies of
+	// the signal, in 5.3.20 and 3.2.57 alike. Measured 2026-11-02 (#7327).
+	s.PipelineElementKeepsTheTraps = interp.No
 	// unanswered ALoneTrapCommandKeepsTrapListing: every boundary it is
 	// asked behind keeps the listing here, so it is never reached.
 	s.BackgroundJobKeepsTrapListing = interp.Yes

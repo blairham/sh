@@ -230,6 +230,7 @@ func TestSemantics(t *testing.T) {
 		// had.
 		{"SubshellKeepsTrapListing", s.SubshellKeepsTrapListing, interp.Yes},
 		{"PipelineElementKeepsTrapListing", s.PipelineElementKeepsTrapListing, interp.No},
+		{"PipelineElementKeepsTheTraps", s.PipelineElementKeepsTheTraps, interp.No},
 		{"BackgroundJobKeepsTrapListing", s.BackgroundJobKeepsTrapListing, interp.No},
 		{"KeptTrapListingIncludesExit", s.KeptTrapListingIncludesExit, interp.Yes},
 		{"SubshellHidesInheritedIgnoredTraps", s.SubshellHidesInheritedIgnoredTraps, interp.No},

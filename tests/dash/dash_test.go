@@ -218,6 +218,7 @@ func TestSemantics(t *testing.T) {
 		// listing includes EXIT stays unanswered — nothing is ever kept.
 		{"SubshellKeepsTrapListing", s.SubshellKeepsTrapListing, interp.No},
 		{"PipelineElementKeepsTrapListing", s.PipelineElementKeepsTrapListing, interp.No},
+		{"PipelineElementKeepsTheTraps", s.PipelineElementKeepsTheTraps, interp.No},
 		{"BackgroundJobKeepsTrapListing", s.BackgroundJobKeepsTrapListing, interp.No},
 		{"KeptTrapListingIncludesExit", s.KeptTrapListingIncludesExit, interp.Unspecified},
 		{"SubshellHidesInheritedIgnoredTraps", s.SubshellHidesInheritedIgnoredTraps, interp.No},

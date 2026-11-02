@@ -2105,6 +2105,9 @@ func Semantics() interp.Semantics {
 	// POSIX answer and is measured rather than assumed.
 	s.SubshellKeepsTrapListing = interp.No
 	s.PipelineElementKeepsTrapListing = interp.No
+	// And the element dies of a handled signal it is sent. Measured
+	// 2026-11-02 in the pinned alpine, BusyBox 1.37.0 (#7327).
+	s.PipelineElementKeepsTheTraps = interp.No
 	// Except for a body that is nothing but `trap`, which keeps it in a
 	// pipeline element and in a substitution alike. Measured 2026-10-03;
 	// the grid is on the axis.

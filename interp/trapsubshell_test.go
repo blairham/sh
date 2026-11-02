@@ -26,6 +26,7 @@ func trapSem() Semantics {
 	s.TrapPrintsBareWithConditions = No
 	s.SubshellKeepsTrapListing = No
 	s.PipelineElementKeepsTrapListing = No
+	s.PipelineElementKeepsTheTraps = No
 	s.BackgroundJobKeepsTrapListing = No
 	s.ALoneTrapCommandKeepsTrapListing = No
 	s.KeptTrapListingIncludesExit = Yes
@@ -119,6 +120,82 @@ func TestPipelineElementListingIsItsOwnBoundary(t *testing.T) {
 	s.SubshellKeepsTrapListing = Yes
 	if got, _ := run(t, `trap 'echo x' USR1; trap | cat; echo done`, withSem(s)); got != "done\n" {
 		t.Errorf("a subshell answer does not leak into a pipeline: got %q", got)
+	}
+}
+
+// A pipeline element that keeps the parent's traps holds them as its own
+// table rather than as a picture: a change to one trap leaves the others
+// listed, where a kept picture is dropped by it, and an ignore the parent had
+// is listed beside the handler. The parentheses standing as an element are a
+// subshell and keep nothing, and neither does a background job.
+func TestAPipelineElementKeepsTheTrapsWhereTheAxisSaysSo(t *testing.T) {
+	s := trapSem()
+	s.PipelineElementKeepsTrapListing = Yes
+	s.SubshellHidesInheritedIgnoredTraps = Yes
+	for _, c := range []struct {
+		name, src      string
+		keeps, picture string
+	}{
+		{
+			"a change to another trap",
+			`trap 'echo x' USR1; { trap '' USR2; trap; } | cat; echo done`,
+			"trap -- 'echo x' USR1\ntrap -- '' USR2\ndone\n",
+			"trap -- '' USR2\ndone\n",
+		},
+		{
+			"an ignore the parent had",
+			`trap '' USR2; trap 'echo x' USR1; { echo a; trap; } | cat; echo done`,
+			"a\ntrap -- 'echo x' USR1\ntrap -- '' USR2\ndone\n",
+			// The same lines, but from the picture: the ignore is the
+			// element's own when it keeps the traps, and an inherited one
+			// is hidden where this vector hides them.
+			"a\ntrap -- 'echo x' USR1\ntrap -- '' USR2\ndone\n",
+		},
+		{
+			"a reset of the kept one",
+			`trap 'echo x' USR1; { trap - USR1; trap; } | cat; echo done`,
+			"done\n",
+			"done\n",
+		},
+		{
+			"parentheses as the element",
+			`trap 'echo x' USR1; ( trap '' USR2; trap ) | cat; echo done`,
+			"trap -- '' USR2\ndone\n",
+			"trap -- '' USR2\ndone\n",
+		},
+	} {
+		for _, keep := range []Answer{Yes, No} {
+			s.PipelineElementKeepsTheTraps = keep
+			want := c.picture
+			if keep == Yes {
+				want = c.keeps
+			}
+			if got, _ := run(t, c.src, withSem(s)); got != want {
+				t.Errorf("%s, keeps=%v: got %q, want %q", c.name, keep, got, want)
+			}
+		}
+	}
+}
+
+// And the question is asked only behind the listing's yes, and only where the
+// parent holds a handler: a vector that leaves it unanswered runs a pipeline
+// with nothing trapped, and a dialect that clears the listing never reaches
+// it.
+func TestAPipelineElementKeepingTheTrapsIsAskedOnlyWhereItMatters(t *testing.T) {
+	s := trapSem()
+	s.PipelineElementKeepsTheTraps = Unspecified
+	s.PipelineElementKeepsTrapListing = Yes
+	if got, _ := run(t, `trap '' USR2; { echo a; } | cat; echo done`, withSem(s)); got != "a\ndone\n" {
+		t.Errorf("nothing handled: got %q", got)
+	}
+	s.PipelineElementKeepsTrapListing = No
+	if got, _ := run(t, `trap 'echo x' USR1; { echo a; } | cat; echo done`, withSem(s)); got != "a\ndone\n" {
+		t.Errorf("behind the listing's no: got %q", got)
+	}
+	s.PipelineElementKeepsTrapListing = Yes
+	got, _ := run(t, `trap 'echo x' USR1; { echo a; } | cat; echo done`, withSem(s))
+	if !strings.Contains(got, "keeping the parent's signal traps") {
+		t.Errorf("unanswered where it is reached: got %q, want the refusal naming the question", got)
 	}
 }
 

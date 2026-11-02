@@ -3729,6 +3729,10 @@ func Semantics() interp.Semantics {
 	// background job lists nothing: `trap | cat` is empty where `(trap)` is
 	// not, which is the split issue #339 measured.
 	s.SubshellKeepsTrapListing = interp.Yes
+	// And a pipeline element the shell forks dies of a handled signal it is
+	// sent: the handler is not kept there. Measured 2026-11-02 on ksh93u+,
+	// the element's pid read as a child's parent (#7327).
+	s.PipelineElementKeepsTheTraps = interp.No
 	s.ALoneTrapCommandKeepsTrapListing = interp.No
 	s.KeptTrapListingIncludesExit = interp.Yes
 	s.UmaskPrintsFourDigits = interp.Yes

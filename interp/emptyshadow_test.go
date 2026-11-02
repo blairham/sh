@@ -180,6 +180,13 @@ func emptyShadowCompare(
 	}
 }
 
+// emptyShadowRows are lines of emptyShadowScript's output from its first
+// call to its last, which the full road must write for a comparison to have
+// compared the whole script.
+var emptyShadowRows = []string{
+	"[<one>][<lit>]", "[<two>][<lit>]", "[deep]\n", "[after][after]\n", "[1]\n[1]\n", "[<unset>][<unset>]\n",
+}
+
 // TestAnEmptyShadowAnswersAsTheFullRoadDoes runs emptyShadowScript with the
 // route for a `local` operand over a name with nothing to shadow on and off,
 // and requires the same output and status (#6373).
@@ -194,8 +201,7 @@ func TestAnEmptyShadowAnswersAsTheFullRoadDoes(t *testing.T) {
 			if name == "inherits outer" {
 				atLeast = 0
 			}
-			emptyShadowCompare(t, f, sem, name == "inherits outer", atLeast,
-				[]string{"[<one>][<lit>]", "[<two>][<lit>]", "[deep]\n", "[after][after]\n", "[1]\n[1]\n", "[<unset>][<unset>]\n"})
+			emptyShadowCompare(t, f, sem, name == "inherits outer", atLeast, emptyShadowRows)
 		})
 	}
 }
@@ -255,8 +261,7 @@ func TestAnEmptyTypesetShadowAnswersAsTheFullRoadDoes(t *testing.T) {
 					if vname == "inherits outer" {
 						atLeast = 0
 					}
-					emptyShadowCompare(t, prog, sem, vname == "inherits outer", atLeast,
-						[]string{"[<one>][<lit>]", "[<two>][<lit>]", "[deep]\n", "[after][after]\n", "[1]\n[1]\n", "[<unset>][<unset>]\n"})
+					emptyShadowCompare(t, prog, sem, vname == "inherits outer", atLeast, emptyShadowRows)
 				})
 			}
 			for _, kw := range []struct {

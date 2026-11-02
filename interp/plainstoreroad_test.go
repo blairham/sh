@@ -66,6 +66,10 @@ var theFullRoad = map[string][]string{
 		// is the element road again: storesAPlainScalar refuses every
 		// subscript (#7113).
 		"elementWriteThroughAnElementReference", "assignThroughAnElementReference",
+		// And the same write refused, as the statement's own refusal, in the
+		// column that does not nest it — the indexed element road again
+		// (#7367).
+		"elementWriteThroughAnElementReferenceRefused",
 	},
 	"setVarAs": {
 		"registeredGuard", "attributeFolded", "compoundMemberThroughAReference",

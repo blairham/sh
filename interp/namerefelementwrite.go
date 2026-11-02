@@ -81,3 +81,46 @@ func (r *Runner) assignThroughAnElementReference(ctx context.Context, a, chain *
 	}
 	r.assign(ctx, chain)
 }
+
+// elementWriteThroughAnElementReferenceRefused refuses a where it writes an
+// element through a reference aimed at an element in the column that does not
+// nest one, and reports whether it did. It is the assignment statement's own
+// refusal, so it costs what the statement's other reference refusals cost:
+// the rest of the line goes with it.
+//
+// Measured 2026-11-02 on bash 5.3.20 (`/opt/homebrew/bin/bash`), from `-c`
+// under `env -i PATH=/usr/bin:/bin` and from a script file, with `declare -A
+// a; declare -n e='a[x]'` in front of each row and `; echo "after=$?"` behind
+// it on the same line (#7367):
+//
+//	e[k]=1                    `` `a[x]': not a valid identifier ``, no
+//	                          `after`, and the next line runs
+//	e[k]+=1                   the same
+//	e[1]=z over `declare -a a; declare -n e='a[1]'`
+//	                          the same, `` `a[1]' ``
+//	x=1 e[k]=1 y=2            the same, and `y` is never written
+//	f() { e[k]=1; echo in; }; f
+//	                          no `in` and no `after`: the line the call is on
+//	                          goes, as it does for every give-up
+//	set -o posix; e[k]=1      the shell ends at 127
+//	e+=1                      the control: no subscript of the script's own,
+//	                          `a[x]` becomes 1 and `after=0`
+//	declare -n m; m=1         the control that already agreed: the same give-up
+//	x=$(( e[k]=1 ))           the sentence, `after=0`: an arithmetic write is
+//	                          not the statement's, and runs on
+//	read 'e[k]' <<< v         the sentence, `after=1`: nor is a builtin's
+//
+// Every row the statement owns is Runner.refuseNamerefAim's assignedAlone
+// answer, row for row — the give-up, the list it stops and the mode that
+// sharpens it — so this reaches that answer rather than giving the refusal a
+// cost of its own. It is asked where the store is, once the value, the
+// subscript's words and its arithmetic are done, because bash does all three
+// first: `i=0; e[i++]=1` leaves `i` at 1, and `e[1/0]=1` is the division's
+// refusal and not this one. The other routes reach the same sentence at the
+// store itself — see Runner.elementWriteRefusesAReferenceToAnElement.
+func (r *Runner) elementWriteThroughAnElementReferenceRefused(a *syntax.Assign) bool {
+	if !r.isNameref(a.Name) {
+		return false
+	}
+	return r.elementWriteRefusesAReferenceToAnElement(r.throughNameref(a.Name), assignedAlone)
+}

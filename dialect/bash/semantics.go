@@ -1079,6 +1079,14 @@ func Semantics() interp.Semantics {
 	// direct `declare -n r=r` is refused in both shells and is the core's
 	// answer rather than this axis — see interp/nameref.go.
 	s.NamerefCycleIsRefused = interp.No
+	// A write that would aim a reference at a word that is no name is
+	// refused and the shell carries on: measured 2026-11-01 on 5.3.20 from a
+	// script file, `declare -n m; m=1` gives up the rest of its line and the
+	// next one runs, and a `for m in 1` over an aimed `m` reports 1 and goes
+	// on. `set -o posix` ends the first and not the second, which is POSIX's
+	// rule for a failed assignment rather than this one (#7085). See
+	// interp.Semantics.RefusedReferenceAimIsFatal.
+	s.RefusedReferenceAimIsFatal = interp.No
 	// A `-n` declaration over a name carrying an array is refused **after**
 	// the two refusals about the name itself, and the array *attribute* is
 	// enough: measured 2026-09-16 on 5.3.20, `typeset -a r; typeset -n r=v`

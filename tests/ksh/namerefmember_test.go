@@ -222,11 +222,13 @@ func TestWhatAimingAtAMemberDoesNotReach(t *testing.T) {
 	// parent` — so the two are not one sentence in two places and the
 	// location form is its own question. Those routes keep the refusal they
 	// already made: the wrong noun at the right status, unchanged by this.
+	// The assignment's is this shell's bad-name sentence since #7085, which
+	// still is not `no parent`.
 	for _, c := range []struct{ name, src, want string }{
 		{
 			"an assignment aiming at a parentless member",
 			`typeset -n c; c=qq.x`,
-			"sh: `qq.x': not a valid identifier\n",
+			"sh: qq.x: invalid variable name\n",
 		},
 		{
 			"a parentless member value adopted by the valueless form",

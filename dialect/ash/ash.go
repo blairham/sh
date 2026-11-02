@@ -1025,6 +1025,7 @@ func Semantics() interp.Semantics {
 	// spelling of the declaration can be put to this shell (#2553).
 	// unanswered NamerefLetterStandsAlone: the same wall — there is no
 	// `typeset` to write the letters on (#3171).
+	// unanswered RefusedReferenceAimIsFatal: no references to aim (#7085).
 	// unanswered ContainerWriteThroughAReferenceNamesTheReference: no references.
 	// unanswered DeclarationOperandSplitsAfterTheSubscript: no arrays, so no
 	// operand has a subscript to hold an `=`.

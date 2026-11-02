@@ -267,6 +267,7 @@ ash   ReadExactCountKeepsPartial
 ash   ReadLeftByAHandlersReturnAssignsWhatArrived
 ash   ReadTypedValueFailureIsAnAssignmentFailure
 ash   RefusedPlacementKeepsWhatTheLiteralPlaced
+ash   RefusedReferenceAimIsFatal
 ash   TypedValueFailureGivesUpTheLine
 ash   ReadonlyAttributeCanBeRemoved
 ash   ReadonlyElement
@@ -697,6 +698,7 @@ dash  ReadTimeoutBoundsReadability
 dash  ReadTimeoutKeepsWhatArrived
 dash  ReadTypedValueFailureIsAnAssignmentFailure
 dash  RefusedPlacementKeepsWhatTheLiteralPlaced
+dash  RefusedReferenceAimIsFatal
 dash  TypedValueFailureGivesUpTheLine
 dash  ReadZeroTimeout
 dash  ReadonlyAttributeCanBeRemoved
@@ -914,6 +916,7 @@ zsh   ReadExactCountGivenUpKeepsWhatItTook
 zsh   ReadExactCountKeepsPartial
 zsh   ReadPartialCountSucceeds
 zsh   ReadonlyReferenceLetter
+zsh   RefusedReferenceAimIsFatal
 zsh   RegexMatchOmitsGroupsThatDidNotMatch
 zsh   RegexMatchSurvivesAFailedMatch
 zsh   ReportsAKilledCommandInACommandSubstitution

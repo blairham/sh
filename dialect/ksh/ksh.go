@@ -4186,6 +4186,11 @@ func Semantics() interp.Semantics {
 	// `read`'s is marked. Measured 2026-10-15 on ksh93u+; see the axes.
 	s.AllexportMarksALoopOrGetoptsName = interp.No
 	s.AllexportMarksGetoptsOwnParameters = interp.No
+	// Nor a name a `typeset` with no value brings into being, at the top
+	// level or in a `function` body: `set -a; typeset g; set +a; g=5` hands a
+	// child nothing. Measured 2026-11-01 on ksh93u+; see the axes (#7283).
+	s.AllexportMarksAGlobalDeclaredWithoutAValue = interp.No
+	s.AllexportMarksALocalDeclaredWithoutAValue = interp.No
 	// A `( … )` or `$( … )` hashes into this shell's own table, and empties
 	// it with `hash -r`. Measured 2026-10-03; see the axis.
 	s.SubshellSharesTheCommandHash = interp.Yes

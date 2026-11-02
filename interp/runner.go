@@ -15336,6 +15336,66 @@ func (r *Runner) markGetoptsOwnForAllexport(name string) {
 		"`set -a` exporting OPTARG and OPTIND as `getopts` writes them")
 }
 
+// nothingStandsUnder reports, where `set -a` is on, whether a declaration with
+// no value is about to bring name into being rather than name one already
+// there. Asked just before declareEmpty.
+//
+// fresh is a local this line's shadow has just made, which is a new binding
+// whatever the cell still shows: the shadow saves the outer value without
+// emptying the cell, and declareEmpty is what decides what the local starts
+// as. zsh 5.9.2 marks `x=1; set -a; f() { local x; }` as it marks a local
+// with nothing outside it. Otherwise the name is new where nothing holds a
+// value under it and no earlier declaration has recorded it: `x=1; set -a;
+// declare x` is left alone in bash 5.3.20 and zsh alike.
+//
+// Without `set -a` it answers false and reads nothing, which keeps it off the
+// common path.
+func (r *Runner) nothingStandsUnder(name string, fresh bool) bool {
+	if !r.allexport {
+		return false
+	}
+	if fresh {
+		return true
+	}
+	return !r.declaredNameHolds(name) &&
+		!r.attrHas(name, attrDeclaredHoldingNothing) && !r.attrHas(name, attrDeclaredEmpty)
+}
+
+// markADeclaredNameForAllexport is markForAllexport for a scalar a
+// declaration with no value has just brought into being — see
+// Semantics.AllexportMarksAGlobalDeclaredWithoutAValue and
+// AllexportMarksALocalDeclaredWithoutAValue, which local chooses between.
+// born is nothingStandsUnder's answer from before the declaration.
+//
+// Asked after declareEmpty rather than before it, because that is what
+// decides whether the binding ended up holding anything of its own: a local
+// that starts as the outer binding (Runner.MarkLocalKeepsTheOuterValue) or
+// takes an assignment prefix's value is holding a value it did not bring
+// into being, and dash's `x=1; set -a; f() { local x; }` tells a child
+// nothing about `x`. zsh's declared empty is not a value of its own either,
+// and is marked: a child is still told nothing until the name is assigned.
+//
+// An array or a table is AllexportMarksACompound's question, answered where
+// the compound is marked.
+func (r *Runner) markADeclaredNameForAllexport(name string, born, local bool) {
+	// A declaration declareEmpty has already refused over an unanswered axis
+	// of its own is not made, so there is nothing to mark and no second
+	// question to report.
+	if !born || r.unspecified || r.arrayDeclared(name) || r.assocDeclared(name) {
+		return
+	}
+	if r.declaredNameHolds(name) && !r.attrHas(name, attrDeclaredEmpty) {
+		return
+	}
+	axis, question := r.sem().AllexportMarksAGlobalDeclaredWithoutAValue,
+		"`set -a` exporting a global a declaration with no value makes"
+	if local {
+		axis, question = r.sem().AllexportMarksALocalDeclaredWithoutAValue,
+			"`set -a` exporting a local a declaration with no value makes"
+	}
+	r.markWhereTheAxisSays(name, axis, question)
+}
+
 // markWhereTheAxisSays is the mark for a store the shells part on, asked only
 // where `set -a` is on: the option is read first, so a script that never says
 // `set -a` reaches no axis.

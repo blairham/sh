@@ -28250,6 +28250,47 @@ type Semantics struct {
 	// assigned (#6462).
 	AllexportMarksGetoptsOwnParameters Answer
 
+	// AllexportMarksAGlobalDeclaredWithoutAValue makes `set -a` mark a
+	// scalar that a declaration with no value brings into being as a global:
+	// `typeset v` or `declare v` at the top level, `declare -g v` in a
+	// function, with or without a type letter.
+	//
+	// ksh93 alone answers No. Measured 2026-11-01 under `-c` with `env -i
+	// PATH=/usr/bin:/bin`, reading the attribute back by assigning after `set
+	// +a` and asking a child: `set -a; typeset g; set +a; g=5; env` hands the
+	// child `g=5` in bash 5.3.20 and zsh 5.9.2, and nothing in ksh93u+. bash
+	// lists `declare gd` as `declare -x gd`, `declare -g gx` in a function
+	// the same, and `declare -i n` as `declare -ix n`; zsh's `${(t)gd}` is
+	// `scalar-export`. dash and BusyBox ash have no declaration word that
+	// makes a global without a value.
+	//
+	// Only a name the declaration brings into being: `x=1; set -a; declare
+	// x` leaves `declare -- x="1"` in bash and `scalar` in zsh. Not an array
+	// or a table either, which is AllexportMarksACompound's: `set -a; declare
+	// -a A` lists `declare -a A` in bash. A declaration that assigns is an
+	// assignment and is marked in every column, this one included (#7283).
+	AllexportMarksAGlobalDeclaredWithoutAValue Answer
+
+	// AllexportMarksALocalDeclaredWithoutAValue is the same question for a
+	// local the declaration makes: `local v`, or `typeset v` in a function
+	// whose `typeset` scopes.
+	//
+	// bash and ksh93 answer No. Measured 2026-11-01 as above, inside a
+	// function: `set -a; f() { local g; set +a; g=5; env; }` hands the child
+	// `g=5` in zsh 5.9.2, dash 0.5.12 and BusyBox ash (the pinned alpine
+	// image), and nothing in bash 5.3.20, which lists `local sa` as `declare
+	// -- sa` where the top-level `declare gd` is `declare -x gd`, or in
+	// ksh93u+ (`function f { typeset g; … }`). zsh's `${(t)sa}` is
+	// `scalar-local-export`, and its child is still told nothing about the
+	// name until something assigns it: the declared empty is not a value
+	// (see attrDeclaredEmpty).
+	//
+	// A local that starts as the outer binding is not brought into being:
+	// `x=1; set -a; f() { local x; set +a; x=5; env; }` tells dash's child
+	// nothing about `x`. A local with a value is an assignment, marked in
+	// every column — bash's `local sb=1` is `declare -x sb="1"` (#7283).
+	AllexportMarksALocalDeclaredWithoutAValue Answer
+
 	// GetoptsLeavesTheEnvironmentCopyOfItsOwnParameters makes `getopts`
 	// leave behind the copy of an **exported** OPTARG or OPTIND that a child
 	// is handed: the parameter takes the new value and a child goes on being
@@ -38592,6 +38633,12 @@ func PosixSemantics() Semantics {
 		// overrides both and zsh the second.
 		AllexportMarksALoopOrGetoptsName:   Yes,
 		AllexportMarksGetoptsOwnParameters: Yes,
+		// The standard has no declaration that makes a name without a value,
+		// so the base takes the columns: a global is marked in both shells
+		// that make one and ksh93 overrides; a local is marked in zsh, dash
+		// and BusyBox ash, and bash and ksh93 override.
+		AllexportMarksAGlobalDeclaredWithoutAValue: Yes,
+		AllexportMarksALocalDeclaredWithoutAValue:  Yes,
 		// And a child is handed what getopts wrote into an exported OPTARG
 		// or OPTIND, as it is for any other store; zsh overrides.
 		GetoptsLeavesTheEnvironmentCopyOfItsOwnParameters: No,

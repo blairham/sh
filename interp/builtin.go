@@ -8461,6 +8461,14 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 			if hasValue && r.ctl == controlExit {
 				return r.status
 			}
+			if hasValue {
+				// setVar's form, so the store marks nothing: see the other
+				// store below for why the mark is this word's own.
+				r.markForAllexport(name)
+			}
+			if r.unspecified {
+				return r.status
+			}
 			continue
 		}
 		// The hide-in-scope letter asks for an ordinary local over the
@@ -8808,6 +8816,13 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 			if r.ctl == controlExit {
 				return r.status
 			}
+			// `set -a` reaches a local's value as it reaches every other
+			// declaration's: `set -a; f() { local sb=1; }` lists `declare -x
+			// sb="1"` in bash 5.3.20 and `scalar-local-export` in zsh 5.9.2,
+			// and dash 0.5.12 and BusyBox ash list `export sb='1'`. The store
+			// is setVar's rather than a declaration's, which is why the mark
+			// that setVarAs makes for the other words is made here (#7283).
+			r.markForAllexport(name)
 		default:
 			if r.deferredNameListsAsAnOperand(name, asked.none, redeclared) {
 				// And the deferred name's bare row under this word too,
@@ -8838,10 +8853,15 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 			// this builtin has always reached do, which is not this change's
 			// business, and nothing could exercise it either way.
 			if !r.declarationCarriesAnArrayLiteral(name) {
+				born := r.nothingStandsUnder(name, fresh)
 				r.declareEmpty(name, fresh, f.export || f.readonly,
 					asked.any,
 					f.leavesAnAttribute(),
 					f.inherit || r.LocalInheritsTheOuterValue(), false)
+				r.markADeclaredNameForAllexport(name, born, fresh)
+				if r.unspecified {
+					return r.status
+				}
 			}
 		}
 		if f.readonly && !f.readonlyOff {

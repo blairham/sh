@@ -12,6 +12,7 @@ import (
 
 	"github.com/blairham/sh/internal/coverage"
 	"github.com/blairham/sh/internal/suite"
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // TestTheSuiteIsReadWithoutBeingAskedFor is the one #2630 is about.
@@ -111,7 +112,19 @@ func TestANamedSuiteThatIsNotThereIsAnError(t *testing.T) {
 // here; an entry the columns contradict — mentioned after all, or gone from
 // every surface — fails this test too, so the ledger cannot become a place
 // to put things.
+//
+// It is not run under the race detector. It parses every case and every
+// suite file under six grammars in one goroutine, beside no other test of
+// this package, so the detector has nothing to compare and can report
+// nothing; it only made the sweep about six times slower (24s against 4s on
+// a laptop), on CI's Linux leg where the runner is CPU-bound under -race and
+// every package beside this one pays for the time (#7290). Every
+// uninstrumented run still holds the zero whole: CI's macOS leg, `make test`
+// and a plain `go test`.
 func TestNothingEntersTheSurfaceWithoutACase(t *testing.T) {
+	if testenv.RaceDetector {
+		t.Skip("one goroutine and nothing beside it, so -race can find nothing; the uninstrumented legs hold the zero whole (#7290)")
+	}
 	root := filepath.Join("..", "..", "..", filepath.FromSlash(DefaultSuite))
 	fromSuite, err := suiteSources(root)
 	if err != nil {

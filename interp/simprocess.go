@@ -57,12 +57,34 @@ type Process struct {
 	// because a body is forked under the monitor or not whether or not a
 	// front end supplied ProcessAnchor.
 	monitored bool
-	// job records that a real shell forks this body as a job of its own: a
-	// `( … )` the dialect does not run in its own process, or a background
-	// job's body. Forked by the shell itself under the monitor, such a body
-	// leads a process group the shell is not in. See jobgroupsignal.go.
-	job bool
+	// job records what a real shell forks this body as, which is what
+	// decides, for the body the shell itself forked under the monitor, the
+	// process group it is in: a job of its own, an element of a pipeline's,
+	// a process substitution, or nothing that leads a group at all. Read
+	// here and asked only at a group kill. See jobgroupsignal.go.
+	job jobKind
 }
+
+// jobKind is what a real shell forks a body as. See Process.job.
+type jobKind uint8
+
+const (
+	// notAJob is a body no shell forks as a job: a `$( … )`, or a body the
+	// dialect runs in its own process.
+	notAJob jobKind = iota
+	// aJob is a `( … )` the dialect forks, or a background job's body: a
+	// group of its own under the monitor in every dialect that forks it.
+	aJob
+	// aPipelineLeader is a foreground pipeline's first element, which leads
+	// the pipeline's group where the dialect gives the pipeline one.
+	aPipelineLeader
+	// aPipelineElement is any later element: in the group the first one
+	// leads, where there is one, and never leading it.
+	aPipelineElement
+	// aProcessSubstitution is a `<(…)` or `>(…)`, a group of its own where
+	// the dialect gives it one.
+	aProcessSubstitution
+)
 
 // Process answers which process this runner's code would be running in. Nil
 // is the shell's own; see the type.

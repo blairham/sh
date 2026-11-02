@@ -7294,6 +7294,72 @@ type Semantics struct {
 	// a subshell, as SubshellRunsOnAfterSignalingTheShell records.
 	SubshellEndsWhenItSendsTheShellATrappedSignal Answer
 
+	// MonitoredPipelineIsAGroupOfItsOwn puts a foreground pipeline the shell
+	// forks under the monitor in a process group of its own, led by its first
+	// element, so a group kill from inside an element reaches the pipeline
+	// and not the shell.
+	//
+	//	set -m; trap 'echo T' USR1; : | (kill -USR1 0; echo in); echo out=$?
+	//
+	// writes no T and out=158 in bash, zsh and dash and out=138 in BusyBox
+	// ash, where SIGUSR1 is 10, and T and out=286 in ksh93, which leaves the
+	// elements in the shell's group under `-c` even on a terminal. Measured
+	// 2026-11-01 on a pseudo-terminal: bash 5.3.20 and 3.2.57, zsh 5.9.2,
+	// dash, ksh93u+ 2012-08-01, and ash 1.37.0 in the pinned alpine; bash and
+	// ksh93 also with no terminal, with the same answers. The same split with
+	// the element first, `(kill -USR1 0; echo in) | /bin/cat`, and untrapped,
+	// where the four that say yes write the element's notice and carry on and
+	// ksh93 dies of it. Without `set -m` every column writes T (#7318).
+	//
+	// Asked only at a group kill from inside an element the shell itself
+	// forked under the monitor, and at a kill aimed at the first element's own
+	// number, which names the group where the answer is yes and none where it
+	// is no. A later element never leads the group, whatever the answer: `set
+	// -m; : | { kill -USR1 -$BASHPID; echo in k=$?; }` is `No such process`
+	// and `in k=1` in bash. See jobgroupsignal.go.
+	//
+	// The preset says yes. XCU has `set -m` run "all jobs … in their own
+	// process groups", and a pipeline is a job.
+	//
+	// unpinned bash: no corpus row runs a group kill under the monitor;
+	// pinned by TestAMonitoredPipelineOrProcessSubstitutionIsAGroupInOneDialect.
+	//
+	// unpinned ksh: the same reach, and the same test.
+	//
+	// unpinned zsh: the same reach, and the same test.
+	//
+	// unpinned dash: the same reach, and the same test.
+	//
+	// unpinned ash: the same reach, measured in the pinned alpine only.
+	MonitoredPipelineIsAGroupOfItsOwn Answer
+
+	// MonitoredProcessSubstitutionIsAGroupOfItsOwn makes a `<(…)` or `>(…)`
+	// the shell forks under the monitor the leader of a process group of its
+	// own, so its own number names a group and a group kill inside it does not
+	// reach the shell.
+	//
+	//	set -m; cat <( p=$BASHPID; kill -0 -- -$p; echo k=$? )
+	//
+	// is `No such process` and k=1 in bash, and k=0 in zsh, spelled with
+	// `$sysparams[pid]`; ksh93, whose own number is read back from a child,
+	// says no such process as bash does. And `set -m; trap 'echo T' USR1; cat
+	// <(kill -USR1 0; echo in)` writes T in bash and ksh93 and nothing in
+	// zsh. Measured 2026-11-01, bash 5.3.20 with no terminal, zsh 5.9.2 and
+	// ksh93u+ on a pseudo-terminal (#7306). A `( … )` leads a group in all
+	// three, and a `$( … )` in none (#7324), so the split is the process
+	// substitution's alone.
+	//
+	// Asked only at a group kill from inside a process substitution the shell
+	// itself forked under the monitor. See jobgroupsignal.go.
+	//
+	// unpinned bash: no corpus row runs a group kill under the monitor;
+	// pinned by TestAMonitoredPipelineOrProcessSubstitutionIsAGroupInOneDialect.
+	//
+	// unpinned ksh: the same reach, and the same test.
+	//
+	// unpinned zsh: the same reach, and the same test.
+	MonitoredProcessSubstitutionIsAGroupOfItsOwn Answer
+
 	// HangupIsAnOrderlyExit makes an untrapped SIGHUP end the shell the way
 	// `exit 1` would rather than by the signal's default action.
 	//
@@ -38681,6 +38747,9 @@ func PosixSemantics() Semantics {
 		// And the same copy runs on after a trapped signal: the handler is
 		// the parent's, and the parent runs it once the copy is done.
 		SubshellEndsWhenItSendsTheShellATrappedSignal: No,
+		// XCU has `set -m` run all jobs in their own process groups, and a
+		// pipeline is a job. Four of the five as well; ksh93 overrides.
+		MonitoredPipelineIsAGroupOfItsOwn: Yes,
 		// The standard describes `exit` as exiting and says nothing about a
 		// job left stopped, so the base leaves; bash and zsh, which stay and
 		// warn, override.

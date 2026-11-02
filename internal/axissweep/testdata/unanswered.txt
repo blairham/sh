@@ -217,6 +217,7 @@ ash   LongOptionValueIsANumber
 ash   LongestMatchTakesTheWrittenArm
 ash   MixedTableLiteral
 ash   MonitorOffSilencesJobsAtExit
+ash   MonitoredProcessSubstitutionIsAGroupOfItsOwn
 ash   NameBeyondASCIIStaysOutOfTheEnvironment
 ash   NamerefArrayRefusal
 ash   NamerefCycleIsRefused
@@ -637,6 +638,7 @@ dash  LongOptionNameIgnoresHyphens
 dash  LongOptionValueIsANumber
 dash  LongestMatchTakesTheWrittenArm
 dash  MixedTableLiteral
+dash  MonitoredProcessSubstitutionIsAGroupOfItsOwn
 dash  NameBeyondASCIIStaysOutOfTheEnvironment
 dash  NamerefArrayRefusal
 dash  NamerefCycleIsRefused

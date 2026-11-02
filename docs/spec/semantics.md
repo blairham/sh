@@ -2338,10 +2338,33 @@ in the job settle their copies and nothing is sent to the kernel: not
 the shell's group, and not the group a placeholder leads, whose death
 made the next program started into it fail (#7238).
 
-A foreground pipeline is the same question with a split in it — bash,
-zsh and dash give it a group of its own under the monitor and ksh93
-leaves its elements in the shell's group under `-c` even on a terminal —
-and is #7318's.
+A foreground pipeline and a process substitution are the same question
+with a split in each, so each is an axis, asked only at a group kill
+from inside the body the shell itself forked under the monitor. Measured
+2026-11-01 on a pseudo-terminal, bash and ksh93 also with no terminal,
+BusyBox ash in the pinned alpine on docker's terminal:
+
+    set -m; trap 'echo T' USR1; : | (kill -USR1 0; echo in); echo out=$?
+                                 bash, zsh, dash, ash: no T, out=158
+                                 (138); ksh93: T, out=286
+    …the element first            the same split
+    …untrapped                    the four carry on; ksh93 dies
+    …without `set -m`             T in every column
+    set -m; : | { kill -USR1 -$BASHPID; echo in k=$?; }
+                                 bash: no such process, in k=1
+    set -m; { kill -USR1 -$BASHPID; echo in k=$?; } | /bin/cat
+                                 bash: no T, out=0
+    set -m; cat <( p=$BASHPID; kill -0 -- -$p; echo k=$? )
+                                 bash, ksh93: no such process; zsh: k=0
+    set -m; trap 'echo T' USR1; cat <(kill -USR1 0; echo in)
+                                 bash, ksh93: T; zsh: no T
+
+So under the monitor a foreground pipeline is a group of its own led by
+its first element in bash, zsh, dash and ash and not in ksh93
+(MonitoredPipelineIsAGroupOfItsOwn, #7318), and a `<(…)` leads one in
+zsh alone (MonitoredProcessSubstitutionIsAGroupOfItsOwn, #7306). A later
+element never leads the group, in any column. A `$( … )` is neither: no
+shell forks it as a job, and its own number is #7324's.
 
 The lesson is about the instrument: a corpus records what a shell does,
 and it cannot record a *sometimes*. Anything measured has to be

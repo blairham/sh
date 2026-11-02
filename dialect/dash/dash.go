@@ -521,6 +521,13 @@ func Semantics() interp.Semantics {
 	// in); echo "after $?"` writes `in`, `T` and `after 0`. Measured
 	// 2026-11-01 (#7168).
 	s.SubshellEndsWhenItSendsTheShellATrappedSignal = interp.No
+	// Under the monitor a foreground pipeline is a group of its own: measured
+	// 2026-11-01 on a pseudo-terminal, `set -m; trap 'echo T' USR1; : | (kill
+	// -USR1 0; echo in)` writes the notice, no T and out=158 (#7318). See
+	// interp.Semantics.MonitoredPipelineIsAGroupOfItsOwn.
+	s.MonitoredPipelineIsAGroupOfItsOwn = interp.Yes
+	// unanswered MonitoredProcessSubstitutionIsAGroupOfItsOwn: this shell
+	// has no process substitution, so nothing is forked to ask about.
 	// dash has somebody to tell on this route, and tells them exactly one
 	// thing: measured on `-i script.sh` through a pseudo-terminal it writes
 	// `[1] + Done sleep 0.3` and never the line that starts the job. The

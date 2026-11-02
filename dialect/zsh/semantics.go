@@ -171,6 +171,14 @@ func Semantics() interp.Semantics {
 	// in); echo "after $?"` writes `in`, `T` and `after 0`. Measured
 	// 2026-11-01 on zsh 5.9.2 (#7168).
 	s.SubshellEndsWhenItSendsTheShellATrappedSignal = interp.No
+	// Under the monitor a foreground pipeline is a group of its own, and so is
+	// a `<(…)`: measured 2026-11-01 on 5.9.2 on a pseudo-terminal, `set -m;
+	// trap 'echo T' USR1; : | (kill -USR1 0; echo in)` writes no T and
+	// out=158, and `cat <( p=$sysparams[pid]; kill -0 -$p )` is 0 (#7318,
+	// #7306). See interp.Semantics.MonitoredPipelineIsAGroupOfItsOwn and
+	// interp.Semantics.MonitoredProcessSubstitutionIsAGroupOfItsOwn.
+	s.MonitoredPipelineIsAGroupOfItsOwn = interp.Yes
+	s.MonitoredProcessSubstitutionIsAGroupOfItsOwn = interp.Yes
 	// And it announces both ends of a job on that route: measured on
 	// `-i script.sh` through a pseudo-terminal, `[1] <pid>` as the job
 	// starts and `[1]  + done       sleep 0.3` as it ends.

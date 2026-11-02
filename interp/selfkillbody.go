@@ -343,16 +343,28 @@ func (r *Runner) settleCopiesSignals() bool {
 // bodies' processes and the anchor each one has, and whether that body is
 // still running does not matter: it never had a group to signal.
 
+//
+// Under the monitor the body the shell itself forked leads a group only where
+// a real shell made it the leader of one: a pipeline element other than the
+// first never does, its group being the first element's, and a pipeline's
+// first element and a `<(…)` do where the dialect gives them a group at all.
+// That one is a split and asks its axis, and only here, at a kill aimed at
+// the body's own number (#7318, #7306). See jobgroupsignal.go.
+
 // aimedAtAGroupNoForkLeads reports that pid names, as a process group, the
 // group this body or one it was copied from leads here and would not lead in
-// a shell that forks: a body forked with the monitor off.
+// a shell that forks: a body forked with the monitor off, or the one the
+// shell forked under it as something that leads no group.
 func (r *Runner) aimedAtAGroupNoForkLeads(pid int) bool {
 	if pid >= allProcesses {
 		return false
 	}
 	for p := r.process; p != nil; p = p.outer {
 		if p.anchor.leads(-pid) {
-			return !p.monitored
+			if !p.monitored {
+				return true
+			}
+			return p.outer == nil && p.job != notAJob && !r.jobLeadsItsGroup(p)
 		}
 	}
 	return false

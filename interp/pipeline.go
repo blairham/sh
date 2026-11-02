@@ -584,6 +584,14 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		// the shell's own number — measured, that is what real zsh answers
 		// there, because that element really is the shell.
 		releaseAnchor := sub.anchorForkedBody()
+		// And what a real shell forks it as: an element of the pipeline's
+		// job, the first one leading the job's group, where the dialect gives
+		// the pipeline one under the monitor. Read rather than asked: see
+		// jobgroupsignal.go (#7318).
+		sub.process.job = aPipelineElement
+		if i == 0 {
+			sub.process.job = aPipelineLeader
+		}
 		release := releaseFds[i]
 		// And its hold on the tables it shares with this shell, which the
 		// element is done reading by then. See sharedtable.go.

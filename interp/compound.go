@@ -211,7 +211,9 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// all, which is everywhere but the dialect that runs them in its own
 		// process. Read rather than asked: what it decides is only consulted
 		// by a group kill under the monitor. See jobgroupsignal.go.
-		sub.process.job = !sub.subshellUnforked || r.sem().SubshellRunsOnAfterSignalingTheShell != No
+		if !sub.subshellUnforked || r.sem().SubshellRunsOnAfterSignalingTheShell != No {
+			sub.process.job = aJob
+		}
 		sub.inParensBody = true
 		err := sub.runList(ctx, c.List)
 		if sub.tailReached {

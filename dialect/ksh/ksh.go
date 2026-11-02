@@ -4363,6 +4363,15 @@ func Semantics() interp.Semantics {
 	// echo "after $?"` writes `T` and `after 286`. Measured 2026-11-01 on
 	// ksh93u+ 2012-08-01, alone in the panel (#7168).
 	s.SubshellEndsWhenItSendsTheShellATrappedSignal = interp.Yes
+	// Under the monitor, run by `-c`, a pipeline's elements stay in the
+	// shell's group, even on a terminal, and so does a `<(…)`: measured
+	// 2026-11-01 on ksh93u+, `set -m; trap 'echo T' USR1; : | (kill -USR1 0;
+	// echo in)` writes T and out=286, and a `<(…)` aiming `kill -0` at its own
+	// number, read back from a child, is `no such process` (#7318, #7306).
+	// See interp.Semantics.MonitoredPipelineIsAGroupOfItsOwn and
+	// interp.Semantics.MonitoredProcessSubstitutionIsAGroupOfItsOwn.
+	s.MonitoredPipelineIsAGroupOfItsOwn = interp.No
+	s.MonitoredProcessSubstitutionIsAGroupOfItsOwn = interp.No
 	// And it announces both ends of a job on that route: measured on
 	// `-i script.sh` through a pseudo-terminal, `[1]\t<pid>` as the job
 	// starts and `[1] +  Done  sleep 0.3 &` as it ends.

@@ -70,6 +70,9 @@ func (sh *Shell) session(argv []string, in source) int {
 	// however it was reached: `sh`, `sh -s` and `sh -i` at a terminal all
 	// show `s` in `$-` across the panel.
 	r := sh.newRunnerAs(name, params, dg, interp.RouteStandardInput, in.invocationEmulation())
+	// Before anything runs, as on every route. A prompt is not a start
+	// anyone times, so it waits here rather than at its first command.
+	awaitTheWatch()
 	// A prompt has someone to tell about its jobs, and a script does not:
 	// no shell in the panel announces a background job to `sh -c`, and a
 	// Runner embedded in another program has nobody to announce one to.

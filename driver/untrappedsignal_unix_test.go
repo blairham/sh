@@ -64,6 +64,25 @@ func TestAnUntrappedSignalFromOutsideEndsTheShell(t *testing.T) {
 	}
 }
 
+// A start does not wait for the watch to take the signals the runtime drops —
+// each is a round trip to the runtime's signal-mask thread, and on Linux they
+// came to about a millisecond of every start (#7263) — but the shell's first
+// command does. So a signal sent once the script has run anything still ends
+// the shell, however long the watch took: here it is held back far longer
+// than a start takes, and the signal goes the moment the script says it is
+// ready. Without the join the script is ready long before the watch is, the
+// runtime drops the signal, and the shell sits in its `read`.
+func TestASignalFromOutsideFindsTheWatchReadyAtTheFirstCommand(t *testing.T) {
+	dieRunningAsAShell()
+	for _, s := range []namedSignal{{"USR1", syscall.SIGUSR1}, {"ALRM", syscall.SIGALRM}} {
+		t.Run(s.name, func(t *testing.T) {
+			ws, out := signaledInAGroupOfItsOwn(t, "^TestASignalFromOutsideFindsTheWatchReadyAtTheFirstCommand$",
+				outsideSignal{hold: "read line", sig: s.sig, env: []string{dyingHeldWatch + "=1"}})
+			diedOf(t, ws, out, s.sig)
+		})
+	}
+}
+
 // The same under `-i`, which is a different road to the watch: an interactive
 // shell hands it a second answer about what it ignores. bash 5.3, bash 3.2 and
 // dash die of all of these under `-i -c` as well; see

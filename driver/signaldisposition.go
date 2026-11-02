@@ -32,6 +32,7 @@ import (
 // also what takes the shell's own ignore off, ahead of interp's drain. See
 // watchAgain.
 func setSignalDisposition(sig syscall.Signal, ignore bool) {
+	awaitTheWatch()
 	if ignore {
 		signal.Ignore(sig)
 		return

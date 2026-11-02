@@ -65,6 +65,10 @@ command eval 'local top'; echo "<top $?>"
 ou=outer; k2() { local ou; unset ou; local ou; ou=in; show ou; }; k2; show ou
 lt() { local -i li; li=2+3; local -x lx=1; local -r lr=1; local -a la; local -u lu=abc; show li lx lr la lu
   case "$(export -p)" in *lx=*) echo lx-exported;; *) echo lx-not;; esac; }; lt; show li lx lr la lu; lr=w; p "$lr"
+rt() { local r1 r2 r3 r4 r5 r6 r7=v r8; command eval 'r1=(x y)'; command eval 'typeset -i r2=7'
+  command eval 'typeset -u r3=ab'; export r4=e; command eval 'typeset -A r5'; command eval 'readonly r6'
+  r7=w; unset r8; show r1 r2 r3 r4 r5 r6 r7 r8; }
+rt; show r1 r2 r3 r4 r5 r6 r7 r8; rt; show r1 r2 r3 r4 r5 r6 r7 r8; p "<${r7-unset}>" "<${r8-unset}>"
 ap() { local an+=x; show an; local an+=y; show an; }; ap; show an
 tt() { local TIED; TIED=a:b; show TIED tied; local REFUSED=bad; echo "<refused $?>"; }; tt; show TIED tied REFUSED
 pe() { local BORN; printenv BORN || echo no-born; BORN=in; printenv BORN || echo no-born; }; pe; printenv BORN
@@ -96,14 +100,15 @@ func emptyShadowVectors() map[string]Semantics {
 }
 
 // emptyShadowRun runs prog under sem with the route on or off, and gives back
-// the output, the status and how many operands took the route. Both runs share
-// one directory and one TMPDIR, which `export -p` lists.
+// the output, the status, how many operands took the route and how many names
+// a return put back through its own half. Both runs share one directory and
+// one TMPDIR, which `export -p` lists.
 func emptyShadowRun(
 	t *testing.T, prog *syntax.File, sem Semantics, inheritsOuter bool,
-) func(on bool) (string, int, int) {
+) func(on bool) (string, int, int, int) {
 	t.Helper()
 	dir, tmp := t.TempDir(), t.TempDir()
-	return func(on bool) (string, int, int) {
+	return func(on bool) (string, int, int, int) {
 		was := SetEmptyShadowShortcutForTest(on)
 		defer SetEmptyShadowShortcutForTest(was)
 		var out strings.Builder
@@ -130,21 +135,33 @@ func emptyShadowRun(
 		if err != nil {
 			t.Fatalf("route %v: %v", on, err)
 		}
-		return out.String(), st, EmptyShadowsForTest(r)
+		return out.String(), st, EmptyShadowsForTest(r), EmptyReturnsForTest(r)
 	}
 }
 
 // emptyShadowCompare runs prog both ways and requires the same output and
 // status, the route to have taken at least atLeast operands with it on (none
-// where atLeast is 0) and none with it off, and the full road's output to hold
-// every row, so a script that stopped early compares nothing.
+// where atLeast is 0) and none with it off, the return's half of it to have
+// put back some name wherever the declaration's half was taken and none with
+// it off, and the full road's output to hold every row, so a script that
+// stopped early compares nothing.
+//
+// The return's half is not required to be absent where the declaration's
+// is: the full road's shadow of a name with nothing to save writes the same
+// records, and the return reads only the records and what the call left.
 func emptyShadowCompare(
 	t *testing.T, prog *syntax.File, sem Semantics, inheritsOuter bool, atLeast int, rows []string,
 ) {
 	t.Helper()
 	run := emptyShadowRun(t, prog, sem, inheritsOuter)
-	full, fullStatus, fullTaken := run(false)
-	short, shortStatus, taken := run(true)
+	full, fullStatus, fullTaken, fullReturns := run(false)
+	short, shortStatus, taken, returns := run(true)
+	switch {
+	case fullReturns != 0:
+		t.Errorf("a return took the route for %d names with it off; want none", fullReturns)
+	case atLeast > 0 && returns == 0:
+		t.Errorf("no return took the route; want some, where %d operands did", taken)
+	}
 	if short != full || shortStatus != fullStatus {
 		t.Errorf("with the route:\n%s(status %d)\nwithout it:\n%s(status %d)", short, shortStatus, full, fullStatus)
 	}
@@ -178,7 +195,7 @@ func TestAnEmptyShadowAnswersAsTheFullRoadDoes(t *testing.T) {
 				atLeast = 0
 			}
 			emptyShadowCompare(t, f, sem, name == "inherits outer", atLeast,
-				[]string{"[<one>][<lit>]", "[<two>][<lit>]", "[deep]\n", "[after][after]\n", "[1]\n[1]\n"})
+				[]string{"[<one>][<lit>]", "[<two>][<lit>]", "[deep]\n", "[after][after]\n", "[1]\n[1]\n", "[<unset>][<unset>]\n"})
 		})
 	}
 }
@@ -239,7 +256,7 @@ func TestAnEmptyTypesetShadowAnswersAsTheFullRoadDoes(t *testing.T) {
 						atLeast = 0
 					}
 					emptyShadowCompare(t, prog, sem, vname == "inherits outer", atLeast,
-						[]string{"[<one>][<lit>]", "[<two>][<lit>]", "[deep]\n", "[after][after]\n", "[1]\n[1]\n"})
+						[]string{"[<one>][<lit>]", "[<two>][<lit>]", "[deep]\n", "[after][after]\n", "[1]\n[1]\n", "[<unset>][<unset>]\n"})
 				})
 			}
 			for _, kw := range []struct {

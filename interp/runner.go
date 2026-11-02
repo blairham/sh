@@ -11590,10 +11590,7 @@ func (r *Runner) walkThePrefixBehindTheCommand(c *syntax.SimpleCmd, argv []strin
 	}
 	held.release(ex)
 	r.takeThePrefixWalkFrom(ex)
-	if r.givesUpForAFailedPrefix(walk, r.prefixCommandOf(argv)) {
-		return true
-	}
-	return false
+	return r.givesUpForAFailedPrefix(walk, r.prefixCommandOf(argv))
 }
 
 // prefixValue is what an assignment prefix hands the command it stands in

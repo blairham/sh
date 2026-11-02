@@ -136,7 +136,7 @@ func (r *Runner) signalThisBody(name string, sig syscall.Signal) error {
 			break
 		}
 		r.selfSignaledBody(key)
-	case !trapped && fatalSignal(name, sig):
+	case r.endsThisBody(name, sig):
 		// **Without asking whether the shell ignores it untrapped**, which
 		// is the one place this switch parts from sendSignal's and is
 		// measured rather than reasoned. A shell that is not interactive
@@ -165,6 +165,16 @@ func (r *Runner) signalThisBody(name string, sig syscall.Signal) error {
 		// nothing is sent — as for the rest of this case at the top level.
 	}
 	return nil
+}
+
+// endsThisBody reports that signalThisBody answers a signal with this body's
+// death: one its table leaves untrapped, or that no trap can answer, whose
+// default ends a process. Asked there and by a body's `wait`, which a copy's
+// such signal cuts short (#7383), so the two cannot disagree about which
+// arrival is a death. See waitinabody.go.
+func (r *Runner) endsThisBody(name string, sig syscall.Signal) bool {
+	_, trapped := r.trapTable()[trapKey(name, sig)]
+	return (!trapped || !catchableSignal(sig)) && fatalSignal(name, sig)
 }
 
 // selfSignaledBody records a signal the running body aimed at itself.

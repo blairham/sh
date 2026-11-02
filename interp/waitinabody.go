@@ -38,11 +38,37 @@ import "syscall"
 //	        here, before: U, w=0 at 0.5 s
 //
 // Not an ignored signal, which queues nothing — `trap "" TERM` in the first
-// row waits the second out at 0 in all five — and not one left untrapped,
-// which ends the body by the death that path already has. Nor CHLD, which is
-// a split: bash 5.3, zsh and ksh93 wait the inner job out with `kill -CHLD`
-// sent to the body, and dash cuts the wait short at 148. This shell waits it
-// out in every dialect, as the top level's wait does (see pendingTrap).
+// row waits the second out at 0 in all five — and not one the shell sends the
+// job untrapped, which ends the body by the death that path already has
+// (abandonOnDeath). Nor CHLD, which is a split: bash 5.3, zsh and ksh93 wait
+// the inner job out with `kill -CHLD` sent to the body, and dash cuts the wait
+// short at 148. This shell waits it out in every dialect, as the top level's
+// wait does (see pendingTrap).
+//
+// **A copy's untrapped fatal signal ends the body's wait too**, and the body
+// dies of it at the moment between commands right after (#7383). The copy
+// route has no death of its own to select on: what a copy aims at the body is
+// settled by the body at its next moment (settleCopiesSignals), and a body
+// sitting in `wait` reached that moment only once the inner job ended. So the
+// same wake that cuts the wait short for a handler cuts it short for a death,
+// and signalThisBody, asked the same question here as there (endsThisBody),
+// takes it. Measured 2026-11-02 under `-c`, each shell in a process group of
+// its own, the body's pid from `$BASHPID`, `$sysparams[pid]` or a child's
+// `$PPID`:
+//
+//	( p=<pid>; ( sleep 0.1; kill -USR1 $p; sleep 0.3 ) & wait $!; echo w=$? )
+//	echo st=$?
+//	        st=158 at 0.12 s in bash 5.3, zsh and dash, with bash's and
+//	        dash's notice; ksh93 dies of USR1 at 0.12 s, the pid it read
+//	        being the shell's own; here, before: st=158 at 0.44 s
+//	… kill -TERM, a bare `wait`, the body a `&` job waited for with `wait $!`,
+//	or the `wait` the body's last command
+//	        the same at 0.12 s: 143 for TERM; ksh93 286 and 271 for the job
+//	… trap 'echo E' EXIT in the body
+//	        bash writes E and then its notice, zsh and dash nothing: the
+//	        death rules' answer (Semantics.ExitTrapRunsOnSignalDeath)
+//	… trap '' USR1 or trap '' TERM in the body
+//	        w=0, st=0 at 0.43 s in bash, zsh and dash: waited out
 //
 // **And an arrival a `&` job raised before its `$!` was settled waits past
 // the shell's next moment between commands.** A real shell forks the job and
@@ -68,10 +94,12 @@ import "syscall"
 // bash 3.2 cannot reach the body rows, having no `$BASHPID`. A death is not
 // held: it is taken before the handlers are, at the same moment as before.
 
-// aBodysTrappedArrival is what ends a body's `wait`: a signal waiting for this
-// body that its own table answers with a handler — sent by the shell to the
-// job, by a copy of the body to its number, or raised by the body itself.
-func (r *Runner) aBodysTrappedArrival() (syscall.Signal, bool) {
+// anArrivalEndsABodysWait is what ends a body's `wait`: a signal waiting for
+// this body that its own table answers with a handler — sent by the shell to
+// the job, by a copy of the body to its number, or raised by the body itself —
+// or one a copy sent that the body dies of, which it does at the moment right
+// after the wait.
+func (r *Runner) anArrivalEndsABodysWait() (syscall.Signal, bool) {
 	handled := func(key string) bool {
 		return key != "CHLD" && key != "CLD" && r.traps[key] != ""
 	}
@@ -87,7 +115,8 @@ func (r *Runner) aBodysTrappedArrival() (syscall.Signal, bool) {
 	}
 	if r.copiesSignaled() {
 		if a, ok := r.process.firstArrival(func(a bodyArrival) bool {
-			return catchableSignal(a.sig) && handled(trapKey(a.name, a.sig))
+			return (catchableSignal(a.sig) && handled(trapKey(a.name, a.sig))) ||
+				r.endsThisBody(a.name, a.sig)
 		}); ok {
 			return a.sig, true
 		}

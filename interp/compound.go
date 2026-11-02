@@ -744,6 +744,9 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 		// interp/arithforpart.go.
 		initText, condText, postText := c.PartsAsWritten()
 		initText, condText, postText = r.diag().arithForPartsKept(initText, condText, postText)
+		// Whether an empty initializer or step is traced all the same. See
+		// Diagnostics.TraceArithForEmptyInitializerAndStep.
+		emptyTraced := r.diag().TraceArithForEmptyInitializerAndStep
 		// Each part is a head of its own, counted one evaluation at a time:
 		// a two-pass loop writes the initializer, three conditions, two
 		// steps and two bodies. The initializer and the step are the two a
@@ -761,7 +764,7 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 			return nil
 		}
 		if !skippedInit {
-			if _, ok := r.forArithPart(c.Init, initText, c.Pos()); !ok {
+			if _, ok := r.forArithPart(c.Init, initText, c.Pos(), emptyTraced); !ok {
 				return nil
 			}
 		}
@@ -782,7 +785,7 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 				return nil
 			}
 			if c.Cond != nil || c.CondText != "" {
-				v, ok := r.forArithPart(c.Cond, condText, c.Pos())
+				v, ok := r.forArithPart(c.Cond, condText, c.Pos(), false)
 				if !ok {
 					return nil
 				}
@@ -818,7 +821,7 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 				return nil
 			}
 			if !skippedPost {
-				if _, ok := r.forArithPart(c.Post, postText, c.Pos()); !ok {
+				if _, ok := r.forArithPart(c.Post, postText, c.Pos(), emptyTraced); !ok {
 					return nil
 				}
 			}
@@ -838,7 +841,7 @@ func arithPartWritten(tree syntax.ArithExpr, text string) bool {
 	return tree != nil || strings.TrimSpace(text) != ""
 }
 
-func (r *Runner) forArithPart(tree syntax.ArithExpr, text string, at syntax.Pos) (int, bool) {
+func (r *Runner) forArithPart(tree syntax.ArithExpr, text string, at syntax.Pos, emptyIsTraced bool) (int, bool) {
 	// The part's text is read again when the loop reaches it, so a
 	// substitution in it is placed from the header's line rather than from
 	// the text's own first. See Runner.inArithCommandText (#3810).
@@ -855,8 +858,10 @@ func (r *Runner) forArithPart(tree syntax.ArithExpr, text string, at syntax.Pos)
 	// what the shells do — and in its own spelling, which is why the field is
 	// not the one `(( ))` reads: zsh writes a loop header's parts bare where
 	// it wraps a `(( ))` command in parentheses. An absent part is traced by
-	// nobody, which is what makes `for ((;;))` silent between its iterations.
-	if strings.TrimSpace(expanded) != "" {
+	// nobody, which is what makes `for ((;;))` silent between its iterations,
+	// but for the initializer and the step where emptyIsTraced says so — see
+	// Diagnostics.TraceArithForEmptyInitializerAndStep (#7117).
+	if emptyIsTraced || strings.TrimSpace(expanded) != "" {
 		// Traced with the blanks *after* it and not the ones before, which
 		// is what both shells that keep the part whole do: measured
 		// 2026-09-12 on `set -x; for (( i=0 ; i<1 ; i++ ))`, bash 5.3.15

@@ -917,6 +917,9 @@ func Diagnostics() interp.Diagnostics {
 		// command is wrapped in spaced parentheses and the three parts of a
 		// `for ((;;))` header are written bare — `i=0`, `i<2`, `i++`.
 		TraceArithForPart: interp.TraceArithBare,
+		// And an empty initializer or step is still written, as the prefix
+		// alone; an empty condition is not (#7117).
+		TraceArithForEmptyInitializerAndStep: true,
 		// zsh names the last token it read and nothing else.
 		EvalNaming:       interp.SourceReplacesShell,
 		SourceFileNaming: interp.SourceReplacesShell,

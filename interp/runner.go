@@ -9603,7 +9603,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 					break
 				}
 				operandAt = append(operandAt, len(argv))
-				argv = append(argv, r.expandAssignArg(w))
+				argv = append(argv, r.expandADeclarationsAssignArg(w))
 				argv = r.storeOperandInTurn(argv, turn)
 				if turn != nil && turn.stopped {
 					break
@@ -9665,7 +9665,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				break
 			}
 			operandAt = append(operandAt, len(argv))
-			argv = append(argv, r.expandAssignArg(w))
+			argv = append(argv, r.expandADeclarationsAssignArg(w))
 			argv = r.storeOperandInTurn(argv, turn)
 			if turn != nil && turn.stopped {
 				break

@@ -492,3 +492,33 @@ func (r *Runner) handedTextWrittenBeforeACopy() func() {
 	line.writtenBeforeACopy = true
 	return func() { line.writtenBeforeACopy = false }
 }
+
+// A declaration's operand written as an assignment hands the text on as a
+// command in a group does, at the top of a body as well: a substitution in it
+// writes the text before it starts, and the declaration's own line goes out
+// without it. A plain word of the same command still carries it, as any
+// command's words do at the top of a body, so this is the operand's and not
+// the command's. Measured 2026-11-02 on zsh 5.9.2 under `-f -c`, both streams
+// on one pipe (#7118):
+//
+//	x=$( typeset y=$(echo a) )              `+zsh:1> x=+zsh:1> echo a`, then
+//	                                        `+zsh:1> typeset y=a`
+//	x=$( typeset -a y=( $(echo a) ) )       the same, `typeset -a y=( a )`
+//	x=$( typeset y=a )                      `+zsh:1> x=+zsh:1> typeset y=a`
+//	x=$( typeset $(echo y)=a z=$(echo b) )  `+zsh:1> x=+zsh:1> echo y`,
+//	                                        `+zsh:1> x=+zsh:1> echo b`, then
+//	                                        `+zsh:1> typeset 'y=a' z=b`
+//	x=$( typeset z=$(echo b) $(echo y)=a )  `+zsh:1> x=+zsh:1> echo b`,
+//	                                        `+zsh:1> echo y`, the line alone
+//	x=$( builtin typeset y=$(echo a) )      a plain command's: `x=` on both
+//
+// and the same for `local`, `export`, `readonly`, `declare` and `integer`.
+
+// expandADeclarationsAssignArg is expandAssignArg for a declaration's operand
+// written as an assignment. See the measurements above.
+func (r *Runner) expandADeclarationsAssignArg(w *syntax.Word) string {
+	if r.openTrace != nil {
+		defer r.handedTextWrittenBeforeACopy()()
+	}
+	return r.expandAssignArg(w)
+}

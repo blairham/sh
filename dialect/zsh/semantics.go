@@ -2017,6 +2017,9 @@ func Semantics() interp.Semantics {
 	// A failed expansion in a declaration's words or a `case` leaves `$?`
 	// alone. See the field (#5657).
 	s.FailedExpansionInADeclarationOrCaseSetsNoStatus = interp.Yes
+	// And from a declaration's first assignment operand on, each word is
+	// matched before the next one is expanded. See the field (#7125).
+	s.DeclarationWordsAreMatchedInTurnFromAnAssignment = interp.Yes
 	// And a typed declaration whose own evaluation fails ends the script at
 	// 0: see interp.Semantics.DeclaredTypedValueFailureLeavesZero (#5677).
 	s.DeclaredTypedValueFailureLeavesZero = interp.Yes

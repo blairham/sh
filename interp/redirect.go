@@ -1281,11 +1281,9 @@ func (r *Runner) applyRedirList(
 			// first act blocks would otherwise leave the shell waiting for a pid
 			// that is not coming.
 			r.settleBackgroundJobBeforeABlockingOpen(path)
-			// The path as the shell must open it, which is the path the
-			// command was given in all but one shape: a substitution inside
-			// another one's body publishes a number the enclosing pipe is
-			// still parked on here. See Runner.substOpenPath.
-			f, fellBack, err := r.openThroughNoclobber(ctx, &action, r.substOpenPath(path), flags)
+			// The file, opened and already moved out of the way of the numbers
+			// a substitution is published from. See Runner.openRaised.
+			f, fellBack, err := r.openRaised(ctx, &action, path, flags)
 			if errors.Is(err, errRefused) {
 				// The gate let the *name* through and refused what the name
 				// reached — a link into a denied place. Reported here rather
@@ -1339,9 +1337,6 @@ func (r *Runner) applyRedirList(
 			// trail fed by the error path alone held every file the shell could
 			// not open and none it could.
 			r.emit(ctx, Event{Kind: EventAccess, Action: action})
-			// Out of the way of the numbers a substitution is published
-			// from. See Runner.raiseScriptFile.
-			f = r.raiseScriptFile(f)
 			// The name as the script named it, kept for the one caller that has
 			// to word a failure of its own *after* this succeeded. See
 			// Runner.openedName.
@@ -1465,6 +1460,47 @@ func (r *Runner) applyRedirList(
 	}
 	trace.flush()
 	return closers, nil
+}
+
+// openRaised opens path for a redirection and moves the file out of the way
+// of the numbers a substitution is published from — see
+// Runner.raiseScriptFile — answering what openThroughNoclobber answers.
+//
+// The path the shell opens is the path the command was given in all but one
+// shape: a substitution inside another one's body publishes a number the
+// enclosing pipe is still parked on here. See Runner.substOpenPath.
+//
+// **An open of the command's own substitution pipe is made inside
+// transientFds, from the open to the move.** The open lands on the lowest free
+// number, and the substitution's body is already running when its command's
+// redirections are applied, so a park in that body could find the file on the
+// number it wanted and step over it — where a forking shell's body holds
+// nothing its parent opens afterwards. `read x < <(echo <(true))` is the
+// shape, and it is a common way to write the construct. Measured on darwin
+// with the park held between finding a let-go number empty and asking for it
+// again, the parent's `/dev/fd/N` landed on the number in that gap and the
+// inner substitution was published one higher in 200 runs of 200; unforced,
+// TestASiblingLettingGoInsideTheParksQuestionIsTaken did the same in 2 runs
+// of 10,000 under load (#7035).
+//
+// Only that pipe, because it is the one open here that cannot wait: on darwin
+// `/dev/fd/N` duplicates a descriptor this process holds, and on Linux it
+// reopens an anonymous pipe, which the kernel never holds waiting for its
+// other end the way it holds a FIFO. An open that can wait, a FIFO for its
+// writer, must not hold the lock: a park queued behind it holds up every
+// start, and the writer can be one of them. Nor with `set -C`, whose second
+// open follows a stat a Gate is asked about, which is no place to be holding
+// something every start waits on.
+func (r *Runner) openRaised(ctx context.Context, a *Action, path string, flags int) (*os.File, bool, error) {
+	if _, pipe := r.ownPipeDirection(path); pipe && flags&os.O_EXCL == 0 {
+		transientFds.RLock()
+		defer transientFds.RUnlock()
+	}
+	f, fellBack, err := r.openThroughNoclobber(ctx, a, r.substOpenPath(path), flags)
+	if err != nil {
+		return f, fellBack, err
+	}
+	return r.raiseScriptFile(f), fellBack, nil
 }
 
 // eachTarget combines a stream's targets where the dialect writes to all of

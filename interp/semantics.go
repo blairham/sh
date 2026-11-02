@@ -35779,6 +35779,46 @@ type Semantics struct {
 	// ash have no array literal (#6852).
 	RefusedPlacementKeepsWhatTheLiteralPlaced Answer
 
+	// AppendingSubscriptedLiteralStoresFromTheFirstPosition makes `b+=(…)`
+	// over a name already holding an indexed array a run of element stores
+	// into it whenever the literal holds any `[k]=v` element: the bare
+	// elements in front of the first subscripted one start at the **first**
+	// position and overwrite what is there. No starts them after the last
+	// element, as a literal with no subscripted element always does.
+	//
+	// Measured 2026-11-01 from script files under `env -i PATH=/usr/bin:/bin`,
+	// each row read back with `typeset -p b` in zsh and `declare -p b` in
+	// bash, where the same rows are written with the subscripts one lower and
+	// the column is the values in subscript order, dense from [0] unless said:
+	//
+	//	row (zsh's spelling)           zsh 5.9.2 (-f)        bash 5.3.20
+	//	b=(7); b+=(9 [3]=y)            ( 9 '' y )            7 9 y
+	//	b=(7 8 9); b+=(x [5]=y)        ( x 8 9 '' y )        7 8 9 x y
+	//	b=(7 8 9); b+=(x y [5]=z)      ( x y 9 '' z )        7 8 9 x z
+	//	b=(7 8 9 10); b+=(x [2]=y z)   ( x y z 10 )          not measured
+	//	b=(7 8 9); b+=([5]=z x)        ( 7 8 9 '' z x )      7 8 9, [4]=z [5]=x
+	//	b=(7 8); b+=([1]=y)            ( y 8 )               y 8
+	//	b=(7); b+=(9)                  ( 7 9 )               7 9
+	//
+	// bash 3.2.57 places the bare elements as 5.3 does; its `[k]=v` inside a
+	// `+=` joins the element rather than replacing it (`[4]="yz"` in the third
+	// row), which is a different question from this one.
+	//
+	// So zsh's bare element after a subscripted one continues from it, as it
+	// does everywhere, and the literal only differs in where the run *starts*
+	// — which is why the question is asked only of a literal with a bare
+	// element ahead of its first subscripted one: the fifth row and the two
+	// controls answer alike either way. It is the name already holding an
+	// array that starts the run over, and not the subscript alone: over a
+	// scalar, `s=abc; s+=(x [3]=y)` is `( abc x y )` in zsh, and an unset or
+	// declared-empty name is `( x '' y )`, the first position either way. A
+	// produced array is the same as a stored one: `set -- 7 8 9; argv+=(x
+	// [5]=y)` leaves `x 8 9 '' y` (#7079).
+	//
+	// dash and BusyBox ash have no array literal. ksh93 has no line to ask
+	// it on; see dialect/ksh.
+	AppendingSubscriptedLiteralStoresFromTheFirstPosition Answer
+
 	// EmptySubscriptTextIsAMathError refuses a subscript whose text is
 	// *empty or blank once it has been expanded* — `${a[$w]}` with an empty
 	// `$w`, and `${a[ ]}` beside it — where an expression reads it.

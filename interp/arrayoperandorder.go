@@ -73,6 +73,11 @@ import (
 // Runner.tableLetterHere is written by the utility. See
 // Runner.bareLiteralElementIsOneValue, which is the one question that needs
 // it.
+//
+// The operand walk reaches the literals in written order wherever there is
+// one, and every column with the construct has one (#7075); the loop below is
+// for a command it does not reach — a utility this shell does not have, or a
+// literal over a frozen name in the column that stores every operand in turn.
 func (r *Runner) expandArrayOperands(
 	ctx context.Context,
 	c *syntax.SimpleCmd,
@@ -176,12 +181,12 @@ func (r *Runner) traceArrayOperandAsItIsExpanded(op *arrayOperand, tableLetterAh
 }
 
 // walkTheLiteralOperandsLeft is the operand walk reaching the literals written
-// behind the command's last word, in the columns that place a literal before
-// the operand behind it expands: each is expanded, traced and held in turn,
-// so `typeset -a a=(1) b=("${a[0]}")` gives `b` the 1, and a literal that
-// fails leaves the ones in front of it in place — `typeset -a a=(5) b=(6
-// $((1/0)))` keeps `a=(5)` (#6798). Reports whether it walked them, and if so
-// whether the command goes on.
+// behind the command's last word: each is expanded and traced in turn, and in
+// the columns that place a literal before the operand behind it expands,
+// placed — so `typeset -a a=(1) b=("${a[0]}")` gives `b` the 1 there, and a
+// literal that fails leaves the ones in front of it in place: `typeset -a
+// a=(5) b=(6 $((1/0)))` keeps `a=(5)` (#6798). Reports whether it walked
+// them, and if so whether the command goes on.
 //
 // The walk that stores every operand leaves a literal over a frozen name to
 // the refusal ahead of the command, which words it under the element where
@@ -193,17 +198,14 @@ func (r *Runner) walkTheLiteralOperandsLeft(
 	argv []string,
 	turn **operandsInTurn,
 ) (walked, goesOn bool) {
-	if len(r.arrayOperands) == 0 || r.sem().DeclarationArrayOperandsAreStoredInTurn != Yes {
+	if len(r.arrayOperands) == 0 {
 		// Every command passes through here, and one with no literal operand
-		// has nothing to walk and asks nothing. Nor does the column that
-		// expands a literal after the words: a literal in front of a scalar
-		// operand is the walk's in the column that stores every operand in
-		// turn, and the literals behind the last word are this axis's.
+		// has nothing to walk and asks nothing.
 		return false, true
 	}
 	t := *turn
 	if t == nil {
-		if t = r.startOperandsInTurn(argv); t == nil {
+		if t = r.startOperandsInTurn(c, argv); t == nil {
 			return false, true
 		}
 		*turn = t

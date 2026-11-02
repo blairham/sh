@@ -11316,8 +11316,10 @@ type Semantics struct {
 	// whether it is stored in turn too is DeclarationOperandsAreStoredInTurn,
 	// whose walk also places a literal written in front of a scalar; this one
 	// is what reaches a literal written behind another literal, past the last
-	// word. The other answer expands every literal after the command's words
-	// and places none of them until the utility has run.
+	// word. The other answer places none of them until the utility has run.
+	// Either way each literal is expanded where it is written, between the
+	// words either side of it, which every shell with the construct does: it
+	// is not this axis's (#7075, interp/declarationinturn.go).
 	// Measured 2026-10-30 from a script file under `env -i
 	// PATH=/usr/bin:/bin`, `a=(1 2); b=(3 4)` first where it matters and the
 	// state read by an exit trap:

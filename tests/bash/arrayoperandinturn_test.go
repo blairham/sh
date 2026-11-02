@@ -121,6 +121,13 @@ func TestAnArrayOperandIsPlacedBeforeTheNextOperandExpands(t *testing.T) {
 			"set -x\ndeclare a=(1) s=$(echo x) b=($(echo y))\n",
 			"+ a=('1')\n++ echo x\n++ echo y\n+ b=('y')\n+ declare a s=x b\n",
 		},
+		{
+			// #7075's trace row: the literal's line, then the scalar's
+			// substitution, then the utility's.
+			"a literal's line comes before the scalar behind it expands",
+			"set -x\ntypeset -a a=(1) y=$(echo s >&2)\n",
+			"+ a=('1')\n++ echo s\ns\n+ typeset -a a y=\n",
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			if got := runBashFileCombined(t, c.src); got != c.want {

@@ -66,14 +66,16 @@ import (
 // one, so a stop there puts them back rather than keeping them — see
 // operandsInTurn.stop (#7011).
 //
-// A second column walks a declaration's **array literals** and not its scalar
-// operands: each literal is expanded, traced and placed in turn, the scalar
+// Every other column walks a declaration's **array literals** and not its
+// scalar operands: each literal is expanded and traced in turn, the scalar
 // words between them only expanded, and the utility then stores everything
-// for real. Its placement is the operand's own store over a saved cell, so a
+// for real. Expanding in turn is every shell's answer, so a substitution in a
+// literal runs between the words written either side of it (#7075). Where
+// Semantics.DeclarationArrayOperandsAreStoredInTurn says so, each literal is
+// placed in turn as well, by the operand's own store over a saved cell, so a
 // refusal there — an element before the first, an empty key — is reported at
 // the literal's turn, ahead of the utility's own line, and ends the walk with
 // what was placed before it (#6798, #6852). See
-// Semantics.DeclarationArrayOperandsAreStoredInTurn and
 // Runner.placeLiteralOperandInTurn.
 //
 // See Semantics.DeclarationOperandsAreStoredInTurn (#6770).
@@ -95,9 +97,10 @@ type operandsInTurn struct {
 	literals map[*syntax.Assign]*expandedAssign
 	// traced is the literal operands whose lines were written here.
 	traced map[*syntax.Assign]bool
-	// literalsOnly is the column that walks a declaration's array-literal
+	// literalsOnly is the walk that reaches a declaration's array-literal
 	// operands and leaves its scalar ones to the utility: a scalar operand is
-	// expanded in turn and neither held nor traced. See
+	// expanded in turn and neither held nor traced. Every column but the one
+	// that stores every operand in turn walks this way. See
 	// Semantics.DeclarationArrayOperandsAreStoredInTurn.
 	literalsOnly bool
 }
@@ -179,7 +182,7 @@ func (r *Runner) reachOperandInTurn(
 	turn *operandsInTurn,
 ) (*operandsInTurn, bool) {
 	if turn == nil {
-		if turn = r.startOperandsInTurn(argv); turn == nil {
+		if turn = r.startOperandsInTurn(c, argv); turn == nil {
 			return nil, false
 		}
 	}
@@ -190,13 +193,15 @@ func (r *Runner) reachOperandInTurn(
 }
 
 // startOperandsInTurn is the walk's state for one command, or nil where
-// nothing is walked: not the column, or `local` — it is in the substrate's
-// list of declaration utilities and one column has no such command, so
-// nothing is about to store the operands and nothing is held. The same gate
-// the trace's split uses, see Runner.traceOperandSplitsBefore.
-func (r *Runner) startOperandsInTurn(argv []string) *operandsInTurn {
+// nothing is walked: outside the column that stores every operand in turn, a
+// command with no array-literal operand, since the literals are all the walk
+// reaches there; or `local` — it is in the substrate's list of declaration
+// utilities and one column has no such command, so nothing is about to store
+// the operands and nothing is held. The same gate the trace's split uses, see
+// Runner.traceOperandSplitsBefore.
+func (r *Runner) startOperandsInTurn(c *syntax.SimpleCmd, argv []string) *operandsInTurn {
 	all := r.declarationOperandsStoredInTurn()
-	if !all && r.sem().DeclarationArrayOperandsAreStoredInTurn != Yes {
+	if !all && !aLiteralOperandIsWritten(c.Assigns) {
 		return nil
 	}
 	if !r.declarationUtilityIsHere(argv) {
@@ -205,6 +210,17 @@ func (r *Runner) startOperandsInTurn(argv []string) *operandsInTurn {
 	turn := &operandsInTurn{literalsOnly: !all}
 	turn.held.undo = turn.undoBuf[:0]
 	return turn
+}
+
+// aLiteralOperandIsWritten reports whether a command carries an array-literal
+// operand among its words.
+func aLiteralOperandIsWritten(assigns []*syntax.Assign) bool {
+	for _, a := range assigns {
+		if a.Operand {
+			return true
+		}
+	}
+	return false
 }
 
 // literal is the element list expanded ahead for this operand, or nil.
@@ -235,10 +251,12 @@ func (t *operandsInTurn) wasTraced(a *syntax.Assign) bool {
 // local, so what is kept goes with the call: `function f { v=new typeset
 // y=${q?boom}; }; v=old; f` leaves `old`, as ksh93u+ does. See
 // interp/prefixdeclarationlocal.go (#7002). The operands were held in the
-// global cell, and a stop there has already put them back (#7011).
+// global cell, and a stop there has already put them back (#7011). A walk
+// over the literals alone stores no prefix, so a stop there keeps what it
+// placed and puts the prefix back, as the end of the command does.
 func (t *operandsInTurn) release(r *Runner, prefix *heldPrefix) {
 	if t != nil {
-		if t.stopped {
+		if t.stopped && !t.literalsOnly {
 			prefix.undo = nil
 			return
 		}
@@ -593,12 +611,27 @@ func (r *Runner) keepWhatAFailedLiteralOperandStored(
 	r.keepWhatAFailedLiteralStored(a.Name, a.Elems, parsed, how)
 }
 
-// settleALiteralOperand is one literal operand reached by the walk in the
-// column that walks only its literals: refused there if the line refuses it,
-// then expanded, traced, and placed — in that order, which is the order the
+// settleALiteralOperand is one literal operand reached by the walk that
+// reaches only the literals: refused there if the line refuses it, then
+// expanded, traced, and placed — in that order, which is the order the
 // reference writes them: `set -x; declare -a q=([$(true)]=x)` is the
 // substitution's line, the literal's own, and then the refusal (#6852).
 // Reports whether the walk goes on.
+//
+// The expansion is every column's, and the rest is the axis's. Where the
+// literal is not placed in turn its refusal is the store's, after the
+// utility, and its line is written with the command's where the trace puts it
+// there; but its words are still expanded here, between the words written
+// either side of it. Measured 2026-10-30 from script files under `env -i
+// PATH=/usr/bin:/bin`, against GNU bash 5.3.20, bash 3.2.57, ksh93u+
+// 2012-08-01 and zsh 5.9.2, every one of them:
+//
+//	typeset -a a=($(echo A >&2)) y=$(echo s >&2)               A, s
+//	typeset y=$(echo s >&2) a=($(echo A >&2)) z=$(echo t >&2)  s, A, t
+//
+// zsh then refuses `y` as `inconsistent type for assignment`, after both.
+// The literals used to be expanded after every word in that column, `s`
+// before `A` (#7075).
 func (r *Runner) settleALiteralOperand(
 	ctx context.Context,
 	a *syntax.Assign,
@@ -606,8 +639,12 @@ func (r *Runner) settleALiteralOperand(
 	turn *operandsInTurn,
 ) bool {
 	indexed, table := declarationLettersAhead(argv)
-	placed := true
-	if r.inFunc == "" {
+	placed := r.sem().DeclarationArrayOperandsAreStoredInTurn == Yes
+	switch {
+	case !placed:
+		// Expanded in turn and stored by the utility, which is where a
+		// refusal is made: nothing to ask here.
+	case r.inFunc == "":
 		// A frozen name, or one of the other kind of array, refused as a
 		// bare assignment is, with the literals in front of it in place:
 		// `readonly q=1; a=(0); declare -a a=(5) q=(b)` leaves `a` holding 5.
@@ -616,7 +653,7 @@ func (r *Runner) settleALiteralOperand(
 			turn.stop(r, argv)
 			return false
 		}
-	} else if r.attrHas(a.Name, attrReadonly) {
+	case r.attrHas(a.Name, attrReadonly):
 		// Inside a function the store answers, and the walk goes on past it:
 		// a function's `local q=(b)` over a frozen global is the store's
 		// complaint with the call carrying on.
@@ -638,7 +675,8 @@ func (r *Runner) settleALiteralOperand(
 	}
 	e := &expandedAssign{assign: a, elemsAreOperands: true, elems: parsed, elemsSet: true}
 	turn.literals[a] = e
-	if r.tracing() {
+	if r.tracing() && r.diag().TraceDeclarationArrayOperand == TraceOperandSplitBefore {
+		// Off the command's line, where the trace writes it in front.
 		turn.traced[a] = true
 		r.writeArrayOperandLines(arrayOperand{assign: a, expanded: e}, tableAhead, r.diag())
 	}

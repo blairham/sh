@@ -26,8 +26,8 @@ import (
 // Held open here, so the order is not a race: the body waits on a FIFO the
 // test writes to only once the parent's file is open and not yet moved, and
 // the hold lasts until the body's park has missed on the file's number or half
-// a second has passed. Taking the lock out of the open, hold and all, publishes
-// `10 12 11` on every run.
+// a second has passed. With the lock taken out of the open and the hold kept,
+// three runs of three published `10 12 13` or `10 12 11`.
 func TestAParentsFileIsOpenedOutOfAParksWay(t *testing.T) {
 	if measuredInAQuietDescriptorTable(t) {
 		return
@@ -96,8 +96,8 @@ func TestAParentsFileIsOpenedOutOfAParksWay(t *testing.T) {
 // park, and the reader here is a start. So `> fifo` with its reader arriving
 // late, while a body parks, has to finish — whether the name was a FIFO all
 // along or became one between the look that chose the road and the open,
-// which only the non-blocking open answers. Without it the second shape
-// deadlocks on every run, and with neither the look nor the flag both do.
+// which only the non-blocking open answers. Without the flag the second shape
+// deadlocked, and with neither the look nor the flag both did.
 //
 // In a child, so that a regression takes only the child's lock with it.
 func TestAFileOpenThatWaitsHoldsUpNoPark(t *testing.T) {

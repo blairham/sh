@@ -98,8 +98,13 @@ func (r *Runner) reportTheStoresOwnRefusal(name string) {
 // command's own record rather than anything about the name — the same table
 // the declaration path already reads to tell `typeset a=(x)` from `typeset
 // a=x`.
+//
+// A literal the operand walk refused at its own turn had the store speak
+// there, ahead of the utility's own line, so it does not speak again here. See
+// Runner.settleALiteralOperand (#7103).
 func (r *Runner) storeSpeaksBeforeTheBuiltin(form assignForm, name string) bool {
 	return r.diag().LiteralOperandRefusedAlsoSpeaksForTheStore &&
 		r.literalOperands[name] &&
+		!r.literalOperandRefusedInTurn(name) &&
 		r.readonlyRefusalNamesBuiltin(form, name)
 }

@@ -8214,6 +8214,10 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 		// bare `local` there is `not in a function` at 2. Measured with the
 		// rest of Semantics.LocalThroughCommandDeclaresNothing.
 		if st, stop := r.localOutsideAFunction(); stop {
+			// The literals placed ahead of it are kept all the same, as
+			// globals: `local -a q=(1 2)` leaves `q` an array. See
+			// interp/placedliteralskept.go (#7103).
+			r.declarePlacedLiteralsAlone(args, r.localDeclarationOptions())
 			return st
 		}
 	}

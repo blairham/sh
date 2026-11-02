@@ -2387,7 +2387,9 @@ func Semantics() interp.Semantics {
 	s.DeclarationOperandsAreStoredInTurn = interp.No
 	// But an array-literal operand is placed before the word behind it
 	// expands: `a=(0); declare -a a=(1) b=("${a[0]}")` leaves `b` holding 1,
-	// and `declare -a a=(5) b=(6 $((1/0)))` keeps `a=(5)` (#6798). See
+	// and `declare -a a=(5) b=(6 $((1/0)))` keeps `a=(5)` (#6798). And it
+	// stays placed whatever the utility then does: `local -a q=(1 2)` at the
+	// top level leaves `q` the global array (#7103). See
 	// interp.Semantics.DeclarationArrayOperandsAreStoredInTurn.
 	s.DeclarationArrayOperandsAreStoredInTurn = interp.Yes
 	// A bare append onto a table that fails partway keeps the pairs it

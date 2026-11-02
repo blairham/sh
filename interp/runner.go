@@ -9987,6 +9987,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// interp/xtracearrayoperand.go.
 			r.arrayOperands = append(r.arrayOperands, arrayOperand{
 				assign: a, at: at, expanded: turn.literal(a), traced: turn.wasTraced(a),
+				placed: turn.wasPlaced(a), refused: turn.wasRefused(a),
 			})
 			argv = slices.Insert(argv, at, r.arrayOperandName(a))
 			inserted++
@@ -11085,7 +11086,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		outerHeldListing := r.heldListing
 		r.heldListing = heldListing{}
 		if locks {
-			r.assignOperands(ctx, c)
+			r.assignOperands(ctx, c, false)
 		} else {
 			// `declare -ar A=(x y)` has the same problem `readonly` solves by
 			// assigning first, and cannot solve it the same way — the array
@@ -11137,7 +11138,10 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		fatal := false
 		// A refused letter stops the builtin and not, in every dialect, the
 		// array literals written behind it: see interp/refusedlineliterals.go.
-		if (st == 0 || keptLiterals) && !locks {
+		// Nor does any other refusal stop the literals the operand walk placed
+		// ahead of the utility: see Runner.literalsPlacedOutliveTheUtility.
+		placedStay := st != 0 && !keptLiterals && r.literalsPlacedOutliveTheUtility()
+		if (st == 0 || keptLiterals || placedStay) && !locks {
 			// A `-g` declaration's array literal lands on the shell's own
 			// cell, under whatever local or call prefix is standing on the
 			// name. Around the operand assignment rather than inside the
@@ -11157,7 +11161,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			}
 			r.privateDeclarationRan = privateRan
 			r.hideLetterWritten = hideRan
-			r.assignOperands(ctx, c)
+			r.assignOperands(ctx, c, placedStay)
 			r.hideLetterWritten = outerHideRan
 			r.privateDeclarationRan = outerPrivateRan
 			r.inBuiltin, r.locatedUnderACall = outerCall, false
@@ -11175,7 +11179,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				// fatal in one dialect too, and the status they report is the
 				// one the corpus pins.
 				fatal = true
-			case keptLiterals:
+			case keptLiterals, placedStay:
 				// The refusal's own status stands over whatever the
 				// literals did: the line has already failed.
 			case r.assignFailed, r.lettersRefusedTheOperand:
@@ -15873,8 +15877,10 @@ func (r *Runner) storedValue(name string, folded bool) (string, bool) {
 }
 
 // assignOperands applies the array assignments a declaration utility was given
-// as operands, which the parser kept apart from the prefix ones.
-func (r *Runner) assignOperands(ctx context.Context, c *syntax.SimpleCmd) {
+// as operands, which the parser kept apart from the prefix ones. placedOnly
+// applies only the ones the operand walk placed ahead of a utility that then
+// refused — see Runner.literalsPlacedOutliveTheUtility.
+func (r *Runner) assignOperands(ctx context.Context, c *syntax.SimpleCmd, placedOnly bool) {
 	if r.operandWasRejoined {
 		// The utility read the operand itself — it was handed the text and
 		// there is nothing left here to store. Asked of the flag the command
@@ -15906,7 +15912,7 @@ func (r *Runner) assignOperands(ctx context.Context, c *syntax.SimpleCmd) {
 	r.writingADeclarationsOperand = true
 	defer func() { r.writingADeclarationsOperand = declaring }()
 	for _, a := range c.Assigns {
-		if !a.Operand || r.arrayOperandApplied(a) {
+		if !a.Operand || r.arrayOperandApplied(a) || r.arrayOperandLeftOut(a, placedOnly) {
 			continue
 		}
 		if e := r.expandedArrayOperand(a); e != nil {

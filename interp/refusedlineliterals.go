@@ -68,12 +68,39 @@ func (r *Runner) refusedLineDeclaresItsLiterals(written []string, known string, 
 	if len(r.literalOperands) == 0 || r.unspecified || r.ctl == controlExit {
 		return
 	}
+	opts, i, refused := r.literalValueOptions(written, known)
+	if !refused {
+		// The line failed for some other reason — a number a letter was
+		// waiting for, say — and that is not the question asked here.
+		return
+	}
+	var names []string
+	for _, a := range written[i:] {
+		if r.literalOperands[a] {
+			names = append(names, a)
+		}
+	}
+	if len(names) == 0 {
+		return
+	}
+	if !r.ask(r.sem().RefusedDeclarationKeepsItsArrayLiterals,
+		"a declaration's array literals outliving a refused letter") {
+		return
+	}
+	if r.declareLiteralsAlone(opts, names, local) {
+		r.refusedLineKeptItsLiterals = true
+	}
+}
+
+// literalValueOptions reads a declaration line's option words for the letters
+// that shape an array literal's value, and hands back those letters as option
+// words, the index of the first operand in written, and whether a letter
+// outside known was written.
+func (r *Runner) literalValueOptions(written []string, known string) (opts []string, first int, refused bool) {
 	letters := r.sem().DeclareOptions
 	if letters == "" {
 		letters = declareOptionLetters
 	}
-	var opts, names []string
-	refused := false
 	i := 0
 	for ; i < len(written); i++ {
 		a := written[i]
@@ -100,30 +127,24 @@ func (r *Runner) refusedLineDeclaresItsLiterals(written []string, known string, 
 			opts = append(opts, kept)
 		}
 	}
-	if !refused {
-		// The line failed for some other reason — a number a letter was
-		// waiting for, say — and that is not the question asked here.
-		return
-	}
-	for _, a := range written[i:] {
-		if r.literalOperands[a] {
-			names = append(names, a)
-		}
-	}
-	if len(names) == 0 {
-		return
-	}
-	if !r.ask(r.sem().RefusedDeclarationKeepsItsArrayLiterals,
-		"a declaration's array literals outliving a refused letter") {
-		return
+	return opts, i, refused
+}
+
+// declareLiteralsAlone declares names, a line's array-literal operands, under
+// the option words opts, and on the shell's own cell unless local says the
+// word makes a function's names local. Reports whether they were declared.
+func (r *Runner) declareLiteralsAlone(opts, names []string, local bool) bool {
+	letters := r.sem().DeclareOptions
+	if letters == "" {
+		letters = declareOptionLetters
 	}
 	if !local {
 		opts = append(opts, "-g")
 	}
 	rest, f, code := r.parseDeclareFlags("declare", append(opts, names...), letters)
 	if code != 0 || r.unspecified {
-		return
+		return false
 	}
 	r.declareNames(r.inBuiltin, rest, f)
-	r.refusedLineKeptItsLiterals = true
+	return true
 }

@@ -44,10 +44,12 @@ func TestAnArrivalTheRuntimeHasAsAChildEndsIsAnsweredAsThePipelineEnds(t *testin
 	const src = "trap 'echo U' USR1\n" +
 		"if /bin/true; then echo t; fi\n" +
 		"echo b\n"
+	sem := killSem()
+	sem.SignalHandlerSeesEarlierStatus = No
 	late := 0
 	for range 50 {
 		raise.Store(true)
-		out, errs, st := killRun(t, src, killSem(), Diagnostics{})
+		out, errs, st := killRun(t, src, sem, Diagnostics{})
 		if out != "U\nt\nb\n" || errs != "" || st != 0 {
 			late++
 			if late == 1 {

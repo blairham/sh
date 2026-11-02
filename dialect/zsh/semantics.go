@@ -2714,9 +2714,14 @@ func Semantics() interp.Semantics {
 	// And a group with nothing in it is `argument expected` at 2 here,
 	// which is a refusal rather than a false expression (#3687).
 	s.TestEmptyGroupIsFalse = interp.No
-	// unanswered LocalThroughCommandDeclaresNothing: `command local a=1` is
-	// `command not found: local` at 127 in this shell, so the declaration
-	// this axis is about never happens and there is nothing to measure.
+	// And `command local a=1` declares: the question is put here only under
+	// `setopt posixbuiltins`, since without it `command local` is `command
+	// not found: local` at 127 and the builtin is never reached. With it,
+	// measured 2026-11-02 on 5.9.2, `f(){ command local a=1; echo in
+	// rc=$? a=$a; }; a=out; f; echo a=$a` is `in rc=0 a=1` then `a=out`, and
+	// at the top level `command local a=1` is `rc=0 a=1` — the declaration
+	// a bare `local` makes, in the function's scope (#7127).
+	s.LocalThroughCommandDeclaresNothing = interp.No
 	s.UnterminatedBracket = interp.BracketBadPattern
 	// And the same question where a `[:name:]`, a `[.x.]` or a `[=x=]`
 	// inside it is what left it open: not a pattern, the same as a bare `[`.

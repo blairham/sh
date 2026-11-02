@@ -6752,6 +6752,11 @@ type Dialect struct {
 	// `typeset "a=1"`, `typeset $x=1`, `builtin typeset a=1` and `private
 	// q=(1)` come back without one: `private` takes an array operand
 	// (DeclarationUtilities) and is not a reserved word (#5138).
+	//
+	// And the word, written so, is never a call to a function of the same
+	// name: the runner reads it as the declaration whatever the function
+	// table holds. See interp's Runner.reservedWordOutranksAFunction (#7128).
+	//
 	// ReservedWordsOff are grammar reserved words a script has switched off
 	// — zsh's `disable -r` — which the parser then reads as ordinary words
 	// wherever it would have read them as reserved. Nil reserves every word

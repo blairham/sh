@@ -114,7 +114,8 @@ func runAsShellParkingOn(t *testing.T, name string, fd int) (out string, placed 
 	}
 	cmd := exec.Command(os.Args[0], "-test.run="+name)
 	cmd.Env = testenv.WithoutRaceExitPause(
-		append(os.Environ(), lowFdScript+"="+script, lowFdStall+"="+windowStall.String()))
+		append(os.Environ(), lowFdScript+"="+script, lowFdStall+"="+windowStall.String()),
+	)
 	// Deliberately no ExtraFiles: every number this asks about has to be
 	// unopened at the start, so what ends up on it is the script's doing.
 	b, err := cmd.CombinedOutput()

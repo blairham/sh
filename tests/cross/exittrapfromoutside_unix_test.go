@@ -448,7 +448,8 @@ func diesFromOutside(t *testing.T, dialect string, sig syscall.Signal, script st
 	ready, logPath := filepath.Join(dir, "ready"), filepath.Join(dir, "out")
 	cmd := exec.Command(os.Args[0], "-test.run=^TestADialectsExitTrapAnswersAFatalSignalFromOutside$")
 	cmd.Env = testenv.WithoutRaceExitPause(
-		append(os.Environ(), outsideDeathShell+"="+dialect, outsideDeathScript+"="+script, "READY="+ready))
+		append(os.Environ(), outsideDeathShell+"="+dialect, outsideDeathScript+"="+script, "READY="+ready),
+	)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	log, err := os.Create(logPath)
 	if err != nil {
@@ -679,7 +680,8 @@ func endsOnItsOwn(t *testing.T, dialect, script string) (syscall.WaitStatus, str
 	logPath := filepath.Join(t.TempDir(), "out")
 	cmd := exec.Command(os.Args[0], "-test.run=^TestADialectsExitTrapAnswersAFatalSignalFromOutside$")
 	cmd.Env = testenv.WithoutRaceExitPause(
-		append(os.Environ(), outsideDeathShell+"="+dialect, outsideDeathScript+"="+script))
+		append(os.Environ(), outsideDeathShell+"="+dialect, outsideDeathScript+"="+script),
+	)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	log, err := os.Create(logPath)
 	if err != nil {

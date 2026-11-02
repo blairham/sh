@@ -30,7 +30,8 @@ func TestTheModuleHelperLeavesNoHomeBehind(t *testing.T) {
 	tmp := t.TempDir()
 	cmd := exec.Command(exe, "-test.run=^TestModuleHelperProcess$")
 	cmd.Env = testenv.WithoutRaceExitPause(
-		[]string{"PATH=/usr/bin:/bin", "TMPDIR=" + tmp, helperMode + "=delay", "SH_TEST_MODULE_HELPER_MS=0"})
+		[]string{"PATH=/usr/bin:/bin", "TMPDIR=" + tmp, helperMode + "=delay", "SH_TEST_MODULE_HELPER_MS=0"},
+	)
 	out, err := cmd.CombinedOutput()
 	if err != nil || string(out) != "x" {
 		t.Fatalf("the helper wrote %q (%v), want x — the case is about a helper that ran", out, err)

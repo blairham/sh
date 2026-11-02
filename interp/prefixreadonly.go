@@ -60,7 +60,7 @@ type prefixCommand struct {
 func (r *Runner) prefixCommandOf(argv []string) prefixCommand {
 	p := prefixCommand{}
 	for len(argv) > 0 {
-		if _, ok := r.funcs[argv[0]]; ok {
+		if _, ok := r.funcs[argv[0]]; ok && !r.reservedWordOutranksAFunction(argv[0]) {
 			p.kind, p.word = prefixBeforeFunction, argv[0]
 			return p
 		}

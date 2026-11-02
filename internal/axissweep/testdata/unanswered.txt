@@ -903,7 +903,6 @@ zsh   JobsListsWhatChangedSinceTheLastReport
 zsh   JobsPidsLetterOutranksTheLongLetter
 zsh   KeywordPromotesADeclarationsOperand
 zsh   LocalOutsideAFunctionIsFatal
-zsh   LocalThroughCommandDeclaresNothing
 zsh   LongOptionValueIsANumber
 zsh   NamerefArrayRefusal
 zsh   NamerefCycleIsRefused

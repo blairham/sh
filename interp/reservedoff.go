@@ -103,3 +103,32 @@ func (r *Runner) declaresByReservedWord(c *syntax.SimpleCmd) string {
 	}
 	return name
 }
+
+// reservedWordOutranksAFunction reports whether name is the declaration
+// reserved word the running simple command was written with, which a
+// function of the same name does not shadow: the word is the grammar's, and
+// the grammar never looks a reserved word up as a command.
+//
+// Measured 2026-11-02 on zsh 5.9.2 (`-f`, `-c` under `env -i`), for all seven
+// of syntax.Dialect.DeclarationReservedWords, with and without `setopt
+// posixbuiltins`:
+//
+//	function typeset { echo fn; }; typeset x=1      x is 1, no `fn`
+//	the same with `typeset`, `typeset -i x=1+1`, `x=1 typeset y=2`,
+//	  `nocorrect typeset x=1`, `eval 'typeset x=1'`, `(typeset x=1)` and
+//	  `typeset x=1 >/dev/null`                     the declaration
+//	`\typeset x=1`, `'typeset' x=1`, `"typeset" x=1`, `$w x=1` with w set to
+//	  typeset, `noglob typeset x=1`                `fn`, x unset
+//	`builtin typeset x=1`                          the declaration
+//
+// So the function is defined, `functions typeset` lists it, and only a word
+// that the grammar does not read as the reserved one reaches it — which is
+// exactly the word Runner.declaresByReservedWord recognizes, and why this
+// reads what it recorded rather than the name. A word switched off with
+// `disable -r` is an ordinary command name again and finds the function. bash
+// and ksh93 have no declaration reserved words: bash calls the function for
+// all seven, and ksh93 calls it for `local` and `declare` and refuses the
+// rest as `invalid function name` when they are defined (#7128).
+func (r *Runner) reservedWordOutranksAFunction(name string) bool {
+	return name != "" && name == r.reservedCommand
+}

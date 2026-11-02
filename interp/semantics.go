@@ -22207,9 +22207,10 @@ type Semantics struct {
 	// builtin's own words. `command export a=1` and `command readonly a=1`
 	// assign normally in both, so it is `local` alone (#3370).
 	//
-	// zsh and ksh93 never reach the question — one has no `local` at all and
-	// the other declines to find it through `command`, both at 127 — so
-	// neither answers it.
+	// ksh93 never reaches the question — it has no `local` at all, so
+	// `command local` is 127 — and leaves it unanswered. zsh reaches it only
+	// under `setopt posixbuiltins`, which lets `command` find a builtin, and
+	// answers No there: the local is declared, as bash declares it (#7127).
 	LocalThroughCommandDeclaresNothing Answer
 
 	// TestTrailingConnectiveTakesAMissingOperand reads a `-a` or a `-o` that

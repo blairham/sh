@@ -10628,8 +10628,11 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	if argv[0] != "exit" {
 		r.exitWaived = false
 	}
+	// And a declaration written as the reserved word it is in one column is
+	// never a call: the grammar read it before any table was asked. See
+	// Runner.reservedWordOutranksAFunction.
 	if fn, ok := r.funcs[r.namespaceFuncLookup(argv[0])]; ok && !r.presentedButSwitchedOff(argv[0]) &&
-		!r.specialBuiltinOutranksAFunction(argv[0]) {
+		!r.specialBuiltinOutranksAFunction(argv[0]) && !r.reservedWordOutranksAFunction(argv[0]) {
 		r.noteANegatedCall(written)
 		// A name the dialect's prelude presents is a builtin to every
 		// question asked about it, so switching it off has to stop the word
@@ -17367,7 +17370,8 @@ func (r *Runner) loadsAnUndefinedFunctionFirst(ctx context.Context, argv []strin
 		return false
 	}
 	if _, ok := r.funcs[r.namespaceFuncLookup(argv[0])]; !ok ||
-		r.presentedButSwitchedOff(argv[0]) || r.specialBuiltinOutranksAFunction(argv[0]) {
+		r.presentedButSwitchedOff(argv[0]) || r.specialBuiltinOutranksAFunction(argv[0]) ||
+		r.reservedWordOutranksAFunction(argv[0]) {
 		return false
 	}
 	// Asked of every call to a function where the dialect installed a loader

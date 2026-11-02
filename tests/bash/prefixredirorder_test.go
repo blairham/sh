@@ -55,3 +55,39 @@ func TestARefusedPrefixWordIsRefusedWhereItStands(t *testing.T) {
 		at = i
 	}
 }
+
+// And a subscripted word written ahead of a frozen one is refused first, which
+// is the same walk met from the frozen entry's side: each word is refused where
+// the walk reaches it, and the command still runs at 0. Measured 2026-11-02
+// against GNU bash 5.3.20 from `-c` under `env -i PATH=/usr/bin:/bin` with a
+// scratch HOME. This wrote the frozen entry's refusal, and every value behind
+// it, ahead of the subscripted words' (#7095). The last row is the control,
+// with the frozen entry written first.
+func TestASubscriptedWordAheadOfAFrozenOneIsRefusedFirst(t *testing.T) {
+	t.Parallel()
+	const (
+		ident = "bash: line 1: `a[1]': not a valid identifier\n"
+		ro    = "bash: line 1: r: readonly variable\n"
+	)
+	for _, c := range []struct{ name, src, want string }{
+		{"a special builtin", `readonly r=1; a[1]=x r=2 :; echo st=$?`, ident + ro + "st=0\n"},
+		{"an external", `readonly r=1; a[1]=x r=2 /usr/bin/true; echo st=$?`, ident + ro + "st=0\n"},
+		{
+			"a function", `readonly r=1; f() { echo F; }; a[1]=x r=2 f; echo st=$?`,
+			ident + ro + "F\nst=0\n",
+		},
+		{
+			"values and words on both sides",
+			`readonly r=1; w=$(echo W >&2) a[1]=x r=2 b[2]=y q=$(echo Q >&2) :`,
+			"W\n" + ident + ro + "bash: line 1: `b[2]': not a valid identifier\nQ\n",
+		},
+		{"control: the frozen entry first", `readonly r=1; r=2 a[1]=x :; echo st=$?`, ro + ident + "st=0\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			if out, _ := runBash(t, t.TempDir(), c.src); out != c.want {
+				t.Errorf("got %q, want %q", out, c.want)
+			}
+		})
+	}
+}

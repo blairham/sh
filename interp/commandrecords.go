@@ -86,6 +86,11 @@ type commandRecords struct {
 	// Runner.expandThePrefixUpToTheFrozenName. A slice, on the terms
 	// prefixTraceAssigns gives.
 	prefixTracedEarly []*syntax.Assign
+	// prefixSubscriptsRefused are the subscripted prefix entries already
+	// refused, so a word is refused once by whichever walk reaches it first.
+	// See Runner.refuseOneSubscriptedPrefix. A slice, on the terms
+	// prefixTraceAssigns gives.
+	prefixSubscriptsRefused []*syntax.Assign
 	// prefixTraceJoins is the third, and it holds what an **appending**
 	// entry came to: the name's value at the moment this entry expanded,
 	// with the expansion behind it. Recorded rather than derived again,

@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -142,8 +143,18 @@ func (r *Runner) subscriptedPrefixRefusalAnswered(assigns []*syntax.Assign) bool
 	return false
 }
 
-// refuseOneSubscriptedPrefix is the complaint for one such word.
+// refuseOneSubscriptedPrefix is the complaint for one such word, written once
+// for the command whichever walk reaches the word first.
+//
+// Twice-reached is ordinary, not a slip: the frozen-name walk in front of
+// everything else meets the word on its way to the frozen entry, and the
+// ordered walk behind it meets it again. The first is where the word stands
+// in written order. See Runner.expandThePrefixUpToTheFrozenName (#7095).
 func (r *Runner) refuseOneSubscriptedPrefix(a *syntax.Assign) {
+	if slices.Contains(r.prefixSubscriptsRefused, a) {
+		return
+	}
+	r.prefixSubscriptsRefused = append(r.prefixSubscriptsRefused, a)
 	r.diagf("%s\n", Wording(r.diag().SubscriptedPrefixIsNotAName,
 		"`%[1]s': not a valid identifier", subscriptedPrefixSpelling(a, r.wordAsWrittenLayout())))
 }

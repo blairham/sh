@@ -796,7 +796,7 @@ func (r *Runner) traceLiteralAsElementWrites(a *syntax.Assign, e *expandedAssign
 		if el.nested != nil {
 			// A value that is an array of its own, written as the element
 			// write that stores one is. See traceNestedElementWrite.
-			lines = append(lines, r.tracedNestedLines(a.Name, el.sub, el.appendValue, *el.nested, nil, d)...)
+			lines = append(lines, r.tracedNestedLines(a.Name, el.sub, el.appendValue, *el.nested, d)...)
 			continue
 		}
 		op := "="

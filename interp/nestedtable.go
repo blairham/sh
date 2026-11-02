@@ -137,7 +137,7 @@ func (r *Runner) tracedTableWrites(target string, t AssocArray, pairs []literalE
 	lines := make([]string, 0, len(pairs))
 	for _, e := range pairs {
 		if e.nested != nil {
-			lines = append(lines, r.tracedNestedLines(target, quote(e.sub), e.appendValue, *e.nested, nil, d)...)
+			lines = append(lines, r.tracedNestedLines(target, quote(e.sub), e.appendValue, *e.nested, d)...)
 			continue
 		}
 		op := "="
@@ -151,17 +151,11 @@ func (r *Runner) tracedTableWrites(target string, t AssocArray, pairs []literalE
 
 // tracedNestedLines is an element write whose value is an array or a table of
 // its own: one line for an array, and one per pair for a table.
-func (r *Runner) tracedNestedLines(
-	name, sub string,
-	appended bool,
-	value Element,
-	pairs []literalElem,
-	d *Diagnostics,
-) []string {
+func (r *Runner) tracedNestedLines(name, sub string, appended bool, value Element, d *Diagnostics) []string {
 	if value.Table == nil {
 		return []string{r.traceNestedElementWrite(name, sub, appended, value, d)}
 	}
-	return r.tracedTableWrites(name+"["+sub+"]", value.Table, pairs, d)
+	return r.tracedTableWrites(name+"["+sub+"]", value.Table, nil, d)
 }
 
 // nestedOrNil is the element itself where it holds an array or a table, and

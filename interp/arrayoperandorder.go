@@ -227,6 +227,8 @@ func (r *Runner) walkTheLiteralOperandsLeft(
 			op.expanded = e
 		}
 		op.traced = op.traced || t.wasTraced(op.assign)
+		op.placed = op.placed || t.wasPlaced(op.assign)
+		op.refused = op.refused || t.wasRefused(op.assign)
 	}
 	return true, goesOn
 }

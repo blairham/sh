@@ -75,8 +75,10 @@ import (
 // placed in turn as well, by the operand's own store over a saved cell, so a
 // refusal there — an element before the first, an empty key — is reported at
 // the literal's turn, ahead of the utility's own line, and ends the walk with
-// what was placed before it (#6798, #6852). See
-// Runner.placeLiteralOperandInTurn.
+// what was placed before it (#6798, #6852). What was placed stays whatever the
+// utility then does, and inside a function a frozen literal is refused at its
+// own turn while the walk goes on (#7103). See
+// Runner.placeLiteralOperandInTurn and interp/placedliteralskept.go.
 //
 // See Semantics.DeclarationOperandsAreStoredInTurn (#6770).
 
@@ -97,6 +99,12 @@ type operandsInTurn struct {
 	literals map[*syntax.Assign]*expandedAssign
 	// traced is the literal operands whose lines were written here.
 	traced map[*syntax.Assign]bool
+	// placed is the literal operands stored at their turn, which stay
+	// whatever the utility then does; refused is the ones refused at their
+	// turn, which nothing after the utility stores. Both are filled only by
+	// the walk over the literals alone, where the axis places them. See
+	// Runner.settleALiteralOperand.
+	placed, refused map[*syntax.Assign]bool
 	// literalsOnly is the walk that reaches a declaration's array-literal
 	// operands and leaves its scalar ones to the utility: a scalar operand is
 	// expanded in turn and neither held nor traced. Every column but the one
@@ -251,6 +259,24 @@ func (t *operandsInTurn) literal(a *syntax.Assign) *expandedAssign {
 // walk.
 func (t *operandsInTurn) wasTraced(a *syntax.Assign) bool {
 	return t != nil && t.traced[a]
+}
+
+// wasPlaced reports whether this literal operand was stored at its turn.
+func (t *operandsInTurn) wasPlaced(a *syntax.Assign) bool {
+	return t != nil && t.placed[a]
+}
+
+// wasRefused reports whether this literal operand was refused at its turn.
+func (t *operandsInTurn) wasRefused(a *syntax.Assign) bool {
+	return t != nil && t.refused[a]
+}
+
+// markLiteral records what the walk did with a literal operand at its turn.
+func markLiteral(set *map[*syntax.Assign]bool, a *syntax.Assign) {
+	if *set == nil {
+		*set = map[*syntax.Assign]bool{}
+	}
+	(*set)[a] = true
 }
 
 // release puts back what the walk held, where there was a walk, and then what
@@ -696,6 +722,7 @@ func (r *Runner) settleALiteralOperand(
 ) bool {
 	indexed, table := declarationLettersAhead(argv)
 	placed := r.sem().DeclarationArrayOperandsAreStoredInTurn == Yes
+	refusedHere := false
 	switch {
 	case !placed:
 		// Expanded in turn and stored by the utility, which is where a
@@ -710,10 +737,25 @@ func (r *Runner) settleALiteralOperand(
 			return false
 		}
 	case r.attrHas(a.Name, attrReadonly):
-		// Inside a function the store answers, and the walk goes on past it:
-		// a function's `local q=(b)` over a frozen global is the store's
-		// complaint with the call carrying on.
+		// Inside a function a frozen name is not placed, and the walk goes on
+		// past it. Where the utility is about to make the operands locals of
+		// the call, the literal is refused at its own turn — its words
+		// expanded first, then the store's own sentence under the call, and
+		// no line of its own — and the utility then refuses the name in its
+		// words as well. Measured 2026-11-02 on bash 5.3.20 from script files
+		// under `env -i PATH=/usr/bin:/bin`, with `readonly r=1` first:
+		//
+		//	f(){ local -a c=(5) r=($(echo X >&2)) d=(6); }; set -x; f
+		//	    `+ c=('5')`, `++ echo X`, X, `f: r: readonly variable`,
+		//	    `+ d=('6')`, `+ local -a c r d`, `local: r: readonly
+		//	    variable`, and the call carries on at 1
+		//	f(){ :; declare -a c=(5) r=(b); }      `r: readonly variable`,
+		//	    with no name in front: the call speaks for its first command
+		//
+		// `export`, `readonly` and `-g` in a function each answer some other
+		// way, and the store still answers for them after the utility (#7103).
 		placed = false
+		refusedHere = r.operandsAreLocalsOfTheCall(argv)
 	}
 	tableAhead := tableLetterAmongTheOptions(argv)
 	parsed, ok := []literalElem(nil), true
@@ -729,6 +771,13 @@ func (r *Runner) settleALiteralOperand(
 		turn.stop(r, argv)
 		return false
 	}
+	if refusedHere {
+		r.reportTheStoresOwnRefusal(a.Name)
+		markLiteral(&turn.refused, a)
+		// No line is owed for it, here or with the command's.
+		turn.traced[a] = true
+		return true
+	}
 	e := &expandedAssign{assign: a, elemsAreOperands: true, elems: parsed, elemsSet: true}
 	turn.literals[a] = e
 	if r.tracing() && r.diag().TraceDeclarationArrayOperand == TraceOperandSplitBefore {
@@ -736,9 +785,21 @@ func (r *Runner) settleALiteralOperand(
 		turn.traced[a] = true
 		r.writeArrayOperandLines(arrayOperand{assign: a, expanded: e}, tableAhead, r.diag())
 	}
-	if placed && !r.placeLiteralOperandInTurn(ctx, &turn.held, a, e, table || r.assocDeclared(a.Name), indexed) {
+	if !placed {
+		return true
+	}
+	did, ok := r.placeLiteralOperandInTurn(ctx, &turn.held, a, e, table || r.assocDeclared(a.Name), indexed)
+	if !ok {
 		turn.stop(r, argv)
 		return false
+	}
+	if did {
+		// Placed, so it stays whatever the utility then does: measured
+		// 2026-11-02 on bash 5.3.20, `local -a q=(1 2)` at the top level is
+		// `local: can only be used in a function` and leaves `q` the global
+		// array, and `f(){ declare -a c=(5) 'x-y'; }` leaves the call's `c`
+		// holding 5 (#7103). See Runner.literalsPlacedOutliveTheUtility.
+		markLiteral(&turn.placed, a)
 	}
 	return true
 }
@@ -747,8 +808,8 @@ func (r *Runner) settleALiteralOperand(
 // now, for the operands behind it to see, having saved the cell so that the
 // walk's release puts it back and the utility makes the store that stays. The
 // store is the operand's own, so what it refuses and what a refusal keeps are
-// the same here as there. Reports whether the placement went through; a
-// refusal has been reported.
+// the same here as there. Reports whether it was placed, and whether the
+// placement went through; a refusal has been reported.
 //
 // Placed only where the cell the walk would save is the one the store writes
 // and the kind the letters are about to give it: a name that is not a tie or a
@@ -761,9 +822,9 @@ func (r *Runner) placeLiteralOperandInTurn(
 	a *syntax.Assign,
 	e *expandedAssign,
 	table, indexed bool,
-) bool {
+) (placed, ok bool) {
 	if a.Index != nil || len(a.Leading) > 0 {
-		return true
+		return false, true
 	}
 	// Through a reference the store lands on what it names, so that is the
 	// cell saved — `declare -n ref=tgt; declare -a ref=(1 2) z=(${tgt[1]})`
@@ -773,26 +834,26 @@ func (r *Runner) placeLiteralOperandInTurn(
 	if r.isNameref(name) {
 		target, cycle, aimed := r.namerefWalk(name)
 		if !aimed || cycle || strings.ContainsRune(target, '[') {
-			return true
+			return false, true
 		}
 		name = target
 	}
 	if _, tied := r.tieOf(name); tied {
-		return true
+		return false, true
 	}
 	if _, produced := r.producersLookup(name); produced {
-		return true
+		return false, true
 	}
 	if _, produced := r.arrayProducersLookup(name); produced {
-		return true
+		return false, true
 	}
 	_, holds := r.getVar(name)
 	holds = holds || r.nameIsAnArray(name)
 	switch {
 	case table && !r.assocDeclared(name) && holds:
-		return true
+		return false, true
 	case indexed && !table && r.assocDeclared(name):
-		return true
+		return false, true
 	}
 	if !table {
 		// Each subscript read once, here, so the placement and the store that
@@ -806,7 +867,7 @@ func (r *Runner) placeLiteralOperandInTurn(
 	}
 	place := *e
 	r.withPreparedValue(ctx, &place)
-	return !r.expandErr && !r.givingUpAlready() && !r.unspecified
+	return true, !r.expandErr && !r.givingUpAlready() && !r.unspecified
 }
 
 // placeLiteralSubscriptsOnce evaluates a literal's subscripts in order and

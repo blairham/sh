@@ -11765,6 +11765,18 @@ type Semantics struct {
 	// global `a` alone in bash, and `function f { typeset -a a=(5) b=(6
 	// $((1/0))); }` in ksh93u+, while `declare -ga` and `export` keep it.
 	//
+	// And a literal placed is stored, whatever the utility then does: in bash
+	// 5.3.20 `local -a q=(1 2)` at the top level is `local: can only be used
+	// in a function` and leaves `q` the global array, and `readonly r=1;
+	// declare -a c=(5) r d=(6)` is the utility's refusal of `r` with `c` and
+	// `d` holding 5 and 6. Inside a function a frozen literal is refused at
+	// its own turn where the utility makes locals, in the bare assignment's
+	// sentence, and the walk goes on: `+ c=('5')`, `f: r: readonly variable`,
+	// `+ d=('6')`, the utility's line and its own refusal, and the call's `c`
+	// and `d` hold 5 and 6 (#7103, interp/placedliteralskept.go). The column
+	// that stores every operand in turn reaches its literals through the
+	// other walk, which this does not reach.
+	//
 	// **Read rather than asked**, since the question is put to every
 	// declaration with an array literal. dash and BusyBox ash have no array
 	// literal (#6798).

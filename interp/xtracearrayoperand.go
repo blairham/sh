@@ -81,6 +81,11 @@ type arrayOperand struct {
 	// traced says the operand's lines were written as it was held, ahead of
 	// the command's own line. See interp/declarationinturn.go.
 	traced bool
+	// placed says the operand walk stored it at its turn, so the store after
+	// the utility makes it whatever the utility's status; refused says the
+	// walk refused it at its turn, so that store leaves it alone. See
+	// Runner.settleALiteralOperand.
+	placed, refused bool
 }
 
 // expandedArrayOperand is the element list already expanded for this operand,

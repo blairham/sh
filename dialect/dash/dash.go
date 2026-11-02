@@ -291,6 +291,10 @@ func Semantics() interp.Semantics {
 	// The redirections are opened first: measured 2026-09-18, `w=$(echo S
 	// >&2) f > /nope/x` writes the file complaint alone, at 2 (#3449).
 	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsNever
+	// And so nothing of it is stored when one fails, though `:` keeps its
+	// prefix: measured 2026-11-02, `x=0; x=5 : >/nope/x` leaves 0 for an
+	// EXIT trap (#6986).
+	s.PersistingPrefixStoredBeforeTheRedirections = interp.No
 	// Whether a command's trace line waits for its redirections. See
 	// interp.Semantics.TraceLineFollowsTheRedirections (#5547).
 	s.TraceLineFollowsTheRedirections = interp.Yes

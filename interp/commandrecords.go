@@ -116,4 +116,8 @@ type commandRecords struct {
 	// openTraceLiteral is the element literal whose words the open trace line
 	// is waiting for. See Runner.openTraceTakesTheLiteral.
 	openTraceLiteral *syntax.Assign
+	// prefixStoredAhead is this command's persisting prefix as the store made
+	// ahead of its redirections left it, for the route behind them to take
+	// rather than store a second time. See interp/prefixstoredahead.go.
+	prefixStoredAhead storedAheadPrefix
 }

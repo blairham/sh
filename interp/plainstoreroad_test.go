@@ -62,6 +62,10 @@ var theFullRoad = map[string][]string{
 		// A dotted name's missing parent — storesAPlainScalar takes only an
 		// identifier, which has no dot in it (#6628).
 		"refuseAStoreWithNoParent",
+		// An element written through a reference aimed at an element, which
+		// is the element road again: storesAPlainScalar refuses every
+		// subscript (#7113).
+		"elementWriteThroughAnElementReference", "assignThroughAnElementReference",
 	},
 	"setVarAs": {
 		"registeredGuard", "attributeFolded", "compoundMemberThroughAReference",

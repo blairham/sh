@@ -87,7 +87,7 @@ func (r *Runner) tracePrefixAsItGoes(c *syntax.SimpleCmd, argv []string, walk pr
 	// And an element write's subscript is read where its entry stands, so the
 	// element is held for the entries behind it. See
 	// interp/prefixsubscriptinturn.go.
-	subscripts := r.prefixSubscriptsReadHere(c.Assigns, argv)
+	subscripts := r.prefixSubscriptsReadHere(c.Assigns, argv, held.route)
 	for i, a := range c.Assigns {
 		if a.Operand {
 			continue

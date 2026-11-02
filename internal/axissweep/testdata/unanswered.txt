@@ -334,6 +334,7 @@ ash   SubscriptedOperandTakesALocalDeclaration
 ash   SubscriptedOperandTakesTheContainerAttribute
 ash   SubscriptedOperandTakesTheIntegerAttribute
 ash   SubscriptedPrefixIsTakenBack
+ash   SubscriptedPrefixToABuiltinIsAFreshArray
 ash   SubshellIsAJobInItsOwnTable
 ash   TableLetterReachesItsOwnOperandsSubscript
 ash   TableUnderAnArrayDeclaration
@@ -420,6 +421,7 @@ bash  SetArrayOptionsContinuePastTheName
 bash  SetArrayWithNoValuesUnsetsTheName
 bash  ShiftFromTheEndLetter
 bash  SubscriptedPrefixIsTakenBack
+bash  SubscriptedPrefixToABuiltinIsAFreshArray
 bash  WidthJustificationPrecedence
 bash  WidthLettersExcludeTheIntegerLetter
 bash  WidthNumberPrecedence
@@ -777,6 +779,7 @@ dash  SubscriptedOperandTakesALocalDeclaration
 dash  SubscriptedOperandTakesTheContainerAttribute
 dash  SubscriptedOperandTakesTheIntegerAttribute
 dash  SubscriptedPrefixIsTakenBack
+dash  SubscriptedPrefixToABuiltinIsAFreshArray
 dash  SubstitutionPathPrefersProcSelfFd
 dash  SubstringEndBehindTheStart
 dash  SubstringRangeThirdColonIsABadSubstitution
@@ -940,6 +943,7 @@ zsh   RegexMatchOmitsGroupsThatDidNotMatch
 zsh   RegexMatchSurvivesAFailedMatch
 zsh   ReportsAKilledCommandInACommandSubstitution
 zsh   RestrictedFreezeRefusesALetterThatChangesTheName
+zsh   SubscriptedPrefixToABuiltinIsAFreshArray
 zsh   SubstringRangeThirdColonIsABadSubstitution
 zsh   TableLetterReachesItsOwnOperandsSubscript
 zsh   TransformLetterCheckedOnlyWhenValued

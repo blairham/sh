@@ -486,11 +486,12 @@ func Semantics() interp.Semantics {
 	s.PrefixEntriesStayWhenAnInteractiveShellCarriesOn = interp.No
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
 	s.DeclarationPromotesThePrefixEntry = interp.No
-	// unanswered SubscriptedAssignmentPrefix, SubscriptedPrefixIsTakenBack:
-	// a subscripted word is no assignment in this grammar, so `a[1]=v f` is
-	// the *command* `a[1]=v` and the complaint is `a[1]=v: not found`. The
-	// word never becomes an assignment prefix and neither axis is reached.
-	// Measured 2026-09-16 on BusyBox ash 1.37.0 (#3433).
+	// unanswered SubscriptedAssignmentPrefix, SubscriptedPrefixIsTakenBack,
+	// SubscriptedPrefixToABuiltinIsAFreshArray: a subscripted word is no
+	// assignment in this grammar, so `a[1]=v f` is the *command* `a[1]=v`
+	// and the complaint is `a[1]=v: not found`. The word never becomes an
+	// assignment prefix and no axis of the three is reached. Measured
+	// 2026-09-16 on BusyBox ash 1.37.0 (#3433).
 	// POSIX makes an unquoted `$@` behave as `$*` where nothing is split, and
 	// this shell complies: `IFS=-; set -- x y z; v=${@}` is `x-y-z`.
 	s.UnsplitAtListJoinsOnIFS = interp.Yes

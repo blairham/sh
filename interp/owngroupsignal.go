@@ -163,6 +163,11 @@ func (r *Runner) signalTheGroupFromASubshell(name string, sig syscall.Signal, tr
 		// it in the shell's process, and it has ended it.
 		return
 	}
+	if r.theJobAround() != nil {
+		// The subshell is in a job's group and not this one, so the shell's
+		// copy is the only one there is. See jobgroupsignal.go.
+		return
+	}
 	_ = r.signalThisBody(name, sig)
 	// Not reached in the dialect whose `( … )` is the shell's own process:
 	// that copy has ended the subshell above, and the rule that did it ends

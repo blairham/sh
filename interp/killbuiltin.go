@@ -1200,6 +1200,12 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 			r.signalTheBodyAround(a, name, sig)
 			return nil
 		}
+		// A group kill from inside a job a real shell forked under the
+		// monitor, at that job's group, which the shell is not in (#7246).
+		// See jobgroupsignal.go.
+		if job := r.theJobAround(); job != nil && (pid == 0 || job.anchor.leads(-pid)) {
+			return r.signalTheJobsGroup(name, sig)
+		}
 		if aimedAtTheShellsOwnGroup(pid) {
 			return r.signalTheShellsOwnGroup(pid, name, sig)
 		}

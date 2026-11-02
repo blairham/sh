@@ -2302,6 +2302,47 @@ signal. ksh93 runs a `( … )` in its own process, so there the
 subshell's copy is the shell's, and the rule that ends it at the shell's
 answer ends every unforked subshell around it as well.
 
+**Under the monitor the group is the job's, not the shell's.** A body a
+real shell forks as a job — a `( … )`, a background job's body — leads a
+process group of its own when the shell that forked it has the monitor
+on, so a group kill inside it reaches that group and the shell gets no
+copy (#7246). Measured 2026-11-01, each shell in a process group of its
+own and no terminal, against bash 5.3.20 and bash 3.2.57:
+
+    set -m; trap 'echo T' USR1; (kill -USR1 0; echo in); echo out=$?
+                                         the notice, out=158, no T
+    …with `(set +m; …)` inside           the same
+    trap 'echo T' USR1; (set -m; kill -USR1 0; echo in); echo out=$?
+                                         T, out=158: the shell's group
+    …with `kill -USR1 -$BASHPID`         the first row
+    …with `kill -USR1 -$$`               in, T, out=0
+    set -m; trap 'echo T' USR1; ( (kill -USR1 0; echo in2); echo in1 )
+                                         the notice, out=158, no T
+    set -m; trap 'echo T' USR1; (kill -USR1 0; echo in) & wait $!
+                                         out=158, no T
+    set -m; (kill -TERM 0; echo in); echo out=$?
+                                         the notice, out=143
+
+zsh 5.9.2 refuses `set -m` without a terminal and dash turns it off; on
+a pseudo-terminal, where both grant it, both write every row as bash
+does. ksh93u+ runs a `( … )` in its own process, so there is no job and
+it writes T and out=286 as without the monitor; its background job is a
+group of its own and writes no T. So every shell that forks agrees, and
+there is no axis. The noun is the monitor **at the fork of the body the
+shell itself forked**: turned on inside the parentheses it makes no
+group, and a body forked inside a job has no job control of its own, so
+the nested row takes both parentheses. Here the shell ran its handler
+for every row, and an untrapped signal killed the whole shell, because
+the kernel's copy of a group kill reached this process. Now the bodies
+in the job settle their copies and nothing is sent to the kernel: not
+the shell's group, and not the group a placeholder leads, whose death
+made the next program started into it fail (#7238).
+
+A foreground pipeline is the same question with a split in it — bash,
+zsh and dash give it a group of its own under the monitor and ksh93
+leaves its elements in the shell's group under `-c` even on a terminal —
+and is #7318's.
+
 The lesson is about the instrument: a corpus records what a shell does,
 and it cannot record a *sometimes*. Anything measured has to be
 deterministic first, or the measurement is of the machine rather than of

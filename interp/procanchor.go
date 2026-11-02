@@ -132,13 +132,6 @@ type procAnchor struct {
 	// placeholder, which may be older than the anchor: see
 	// procanchorspare.go.
 	exited chan struct{}
-
-	// monitored records that the body was forked while the monitor was on,
-	// which is when a real shell can have made it a group of its own.
-	// Without it the group is this shell's arrangement and no reference's,
-	// and a script aiming a group kill at it is refused. See
-	// aimedAtAGroupNoForkLeads.
-	monitored bool
 }
 
 // newProcAnchor makes the anchor for one substitution body, unstarted.
@@ -273,10 +266,6 @@ func (c *Runner) anchorForkedBody() func() {
 		return exit
 	}
 	a.outer = c.bodyAnchor
-	// The clone has not run anything yet, so its monitor is still the one
-	// of the shell that forked it — the one that decided whether a real
-	// shell's fork would have led a group.
-	a.monitored = c.monitor
 	// The group is this body's, and a copy of the body reaches the body
 	// through it. See selfkillbody.go.
 	c.process.anchor = a

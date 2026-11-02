@@ -928,6 +928,9 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// on running, so the release goes with the two above rather than here.
 	// See Runner.anchorForkedBody.
 	releaseAnchor := sub.anchorForkedBody()
+	// And it is a job, which under the monitor is a process group of its
+	// own in every dialect. See jobgroupsignal.go.
+	sub.process.job = true
 	// A background job keeps the parent's trap listing in one shell fewer
 	// than a pipeline element does, so it is its own kind of boundary.
 	sub.retagTrapBoundary(trapContextBackground)

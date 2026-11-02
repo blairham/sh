@@ -207,6 +207,11 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// is nothing left of the subshell to hold it open. See
 		// Runner.anchorForkedBody.
 		defer sub.anchorForkedBody()()
+		// And a job of its own where a real shell forks the parentheses at
+		// all, which is everywhere but the dialect that runs them in its own
+		// process. Read rather than asked: what it decides is only consulted
+		// by a group kill under the monitor. See jobgroupsignal.go.
+		sub.process.job = !sub.subshellUnforked || r.sem().SubshellRunsOnAfterSignalingTheShell != No
 		sub.inParensBody = true
 		err := sub.runList(ctx, c.List)
 		if sub.tailReached {

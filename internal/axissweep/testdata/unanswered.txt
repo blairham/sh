@@ -68,6 +68,7 @@ ash   BadSubscriptToUnset
 ash   BareElementsInATableLiteralAreEachOneValue
 ash   BareElementsInATableLiteralMustPairOff
 ash   BareFloatLetterResetsThePrecision
+ash   BareReferenceLetterFollowsTheReference
 ash   BareSubscriptIsASubscript
 ash   BareTypesetListing
 ash   BlankArithSubscriptIsTheEmptyExpression
@@ -355,6 +356,7 @@ ash   UnsetStatusIsTheLastSubscripts
 ash   UnsetSubscriptSkippedWhenNameUnset
 ash   UpperCaseLetterBesideANumericTypeLetterRecordsNothing
 ash   ValuelessSubscriptedOperand
+ash   ValueThroughAReferenceAimsTheUnaimedEnd
 ash   WholeArraySubscriptAssigningATable
 ash   WholeArraySubscriptAssigningAnArray
 ash   WholeArraySubscriptKeyInATableLiteral
@@ -469,6 +471,7 @@ dash  BareElementsInATableLiteralAreEachOneValue
 dash  BareElementsInATableLiteralMustPairOff
 dash  BareFloatLetterResetsThePrecision
 dash  BareReadTakesTheLineWhole
+dash  BareReferenceLetterFollowsTheReference
 dash  BareSubscriptIsASubscript
 dash  BareTypesetListing
 dash  BlankArithSubscriptIsTheEmptyExpression
@@ -795,6 +798,7 @@ dash  UnsetStatusIsTheLastSubscripts
 dash  UnsetSubscriptSkippedWhenNameUnset
 dash  UpperCaseLetterBesideANumericTypeLetterRecordsNothing
 dash  ValuelessSubscriptedOperand
+dash  ValueThroughAReferenceAimsTheUnaimedEnd
 dash  WholeArraySubscriptAssigningATable
 dash  WholeArraySubscriptAssigningAnArray
 dash  WholeArraySubscriptKeyInATableLiteral
@@ -871,6 +875,7 @@ zsh   AliasNameCheckReachesALookup
 zsh   ArithSubscriptDollarSingleIsDecoded
 zsh   ArrayLetterOverAnUnaimedReferenceDropsIt
 zsh   BackgroundJobInputIsOnlyTheShellsOwn
+zsh   BareReferenceLetterFollowsTheReference
 zsh   BraceFreesProducedGroupSyntax
 zsh   BraceMakesAProducedStarOrBracketText
 zsh   ContainerWriteThroughAReferenceNamesTheReference
@@ -939,3 +944,4 @@ zsh   UnsetReferenceLetterRemovesANonReference
 zsh   FunctionBodyListingWritesItsAttributes
 zsh   SubstitutionRunsTheBodyReadWithItsLine
 zsh   FdMoveSuffixMustBeWritten
+zsh   ValueThroughAReferenceAimsTheUnaimedEnd

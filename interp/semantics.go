@@ -3032,6 +3032,79 @@ type Semantics struct {
 	// TestADeclarationThroughAFunctionsOwnReferenceStoresThroughIt.
 	DeclarationThroughAReferenceMakesTheTargetLocal Answer
 
+	// ValueThroughAReferenceAimsTheUnaimedEnd decides which reference a value
+	// aims when it is written to a reference whose chain ends at one aimed at
+	// nothing: Yes aims the one at the end, as the same value written to that
+	// name directly would; No aims the reference the script wrote.
+	//
+	// Measured 2026-11-02 on ksh93u+ 2012-08-01 from `-c` under `env -i
+	// PATH=/usr/bin:/bin`, with `typeset -n m; typeset -n l=m` first (#7114):
+	//
+	//	l=y                 `typeset -n m=y`, traced `+ m=y`
+	//	l+=y, typeset l=y   the same
+	//	l=y :               the same, traced `+ m=y`, `+ :`
+	//	l=1                 `1: invalid variable name`, and the shell ends
+	//	for l in y          `typeset -n l=y`: the loop aims its own name and
+	//	                    never comes here
+	//
+	// The control is a chain whose end is aimed, `x=0; typeset -n m=x;
+	// typeset -n l=m; l=5`, which writes 5 into `x` in both shells. ksh93
+	// then lists `l` as `typeset -n l=.deleted`, which is its listing for any
+	// reference whose target was made a reference afterwards — `typeset -n
+	// l=x; typeset -n x=z` lists `l` the same way — and which this shell does
+	// not model, there or here. ksh93 builds no longer chain to an unaimed
+	// end: `typeset -n l=k` over `typeset -n k=m` is `typeset: m: no
+	// reference name`.
+	//
+	// bash 5.3.20 aims neither, and not in one way: after `declare -n m;
+	// declare -n l=m`, `l=y` gives up its line at 1 with nothing said,
+	// `declare l=y` and `l=y :` change nothing at 0, `export l=y` is
+	// ``export: `': not a valid identifier``, and `for l in y` aims `m`.
+	// None of that is modeled; its No keeps what every column did before the
+	// axis existed.
+	//
+	// Read as a plain comparison rather than asked, for the reason
+	// RefusedReferenceAimIsFatal gives. See Runner.referenceAValueAims.
+	//
+	// unpinned ksh: pinned by
+	// TestAValueThroughAReferenceAimsTheUnaimedOneAtTheEndOfTheChain.
+	ValueThroughAReferenceAimsTheUnaimedEnd Answer
+
+	// BareReferenceLetterFollowsTheReference makes a valueless `-n`
+	// declaration over a name that is already an aimed reference a
+	// declaration of the name the reference reaches, which then becomes a
+	// reference itself and adopts the value it holds as the name to aim at.
+	// No leaves the reference standing as it was.
+	//
+	// Measured 2026-11-02 from `-c` under `env -i PATH=/usr/bin:/bin`, with
+	// `typeset -n m=x` (`declare -n` in bash) and then `typeset -n m` (#7115):
+	//
+	//	x first   ksh93u+                                 bash 5.3.20
+	//	x=y       `typeset -n x=y`, 0                     `m="x"`, `x="y"`, 0
+	//	x=0       `typeset: 0: invalid variable name`,    `m="x"`, 0
+	//	          and the shell ends
+	//	x=        `typeset: : invalid variable name`,     `m="x"`, 0
+	//	          and the shell ends
+	//	unset     `typeset -n x`, aimed at nothing, 0     `m="x"`, 0
+	//
+	// So in ksh93 the line is `typeset -n x`, with every answer that line has
+	// — see Runner.declareNameref, whose adoption of a value already standing
+	// under the name is each row. A reference aimed at an element reaches its
+	// array, as an attribute does: with `a=(p q); typeset -n m='a[1]'` the
+	// line is `typeset: a: reference variable cannot be an array`. A valued
+	// `typeset -n m=z` re-aims `m` in both shells, and a function's `typeset
+	// -n m` over a reference it did not make declares a fresh local of its
+	// own in both; neither comes here. ksh93 lists `m` as `typeset -n
+	// m=.deleted` afterwards wherever `x` held a value, which is the listing
+	// ValueThroughAReferenceAimsTheUnaimedEnd describes and does not model.
+	//
+	// Read as a plain comparison, as the axis above is. See
+	// Runner.declarationFollowsTheReference.
+	//
+	// unpinned ksh: pinned by
+	// TestABareReferenceLetterOverAnAimedReferenceDeclaresItsTarget.
+	BareReferenceLetterFollowsTheReference Answer
+
 	// DeclarationOperandSplitsAfterTheSubscript looks for a declaration
 	// operand's `=` after its subscript's closing bracket, so an `=` inside
 	// the subscript is part of the key. No cuts the operand at its first `=`.

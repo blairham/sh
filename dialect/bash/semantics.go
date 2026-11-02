@@ -1158,6 +1158,15 @@ func Semantics() interp.Semantics {
 	// declare -n m=x; declare m=3; }; f` leaves `x=0` (#4088, #7352). See
 	// interp.Semantics.DeclarationThroughAReferenceMakesTheTargetLocal.
 	s.DeclarationThroughAReferenceMakesTheTargetLocal = interp.Yes
+	// A value written to a reference whose chain ends at one aimed at nothing
+	// aims neither one here, and the several ways it does not are not modeled
+	// (#7114). See interp.Semantics.ValueThroughAReferenceAimsTheUnaimedEnd.
+	s.ValueThroughAReferenceAimsTheUnaimedEnd = interp.No
+	// And a bare `declare -n m` over an aimed `m` leaves it as it was:
+	// measured 2026-11-02 on 5.3.20, `x=0; declare -n m=x; declare -n m` is 0
+	// and lists `declare -n m="x"` (#7115). See
+	// interp.Semantics.BareReferenceLetterFollowsTheReference.
+	s.BareReferenceLetterFollowsTheReference = interp.No
 	// Measured 2026-10-16 (#6781): see
 	// interp.Semantics.DeclarationOperandSplitsAfterTheSubscript.
 	s.DeclarationOperandSplitsAfterTheSubscript = interp.Yes

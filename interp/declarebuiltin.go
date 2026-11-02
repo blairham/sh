@@ -2382,7 +2382,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 		// where every other valueless declaration does. See declareEmpty's
 		// leavesAnAttribute argument (#4163).
 		followedAReference := false
-		if target, follows := r.attributeFollowsTheReference(name, df); follows {
+		if target, follows := r.declarationFollowsTheReference(name, df, hasValue); follows {
 			followedAReference = true
 			// The refusal the redirect leads to may still be spoken of under
 			// the name the script wrote, which is one column's answer and

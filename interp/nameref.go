@@ -469,6 +469,12 @@ func (r *Runner) namerefAssignmentTarget(name, value string, form assignForm) (t
 	if aimed {
 		return target, true
 	}
+	if !cycle {
+		// The reference the value aims, which is the one at the end of a
+		// chain in the column that aims that one (#7114). Every check below
+		// is about the reference being aimed, so they are all asked of it.
+		name = r.referenceAValueAims(name, target)
+	}
 	if cycle {
 		// **A reference in a cycle is aimed, not unaimed.** The walk cannot
 		// hand back a name, but the reference has one written in it, so an
@@ -578,6 +584,19 @@ func (r *Runner) namerefAssignmentTarget(name, value string, form assignForm) (t
 	}
 	r.setNameref(name, value)
 	return name, false
+}
+
+// referenceAValueAims is the reference a value written to name aims, where
+// name's chain ends at end, a reference aimed at nothing: end itself in the
+// column whose value follows the chain there, and name everywhere else. A
+// name with no chain behind it is its own end, so `typeset -n m; m=y` aims
+// `m` whatever the answer. See Semantics.ValueThroughAReferenceAimsTheUnaimedEnd
+// and Runner.nameTracedThroughTheReference, which writes the same name.
+func (r *Runner) referenceAValueAims(name, end string) string {
+	if end != name && r.sem().ValueThroughAReferenceAimsTheUnaimedEnd == Yes {
+		return end
+	}
+	return name
 }
 
 // referenceIsThisCallsOwn reports whether the reference under this name was

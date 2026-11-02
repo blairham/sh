@@ -2336,6 +2336,16 @@ func Semantics() interp.Semantics {
 	// leaves `x=3` (#7352). See
 	// interp.Semantics.DeclarationThroughAReferenceMakesTheTargetLocal.
 	s.DeclarationThroughAReferenceMakesTheTargetLocal = interp.No
+	// A value written to a reference whose chain ends at one aimed at nothing
+	// aims that one: measured 2026-11-02, `typeset -n m; typeset -n l=m; l=y`
+	// lists `typeset -n m=y` and traces `+ m=y` (#7114). See
+	// interp.Semantics.ValueThroughAReferenceAimsTheUnaimedEnd.
+	s.ValueThroughAReferenceAimsTheUnaimedEnd = interp.Yes
+	// And a bare `typeset -n m` over an aimed `m` declares what `m` reaches:
+	// measured 2026-11-02, `x=0; typeset -n m=x; typeset -n m` is `typeset: 0:
+	// invalid variable name` and the shell ends (#7115). See
+	// interp.Semantics.BareReferenceLetterFollowsTheReference.
+	s.BareReferenceLetterFollowsTheReference = interp.Yes
 	// Measured 2026-10-16 (#6781): see
 	// interp.Semantics.DeclarationOperandSplitsAfterTheSubscript.
 	s.DeclarationOperandSplitsAfterTheSubscript = interp.Yes

@@ -327,7 +327,7 @@ func (r *Runner) refusePrefixesEarly(assigns []*syntax.Assign, argv []string) bo
 		!r.tracePrefixFollowsTheCommand(assigns, argv)
 	held := heldPrefix{route: r.heldExportRouteOf(argv)}
 	defer held.release(r)
-	if r.expandThePrefixUpToTheFrozenName(assigns, refuseEach, traceEach, &held) {
+	if r.expandThePrefixUpToTheFrozenName(assigns, refuseEach, traceEach, &held, p) {
 		// The expansion's sentence is the whole of what the script is told,
 		// and the command is over: the refusal is never written.
 		r.givesUpForAFailedPrefix(walk, p)
@@ -388,15 +388,11 @@ func (r *Runner) prefixRefusalApplies(p prefixCommand) bool {
 // them are named follows from this: a shell that gives the command up stops at
 // the first refusal and a shell that carries on names them all.
 func (r *Runner) prefixRefusalCost(p prefixCommand) (fatal, skip, giveUpTheLine bool, unanswered string) {
-	if r.posixMode && r.ask(r.sem().PosixModeSharpensAPrefixRefusal,
-		"POSIX mode sharpening what a refused assignment prefix costs") {
+	if sharpened, fatal := r.posixModeSharpensThePrefixRefusal(p); sharpened {
 		// The mode answers both halves at once and the fatality and cost
 		// axes are not consulted: see
-		// Semantics.PosixModeSharpensAPrefixRefusal for the five rows.
-		if p.kind == prefixBeforeSpecialBuiltin {
-			return true, true, false, ""
-		}
-		return false, true, true, ""
+		// Semantics.PosixModeSharpensAPrefixRefusal for the rows.
+		return fatal, true, !fatal, ""
 	}
 	fatal, answered := r.prefixFatalityForTheCommand(p)
 	if !answered {
@@ -412,6 +408,47 @@ func (r *Runner) prefixRefusalCost(p prefixCommand) (fatal, skip, giveUpTheLine 
 		return false, false, false, ""
 	}
 	return false, true, false, "a refused assignment prefix costing the command it stood in front of"
+}
+
+// posixModeSharpensThePrefixRefusal reports whether POSIX mode decides what a
+// refused assignment prefix costs this command, and if it does, whether the
+// refusal ends the shell rather than giving up the rest of the line.
+//
+// Shared by the two refusals the mode moves alike — a frozen name and a
+// subscripted word the dialect will not take — so the two cannot come to be
+// keyed on different things. The key is the special builtin that **runs**:
+// `command :` gives up the line where `:` ends the shell. See
+// Semantics.PosixModeSharpensAPrefixRefusal (#7343).
+func (r *Runner) posixModeSharpensThePrefixRefusal(p prefixCommand) (sharpened, fatal bool) {
+	if !r.posixMode || !r.ask(r.sem().PosixModeSharpensAPrefixRefusal,
+		"POSIX mode sharpening what a refused assignment prefix costs") {
+		return false, false
+	}
+	return true, p.kind == prefixBeforeSpecialBuiltin && !p.throughCommand
+}
+
+// stopForARefusedPrefix ends the shell over a refused prefix, or gives up the
+// rest of the line, which are the two costs that leave the command unrun and
+// stop the walk.
+//
+// The fatal half is the failed expansion's door, for its number: measured
+// 2026-11-02 on bash 5.3.20, `set -o posix; readonly r=1; r=2 :` and `a[1]=x
+// :` each end a command string at **127** and a script file at 1, and a
+// function keeps the 127 where a subshell does not — exactly
+// Diagnostics.ExpansionFailureStatusFromCommandString (#7343). That column is
+// the only one with such a number and is fatal here only in POSIX mode, so a
+// dialect that ends the shell on every refusal keeps its ordinary status.
+//
+// The other half goes through the door the core's own give-ups use: measured,
+// `v=3 true; echo pre=$?` writes no `pre=` and the next line reports 1, a
+// function body, an `if`, a `for` and a `||` unwind alike, and a command
+// string ends the shell at 1 instead.
+func (r *Runner) stopForARefusedPrefix(fatal bool) {
+	if fatal {
+		r.fatalExpansionQuiet()
+		return
+	}
+	r.GiveUpTheCommandAt(1)
 }
 
 // prefixRefusalEndsTheWalk reports whether a walk over a prefix in front of
@@ -538,16 +575,11 @@ func (r *Runner) refusePrefixesNow(assigns []*syntax.Assign, p prefixCommand, re
 	case unanswered != "":
 		r.diagf("%s\n", r.unanswered(unanswered))
 		r.status, r.unspecified = 2, true
-	case fatal:
-		r.fatalQuiet()
-	case giveUpTheLine:
+	case fatal, giveUpTheLine:
 		// The command is not run and neither is the rest of the command
-		// list, which is the whole of the difference from the case below:
-		// measured, `v=3 true; echo pre=$?` writes no `pre=` and the next
-		// line reports 1. Through the door the core's own give-ups use, so
-		// a function body, an `if`, a `for` and a `||` unwind alike and a
-		// command string ends the shell instead.
-		r.GiveUpTheCommandAt(1)
+		// list — or the shell — which is the whole of the difference from
+		// the case below. See Runner.stopForARefusedPrefix.
+		r.stopForARefusedPrefix(fatal)
 	case skip:
 		// The command is not run and the status is the refusal's own.
 		// Measured: `readonly x=1; x=2 /bin/echo RAN; echo after` prints the

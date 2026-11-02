@@ -1092,6 +1092,12 @@ func Semantics() interp.Semantics {
 	// rule for a failed assignment rather than this one (#7085). See
 	// interp.Semantics.RefusedReferenceAimIsFatal.
 	s.RefusedReferenceAimIsFatal = interp.No
+	// And `set -o posix` ends the bare assignment's, at 127 from `-c` and 1
+	// from a file, where the loop and `declare m=1` still carry on: measured
+	// 2026-11-02 on 5.3.20, the same for `ref[0]=foo` through a reference
+	// with nothing to point at (#7343). See
+	// interp.Semantics.PosixModeSharpensARefusedReferenceAim.
+	s.PosixModeSharpensARefusedReferenceAim = interp.Yes
 	// A `-n` declaration over a name carrying an array is refused **after**
 	// the two refusals about the name itself, and the array *attribute* is
 	// enough: measured 2026-09-16 on 5.3.20, `typeset -a r; typeset -n r=v`
@@ -1969,8 +1975,10 @@ func Semantics() interp.Semantics {
 	// And POSIX mode moves both of those: measured 2026-09-18 from a script
 	// file with `set -o posix; readonly v=1` in front of it, `v=3 true;
 	// echo pre=$?` writes the complaint, never the `pre=`, and reports 1 on
-	// the next line, while `v=3 :` ends the script at 1. See
-	// Semantics.PosixModeSharpensAPrefixRefusal.
+	// the next line, while `v=3 :` ends the script at 1 — and a command
+	// string at 127. A refused subscripted word, `a[1]=x :`, is moved the
+	// same way, and `command :` is not a special builtin to either (#7343).
+	// See Semantics.PosixModeSharpensAPrefixRefusal.
 	s.PosixModeSharpensAPrefixRefusal = interp.Yes
 	// A failed expansion gives up the line here and the shell carries on at
 	// the next one, which is this shell alone among the four. Measured over

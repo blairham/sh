@@ -10194,8 +10194,10 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	if !answered {
 		return nil
 	}
-	if !early {
-		r.refuseSubscriptedPrefixes(c.Assigns)
+	if !early && r.refuseSubscriptedPrefixes(c.Assigns, argv) {
+		// POSIX mode made the refusal cost the command, and it has already
+		// unwound what it costs. See Runner.refuseOneSubscriptedPrefix.
+		return nil
 	}
 	// Not a second time where the walk in front of a declaration's operand
 	// has already asked it. See interp/prefixoperandorder.go.
@@ -10627,7 +10629,8 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// that ends the shell leave the entries in front of it. See
 		// interp/prefixentriesstay.go.
 		frozenHeld := heldPrefix{route: heldExportRoute{set: true, kind: prefixCommand{kind: prefixBeforeFunction}}}
-		if !r.prefixCheckedFirst && r.expandThePrefixUpToTheFrozenName(c.Assigns, nil, false, &frozenHeld) {
+		if !r.prefixCheckedFirst && r.expandThePrefixUpToTheFrozenName(c.Assigns, nil, false, &frozenHeld,
+			prefixCommand{kind: prefixBeforeFunction}) {
 			// A frozen name's own value is what failed, in one of the four
 			// columns that evaluate it first: the expansion's sentence is
 			// the whole of what the script is told, the refusal is never
@@ -10815,7 +10818,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// that ends the shell leave the entries in front of it. See
 		// interp/prefixentriesstay.go.
 		frozenHeld := heldPrefix{route: heldExportRoute{set: true, kind: kind}}
-		if !r.prefixCheckedFirst && r.expandThePrefixUpToTheFrozenName(c.Assigns, nil, false, &frozenHeld) {
+		if !r.prefixCheckedFirst && r.expandThePrefixUpToTheFrozenName(c.Assigns, nil, false, &frozenHeld, kind) {
 			// What the frozen name was being given is what failed, in one of
 			// the four columns that evaluate it ahead of the refusal: its
 			// sentence is the whole of what the script is told, and the

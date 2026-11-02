@@ -660,6 +660,15 @@ func (r *Runner) refuseNamerefAim(value string, form assignForm) {
 		return
 	}
 	r.diagf("%s\n", sentence)
+	if form == assignedAlone && r.posixMode && r.ask(r.sem().PosixModeSharpensARefusedReferenceAim,
+		"POSIX mode sharpening a refused reference aim written as an assignment of its own") {
+		// A failed assignment statement, which the mode makes fatal: the
+		// shell ends, at the command string's 127 for a fatal failure where
+		// the dialect has one. The loop and the declaration never come here.
+		// See Semantics.PosixModeSharpensARefusedReferenceAim (#7343).
+		r.fatalExpansionQuiet()
+		return
+	}
 	r.status = 1
 	if form == assignedAlone {
 		r.abandonTheCommand()

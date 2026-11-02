@@ -9439,6 +9439,9 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	// interp/prefixoperandorder.go.
 	var prefixHeld heldPrefix
 	defer func() { turn.release(r, &prefixHeld) }()
+	// Whether that walk gave the command up: a frozen entry it refused, or an
+	// axis nobody answered. Either has said what it costs.
+	prefixStopped := false
 	// How much of argv had been built when each of the command's words was
 	// reached, which is what puts an array-literal operand back at the index
 	// it was written at. See interp/operandwrittenorder.go.
@@ -9567,6 +9570,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				// argument is expanded before its prefix everywhere. See
 				// interp/prefixoperandorder.go.
 				if !r.prefixBeforeADeclarationsOperand(c.Assigns, argv, &prefixHeld) {
+					prefixStopped = true
 					break
 				}
 				// Stored and traced as it is reached, in the column that
@@ -9632,6 +9636,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// The appending spelling of the same operand, so the same
 			// ordering question with the same answer.
 			if !r.prefixBeforeADeclarationsOperand(c.Assigns, argv, &prefixHeld) {
+				prefixStopped = true
 				break
 			}
 			var on bool
@@ -9982,6 +9987,15 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		r.status = 2
 		return nil
 	}
+	if prefixStopped {
+		// A frozen prefix entry, refused where the walk in front of a
+		// declaration's operand reached it: the refusal has set the status
+		// and anything it ends, and no operand behind it was expanded. Ahead
+		// of the failed-expansion test below, because a value in front of the
+		// frozen entry that would not expand has been given up on already.
+		// See interp/prefixoperandorder.go.
+		return nil
+	}
 	if r.expandErr {
 		// A failed expansion abandons the rest of the list rather than
 		// running the next command, in every shell measured — which is what
@@ -10101,7 +10115,10 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// Asked only where there is an operand, so a command with none asks
 		// nothing. See interp/prefixoperandorder.go.
 		if !r.prefixBeforeADeclarationsOperand(c.Assigns, argv, &prefixHeld) {
-			r.status = 2
+			// Unanswered, or a frozen entry refused with a status of its own.
+			if r.unspecified {
+				r.status = 2
+			}
 			return nil
 		}
 	}
@@ -10180,7 +10197,9 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	if !early {
 		r.refuseSubscriptedPrefixes(c.Assigns)
 	}
-	if r.refusePrefixesEarly(c.Assigns, argv) {
+	// Not a second time where the walk in front of a declaration's operand
+	// has already asked it. See interp/prefixoperandorder.go.
+	if !r.prefixCheckedFirst && r.refusePrefixesEarly(c.Assigns, argv) {
 		return nil
 	}
 	// And an array-literal operand its own store will refuse, in the dialect

@@ -114,6 +114,18 @@ func (r *Runner) literalElemPos(name string, a Array, e literalElem, value strin
 		return 0, false
 	}
 	pos, ok := r.elemPos(a, idx)
+	if ok && idx < 0 && r.ask(r.sem().NegativeSubscriptInAnIndexedLiteralIsBad,
+		"a negative subscript inside an indexed array literal being refused") {
+		// Counting back from the end found an element, and the column that
+		// refuses every subscript below the first element in a literal
+		// refuses this one too, the way it refuses `[0]=v` (#7322). Asked
+		// only here: one that counts back past the start is refused by
+		// either reading.
+		ok = false
+	}
+	if r.unspecified {
+		return 0, false
+	}
 	if !ok || empty {
 		// Before the first element, or a subscript that expanded to nothing
 		// where that is refused. Refused as the plain form is — and worded
@@ -360,6 +372,7 @@ func (r *Runner) literalElems(elems []*syntax.ArrayElem, readsSubscripts, bareIs
 		out = append(out, literalElem{fields: r.expandLiteralElement(w), written: written})
 		waiting = append(waiting, len(out)-1)
 	}
+	r.keepEmptyBareElements(out, waiting)
 	r.matchLiteralElements(out, waiting)
 	if !r.expansionFailedHere(failedBefore) {
 		r.raiseHeldRefusal()
@@ -1237,6 +1250,32 @@ func (r *Runner) arrayToAppendTo(name string) (Array, bool) {
 func (r *Runner) expandLiteralElement(w *syntax.Word) []string {
 	defer r.outsideTheEqualsContextWord()()
 	return r.expandWordEscaped(w)
+}
+
+// keepEmptyBareElements gives each bare element at the given positions of out
+// that expanded to no word at all one empty word instead, in a literal that
+// places by subscript and in the column that keeps it there — see
+// Semantics.EmptyBareElementOfASubscriptedLiteralTakesAPosition (#7321).
+//
+// Before the pathname stage, which is what still removes a pattern that
+// matched nothing under `nullglob`: the element came to its word, and the
+// match took it away afterwards. Asked only of a literal holding both shapes
+// and an element that came to nothing, which is the one literal the two
+// readings place differently.
+func (r *Runner) keepEmptyBareElements(out []literalElem, waiting []int) {
+	if len(waiting) == 0 || !placesBySubscript(out) {
+		return
+	}
+	for _, at := range waiting {
+		if len(out[at].fields) != 0 {
+			continue
+		}
+		if !r.ask(r.sem().EmptyBareElementOfASubscriptedLiteralTakesAPosition,
+			"an empty bare element of a subscripted array literal taking a position") {
+			return
+		}
+		out[at].fields = []string{""}
+	}
 }
 
 // matchLiteralElements runs the pathname stage over a literal's bare elements,

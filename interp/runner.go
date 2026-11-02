@@ -16217,7 +16217,7 @@ func (r *Runner) assignAll(ctx context.Context, assigns []*syntax.Assign) {
 // axis is never questioned about a line that has no literal and no subscript
 // in it.
 func (r *Runner) prepareTracedAssign(a *syntax.Assign, value string) *expandedAssign {
-	e := &expandedAssign{assign: a, value: value, tracedAs: r.tracedThroughTheReference(a)}
+	e := &expandedAssign{assign: a, value: value, tracedAs: r.tracedThroughTheReference(a, nil)}
 	if a.IsArray && a.Members == nil && a.Index == nil && !a.Operand && r.assocDeclared(a.Name) &&
 		r.sem().TraceSubscriptedArrayLiteralIsElementAssignments == Yes &&
 		r.tableLiteralIsStoredAsItIsExpanded(a.Elems) {

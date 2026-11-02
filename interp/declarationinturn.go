@@ -335,7 +335,9 @@ func (r *Runner) storeOperandInTurn(argv []string, turn *operandsInTurn) []strin
 		}
 		turn.held.hold(r, name, held)
 		if r.tracing() {
-			r.traceOperandInTurn(name+op, value, d)
+			// Under the variable a reference lands it in, where the utility
+			// stores through one. See interp/xtracenameref.go (#7102).
+			r.traceOperandInTurn(r.nameTracedThroughTheReference(name, true, argv)+op, value, d)
 		}
 	case r.assocDeclared(base):
 		key := r.declarationSubscriptText(base, sub)
@@ -352,7 +354,8 @@ func (r *Runner) storeOperandInTurn(argv []string, turn *operandsInTurn) []strin
 		r.holdingAnOperand = false
 		r.oweTheEmptyKeyWarning(key)
 		if r.tracing() {
-			r.traceOperandInTurn(base+"["+r.traceQuote(key, d.TraceQuoting, d.TraceMetacharacters)+"]"+op, value, d)
+			r.traceOperandInTurn(r.nameTracedThroughTheReference(base, false, argv)+
+				"["+r.traceQuote(key, d.TraceQuoting, d.TraceMetacharacters)+"]"+op, value, d)
 		}
 	default:
 		idx, err := r.subscriptValue(sub)
@@ -375,7 +378,7 @@ func (r *Runner) storeOperandInTurn(argv []string, turn *operandsInTurn) []strin
 		r.setArrayElem(base, idx, sub, held)
 		at := itoa(idx)
 		if r.tracing() {
-			r.traceOperandInTurn(base+"["+at+"]"+op, value, d)
+			r.traceOperandInTurn(r.nameTracedThroughTheReference(base, false, argv)+"["+at+"]"+op, value, d)
 		}
 		// The position it came to, so the utility does not evaluate the
 		// subscript a second time.
@@ -586,7 +589,8 @@ func (r *Runner) settleLiteralOperandsBefore(
 		if r.tracing() {
 			turn.traced[a] = true
 			r.operandsTracedInTurn = true
-			r.writeArrayOperandLines(arrayOperand{assign: a, expanded: e}, tableAhead, r.diag())
+			r.writeArrayOperandLines(arrayOperand{assign: r.tracedThroughTheReference(a, argv), expanded: e},
+				tableAhead, r.diag())
 		}
 	}
 	return true

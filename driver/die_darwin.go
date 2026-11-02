@@ -36,3 +36,18 @@ func restoreDefaultDisposition(sig syscall.Signal) error {
 	}
 	return nil
 }
+
+// ignoredByTheKernel reports whether sig's disposition is SIG_IGN, asked of
+// the kernel for the reason restoreDefaultDisposition sets it there: what
+// os/signal reports is its own bookkeeping, and after a subscription has come
+// and gone the two can disagree. See letGoOfTheWatch.
+func ignoredByTheKernel(sig syscall.Signal) bool {
+	var old [dispositionBytes]byte
+	if _, _, errno := syscall.Syscall(
+		syscall.SYS_SIGACTION, uintptr(sig), 0, uintptr(unsafe.Pointer(&old)),
+	); errno != 0 {
+		return false
+	}
+	// The handler is the structure's first word; SIG_IGN is 1.
+	return *(*uintptr)(unsafe.Pointer(&old)) == 1
+}

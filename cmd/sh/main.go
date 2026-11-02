@@ -148,6 +148,10 @@ func main() {
 	// this one shell ran at GOGC=100 with no ceiling. Here and not in run, for
 	// the same reason: the tests call run.
 	driver.TuneCollector()
+	// And the watch for fatal signals from outside, which MainArgs takes down
+	// as its run returns: this process goes on to shut its plugins down after
+	// that, and a QUIT from outside there must still end it quietly.
+	driver.KeepFatalSignalWatch()
 	exit(run(os.Args, os.Stdin, os.Stdout, os.Stderr))
 }
 

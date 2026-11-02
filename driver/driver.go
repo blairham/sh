@@ -583,6 +583,9 @@ func Main(sh Shell) int {
 	// The collector's threshold, which only a binary may set — see
 	// collector.go for the measurement and for why MainArgs does not.
 	TuneCollector()
+	// And the watch for fatal signals from outside, kept for as long as the
+	// process lasts, for the same reason. See fatalsignal.go.
+	KeepFatalSignalWatch()
 	return sh.mainArgs(os.Args)
 }
 
@@ -591,7 +594,16 @@ func Main(sh Shell) int {
 //
 // argv includes argv[0]. An argv with nothing in it is treated as bare, since
 // a shell that cannot name itself still has to produce diagnostics.
-func MainArgs(sh Shell, argv []string) int { return sh.mainArgs(argv) }
+//
+// It leaves the process as it found it in one more way than that: the watch
+// for fatal signals a run sets up is taken down as the run returns, unless a
+// main has kept it with [KeepFatalSignalWatch]. A test binary that calls this
+// is not the process the shell owns once the call is over (#7370).
+func MainArgs(sh Shell, argv []string) int {
+	letGo := keepTheWatch()
+	defer letGo()
+	return sh.mainArgs(argv)
+}
 
 // mainArgs is MainArgs on a Shell its caller owns. Main hands over its own
 // rather than a copy: the start's stack is measured from here, and a copy of a

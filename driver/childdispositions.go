@@ -65,8 +65,7 @@ func startWithDispositions(ignore, reset []syscall.Signal, start func() error) e
 // after a window the runtime cannot tell that ignore from one it was born
 // with. Both are signals the watch answers, so that branch is never theirs.
 func handBack(sig syscall.Signal) {
-	if ch := fatalWatch.ch; ch != nil && watched(sig) {
-		signal.Notify(ch, sig)
+	if watched(sig) && subscribeTheWatch(sig) {
 		return
 	}
 	c := make(chan os.Signal, 1)

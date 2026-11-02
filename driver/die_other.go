@@ -14,3 +14,5 @@ import "syscall"
 // plus the number — wrong, and reported, which is the pair of properties a
 // hang does not have.
 func restoreDefaultDisposition(syscall.Signal) error { return nil }
+
+func ignoredByTheKernel(syscall.Signal) bool { return false }

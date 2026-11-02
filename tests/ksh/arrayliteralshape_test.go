@@ -236,3 +236,76 @@ func TestAnAppendOverAnIndexedArrayHoldingNoElementReadsTheSubscripts(t *testing
 		}
 	}
 }
+
+// An append to an indexed array that has held an element and holds none now
+// starts at the second position, as if the first were still taken — the same
+// history that lists such an array as `typeset -a e=([0]=)`. It is the history
+// and not the count or the extent that decides: two elements emptied still
+// start at [1] rather than [2], and an array whose only element stood at [5]
+// starts at [1] rather than [6] (#7393).
+//
+// Measured 2026-11-02 under `-c` with `env -i PATH=/usr/bin:/bin` on ksh93u+
+// 2012-08-01.
+func TestAnAppendToAnEmptiedArrayStartsPastTheFirstPosition(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		// The issue's row, and its two controls: an array still holding an
+		// element appends after its highest subscript.
+		{`e=(7); unset 'e[0]'; e+=(z); typeset -p e`, "typeset -a e=([1]=z)\n"},
+		{`e=(7 8); unset 'e[1]'; e+=(z); typeset -p e`, "typeset -a e=(7 z)\n"},
+		{`e=(7 8 9); unset 'e[2]'; e+=(z); typeset -p e`, "typeset -a e=(7 8 z)\n"},
+		// Not the old count, not the old extent, and not the order the
+		// elements went in.
+		{`e=(7 8); unset 'e[0]' 'e[1]'; e+=(z); typeset -p e`, "typeset -a e=([1]=z)\n"},
+		{`e=(7 8 9); unset 'e[2]' 'e[1]' 'e[0]'; e+=(z); typeset -p e`, "typeset -a e=([1]=z)\n"},
+		{`typeset -a e=([5]=7); unset 'e[5]'; e+=(z); typeset -p e`, "typeset -a e=([1]=z)\n"},
+		{`e=(7); e[5]=8; unset 'e[0]' 'e[5]'; e+=(z); typeset -p e`, "typeset -a e=([1]=z)\n"},
+		// However the element got there, and in a function's own array.
+		{`typeset -a e; e[0]=q; unset 'e[0]'; e+=(z); typeset -p e`, "typeset -a e=([1]=z)\n"},
+		{`set -A e 7; unset 'e[0]'; e+=(z); typeset -p e`, "typeset -a e=([1]=z)\n"},
+		{`f() { typeset -a e=(7); unset 'e[0]'; e+=(z); typeset -p e; }; f`, "typeset -a e=([1]=z)\n"},
+		// The rest of the literal follows on, an empty append leaves the
+		// history standing, and the next append goes after what landed.
+		{`e=(7); unset 'e[0]'; e+=(y z); typeset -p e`, "typeset -a e=([1]=y [2]=z)\n"},
+		{`e=(7); unset 'e[0]'; e+=(); e+=(z); typeset -p e`, "typeset -a e=([1]=z)\n"},
+		{`e=(7); unset 'e[0]'; e+=(y); e+=(z); typeset -p e`, "typeset -a e=([1]=y [2]=z)\n"},
+		{`e=(7); unset 'e[0]'; e+=(z); echo ${#e[@]} ${!e[@]} ${e[1]}`, "1 1 z\n"},
+		// The kept text of #7323's row lands there too.
+		{`e=(7); unset 'e[0]'; e+=([3]=y); typeset -p e`, "typeset -a e=([1]='[3]=y')\n"},
+		// The controls: a name that never held an element, or that `unset`
+		// took away whole, or that a declaration started over, starts at the
+		// first position; an element store places where it is told; and a
+		// scalar append is a store to the first element.
+		{`typeset -a e; e+=(z); typeset -p e`, "typeset -a e=(z)\n"},
+		{`e=(7); unset e; e+=(z); typeset -p e`, "typeset -a e=(z)\n"},
+		{`e=(7); typeset -a e=(); e+=(z); typeset -p e`, "typeset -a e=(z)\n"},
+		{`e=(7); unset 'e[0]'; e[${#e[@]}]=z; typeset -p e`, "typeset -a e=(z)\n"},
+		{`e=(7); unset 'e[0]'; e+=z; typeset -p e`, "typeset -a e=(z)\n"},
+		// A declaration's literal starts the history over, emptied or not,
+		// where a valueless declaration keeps it: every reader of the
+		// history sees the never-held state.
+		{
+			`e=(7); unset 'e[0]'; typeset -a e=(); typeset -p e; e+=(z); typeset -p e`,
+			"typeset -a e\ntypeset -a e=(z)\n",
+		},
+		{
+			`e=(7); typeset -a e=($nothing); typeset -p e; e+=(z); typeset -p e`,
+			"typeset -a e\ntypeset -a e=(z)\n",
+		},
+		{`e=(7); typeset -a e=(); e=/y; typeset -p e`, "typeset -a e=/y\n"},
+		{`e=(7); typeset -a e=(); e+=([3]=y); typeset -p e`, "typeset -a e=([3]=y)\n"},
+		{
+			`e=(7); typeset -a e=(8); unset 'e[0]'; typeset -p e; e+=(z); typeset -p e`,
+			"typeset -a e=([0]=)\ntypeset -a e=([1]=z)\n",
+		},
+		{
+			`e=(7); unset 'e[0]'; typeset -a e; typeset -p e; e+=(z); typeset -p e`,
+			"typeset -a e=([0]=)\ntypeset -a e=([1]=z)\n",
+		},
+	} {
+		if out, st := runKsh(t, dir, tc.src); out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
+		}
+	}
+}

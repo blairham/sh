@@ -29,6 +29,7 @@
 ash   AliasInvalidNameFatal
 ash   AliasNameCheckReachesALookup
 ash   AnchoredEmptyReplacementPattern
+ash   AppendToAnEmptiedArrayStartsPastTheFirstPosition
 ash   AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
 ash   AppendingSubscriptedLiteralStoresFromTheFirstPosition
 ash   ArithDivisionByZeroYieldsAValue
@@ -430,6 +431,7 @@ dash  ASubshellAsTheLastPipelineElementJudgesItself
 dash  AliasInvalidNameFatal
 dash  AliasNameCheckReachesALookup
 dash  AnchoredEmptyReplacementPattern
+dash  AppendToAnEmptiedArrayStartsPastTheFirstPosition
 dash  AppendedArrayLiteralOverANameNotDeclaredAnArrayStartsItOver
 dash  AppendingSubscriptedLiteralStoresFromTheFirstPosition
 dash  ArithDivisionByZeroYieldsAValue

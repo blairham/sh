@@ -3465,6 +3465,12 @@ func Semantics() interp.Semantics {
 	// 5.3.20 and 3.2.57 alike (#7079). See
 	// interp.Semantics.AppendingSubscriptedLiteralStoresFromTheFirstPosition.
 	s.AppendingSubscriptedLiteralStoresFromTheFirstPosition = interp.No
+	// An append to an array emptied by `unset` starts at the first position,
+	// as one to an array that never held an element does: measured
+	// 2026-11-02, `e=(7); unset 'e[0]'; e+=(z)` is `([0]="z")` on 5.3.20
+	// (#7393). See
+	// interp.Semantics.AppendToAnEmptiedArrayStartsPastTheFirstPosition.
+	s.AppendToAnEmptiedArrayStartsPastTheFirstPosition = interp.No
 	// A bare element that expanded to nothing is removed from a subscripted
 	// literal as from any other: measured 2026-11-02, with `e=`, `b=(x $e z
 	// [4]=y)` is `([0]="x" [1]="z" [4]="y")` on 5.3.20 (#7321). See

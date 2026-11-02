@@ -1250,6 +1250,7 @@ func Semantics() interp.Semantics {
 	// unanswered EmptySubscriptInAnIndexedLiteralIsBad: no array literal.
 	// unanswered RefusedPlacementKeepsWhatTheLiteralPlaced: no array literal.
 	// unanswered AppendingSubscriptedLiteralStoresFromTheFirstPosition: no array literal.
+	// unanswered AppendToAnEmptiedArrayStartsPastTheFirstPosition: no arrays.
 	// unanswered EmptyBareElementOfASubscriptedLiteralTakesAPosition: no array literal.
 	// unanswered NegativeSubscriptInAnIndexedLiteralIsBad: no array literal.
 	// unanswered DeclarationArrayOperandsAreStoredInTurn: no array literal.

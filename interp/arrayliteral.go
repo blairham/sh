@@ -729,6 +729,18 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appe
 			// appending to `a[0]=x a[5]=y` puts the next element at 6, which
 			// is where the end is.
 			next = old.pastTheEnd()
+			if old.Len() == 0 && r.attrHas(name, attrHeldAnElement) &&
+				r.sem().AppendToAnEmptiedArrayStartsPastTheFirstPosition == Yes {
+				// An array that held an element and lost every one of them
+				// still has its first position taken, in the column that
+				// lists it as `([0]=)`: the append starts at the second
+				// however many elements went and wherever they stood (#7393).
+				// Read rather than asked, since an unanswered vector reaches
+				// this on the common path of every list a script empties and
+				// refills, and the first position is what the other columns
+				// and a core with no shell chosen both answer.
+				next = 1
+			}
 			if len(parsed) > 0 && !parsed[0].subscripted && placesBySubscript(parsed) &&
 				r.ask(r.sem().AppendingSubscriptedLiteralStoresFromTheFirstPosition,
 					"an appending literal with a subscripted element storing from the first position") {

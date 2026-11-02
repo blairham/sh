@@ -175,19 +175,25 @@ func (r *Runner) declareOverNothing(sc *scope, name, value string, hasValue bool
 // through returnAnEmptyShadow: its record is the empty shadow exactly as
 // takeAnEmptyShadow writes it — and as Runner.shadow writes it when every read
 // found nothing — with each record saying "there was none", and the call left
-// the name holding at most a scalar, carrying no attribute and in none of the
-// tables restoreShadowedName reaches.
+// the name holding at most a scalar.
 //
-// Every step of restoreShadowedName over such a record is then a no-op except
-// the value's: with the cell carrying no attribute, each attribute it clears
-// is already clear and each table it empties holds nothing for the name; with
-// no array or table slot, the two drops find nothing; the producer, the
-// compound namespace and the restored message are each keyed on something
-// this record or this state does not have. So the return is the value taken
-// away, which was the largest of the ~65 ns the full return spent a name
-// (#6373). A body that typed, exported, froze, unset or filled the name in any
-// other way leaves something one of these reads finds, and the full road puts
-// that back as it always did.
+// A record saying "none" for every kind is a return that takes everything off
+// the name: the value, every attribute — each one is either cleared outright
+// or put back as the "none" that was saved — the attribute payloads, what a
+// produced parameter was assigned and the export copy. A name holding none of
+// the last three — kept in tables of their own — is left by that return with
+// nothing but the value and the attributes to take away. Only one step reads
+// the name rather than clearing it, the parameter that follows a restored
+// value, and it reads it after the value and the declared-empty record have
+// gone and before anything else has; returnAnEmptyShadow keeps that order.
+// The array and table drops find no slot here, the tables find no entry, and
+// the producer and the compound namespace are keyed on records this one does
+// not have.
+//
+// So the return is one clear of the attributes where the full road asks a
+// dozen records one at a time, which was most of the ~65 ns a name the full
+// return cost (#6373). A body that filled the name with an array or a table
+// leaves it to the full road, since that step reads the name between drops.
 func (r *Runner) emptyShadowReturnsPlainly(rec *shadowRecord, name string) bool {
 	// Each record's "none" is its bit clear, except the attributes', whose
 	// answer is the set itself: a shadow over a name carrying only a bare
@@ -196,14 +202,13 @@ func (r *Runner) emptyShadowReturnsPlainly(rec *shadowRecord, name string) bool 
 		rec.attrs != (nameAttributes{}) || r.memberNamesInUse {
 		return false
 	}
-	// The one attribute allowed is the record that a declaration gave the
-	// name its empty value, which the full return clears beside the value.
-	if c := r.cell(name); c != nil && (c.has&^slotScalar != 0 || c.attrs&^attrDeclaredEmpty != 0) {
+	if c := r.cell(name); c != nil && c.has&^slotScalar != 0 {
 		return false
 	}
-	// The payload tables restoreAttributes empties, what a produced
-	// parameter was last assigned, and the copy of an export a child is
-	// still handed: each a table of its own outside the cell.
+	// And none of the tables outside the cell the full return empties: the
+	// attribute payloads, what a produced parameter was assigned, and the
+	// copy of an export a child is still handed. A fresh local has none of
+	// them, and asking is cheaper than emptying them.
 	if _, ok := r.integerBase[name]; ok {
 		return false
 	}
@@ -229,16 +234,21 @@ func (r *Runner) emptyShadowReturnsPlainly(rec *shadowRecord, name string) bool 
 	return !held
 }
 
+// everyCellAttr is every attribute a cell holds.
+const everyCellAttr cellAttrs = 1<<cellAttrCount - 1
+
 // returnAnEmptyShadow is restoreShadowedName for a name
-// emptyShadowReturnsPlainly accepted: the value goes, and with it the record
-// that a declaration gave it, the parameter that follows a restored value is
-// told so — the one step of the full return that is not keyed on the name's
-// state — and the record is forgotten as the full return forgets it.
+// emptyShadowReturnsPlainly accepted: the steps of the full return that change
+// anything, with the one that reads the name in the place the full return
+// reads it — the value goes and the record that a declaration gave it; the
+// parameter that follows a restored value is told so; then every attribute
+// goes — and the record is forgotten as the full return forgets it.
 func (r *Runner) returnAnEmptyShadow(rec *shadowRecord, name string) {
 	r.emptyReturns++
 	r.varsDel(name)
 	r.attrClear(name, attrDeclaredEmpty)
 	r.ignoredNamesRestored(name)
+	r.setAttrs(name, everyCellAttr, 0)
 	rec.has, rec.bits = 0, 0
 	rec.value, rec.array, rec.assoc, rec.attrs, rec.assigned, rec.exportedOn = "", nil, nil, nameAttributes{}, "", false
 }

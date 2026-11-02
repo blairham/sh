@@ -3127,8 +3127,16 @@ type Semantics struct {
 	// what every vector did before the axis existed. See
 	// Runner.elementWriteThroughAnElementReference.
 	//
+	// The same answer decides the read, because no shell measured parts the
+	// two: Yes reads a subscript on the reference through the same chain,
+	// `${e[0]}` as `${a[x][0]}` and `${#e[@]}` as `${#a[x][@]}`, and No
+	// reads it as before, which bash 5.3.20 answers with nothing — `declare
+	// -A a; a[x]=s; declare -n e='a[x]'; echo "${e[0]} ${#e[@]}"` is ` 0`
+	// (#7366). See Runner.elementReadThroughAnElementReference.
+	//
 	// unpinned ksh: pinned by
-	// TestAnElementWriteThroughAnElementReferenceNestsTheElement.
+	// TestAnElementWriteThroughAnElementReferenceNestsTheElement and
+	// TestAnElementReadThroughAnElementReferenceReadsTheNestedElement.
 	ElementWriteThroughAnElementReferenceNests Answer
 
 	// DeclarationOperandSplitsAfterTheSubscript looks for a declaration

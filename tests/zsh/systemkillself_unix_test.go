@@ -271,3 +271,40 @@ print -r -- st=$pipestatus[1]`,
 		}
 	}
 }
+
+// A pipeline element that signals the body's `$sysparams[pid]` has the body's
+// handler run as the body's wait for the pipeline ends — before an and-or list
+// goes on, inside a redirection the pipeline is inside, and before a body that
+// is one simple command ends, where it used to wait for a next command that
+// never came and was lost (#7354). The handler sees the pipeline's status,
+// where one run between commands sees the one from before the command.
+//
+// Measured 2026-11-02 under `-c` against zsh 5.9.2 in a process group of its
+// own; bash 5.3.20, bash 3.2.57 and dash agree on every row, and ksh93u+ on
+// the simple-command element. Each row's want is what zsh wrote.
+func TestAPipelineCopysSignalToTheBodyIsAnsweredAsTheWaitEnds(t *testing.T) {
+	const elem = `{ kill -USR1 $p } | /bin/cat`
+	for _, c := range []struct{ src, want string }{
+		{
+			`( trap 'print -r -- U' USR1; p=$sysparams[pid]; ` + elem + ` && print -r -- a ); print -r -- out=$?`,
+			"U\na\nout=0\n",
+		},
+		{
+			`( trap 'print -r -- U >&2' USR1; p=$sysparams[pid]; eval '` + elem + `' 2>/dev/null; print -r -- b )`,
+			"b\n",
+		},
+		{
+			`eval 'trap "print -r -- U" USR1; p=$sysparams[pid]; ` + elem + `' | /bin/cat; print -r -- out=$?`,
+			"U\nout=0\n",
+		},
+		{
+			`( trap 'print -r -- U $?' USR1; p=$sysparams[pid]; false
+  { kill -USR1 $p } | (/bin/cat; exit 3); print -r -- st=$? )`,
+			"U 3\nst=3\n",
+		},
+	} {
+		if got := runZshAnchored(t, c.src); got != c.want {
+			t.Errorf("%s\n got %q\nwant %q", c.src, got, c.want)
+		}
+	}
+}

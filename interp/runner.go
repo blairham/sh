@@ -8798,6 +8798,9 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 		if r.line == before {
 			r.line = r.pipelineLine(p)
 		}
+		// What an element aimed at the body this pipeline runs in, answered
+		// as the wait for it ends. See answerCopiesAsAPipelineEnds.
+		r.answerCopiesAsAPipelineEnds(ctx)
 	}
 	if p.Negated && r.negationInverts() {
 		// `!` applies to the whole pipeline and inverts its status.

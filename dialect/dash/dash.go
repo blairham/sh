@@ -772,6 +772,8 @@ func Semantics() interp.Semantics {
 	// unanswered FailedTableAppendKeepsThePairsItAdded: nor a table to
 	// append to.
 	// unanswered FailedOperandLeavesTheLettersKind: nor a container letter.
+	// unanswered FailedBareLiteralStillMakesTheNameAnArray: nor a bare
+	// literal to fail.
 	// unanswered ElementSubscriptIsExpandedBeforeTheValue: no element write
 	// to order — `a[1]=v` is a command word here.
 	// unanswered FrozenElementIsRefusedBeforeItsSubscript: and so no frozen

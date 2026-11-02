@@ -180,6 +180,11 @@ func testSemantics() Semantics {
 	// reached at all: bash takes it. The suite that is about this one sets
 	// both answers — see scalarovertable_test.go.
 	s.ScalarStoredOverATableIsRefused = No
+	// A bare literal that fails leaves a name that was not an array as it
+	// was, which is the answer two of the three columns with arrays give and
+	// what literalabandoned_test.go's "creates no name" asserts. The suite
+	// that is about it sets both — see failedliteralkeeps_test.go (#7078).
+	s.FailedBareLiteralStillMakesTheNameAnArray = No
 	s.ScalarUnderAnArrayDeclaration = ScalarUnderACompoundBecomesTheFirstElement
 	s.ScalarUnderATableDeclaration = ScalarUnderACompoundBecomesTheFirstElement
 	// The two questions a *subscripted* declaration and an exported compound

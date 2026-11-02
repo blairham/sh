@@ -37,7 +37,10 @@ type failedLiteral struct {
 //   - a bare append onto a table, plain pairs included —
 //     Semantics.FailedTableAppendKeepsThePairsItAdded (#6704);
 //   - a declaration whose container letter re-creates the name before its
-//     literal fails — Semantics.FailedOperandLeavesTheLettersKind (#6705).
+//     literal fails — Semantics.FailedOperandLeavesTheLettersKind (#6705);
+//   - a bare literal over a name that is not an array yet, which is made one
+//     before its elements fail and keeps none of them —
+//     Semantics.FailedBareLiteralStillMakesTheNameAnArray (#7078).
 //
 // parsed is the elements before the failed one — literalElems trims the one
 // that failed.
@@ -67,10 +70,26 @@ func (r *Runner) keepWhatAFailedLiteralStored(
 		}
 		return
 	}
-	if how.appendTo && r.assocDeclared(name) &&
-		r.ask(r.sem().FailedTableAppendKeepsThePairsItAdded,
+	if r.assocDeclared(name) {
+		if how.appendTo && r.ask(r.sem().FailedTableAppendKeepsThePairsItAdded,
 			"a failed append onto a table keeping the pairs it had added") {
-		r.assignAssocElems(name, withoutADanglingKey(parsed), true, how.refuseBare)
+			r.assignAssocElems(name, withoutADanglingKey(parsed), true, how.refuseBare)
+		}
+		return
+	}
+	if _, isArray := r.arrayToAppendTo(name); isArray ||
+		r.isCompoundVariable(name) || r.attrHas(name, attrReadonly) {
+		// An array already, which every column leaves holding what it held;
+		// or a name nothing may convert.
+		return
+	}
+	if r.ask(r.sem().FailedBareLiteralStillMakesTheNameAnArray,
+		"a bare array literal that failed still making its name an array") {
+		// What an append would have built on, which is the name as an array
+		// with none of the literal in it: empty where it was unset, its
+		// scalar at element zero where it held one.
+		a, _ := r.appendedOverAScalar(name)
+		r.storeArray(name, a)
 	}
 }
 

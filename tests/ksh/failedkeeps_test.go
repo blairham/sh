@@ -43,6 +43,30 @@ func TestAFailedPlainLiteralWithALetterLeavesThatKind(t *testing.T) {
 			"typeset -a v=(1 2)\n")
 }
 
+// A bare literal that fails leaves a name that was not an array as it was —
+// unset, or the scalar it held — appended or assigned, and an array keeps
+// what it held. Measured 2026-11-01 on ksh93u+ 2012-08-01 from a file, this
+// script, byte for byte; zsh 5.9.2 leaves every row the same, in its own
+// spelling of the listing (#7078).
+func TestAFailedBareLiteralLeavesTheNameAsItWas(t *testing.T) {
+	t.Parallel()
+	checkFailedKeep(t, failedBareScript,
+		".\n"+
+			"b=s\n.\n"+
+			".\n"+
+			"b=s\n.\n"+
+			"typeset -a b=(7)\n.\n")
+}
+
+// failedBareScript fails a bare literal over a name, each row in a subshell
+// of its own, and lists what is left of the name.
+const failedBareScript = "row() { ( trap 'typeset -p b 2>/dev/null; echo .' EXIT; eval \"$1\" ) 2>/dev/null; }\n" +
+	"row 'unset b; b=(1 $((1/0)) 3)'\n" +
+	"row 'b=s; b=(1 $((1/0)) 3)'\n" +
+	"row 'unset b; b+=(1 $((1/0)))'\n" +
+	"row 'b=s; b+=(1 $((1/0)))'\n" +
+	"row 'b=(7); b=(1 $((1/0)) 3)'\n"
+
 // failedTableScript appends to and assigns a table whose literal fails, each
 // row in a subshell of its own, and reads the keys back in a fixed order so
 // that no row depends on the order a table lists its keys in.

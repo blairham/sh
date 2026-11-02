@@ -2350,6 +2350,11 @@ func Semantics() interp.Semantics {
 	// declaration's letter does not re-create a name whose literal failed.
 	s.FailedTableAppendKeepsThePairsItAdded = interp.Yes
 	s.FailedOperandLeavesTheLettersKind = interp.No
+	// But a bare literal that fails still makes a name that was not an
+	// array one: `b=s; b=(1 $((1/0)))` leaves `declare -a b=([0]="s")`, and
+	// an unset name an empty array. See
+	// interp.Semantics.FailedBareLiteralStillMakesTheNameAnArray (#7078).
+	s.FailedBareLiteralStillMakesTheNameAnArray = interp.Yes
 	// bash reports success if it signaled anything at all, where the others
 	// count failures one way or another.
 	s.ExitTrapRunsOnSignalDeath = interp.Yes

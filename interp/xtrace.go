@@ -612,6 +612,12 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string, pre
 			// not one, and `b=()` is none at all.
 			continue
 		}
+		if lines, ok := r.traceNestedTableStore(a, prepared[i], d); ok {
+			// An element that came to hold a table, written as the element
+			// writes into it, one line each. See interp/nestedtable.go.
+			elementLines = append(elementLines, lines...)
+			continue
+		}
 		if lines, ok := r.traceLiteralAsElementWrites(a, prepared[i], d); ok {
 			// A literal whose elements name where their values go, in the
 			// column that traces it as the writes it performs rather than as
@@ -790,7 +796,7 @@ func (r *Runner) traceLiteralAsElementWrites(a *syntax.Assign, e *expandedAssign
 		if el.nested != nil {
 			// A value that is an array of its own, written as the element
 			// write that stores one is. See traceNestedElementWrite.
-			lines = append(lines, r.traceNestedElementWrite(a.Name, el.sub, el.appendValue, *el.nested, d))
+			lines = append(lines, r.tracedNestedLines(a.Name, el.sub, el.appendValue, *el.nested, nil, d)...)
 			continue
 		}
 		op := "="

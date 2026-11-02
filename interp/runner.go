@@ -16426,6 +16426,10 @@ type expandedAssign struct {
 	// trace writes the element from it, with the subscript as it resolved
 	// and unquoted. See Runner.resolvedNestedElement (#6684).
 	nested *Element
+	// nestedPairs is the literal that built nested where it built a table,
+	// pair by pair as written, for the lines that write it in that order.
+	// See interp/nestedtable.go (#6778).
+	nestedPairs []literalElem
 	// chain is every subscript of a chained element write — `a[1][2]=v` —
 	// resolved, first to last, recorded beside subscript for the same column
 	// and for the same reason. Nil for an assignment with one subscript.

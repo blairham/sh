@@ -63,6 +63,15 @@ func (r *Runner) nestedChainSubscript(e *syntax.ParamExpr) ([]string, bool) {
 		// separates them is the caller's, exactly as it is for a name.
 		return r.nestedElements(held), true
 	}
+	if held.Table != nil {
+		// A table the walk reached reads its subscript as a key. See
+		// interp/nestedtable.go (#6778).
+		last, found := held.Table[r.nestedTableKey(e)]
+		if !found {
+			return nil, true
+		}
+		return []string{r.elemText(last)}, true
+	}
 	idx, ok := r.chainLinkIndex(e)
 	if !ok {
 		return nil, true
@@ -80,6 +89,10 @@ func (r *Runner) nestedChainSubscript(e *syntax.ParamExpr) ([]string, bool) {
 func (r *Runner) nestedChainHeld(e *syntax.ParamExpr) (Element, bool) {
 	held, there := r.nestedChainRoot(e)
 	for i := 1; i < len(e.Leading) && there; i++ {
+		if held.Table != nil {
+			held, there = held.Table[r.nestedTableKey(r.chainLink(e, i))]
+			continue
+		}
 		idx, ok := r.chainLinkIndex(r.chainLink(e, i))
 		if !ok {
 			return Element{}, false
@@ -96,6 +109,9 @@ func (r *Runner) nestedChainHeld(e *syntax.ParamExpr) (Element, bool) {
 // subscripts here, for the reason nestedElements gives it no elements.
 func (r *Runner) nestedChainSubscripts(e *syntax.ParamExpr) []string {
 	held, there := r.nestedChainHeld(e)
+	if there && held.Table != nil {
+		return held.Table.keys()
+	}
 	if !there || held.Nested == nil {
 		return []string{}
 	}
@@ -191,6 +207,14 @@ func (r *Runner) nestedElementAt(held Element, idx int) (Element, bool) {
 // where `s=abc; ${#s[@]}` is 1. An empty slice and not nil, because the
 // expansion is set and has nothing in it rather than being unset.
 func (r *Runner) nestedElements(held Element) []string {
+	if held.Table != nil {
+		keys := held.Table.keys()
+		out := make([]string, 0, len(keys))
+		for _, k := range keys {
+			out = append(out, r.elemText(held.Table[k]))
+		}
+		return out
+	}
 	if held.Nested == nil {
 		return []string{}
 	}

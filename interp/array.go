@@ -68,6 +68,11 @@ type Element struct {
 	// still counts as an element and reads back as the two characters `(` and
 	// `)` with a newline between them.
 	Nested Array
+	// Table is the keyed table the element holds instead, and nil where it
+	// holds anything else: a literal whose subscripts are keys, assigned to
+	// one element — `a[k]=([u]=1 [v]=2)` — in the one column that nests it.
+	// Nil beside Nested, never both. See interp/nestedtable.go (#6778).
+	Table AssocArray
 	// Kind says which of the things an element can be it is, where the value
 	// alone cannot say. Zero is what every element was before the field
 	// existed, so Element{}, Scalar(v) and Element{Nested: built} all keep
@@ -159,6 +164,9 @@ func (e Element) scalar() string {
 		// which every read a script can observe goes through.
 		return ""
 	}
+	if e.Table != nil {
+		return e.Table.scalar()
+	}
 	if e.Nested == nil {
 		return e.Str
 	}
@@ -176,8 +184,12 @@ func (e Element) scalar() string {
 // arrays built the same way are the same element and would have compared
 // different.
 func (e Element) equal(f Element) bool {
-	if e.Str != f.Str || e.Kind != f.Kind || (e.Nested == nil) != (f.Nested == nil) {
+	if e.Str != f.Str || e.Kind != f.Kind || (e.Nested == nil) != (f.Nested == nil) ||
+		(e.Table == nil) != (f.Table == nil) {
 		return false
+	}
+	if e.Table != nil {
+		return e.Table.equal(f.Table)
 	}
 	return e.Nested == nil || e.Nested.equal(f.Nested)
 }
@@ -206,7 +218,7 @@ func (a Array) clone() Array {
 		// holds an array of its own — which is ksh93's alone.
 		out := a.shallowClone()
 		for i, v := range out.dense {
-			if v.Nested != nil {
+			if v.Nested != nil || v.Table != nil {
 				out.dense[i] = v.clone()
 			}
 		}
@@ -222,6 +234,9 @@ func (a Array) clone() Array {
 // clone is the same for one element: free for the string every column but one
 // stores, and a copy of the nested array otherwise.
 func (e Element) clone() Element {
+	if e.Table != nil {
+		return Element{Str: e.Str, Table: e.Table.clone(), Kind: e.Kind}
+	}
 	if e.Nested == nil {
 		return e
 	}
@@ -270,7 +285,7 @@ func (r *Runner) denseElems(a Array) ([]string, bool) {
 	if els, ok := a.contiguous(); ok {
 		out := make([]string, len(els))
 		for i, v := range els {
-			if v.Nested == nil && v.Kind == ElementHoldsItsValue {
+			if v.Nested == nil && v.Table == nil && v.Kind == ElementHoldsItsValue {
 				// The string the element holds, which is what elemText
 				// answers for it, without the call.
 				out[i] = v.Str

@@ -3,10 +3,7 @@
 
 package zsh
 
-import (
-	"fmt"
-	"runtime"
-)
+import "runtime"
 
 // Prelude is the part of the dialect written as shell rather than as Go.
 //
@@ -373,8 +370,14 @@ const zshVersion = "5.9.2-blairham"
 // version — the name, the version and the machine it was built for, which is
 // the shape the real shell's one line has. Measured 2026-09-11: standard
 // output, status 0, and nothing else printed.
+//
+// Every piece is a constant, so the line is one, and that is deliberate rather
+// than tidy: Semantics asks for it at every start, and built with fmt.Sprintf
+// it was the only thing in a plain script file's start that touched fmt —
+// six page faults and about 0.02 ms on macOS arm64 for a line that is only
+// ever printed on `--version` (#6491).
 func versionLine() string {
-	return fmt.Sprintf("zsh %s (%s-%s)", zshVersion, runtime.GOARCH, runtime.GOOS)
+	return "zsh " + zshVersion + " (" + runtime.GOARCH + "-" + runtime.GOOS + ")"
 }
 
 // nullCommands is what a command that is only redirections runs, as the two

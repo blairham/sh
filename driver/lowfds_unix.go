@@ -125,14 +125,21 @@ func init() { keepTheRuntimeOffTheLowDescriptors() }
 // open a poller, and a poller that cannot be opened is `throw` rather than an
 // error. A shell that could not reserve the range is one that keeps the bug it
 // had, which is strictly better than one that cannot start.
+//
+// What openRuntimeDescriptors subscribed to is let go last, after the census
+// and the release. Only the order is for speed; see openRuntimeDescriptors.
 func keepTheRuntimeOffTheLowDescriptors() {
 	held, complete := holdLowDescriptors(lowDescriptorCeiling)
+	var unsubscribe func()
 	if complete {
 		before := openInBand()
-		openRuntimeDescriptors()
+		unsubscribe = openRuntimeDescriptors()
 		runtimeDescriptors = appearedInBand(before)
 	}
 	releaseDescriptors(held)
+	if unsubscribe != nil {
+		unsubscribe()
+	}
 }
 
 // runtimeDescriptors are the numbers the Go runtime took while the low range
@@ -280,34 +287,60 @@ func releaseDescriptors(held []int) {
 //     `exec 3>f` writes over it. Linux opens nothing here — its notes are
 //     futexes — and Linux alone skips the call; see primeSignalDelivery.
 //
-// SIGWINCH is the signal asked for because it is the one whose default action
-// is to be ignored: the disposition is put back immediately, and a signal
-// arriving inside those few microseconds is one the process would have thrown
-// away regardless. The channel is dropped rather than drained for the same
-// reason — nothing was going to read it.
-func openRuntimeDescriptors() {
+// # Why PROF
+//
+// The subscription is wanted for its side effect alone — the pipe opens on the
+// first signal anything asks os/signal for, whichever it is — so the signal
+// named is the one that costs nothing else. That is PROF.
+//
+// Every other signal os/signal will deliver is enabled by a round trip to the
+// runtime's signal-mask thread: a goroutine locked to an OS thread of its own,
+// started on first use, that the caller hands the signal to and waits on. A
+// stop is a second round trip. PROF is the one signal the runtime enables and
+// disables without either, because it keeps PROF for its profiler and answers
+// it before anything subscribed could be told — so the channel never receives
+// anything, and neither the mask nor the handler moves. fatalsignal.go meets
+// the same fact from the other side: PROF from another process reaches no
+// watch.
+//
+// It was SIGWINCH, chosen because its default is to be ignored. That was safe
+// and it paid for the mask thread and both round trips before main, measured
+// on macOS arm64 at about 0.10 ms of a one-line zsh script file's start (#6491).
+// A shell that subscribes for real later — the fatal-signal watch does — starts
+// the thread then, and a program that never does never starts it.
+//
+// unsubscribe is what ends the subscription: os/signal's Stop, so nothing
+// outside this call's own channel is touched. It is nil where nothing was
+// subscribed.
+func openRuntimeDescriptors() (unsubscribe func()) {
 	if r, w, err := os.Pipe(); err == nil {
 		_ = r.Close()
 		_ = w.Close()
 	}
 	if !primeSignalDelivery {
-		return
+		return nil
 	}
 	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGWINCH)
-	signal.Stop(ch)
+	signal.Notify(ch, syscall.SIGPROF)
+	// Not stopped here. Stop returns once os/signal's delivery goroutine —
+	// which the first Notify has just started — is parked reading the pipe,
+	// so stopping at once is a wait for that goroutine to be scheduled, on
+	// the start's own path. Stopped after the census and the release, it has
+	// usually been scheduled already: about 0.04 ms less, measured as above.
+	return func() { signal.Stop(ch) }
 }
 
 // primeSignalDelivery is whether openRuntimeDescriptors asks os/signal for
 // anything, which is false on Linux only.
 //
 // The call is there for darwin's pipe and buys nothing where there is no pipe,
-// and it is not free: the first Notify starts the runtime's signal-handling
-// thread, and Stop then waits for its delivery goroutine to be scheduled, all
-// before main. Measured on Linux in the golang:1.26.9 image, paired over 300
-// spawns of `zsh -c :`, dropping it took 0.76 ms of 5.1 ms of CPU, faster in
-// 265 of 300 (#6360). A shell that traps a signal later pays for the thread
-// then, and one that does not never does.
+// and it is not free: the first Notify starts os/signal's delivery goroutine
+// and the thread it blocks on, all before main — and, in the form the call
+// took when this was measured, the runtime's signal-mask thread as well (it
+// named SIGWINCH then; see openRuntimeDescriptors). Measured on Linux in the
+// golang:1.26.9 image, paired over 300 spawns of `zsh -c :`, dropping it took
+// 0.76 ms of 5.1 ms of CPU, faster in 265 of 300 (#6360). A shell that traps a
+// signal later pays for the threads then, and one that does not never does.
 //
 // It used to be made on Linux anyway, in case a future runtime opened
 // something there. That case is still covered, by a test rather than by the

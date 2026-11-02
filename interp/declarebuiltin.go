@@ -2786,7 +2786,7 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 				// Whether `set -a` marks the name is asked of a name this
 				// line brings into being, which `-g` through a reference
 				// does not do (see below). See markADeclaredNameForAllexport.
-				born := r.nothingStandsUnder(name, fresh) && !(df.global && followedAReference)
+				born := r.nothingStandsUnder(name, fresh) && (!df.global || !followedAReference)
 				r.declareEmpty(name, fresh, df.export || df.readonly,
 					withoutMatching(df) != (declareFlags{}),
 					// `-g` through a **reference** leaves the target alone.

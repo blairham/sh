@@ -16911,6 +16911,12 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// store below because both the plain write and the append pass
 		// through it, and because the value is this one whichever they do.
 		r.resolvedSubscript(itoa(r.tracedElementPosition(a.Name, idx)))
+		if r.elementWriteThroughAnElementReferenceRefused(a) {
+			// `e[k]=1` with `e` aimed at `a[x]`, in the column that refuses
+			// it: the statement's refusal, which gives up the line. See
+			// interp/namerefelementwrite.go (#7367).
+			return
+		}
 		if a.Append {
 			// `a[0]+=Q` appends to element 0. Distinct from `a+=(Q)`, which
 			// adds an element after the last: the subscript is what says

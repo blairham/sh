@@ -2120,14 +2120,20 @@ func (r *Runner) namesAnElementOf(name, target string) bool {
 // reach it are statements: [Runner.refuseNamerefAim] is the same sentence
 // with the same speakers, and this reuses it so that `(( r[1] = 5 ))` and a
 // builtin's own store name themselves here exactly as they do there.
-func (r *Runner) elementWriteRefusesAReferenceToAnElement(name string) bool {
+//
+// And it costs what that refusal costs, which the caller's form decides: the
+// assignment statement hands assignedAlone and gives up the rest of the line,
+// as the bare `m=1` over an unaimed reference does, and every other route —
+// `read`, `printf -v`, an arithmetic construct — hands assignedByBuiltin and
+// runs on. See Runner.elementWriteThroughAnElementReferenceRefused (#7367).
+func (r *Runner) elementWriteRefusesAReferenceToAnElement(name string, form assignForm) bool {
 	if isNameLike(name) {
 		return false
 	}
 	if _, _, element := r.indirectElement(name); !element {
 		return false
 	}
-	r.refuseNamerefAim(name, assignedByBuiltin)
+	r.refuseNamerefAim(name, form)
 	return true
 }
 

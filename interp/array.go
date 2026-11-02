@@ -546,7 +546,7 @@ func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 	// `printf -v` and `declare` reach an element by this route and not by
 	// the assignment statement. See Runner.endProducerUnsetEnded.
 	r.endProducerUnsetEnded(name)
-	if r.elementWriteRefusesAReferenceToAnElement(name) {
+	if r.elementWriteRefusesAReferenceToAnElement(name, assignedByBuiltin) {
 		// A reference aimed at an element, with a subscript of its own
 		// written after it — `typeset -n r='A[0]'; r[1]=v`. Two subscripts
 		// name nothing, and the store below would make a parameter literally

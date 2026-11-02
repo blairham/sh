@@ -1208,6 +1208,36 @@ list in the same order with the same refusals (bash's `failglob` refusal
 already waited for the list, #6677), and nothing is asked.
 `interp/pathnamestage.go` holds it (#6768).
 
+**Except in a zsh declaration, from its first assignment operand on.**
+Reaching an assignment operand, scalar or array literal, runs the stage
+over every word held in front of it, before the operand's own value or
+the assignment prefix is expanded; each word behind it is then matched
+before the next word is expanded. So a refusal there leaves the later
+words unexpanded, and the status it keeps is the one in front of the
+command. A declaration with no assignment operand keeps the whole-list
+order, as does one not written as a declaration. Measured 2026-11-02 on
+zsh 5.9.2 under `-f -c` and from a file, the same directory, `Q` for
+`q*(e:'print -u2 Q':)`:
+
+    typeset Q $(echo A >&2)                    A, Q
+    typeset Q $(echo A >&2) y=1                A, Q
+    typeset y=1 Q $(echo A >&2)                Q, A
+    typeset -a a=(1) Q $(echo A >&2)           Q, A
+    typeset Q y=1 $(echo A >&2)                Q, A: matched at the operand
+    typeset Q $(echo A >&2) y=$(echo Y >&2)    A, Q, Y
+    x=$(echo P >&2) typeset Q y=$(echo A >&2)  Q, P, A
+    typeset y=1 Q1 $(echo A >&2) Q2 $(echo B >&2)
+                                               Q1, A, Q2, B
+    local, export, readonly, typeset -x        the same as typeset
+    builtin typeset y=1 Q $(…), \typeset …     A, Q
+    typeset y=1 *nomatch* $(echo S >&2)        the refusal alone
+    typeset *nomatch* y=1 $(echo S >&2)        the refusal alone, at 1
+    (exit 3); typeset y=1 *nomatch* $(exit 6)  3
+
+bash 5.3.20 under `failglob` writes `S` before the refusal for `declare
+y=1 nomatch*zz $(echo S >&2)`, as it does for `echo`. The axis is
+`DeclarationWordsAreMatchedInTurnFromAnAssignment` (#7125).
+
 ## 8. Quote removal
 
 The quote characters that survived stages 1-7 are removed. Nothing else

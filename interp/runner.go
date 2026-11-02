@@ -9531,6 +9531,44 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		r.failedExpansionStatus = wordsRule
 	}
 	failedUnder, declaredYet := statusBefore, false
+	// Whether the stage runs as the walk goes once a declaration's
+	// assignment operand is reached, rather than once at the end. See
+	// Semantics.DeclarationWordsAreMatchedInTurnFromAnAssignment.
+	matchesInTurn := r.sem().DeclarationWordsAreMatchedInTurnFromAnAssignment == Yes
+	// matchTheHeldWords runs the pathname stage over the runs held so far,
+	// word by word, stopping at the first it refuses, and moves the
+	// positions recorded while they were built to where the matches put
+	// them. Armed around each word behind the command's name alone: the
+	// stage runs no substitution, and the code a qualifier runs has a hold
+	// of its own. Under the command's own rule for a failed expansion, which
+	// is the rule once every word is expanded, whenever it runs. See
+	// interp/pathnamestage.go (#6768).
+	matchTheHeldWords := func() {
+		rule := r.failedExpansionStatus
+		r.failedExpansionStatus = statusBefore
+		argv = r.pathnameStage(argv, waiting, func(list []string) {
+			r.armProgramGlob(list, modifierWords, stoppedAtCommand)
+		})
+		r.failedExpansionStatus = rule
+		for i, at := range argvBefore {
+			argvBefore[i] = shiftedBy(waiting, at)
+		}
+		kept := operandAt[:0]
+		for _, at := range operandAt {
+			if from := shiftedBy(waiting, at); cameToOneField(waiting, at) || !heldAt(waiting, at) {
+				kept = append(kept, from)
+			}
+		}
+		operandAt = kept
+		for _, from := range lexedFrom {
+			if cameToOneField(waiting, from) {
+				lexedAt = append(lexedAt, argv[shiftedBy(waiting, from)])
+			}
+		}
+		// Matched, so nothing is held: a run held after this is built at a
+		// position the list already has.
+		waiting, lexedFrom = waiting[:0], lexedFrom[:0]
+	}
 	// How many written words open the command as modifiers, so that the word
 	// at i names the command when i is no more than this. See
 	// leadingModifierWords.
@@ -9550,17 +9588,20 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// its failure is reported below, after the loop.
 			failedUnder = r.failedExpansionStatus
 		}
+		// From the first assignment operand on, which the two rules below
+		// read. An array-literal operand counts as one, though it is not
+		// among the words (#7005).
+		if (keepsTheStatus || matchesInTurn) && i > 0 && len(argv) > 0 && (declaredYet ||
+			(assignShaped || appendShaped || anArrayOperandIsWrittenBefore(c.Assigns, w)) &&
+				r.declarationCommand(c, argv)) {
+			declaredYet = true
+		}
 		if keepsTheStatus {
-			// From the first assignment on: measured, `local $((1/0))` and
-			// `local -a $((1/0))` leave 1, and `local x=1 $((1/0))` leaves 0.
+			// Measured, `local $((1/0))` and `local -a $((1/0))` leave 1,
+			// and `local x=1 $((1/0))` leaves 0, and `typeset -a a=(1)
+			// *nomatch*` leaves 3 behind `(exit 3);` too.
 			r.failedExpansionStatus = wordsRule
-			// An array-literal operand counts as one, though it is not
-			// among the words: `typeset -a a=(1) *nomatch*` leaves 3 behind
-			// `(exit 3);` too (#7005).
-			if i > 0 && len(argv) > 0 && (declaredYet ||
-				(assignShaped || appendShaped || anArrayOperandIsWrittenBefore(c.Assigns, w)) &&
-					r.declarationCommand(c, argv)) {
-				declaredYet = true
+			if declaredYet {
 				r.failedExpansionStatus = failedExpansionKeepsTheStatus
 			}
 		}
@@ -9571,6 +9612,19 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// all six columns, and `set -u; printf "[%s]" "$a" "$b"` names
 			// only `a`. Both wrote one line per bad word here.
 			break
+		}
+		if matchesInTurn && declaredYet && len(waiting) > 0 {
+			// The words held so far are matched before this one is
+			// expanded, and before the operand's own value or the prefix
+			// in front of the command: zsh's order behind a declaration's
+			// assignment operand, where a refusal leaves every later word
+			// unexpanded. See
+			// Semantics.DeclarationWordsAreMatchedInTurnFromAnAssignment
+			// (#7125).
+			matchTheHeldWords()
+			if r.pathnameStageStopped() {
+				break
+			}
 		}
 		// A declaration utility's `name=value` arguments are assignments and
 		// expand as ones, which is what keeps `typeset -i n=3*3` from being
@@ -9798,9 +9852,10 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		}
 		// The fields go onto the list expanded and not yet matched: the
 		// pathname stage runs over the whole list once every word is
-		// expanded, below. Behind the command's name a refusal there may be
-		// the program's, which is what armed carries. See
-		// interp/pathnamestage.go (#6768).
+		// expanded, below, or behind a declaration's assignment operand
+		// before the next word is, above. Behind the command's name a
+		// refusal there may be the program's, which is what armed carries.
+		// See interp/pathnamestage.go (#6768).
 		argv, waiting = holdGlob(argv, waiting, fields, noglob, !scanning && len(argv) > modifierWords)
 		// Behind a declaration's first assignment operand, a refusal of the
 		// stage leaves `$?` as any other failure there does. Measured
@@ -9828,30 +9883,9 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	}
 	r.failedExpansionStatus = statusBefore
 	// Every word is expanded, so the pathname stage runs over the list now,
-	// word by word, and stops at the first word it refuses. Armed around each
-	// word behind the command's name alone: the stage runs no substitution,
-	// and the code a qualifier runs has a hold of its own. See
-	// interp/pathnamestage.go (#6768).
-	argv = r.pathnameStage(argv, waiting, func(list []string) {
-		r.armProgramGlob(list, modifierWords, stoppedAtCommand)
-	})
-	// The positions recorded while the list was built, where the matches
-	// moved them.
-	for i, at := range argvBefore {
-		argvBefore[i] = shiftedBy(waiting, at)
-	}
-	kept := operandAt[:0]
-	for _, at := range operandAt {
-		if from := shiftedBy(waiting, at); cameToOneField(waiting, at) || !heldAt(waiting, at) {
-			kept = append(kept, from)
-		}
-	}
-	operandAt = kept
-	for _, from := range lexedFrom {
-		if cameToOneField(waiting, from) {
-			lexedAt = append(lexedAt, argv[shiftedBy(waiting, from)])
-		}
-	}
+	// word by word, and stops at the first word it refuses. See
+	// matchTheHeldWords (#6768).
+	matchTheHeldWords()
 	if len(argv) > modifierWords {
 		r.armProgramGlob(argv, modifierWords, stoppedAtCommand)
 	}

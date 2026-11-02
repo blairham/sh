@@ -2221,6 +2221,43 @@ type Semantics struct {
 	// (#7005).
 	FailedExpansionInADeclarationOrCaseSetsNoStatus Answer
 
+	// DeclarationWordsAreMatchedInTurnFromAnAssignment runs the pathname
+	// stage over a declaration's words as the walk goes, from the first
+	// assignment operand on, where everywhere else it runs once every word of
+	// the list is expanded (#6768). Reaching an assignment operand, scalar or
+	// array literal, matches every word held in front of it before the
+	// operand or the prefix is expanded, and each word behind it is matched
+	// before the next word is expanded, so a refusal there leaves the words
+	// behind it unexpanded.
+	//
+	// Measured 2026-11-02 on zsh 5.9.2 (`-f -c`) under `env -i
+	// PATH=/usr/bin:/bin`, in a directory holding one file `q`, with `Q` a
+	// qualifier's code, `q*(e:'print -u2 Q':)`, and both streams on one pipe:
+	//
+	//	typeset Q $(echo A >&2)                  A, Q: no assignment operand
+	//	typeset Q $(echo A >&2) y=1              A, Q
+	//	typeset y=1 Q $(echo A >&2)              Q, A
+	//	typeset -a a=(1) Q $(echo A >&2)         Q, A
+	//	typeset Q y=1 $(echo A >&2)              Q, A: matched at the operand
+	//	typeset Q $(echo A >&2) y=$(echo Y >&2)  A, Q, Y: before its value
+	//	x=$(echo P >&2) typeset Q y=1            Q, P: before the prefix
+	//	typeset y=1 Q1 $(echo A >&2) Q2 $(echo B >&2)
+	//	                                         Q1, A, Q2, B
+	//	local, export, readonly, `typeset -x`    the same as typeset
+	//	builtin typeset y=1 Q $(…), \typeset …   A, Q: not one written as a
+	//	                                         declaration
+	//	typeset y=1 *nomatch* $(echo S >&2)      the refusal alone, no S
+	//	typeset *nomatch* y=1 $(echo S >&2)      the same, at 1
+	//	typeset y=1 *nomatch* $((1/0))           the refusal, no division
+	//	(exit 3); typeset y=1 *nomatch* $(exit 6)
+	//	                                         3: the substitution never ran
+	//
+	// bash 5.3 has no code in the stage, and under `failglob` `declare y=1
+	// nomatch*zz $(echo S >&2)` writes S first, as `echo` does.
+	//
+	// zsh Yes, every other dialect No; read as `== Yes` (#7125).
+	DeclarationWordsAreMatchedInTurnFromAnAssignment Answer
+
 	// FailedExpansionInACommandKeepsAFailingStatus leaves `$?` alone when an
 	// expansion fails in any simple command's words and `$?` was already a
 	// failure, and sets the fatal status over a 0. zsh alone.
@@ -37622,6 +37659,10 @@ func PosixSemantics() Semantics {
 		// The standard's fatal expansion error is a status like any other's.
 		// See the field.
 		FailedExpansionInADeclarationOrCaseSetsNoStatus: No,
+		// The standard expands every word of a command before pathname
+		// expansion is performed on any of them (XCU 2.6), whatever the
+		// words are. See the field.
+		DeclarationWordsAreMatchedInTurnFromAnAssignment: No,
 		// POSIX has `echo` and `printf` exit greater than zero when "an
 		// error occurred", and a write that went nowhere is one; dash
 		// complies. zsh is the holdout, keeping status 0.

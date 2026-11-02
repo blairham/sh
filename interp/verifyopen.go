@@ -103,32 +103,53 @@ func (r *Runner) reportRefusal(a Action) {
 // the process, and this one does not — a mask is a body's own here, so the
 // masking is done where the mode is chosen. See umaskscope.go.
 func (r *Runner) openGated(ctx context.Context, a *Action, path string, flags int) (*os.File, error) {
-	f, err := r.openGatedFile(ctx, a, path, flags)
+	f, _, err := r.openGatedRaising(ctx, a, path, flags, opened.Raise{})
+	return f, err
+}
+
+// openGatedRaising is openGated with the descriptors a Gate's walk makes put
+// through raise as they are made, reporting whether the file was. See
+// Runner.openGatedRaised, the one caller that passes a Raise.
+func (r *Runner) openGatedRaising(
+	ctx context.Context,
+	a *Action,
+	path string,
+	flags int,
+	raise opened.Raise,
+) (*os.File, bool, error) {
+	f, raised, err := r.openGatedFile(ctx, a, path, flags, raise)
 	// Every open this shell makes for a script comes through here, so this is
 	// where the number a failure left is recorded rather than at each caller
 	// — see interp/errno.go, and note that a second door recording it would
 	// be a second answer to what `$ERRNO` holds.
 	r.NoteErrno(err)
-	return f, err
+	return f, raised, err
 }
 
-func (r *Runner) openGatedFile(ctx context.Context, a *Action, path string, flags int) (*os.File, error) {
+func (r *Runner) openGatedFile(
+	ctx context.Context,
+	a *Action,
+	path string,
+	flags int,
+	raise opened.Raise,
+) (*os.File, bool, error) {
 	perm := r.createMode(0o666)
 	if r.Gate == nil {
 		// With the thread's signals held, because a redirection to a FIFO
 		// waits in the open for its peer, and an interrupted wait can lose a
 		// peer that came and went (#5763). See opened.WithSignalsHeld.
 		// From the held directory where path was built from it: see dirNow.
-		return opened.AtHeld(path, func(name string) (*os.File, error) {
+		f, err := opened.AtHeld(path, func(name string) (*os.File, error) {
 			return opened.WithSignalsHeld(func() (*os.File, error) { return os.OpenFile(name, flags, perm) })
 		})
+		return f, false, err
 	}
-	return opened.Verified(path, flags, perm, func(reached opened.Reached) error {
+	return opened.VerifiedRaised(path, flags, perm, func(reached opened.Reached) error {
 		if !r.verifyOpened(ctx, a, reached) {
 			return errRefused
 		}
 		return nil
-	})
+	}, raise)
 }
 
 // readFileGated is os.ReadFile with the same verification, for `.`.

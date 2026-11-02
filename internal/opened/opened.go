@@ -189,7 +189,7 @@ func Path(f *os.File) (string, bool) {
 // doing something neither of us understands, and neither is a thing to open a
 // file on.
 func Open(path string, flags int, perm fs.FileMode) (Reached, error) {
-	return openAsking(path, flags, perm, nil)
+	return openAsking(path, flags, perm, nil, Raise{})
 }
 
 // openAsking is Open with the question the walk puts before a creation.
@@ -197,8 +197,9 @@ func Open(path string, flags int, perm fs.FileMode) (Reached, error) {
 // ask is consulted only where the open would make a file that is not there,
 // and only on the walked platforms; it is nil for a caller that is not gating,
 // which is every caller of Open itself. See walk.createChecked for why the
-// question belongs inside the walk and not around it.
-func openAsking(path string, flags int, perm fs.FileMode, ask func(string) error) (Reached, error) {
+// question belongs inside the walk and not around it. raise goes to the walk
+// and not to the fallback, which is an ordinary open and is reported as one.
+func openAsking(path string, flags int, perm fs.FileMode, ask func(string) error, raise Raise) (Reached, error) {
 	if !walkSupported {
 		f, err := os.OpenFile(path, flags, perm)
 		if err != nil {
@@ -206,7 +207,7 @@ func openAsking(path string, flags int, perm fs.FileMode, ask func(string) error
 		}
 		return Reached{File: f}, nil
 	}
-	r, err := walkOpen(path, flags, perm, ask)
+	r, err := walkOpenRaised(path, flags, perm, ask, raise)
 	if err == nil || !errors.Is(err, errFollowedALink) {
 		return r, err
 	}
@@ -316,29 +317,49 @@ func Elsewhere(r Reached, requested string) (string, bool) {
 // what it would have been: `> some-running-binary` reports text-file-busy
 // either way.
 func Verified(path string, flags int, perm fs.FileMode, check func(Reached) error) (*os.File, error) {
+	f, _, err := VerifiedRaised(path, flags, perm, check, Raise{})
+	return f, err
+}
+
+// VerifiedRaised is Verified with every descriptor the walk makes moved out
+// of the way as it is made, for a caller that publishes descriptor numbers to
+// something running beside the open. See Raise, which also says why check is
+// never called inside raise's hold.
+//
+// raised reports that the file has been through raise's Up already. It is
+// false for the one open that is not the walk's — the fallback for a link the
+// walk cannot follow, which lands where the kernel puts it — and for a
+// platform with no walk, and the caller moves such a file itself.
+func VerifiedRaised(
+	path string,
+	flags int,
+	perm fs.FileMode,
+	check func(Reached) error,
+	raise Raise,
+) (f *os.File, raised bool, err error) {
 	r, err := openAsking(path, flags&^os.O_TRUNC, perm, func(name string) error {
 		// The same check, asked about a path that has no descriptor yet
 		// because the file it names is about to be made. Both callers answer
 		// from the name — that is what a rule matches — and the one that
 		// needed a descriptor was the arrangement this package replaced.
 		return check(Reached{Name: name})
-	})
+	}, raise)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if !r.Asked {
 		if err := check(r); err != nil {
 			_ = r.File.Close()
-			return nil, err
+			return nil, false, err
 		}
 	}
 	if flags&os.O_TRUNC != 0 {
 		if err := emptyRegular(r.File); err != nil {
 			_ = r.File.Close()
-			return nil, err
+			return nil, false, err
 		}
 	}
-	return r.File, nil
+	return r.File, r.Raised, nil
 }
 
 // emptyRegular is the held-back half of O_TRUNC.

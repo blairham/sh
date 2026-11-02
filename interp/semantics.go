@@ -1364,6 +1364,43 @@ type Semantics struct {
 	// asked.
 	PrefixToAKeywordFunctionIsScopedToTheCall Answer
 
+	// PrefixToATracedKeywordFunctionIsWorkedTwice works a prefix that
+	// PrefixToAKeywordFunctionIsScopedToTheCall gives to the call through
+	// **twice** where the function is traced: once ahead of the call as the
+	// shell's own, the way a POSIX-form call's is, and then again as the
+	// call's own cells, expanded a second time. No makes a traced call's
+	// prefix the call's own and nothing more, as an untraced one's is.
+	//
+	// Measured 2026-11-01 from script files under `env -i PATH=/usr/bin:/bin`
+	// with a scratch HOME, with `function g { echo "in x=$x"; }`:
+	//
+	//	                          ksh93u+ 2012-08-01
+	//	typeset -ft g; set -x; x=1 g      `+ x=1`, `+ g`, `+ x=1`, the body
+	//	typeset -ft g; x=$(echo s >&2) g  `s` twice, then the body
+	//	typeset -ft g; x=1 g; echo $x     `in x=1`, then `1`: it persists
+	//	typeset -ft g; x=o; x+=a g        the body sees `a`, `olda` after
+	//	typeset -ft g; n=0; x=$((n+=1)) g the body sees `2`, `1` after
+	//	set -x; x=1 g                     `+ g`, `+ x=1`: the untraced control
+	//
+	// So the front pass is a POSIX-form call's prefix — written ahead of
+	// the command, expanded ahead of the redirections, stored on the shell's
+	// own cells, persisting — and the second is the untraced call's, written
+	// behind the command's line once the redirections are open, on fresh cells
+	// the return takes away. It sees what the first one stored: `x=o; y=$x
+	// x=new g` shows the body `y=new` and leaves `y=o`. It is not a trace
+	// effect: the substitution runs twice without `set -x` too. A POSIX-form
+	// function marked `-ft` expands its prefix once, but that shell traces
+	// only the keyword form, and a POSIX-form prefix is the shell's anyway.
+	//
+	// bash 5.3.20 (`declare -ft`) and zsh 5.9.2 (`functions -t` and `typeset
+	// -ft`) expand `x=$(echo s >&2) g` once and keep nothing, measured the
+	// same day. Neither scopes the prefix to the call, so neither reaches the
+	// question; No records what they do.
+	//
+	// Asked only where the prefix is scoped to the call and the function is
+	// traced (#7092).
+	PrefixToATracedKeywordFunctionIsWorkedTwice Answer
+
 	// PrefixToALocalDeclarationIsALocal makes an assignment prefix the shell
 	// keeps, written in front of a declaration that is declaring locals of
 	// the running function, a local of that function too. It is a fresh cell

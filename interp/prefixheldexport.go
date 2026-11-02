@@ -51,7 +51,12 @@ func (r *Runner) heldExportRouteOf(argv []string) heldExportRoute {
 	route := heldExportRoute{set: true, kind: r.prefixCommandOf(argv)}
 	if route.kind.kind == prefixBeforeFunction {
 		if fn := r.funcs[route.kind.word]; fn != nil && fn.Keyword {
-			route.scoped = r.sem().PrefixToAKeywordFunctionIsScopedToTheCall == Yes
+			// A traced call's prefix is held for the front pass first, which
+			// is the shell's own: `function g { :; }; typeset -ft g; x=1
+			// y=$(printenv x) g` leaves `y` empty in ksh93u+. The pass behind
+			// it is held as the call's. See interp/tracedcallprefix.go.
+			route.scoped = r.sem().PrefixToAKeywordFunctionIsScopedToTheCall == Yes &&
+				!r.tracedCallPersistsItsPrefixFirst(route.kind.word)
 		}
 	}
 	return route

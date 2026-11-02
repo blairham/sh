@@ -1604,6 +1604,11 @@ func Semantics() interp.Semantics {
 	// The same answer as bash, measured the same day on 5.9.2: `s+=5 kf` in
 	// front of a `function`-form function shows the body `base5` (#3161).
 	s.PrefixToAKeywordFunctionIsScopedToTheCall = interp.No
+	// And a traced function's prefix is worked through once: measured
+	// 2026-11-01 on 5.9.2, `function g { echo "in x=$x"; }; functions -t g;
+	// x=$(echo s >&2) g; echo "after x=$x"` writes `s` once and leaves `x`
+	// empty, and `typeset -ft g` the same (#7092).
+	s.PrefixToATracedKeywordFunctionIsWorkedTwice = interp.No
 	// Under `posixbuiltins` a prefix in front of `local` or `typeset` persists,
 	// and it is an ordinary assignment rather than the function's local:
 	// measured 2026-10-29 on 5.9.2, `g() { echo "g v=$v"; }; f() { v=new

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // bgScript names the script a re-executed copy of this test binary should run
@@ -138,7 +139,7 @@ func runShellForBackground(t *testing.T, src string) {
 	// selected, so naming one would only decide what the process would have
 	// done had it not become a shell.
 	cmd := exec.Command(os.Args[0])
-	cmd.Env = append(os.Environ(), bgScript+"="+src)
+	cmd.Env = testenv.WithoutRaceExitPause(append(os.Environ(), bgScript+"="+src))
 	// A file and not a pipe: os/exec waits for a pipe to close, and a
 	// surviving job holding the shell's streams keeps one open — so the wait
 	// would be for the job rather than for the shell, which is the one thing

@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // TestTheModuleHelperLeavesNoHomeBehind is #5454: the helper re-entered with
@@ -27,7 +29,8 @@ func TestTheModuleHelperLeavesNoHomeBehind(t *testing.T) {
 	}
 	tmp := t.TempDir()
 	cmd := exec.Command(exe, "-test.run=^TestModuleHelperProcess$")
-	cmd.Env = []string{"PATH=/usr/bin:/bin", "TMPDIR=" + tmp, helperMode + "=delay", "SH_TEST_MODULE_HELPER_MS=0"}
+	cmd.Env = testenv.WithoutRaceExitPause(
+		[]string{"PATH=/usr/bin:/bin", "TMPDIR=" + tmp, helperMode + "=delay", "SH_TEST_MODULE_HELPER_MS=0"})
 	out, err := cmd.CombinedOutput()
 	if err != nil || string(out) != "x" {
 		t.Fatalf("the helper wrote %q (%v), want x — the case is about a helper that ran", out, err)

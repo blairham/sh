@@ -14,6 +14,7 @@ import (
 
 	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // forwardedScript carries a script into a re-executed test binary.
@@ -48,7 +49,7 @@ echo caught`
 	ctx, cancel := context.WithTimeout(context.Background(), deathDeadline)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=TestASignalFromAnotherProcessIsHandledInABusyLoop")
-	cmd.Env = append(os.Environ(), forwardedScript+"="+src)
+	cmd.Env = testenv.WithoutRaceExitPause(append(os.Environ(), forwardedScript+"="+src))
 	cmd.WaitDelay = time.Second
 	out, _ := cmd.CombinedOutput()
 	if ctx.Err() != nil {

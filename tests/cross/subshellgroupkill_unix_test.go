@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // groupKillShell names the dialect a re-executed copy of this test binary runs
@@ -199,7 +200,7 @@ func runInAGroup(t *testing.T, dialect, script string) (ws syscall.WaitStatus, o
 	ctx, cancel := context.WithTimeout(context.Background(), deadline)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestASubshellThatSignalsItsOwnGroupDiesOfIt$")
-	cmd.Env = append(os.Environ(), groupKillShell+"="+dialect, groupKillScript+"="+script)
+	cmd.Env = testenv.WithoutRaceExitPause(append(os.Environ(), groupKillShell+"="+dialect, groupKillScript+"="+script))
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.WaitDelay = time.Second
 	var o, e bytes.Buffer

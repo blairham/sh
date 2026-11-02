@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // Nothing may allocate between the descriptor placement and the execve, and
@@ -142,7 +143,7 @@ func TestAFailedExecPutsTheOpenFileLimitBack(t *testing.T) {
 		return
 	}
 	cmd := exec.Command(os.Args[0], "-test.run=TestAFailedExecPutsTheOpenFileLimitBack")
-	cmd.Env = append(os.Environ(), limitProbeChild+"=1")
+	cmd.Env = testenv.WithoutRaceExitPause(append(os.Environ(), limitProbeChild+"=1"))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("the child could not be run: %v\n%s", err, out)

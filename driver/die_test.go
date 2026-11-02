@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/testenv"
 	"github.com/blairham/sh/interp"
 )
 
@@ -241,7 +242,7 @@ func waitStatusOfAShell(t *testing.T, name, src string) (syscall.WaitStatus, str
 	ctx, cancel := context.WithTimeout(context.Background(), deathDeadline)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run="+name)
-	cmd.Env = append(os.Environ(), dyingScript+"="+src)
+	cmd.Env = testenv.WithoutRaceExitPause(append(os.Environ(), dyingScript+"="+src))
 	// So the deadline is one a child cannot outlive. CombinedOutput reads
 	// through a pipe, and a pipe is held open by whatever inherited it — a
 	// `sleep` the shell left behind would keep the read going after the
@@ -549,7 +550,7 @@ func shellSignaledFromOutside(
 	ready := filepath.Join(t.TempDir(), "ready")
 	cmd := exec.Command(os.Args[0], "-test.run="+name)
 	cmd.Env = append(os.Environ(), dyingScript+"="+setup+"printf r >"+ready+"; "+hold)
-	cmd.Env = append(cmd.Env, env...)
+	cmd.Env = testenv.WithoutRaceExitPause(append(cmd.Env, env...))
 	// A file rather than a buffer, and this is the difference between timing
 	// a death and timing a sleep. os/exec copies a non-file stream on a
 	// goroutine and Wait does not return until that copy ends — and the copy

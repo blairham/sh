@@ -10,9 +10,12 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // The second process `zsh/system`'s lock and `zsh/zselect`'s wait are tested
@@ -114,10 +117,20 @@ func helperScripts(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("finding this test binary: %v", err)
 	}
+	// The helper is this binary, so under -race it would sleep a second on
+	// its way out, and a module case waits for every helper it starts. The
+	// shell starts it with the snippet's environment, which this does not
+	// build, so the wrapper carries the option itself.
+	pause := ""
+	if testenv.RaceDetector {
+		kv := testenv.WithoutRaceExitPause([]string{"GORACE=" + os.Getenv("GORACE")})[0]
+		name, value, _ := strings.Cut(kv, "=")
+		pause = name + "=" + strconv.Quote(value) + " "
+	}
 	for name, mode := range map[string]string{
 		"lockprobe": "probe", "lockhold": "hold", "delaywrite": "delay",
 	} {
-		script := "#!/bin/sh\n" +
+		script := "#!/bin/sh\n" + pause +
 			"SH_TEST_MODULE_HELPER_PATH=\"$1\" SH_TEST_MODULE_HELPER_MS=\"$2\" " + helperMode + "=" + mode +
 			" exec " + strconv.Quote(self) + " -test.run='^TestModuleHelperProcess$'\n"
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o700); err != nil {

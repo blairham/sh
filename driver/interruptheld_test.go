@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/testenv"
 	"github.com/blairham/sh/interp"
 )
 
@@ -49,7 +50,8 @@ func heldRun(t *testing.T, name, src string, d interp.InterruptDeferral) (syscal
 	ctx, cancel := context.WithTimeout(context.Background(), deathDeadline)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run="+name)
-	cmd.Env = append(os.Environ(), heldScript+"="+src, heldDeferral+"="+strconv.Itoa(int(d)))
+	cmd.Env = testenv.WithoutRaceExitPause(
+		append(os.Environ(), heldScript+"="+src, heldDeferral+"="+strconv.Itoa(int(d))))
 	cmd.WaitDelay = time.Second
 	out, _ := cmd.CombinedOutput()
 	if ctx.Err() != nil {

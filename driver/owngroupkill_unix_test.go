@@ -18,6 +18,7 @@ import (
 
 	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // ownGroupScript carries a script into a re-executed test binary that leads a
@@ -91,7 +92,7 @@ func runInAGroupOfItsOwn(t *testing.T, src string) (out, errs string) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, os.Args[0],
 		"-test.run=^TestATrappedSignalSentToTheShellsOwnGroupIsHandledBeforeTheNextCommand$")
-	cmd.Env = append(os.Environ(), ownGroupScript+"="+src)
+	cmd.Env = testenv.WithoutRaceExitPause(append(os.Environ(), ownGroupScript+"="+src))
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.WaitDelay = time.Second
 	var o, e bytes.Buffer

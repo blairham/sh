@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // outsideDeathShell names the dialect a re-executed copy of this test binary
@@ -446,7 +447,8 @@ func diesFromOutside(t *testing.T, dialect string, sig syscall.Signal, script st
 	dir := t.TempDir()
 	ready, logPath := filepath.Join(dir, "ready"), filepath.Join(dir, "out")
 	cmd := exec.Command(os.Args[0], "-test.run=^TestADialectsExitTrapAnswersAFatalSignalFromOutside$")
-	cmd.Env = append(os.Environ(), outsideDeathShell+"="+dialect, outsideDeathScript+"="+script, "READY="+ready)
+	cmd.Env = testenv.WithoutRaceExitPause(
+		append(os.Environ(), outsideDeathShell+"="+dialect, outsideDeathScript+"="+script, "READY="+ready))
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	log, err := os.Create(logPath)
 	if err != nil {
@@ -676,7 +678,8 @@ func endsOnItsOwn(t *testing.T, dialect, script string) (syscall.WaitStatus, str
 	t.Helper()
 	logPath := filepath.Join(t.TempDir(), "out")
 	cmd := exec.Command(os.Args[0], "-test.run=^TestADialectsExitTrapAnswersAFatalSignalFromOutside$")
-	cmd.Env = append(os.Environ(), outsideDeathShell+"="+dialect, outsideDeathScript+"="+script)
+	cmd.Env = testenv.WithoutRaceExitPause(
+		append(os.Environ(), outsideDeathShell+"="+dialect, outsideDeathScript+"="+script))
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	log, err := os.Create(logPath)
 	if err != nil {

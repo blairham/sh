@@ -15,6 +15,8 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	"github.com/blairham/sh/internal/testenv"
 )
 
 func TestNormalizeRemovesWhatIsTrueOfTheMachine(t *testing.T) {
@@ -841,7 +843,7 @@ func TestTheJobControlSignalsAreAKnownGapAndStillAre(t *testing.T) {
 	}
 	cmd := exec.Command("/bin/sh", "-c",
 		`trap '' TSTP TTIN TTOU; exec "$1" -test.run='^TestJobControlGapChild$' -test.v`, "sh", exe)
-	cmd.Env = append(os.Environ(), jobControlChildEnv+"=1")
+	cmd.Env = testenv.WithoutRaceExitPause(append(os.Environ(), jobControlChildEnv+"=1"))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("the child failed: %v\n%s", err, out)

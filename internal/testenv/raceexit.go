@@ -23,6 +23,14 @@ const noExitPause = "atexit_sleep_ms=0"
 // interp's cases run that way, and under -race they were half a minute of the
 // package's serial tail (#7290).
 //
+// So every test that starts a copy of its own binary hands it the environment
+// through here: driver's shells, tests/cross's dying dialects, tests/zsh's
+// module helpers, acpcheck's scripted agents. A child's own children inherit
+// the option, which matters where the copy is reached through something else
+// (a `/bin/sh -c 'exec "$1"'`, a wrapper on PATH). With the pause off for
+// the whole run, the test binaries themselves included, the Test step went
+// from 603 s to 451 s.
+//
 // # What it does not cost
 //
 // The child runs one case and the testing package checks the detector after
@@ -31,6 +39,12 @@ const noExitPause = "atexit_sleep_ms=0"
 // status. What goes is the extra second for a goroutine the case left behind
 // to race after the case has returned — and the same case is still waited out
 // in full where the parent binary ends its own run.
+//
+// A child that ends in os.Exit partway through a test, as a shell half does,
+// never reaches that check, and loses nothing either: the detector reports a
+// race when it sees one, and turns an exit at 0 into its own status. Checked
+// with a racy child of each shape under this option: both printed the race,
+// the os.Exit one ended at 66 and the testing one at 1, each in 13 ms.
 //
 // Only under -race, because the option means nothing to a binary without the
 // detector, and the environment an uninstrumented child is handed is then

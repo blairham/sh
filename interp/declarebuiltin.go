@@ -2783,6 +2783,10 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 			// TestAnUnansweredInheritedTypeAxisRefusesTheNamesAfterItToo
 			// pins that rather than the guard that appeared to do it.
 			if !r.declarationCarriesAnArrayLiteral(name) {
+				// Whether `set -a` marks the name is asked of a name this
+				// line brings into being, which `-g` through a reference
+				// does not do (see below). See markADeclaredNameForAllexport.
+				born := r.nothingStandsUnder(name, fresh) && !(df.global && followedAReference)
 				r.declareEmpty(name, fresh, df.export || df.readonly,
 					withoutMatching(df) != (declareFlags{}),
 					// `-g` through a **reference** leaves the target alone.
@@ -2801,6 +2805,13 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 					// lines (#4376's regression).
 					df.leavesAnAttribute() || (df.global && followedAReference),
 					df.inherit || r.LocalInheritsTheOuterValue(), false)
+				// The mark's own question can go unanswered, and unlike the
+				// one above nothing after it would carry the refusal: the
+				// last operand returns the line's status (#7283).
+				r.markADeclaredNameForAllexport(name, born, fresh)
+				if r.unspecified {
+					return r.status
+				}
 			}
 		}
 		if df.readonly && !df.readonlyOff {

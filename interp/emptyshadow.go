@@ -165,6 +165,8 @@ func (r *Runner) declareOverNothing(sc *scope, name, value string, hasValue bool
 		r.setVarAs(name, value, form)
 		return
 	}
+	born := r.nothingStandsUnder(name, true)
 	r.declareEmpty(name, true, f.export || f.readonly, asked.any, f.leavesAnAttribute(),
 		f.inherit || r.LocalInheritsTheOuterValue(), false)
+	r.markADeclaredNameForAllexport(name, born, true)
 }

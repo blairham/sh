@@ -1932,6 +1932,10 @@ func Semantics() interp.Semantics {
 	s.ArrayLiteralAssignmentStartsTheNameOver = interp.No
 	// `local u` hides the caller's `u` — the local exists unset.
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes
+	// And under `set -a` that local is not marked, where `declare gd` at the
+	// top level is: `local sa` lists `declare -- sa` and the top-level one
+	// `declare -x gd`. Measured 2026-11-01 on 5.3.20; see the axis (#7283).
+	s.AllexportMarksALocalDeclaredWithoutAValue = interp.No
 	s.AHiddenExportStillReachesAChild = interp.Yes
 	s.TypesetLocalNeedsKeywordFunction = interp.No
 	s.ReadonlyReassignmentFatal = interp.No

@@ -16272,6 +16272,51 @@ and an output base does not reach the child either: `typeset -i8 D; export
 D` is `D=0` there where zsh, by the other route, writes `D=8#0`.
 
 
+### Under `set -a`, a declaration marks the name it brings into being
+
+Measured 2026-11-01 under `-c` with `env -i PATH=/usr/bin:/bin LC_ALL=C` and
+a scratch `HOME`: bash 5.3.20, zsh 5.9.2 under `-f`, dash 0.5.12, ksh93u+,
+and BusyBox ash 1.37 in the pinned alpine image. The export attribute is read
+back the way a child sees it: the name is assigned *after* `set +a`, so only
+an attribute the declaration left can put it in the environment.
+
+    set -a; <declaration>; set +a; g=5; env | grep -c '^g='
+
+                                 bash  zsh  dash  ash  ksh93
+    typeset g        (top level)  1     1    -     -    0
+    declare -g g     (function)   1     1    -     -    -
+    local g          (function)   0     1    1     1    -
+    typeset g   (function f {…})  0     1    -     -    0
+
+A declaration with a value is an assignment, and every column marks it:
+bash lists `f() { local sb=1; }` as `declare -x sb="1"`, `local sc=` as
+`declare -x sc=""`, and dash and ash list `export sb='1'`. It was the one
+assignment route that went unmarked here — `local`'s store is not a
+declaration's store — while `declare se=1` in the same function was marked.
+
+Without a value the columns part on two questions, and they part differently,
+so each is an axis: a **global** the declaration makes (ksh93 alone leaves it
+unmarked), and a **local** it makes (bash and ksh93 leave it unmarked). bash
+is the one that splits them: `declare gd` at the top level lists `declare -x
+gd`, `local sa` in a function `declare -- sa`. A type letter does not change
+the answer — bash lists `declare -i n` as `declare -ix n` and `local -i m` as
+`declare -i m` — and an array or a table is the compound question, answered
+elsewhere: `set -a; declare -a A` is `declare -a A` in bash and `typeset -ax
+A=( )` in zsh.
+
+**Only a name the declaration brings into being.** Over a name already
+holding a value nothing is marked: `x=1; set -a; declare x` lists `declare --
+x="1"` in bash and `${(t)x}` stays `scalar` in zsh. A local is a new binding
+whatever stands outside it, so zsh marks `x=1; set -a; f() { local x; }` —
+except where the local *starts as* the outer binding, which is dash: there
+`local x` keeps `1` and the same line tells a child nothing about `x`. ash's
+local starts unset, and ash marks it.
+
+**zsh marks the valueless name and still tells no child about it**, which is
+the agreement above holding: `set -a; f() { local sa; env | grep -c '^sa='; }`
+is `0` while `${(t)sa}` is `scalar-local-export`, and `set -a; typeset ge;
+env` leaves `ge` out until `ge=` puts it in (#7283).
+
 ## The array letter beside a letter that says what the values are
 
 Measured 2026-09-12 from a script file, `env -i PATH=/usr/bin:/bin` with a

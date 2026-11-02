@@ -2346,6 +2346,12 @@ func Semantics() interp.Semantics {
 	// invalid variable name` and the shell ends (#7115). See
 	// interp.Semantics.BareReferenceLetterFollowsTheReference.
 	s.BareReferenceLetterFollowsTheReference = interp.Yes
+	// And an element written through a reference aimed at an element is the
+	// chain the two subscripts spell: measured 2026-11-02, `typeset -A a;
+	// typeset -n e='a[x]'; e[k]=1` lists `typeset -A a=([x]=(1) )` and traces
+	// `+ a[x][0]=1` (#7113). See
+	// interp.Semantics.ElementWriteThroughAnElementReferenceNests.
+	s.ElementWriteThroughAnElementReferenceNests = interp.Yes
 	// Measured 2026-10-16 (#6781): see
 	// interp.Semantics.DeclarationOperandSplitsAfterTheSubscript.
 	s.DeclarationOperandSplitsAfterTheSubscript = interp.Yes

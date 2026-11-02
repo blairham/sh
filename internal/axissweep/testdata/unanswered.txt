@@ -139,6 +139,7 @@ ash   EarlierDeclarationLetterBlocksALaterPlus
 ash   ALetterUnderBothSignsComesOff
 ash   EarlierPlusMakesALaterLetterARemoval
 ash   ElementSubscriptIsExpandedBeforeTheValue
+ash   ElementWriteThroughAnElementReferenceNests
 ash   EmptySubscriptInAnIndexedLiteralIsBad
 ash   FrozenElementIsRefusedBeforeItsSubscript
 ash   FrozenLiteralIsExpandedBeforeItIsRefused
@@ -556,6 +557,7 @@ dash  ALetterUnderBothSignsComesOff
 dash  EarlierPlusMakesALaterLetterARemoval
 dash  EchoLastEscapeFlagWins
 dash  ElementSubscriptIsExpandedBeforeTheValue
+dash  ElementWriteThroughAnElementReferenceNests
 dash  EmptySubscriptInAnIndexedLiteralIsBad
 dash  FrozenElementIsRefusedBeforeItsSubscript
 dash  FrozenLiteralIsExpandedBeforeItIsRefused
@@ -883,6 +885,7 @@ zsh   DeclarationMayShadowAnEnclosingScopesReadonly
 zsh   DeclarationRereadsAParenthesizedValue
 zsh   DeclarationThroughAReferenceMakesTheTargetLocal
 zsh   DeclarationThroughAReferenceNamesTheOperand
+zsh   ElementWriteThroughAnElementReferenceNests
 zsh   ErrtraceReachesSubshells
 zsh   ExitTrapFiresWhereTheScriptStopped
 zsh   ExportOrReadonlyTakesAReferenceToAnElement

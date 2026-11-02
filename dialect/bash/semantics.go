@@ -1167,6 +1167,12 @@ func Semantics() interp.Semantics {
 	// and lists `declare -n m="x"` (#7115). See
 	// interp.Semantics.BareReferenceLetterFollowsTheReference.
 	s.BareReferenceLetterFollowsTheReference = interp.No
+	// And an element written through a reference aimed at an element is
+	// refused: measured 2026-11-02 on 5.3.20, `declare -A a; declare -n
+	// e='a[x]'; e[k]=1` is `` `a[x]': not a valid identifier `` and leaves `a`
+	// empty (#7113). See
+	// interp.Semantics.ElementWriteThroughAnElementReferenceNests.
+	s.ElementWriteThroughAnElementReferenceNests = interp.No
 	// Measured 2026-10-16 (#6781): see
 	// interp.Semantics.DeclarationOperandSplitsAfterTheSubscript.
 	s.DeclarationOperandSplitsAfterTheSubscript = interp.Yes

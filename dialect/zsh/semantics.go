@@ -2135,6 +2135,8 @@ func Semantics() interp.Semantics {
 	// letter, so there is no chain of references to aim (#7114).
 	// unanswered BareReferenceLetterFollowsTheReference: the same missing
 	// letter, so there is no reference to declare again (#7115).
+	// unanswered ElementWriteThroughAnElementReferenceNests: the same missing
+	// letter, so there is no reference to aim at an element (#7113).
 	// unanswered ExportOrReadonlyTakesAReferenceToAnElement: the same missing
 	// letter, and the `(P)` flag this shell does have is an expansion rather
 	// than a name, so neither builtin can be handed a reference at all.

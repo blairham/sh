@@ -1002,6 +1002,8 @@ func Semantics() interp.Semantics {
 	// unanswered ValueThroughAReferenceAimsTheUnaimedEnd: no references (#7114).
 	// unanswered BareReferenceLetterFollowsTheReference: no references, and no
 	// `typeset` to write the letter on (#7115).
+	// unanswered ElementWriteThroughAnElementReferenceNests: no references, and
+	// no arrays to aim one at (#7113).
 	// unanswered DeclarationOperandSplitsAfterTheSubscript: no arrays, so no
 	// operand has a subscript to hold an `=`.
 	// unanswered DeclarationThroughAReferenceNamesTheOperand: no references,

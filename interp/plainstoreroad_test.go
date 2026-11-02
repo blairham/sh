@@ -70,6 +70,9 @@ var theFullRoad = map[string][]string{
 		// column that does not nest it — the indexed element road again
 		// (#7367).
 		"elementWriteThroughAnElementReferenceRefused",
+		// A declaration's array literal starting the array's history over —
+		// storesAPlainScalar refuses both a literal and an operand (#7393).
+		"attrClear",
 	},
 	"setVarAs": {
 		"registeredGuard", "attributeFolded", "compoundMemberThroughAReference",

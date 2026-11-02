@@ -16800,6 +16800,23 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 				startOver = func() { r.clearTypeAttributes(a.Name) }
 			}
 		}
+		if a.Operand && !a.Append {
+			// A declaration's literal also starts the array's history over,
+			// emptied or not: measured 2026-11-02 on ksh93u+, after `e=(7);
+			// unset 'e[0]'` the line `typeset -a e=()` lists `typeset -a e`
+			// rather than `([0]=)`, and a later `e+=(z)` is `(z)` and `e=/y`
+			// lists `typeset -a e=/y` — the never-held state, where a
+			// valueless `typeset -a e` keeps the history. Only the listing,
+			// the store and the append that read attrHeldAnElement can see
+			// it, and those are one dialect's (#7393).
+			before := startOver
+			startOver = func() {
+				if before != nil {
+					before()
+				}
+				r.attrClear(a.Name, attrHeldAnElement)
+			}
+		}
 		if r.unspecified {
 			return
 		}

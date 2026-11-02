@@ -3800,6 +3800,11 @@ func Semantics() interp.Semantics {
 	// b+=(x [5]=y)` is `( x 8 9 '' y )` (#7079). See
 	// interp.Semantics.AppendingSubscriptedLiteralStoresFromTheFirstPosition.
 	s.AppendingSubscriptedLiteralStoresFromTheFirstPosition = interp.Yes
+	// An append to an array emptied by slicing starts at the first position:
+	// measured 2026-11-02 on 5.9.2, `e=(7); e[1]=(); e+=(z)` is `( z )`
+	// (#7393). See
+	// interp.Semantics.AppendToAnEmptiedArrayStartsPastTheFirstPosition.
+	s.AppendToAnEmptiedArrayStartsPastTheFirstPosition = interp.No
 	// In such a literal, `=` or `+=`, a bare element that expanded to nothing
 	// still takes a position: measured 2026-11-02 on 5.9.2, with `e=`, `b=(7 8
 	// 9); b+=(x $e [6]=y)` is `( x '' 9 '' '' y )` (#7321). See

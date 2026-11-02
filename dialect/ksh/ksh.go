@@ -4125,6 +4125,12 @@ func Semantics() interp.Semantics {
 	// stands beside a subscripted one. Measured 2026-11-02 on ksh93u+, with
 	// `e=`, `b=(x $e z [4]=y)` is `typeset -a b=(x z '[4]=y')` (#7321).
 	//
+	// An append to an array that held an element and lost every one starts
+	// at the second position: measured 2026-11-02 on ksh93u+, `e=(7 8);
+	// unset 'e[0]' 'e[1]'; e+=(z)` is `typeset -a e=([1]=z)` (#7393). See
+	// interp.Semantics.AppendToAnEmptiedArrayStartsPastTheFirstPosition.
+	s.AppendToAnEmptiedArrayStartsPastTheFirstPosition = interp.Yes
+	//
 	// A negative subscript in a literal counts back from the end, where the
 	// literal reads one at all: measured 2026-11-02, `typeset -a b=([0]=z
 	// [1]=w [-1]=x)` is `typeset -a b=(z x)` (#7322). See

@@ -36341,6 +36341,50 @@ type Semantics struct {
 	// it on; see dialect/ksh.
 	AppendingSubscriptedLiteralStoresFromTheFirstPosition Answer
 
+	// AppendToAnEmptiedArrayStartsPastTheFirstPosition makes `e+=(…)` over an
+	// indexed array that has held an element and holds none now start at the
+	// **second** position, as if the first were still taken. No starts it at
+	// the first, where an array that never held an element starts too.
+	//
+	// Measured 2026-11-02 under `-c` with `env -i PATH=/usr/bin:/bin`, read
+	// back with `typeset -p e` on ksh93u+ 2012-08-01 and bash 5.3.20:
+	//
+	//	row                                          ksh93u+        bash 5.3.20
+	//	e=(7); unset 'e[0]'; e+=(z)                  ([1]=z)        ([0]="z")
+	//	e=(7 8); unset 'e[0]' 'e[1]'; e+=(z)         ([1]=z)        ([0]="z")
+	//	typeset -a e=([5]=7); unset 'e[5]'; e+=(z)   ([1]=z)        ([0]="z")
+	//	e=(7); unset 'e[0]'; e+=(y z)                ([1]=y [2]=z)  [0] and [1]
+	//	e=(7); unset 'e[0]'; e+=(); e+=(z)           ([1]=z)        ([0]="z")
+	//	typeset -a e; e+=(z)                         (z)            ([0]="z")
+	//	e=(7); unset e; e+=(z)                       (z)            ([0]="z")
+	//	e=(7); unset 'e[0]'; e[${#e[@]}]=z           (z)            ([0]="z")
+	//	e=(7 8); unset 'e[1]'; e+=(z)                (7 z)          the same
+	//
+	// So the noun is the array's **history**, the third state attrHeldAnElement
+	// records, and not its count or its extent: two elements emptied start at
+	// the second position and not the third, and an array whose only element
+	// stood at [5] starts there too rather than at [6]. The same history is
+	// what lists such an array as `([0]=)` — an empty first element — and the
+	// append goes after that. The last three rows are the controls: a name
+	// that never held an element, or that `unset` took away whole, starts at
+	// the first position, an element store places where it is told, and an
+	// array still holding an element appends after its highest subscript as
+	// it always has.
+	//
+	// zsh cannot empty an array by `unset` of an element, and the route it
+	// has answers No: `e=(7); e[1]=(); e+=(z)` is `( z )` on 5.9.2. dash and
+	// BusyBox ash have no arrays (#7393).
+	//
+	// unpinned ksh: no corpus row empties an array and then appends to it;
+	// pinned by TestAnAppendToAnEmptiedArrayStartsPastTheFirstPosition.
+	//
+	// unpinned bash: likewise, pinned by
+	// TestAnAppendToAnEmptiedArrayStartsAtTheFirstPosition.
+	//
+	// unpinned zsh: likewise, pinned by
+	// TestAnAppendToAnArrayEmptiedBySlicingStartsAtTheFirstPosition.
+	AppendToAnEmptiedArrayStartsPastTheFirstPosition Answer
+
 	// EmptyBareElementOfASubscriptedLiteralTakesAPosition keeps a bare
 	// element that expanded to **no word at all** as one empty element, in a
 	// literal that holds any `[k]=v` element: it takes the next position and

@@ -326,7 +326,7 @@ func openRuntimeDescriptors() (unsubscribe func()) {
 	// which the first Notify has just started — is parked reading the pipe,
 	// so stopping at once is a wait for that goroutine to be scheduled, on
 	// the start's own path. Stopped after the census and the release, it has
-	// usually been scheduled already: about 0.04 ms less, measured as above.
+	// usually been scheduled already: 0.03 to 0.04 ms less, measured as above.
 	return func() { signal.Stop(ch) }
 }
 

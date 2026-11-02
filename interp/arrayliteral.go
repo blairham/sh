@@ -1230,7 +1230,8 @@ func (r *Runner) literalSubscriptIsAKey(name string, parsed []literalElem, appen
 		// an already-indexed name still reads the subscripts as keys.
 		return false
 	}
-	if appendRead && !elementIsAValueOfItsOwn(parsed[0]) && r.lang().ArrayLiteralShapeFollowsTheFirstElement {
+	if appendRead && r.lang().ArrayLiteralShapeFollowsTheFirstElement &&
+		len(parsed) > 0 && !elementIsAValueOfItsOwn(parsed[0]) {
 		// The other route, and the append's own: `typeset -a e; e+=([1+1]=y)`
 		// is `typeset -a e=([2]=y)`, in the column whose literal shape gives
 		// an indexed array's subscripts up — where an append that read them

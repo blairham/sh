@@ -122,10 +122,37 @@ func (r *Runner) signalTheShellsOwnGroup(pid int, name string, sig syscall.Signa
 // An untrapped stop is the shell's copy left to the kernel, as at the top
 // level: it stops the process, which is every member here, and a second stop
 // raised beside it would stop the shell again once something had continued it.
+//
+// **And every body around the subshell has a copy too** (#7245): the
+// parentheses, substitutions and pipeline elements a real shell forked on
+// the way down to it are members of the same group, with the same defaults.
+// Measured 2026-11-01 the same way:
+//
+//	trap 'echo T' USR1; ( (kill -USR1 0; echo in2); echo in1 ); echo out=$?
+//	        T, out=158 in all five (ksh93 out=286), and the same with a
+//	        third level; bash 5.3 writes its one notice bare, for the outer
+//	        parentheses; here, before: in1, T, out=0
+//	trap 'echo T' USR1; ( trap 'echo S' USR1; (kill -USR1 0; echo in2); echo in1 )
+//	        S, in1, T, out=0 — the body that traps it runs on; here,
+//	        before: in1, T
+//	trap 'echo T' USR1; : | { (kill -USR1 0; echo in2); echo in1; }
+//	        T, out=158 where the element is forked (bash, dash); T, in1,
+//	        out=0 where it is the shell (zsh, ksh93)
+//	( (kill -USR1 0; echo in2); echo in1 ); echo out=$?
+//	        nothing, killed by USR1; here, before: in1
+//
+// So each running body around the sender is left the signal as a copy of it
+// leaves one at the body's own number, and settles it the same way, through
+// signalThisBody at its next moment: innermost outward, because each is
+// waiting for the one inside it. A body that dies of it says nothing about
+// the child that died with it — see the parentheses in compound.go — so the
+// one notice is the shell's. The walk is over the bodies' processes and not
+// their anchors, which exist only where a front end supplied ProcessAnchor.
 
-// signalTheGroupFromASubshell answers the shell's copy and the subshell's own
-// copy of a signal the subshell has just sent the group they share. trapped
-// is whether the shell has an entry for it.
+// signalTheGroupFromASubshell answers the shell's copy, the subshell's own
+// copy and the copy of every body around it, of a signal the subshell has
+// just sent the group they share. trapped is whether the shell has an entry
+// for it.
 func (r *Runner) signalTheGroupFromASubshell(name string, sig syscall.Signal, trapped bool) {
 	was := r.ctl
 	if trapped || !signalStops(sig) {
@@ -137,6 +164,12 @@ func (r *Runner) signalTheGroupFromASubshell(name string, sig syscall.Signal, tr
 		return
 	}
 	_ = r.signalThisBody(name, sig)
+	// Not reached in the dialect whose `( … )` is the shell's own process:
+	// that copy has ended the subshell above, and the rule that did it ends
+	// every unforked subshell around it as well.
+	for p := range r.bodiesAround {
+		r.signalTheBodyAround(p, name, sig)
+	}
 }
 
 // dyingOfASubshellsSignal reports that a subshell has sent the shell a fatal

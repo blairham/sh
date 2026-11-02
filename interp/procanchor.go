@@ -6,7 +6,6 @@ package interp
 import (
 	"os"
 	"sync"
-	"sync/atomic"
 )
 
 // A body a real shell would have *forked* runs on a goroutine of this process
@@ -133,16 +132,6 @@ type procAnchor struct {
 	// placeholder, which may be older than the anchor: see
 	// procanchorspare.go.
 	exited chan struct{}
-
-	// body is the process the body this anchor stands for runs as, which is
-	// what a signal aimed at the group id from a copy of the body reaches —
-	// while it is running. See selfkillbody.go.
-	body *Process
-	// arrivals are those signals, waiting for the body's next moment between
-	// commands, and posted says there are any, so the body can ask without
-	// taking the lock before every command it runs.
-	arrivals []bodyArrival
-	posted   atomic.Bool
 
 	// monitored records that the body was forked while the monitor was on,
 	// which is when a real shell can have made it a group of its own.
@@ -284,11 +273,13 @@ func (c *Runner) anchorForkedBody() func() {
 		return exit
 	}
 	a.outer = c.bodyAnchor
-	a.body = c.process
 	// The clone has not run anything yet, so its monitor is still the one
 	// of the shell that forked it — the one that decided whether a real
 	// shell's fork would have led a group.
 	a.monitored = c.monitor
+	// The group is this body's, and a copy of the body reaches the body
+	// through it. See selfkillbody.go.
+	c.process.anchor = a
 	c.bodyAnchor = a
 	return func() {
 		a.stop()

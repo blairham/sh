@@ -50,6 +50,27 @@ const (
 // three dialects. Each signal number here is the platform's: 30 for USR1 on
 // macOS, 10 on Linux, so the notice is checked for its shape and not its
 // digits.
+//
+// **And every subshell around the sender dies of it too**, because each is a
+// member of the same group with the shell's handled signals back at their
+// defaults (#7245). Measured 2026-11-01 the same way:
+//
+//	trap 'echo T' USR1; ( (kill -USR1 0; echo in2); echo in1 ); echo out=$?
+//	        T, out=158 in all five (ksh93 out=286); bash 5.3 writes the
+//	        notice bare for the outer parentheses, dash the words alone
+//	…with a third level, `( ( (…; echo in3); echo in2 ); echo in1 )`
+//	        the same
+//	trap 'echo T' USR1; ( trap 'echo S' USR1; (kill -USR1 0; echo in2); echo in1 )
+//	        S, in1, T, out=0: the subshell that traps it runs its handler and
+//	        carries on; ksh93 crashes on its own trap, and is left out
+//	trap 'echo T' USR1; : | { (kill -USR1 0; echo in2); echo in1; }
+//	        T, out=158 in bash and dash, whose last element is forked; T,
+//	        in1, out=0 in zsh and ksh93, whose last element is the shell
+//	( (kill -USR1 0; echo in2); echo in1 ); echo out=$?
+//	        nothing: the whole group is killed by USR1
+//
+// Here, before, every enclosing body ran on and wrote `in1` (and `in2`), and
+// bash wrote the notice located, from the outer parentheses.
 func TestASubshellThatSignalsItsOwnGroupDiesOfIt(t *testing.T) {
 	if name := os.Getenv(groupKillShell); name != "" {
 		refuseACoreDump()
@@ -109,6 +130,47 @@ func TestASubshellThatSignalsItsOwnGroupDiesOfIt(t *testing.T) {
 				"dash": {"S\nin\nT\nout=0\n", ""},
 			},
 		},
+		{
+			"the subshell around it", trapped + `( (kill -USR1 0; echo in2); echo in1 ); echo out=$?`,
+			"( ( kill -USR1 0; echo in2 ); echo in1 )",
+			map[string]want{
+				"bash": {"T\n" + died, "bare"},
+				"zsh":  {"T\n" + died, ""},
+				"dash": {"T\n" + died, "words"},
+				"ksh":  {"T\nout=" + strconv.Itoa(256+usr1) + "\n", ""},
+			},
+		},
+		{
+			"two subshells around it",
+			trapped + `( ( (kill -USR1 0; echo in3); echo in2 ); echo in1 ); echo out=$?`,
+			"( ( ( kill -USR1 0; echo in3 ); echo in2 ); echo in1 )",
+			map[string]want{
+				"bash": {"T\n" + died, "bare"},
+				"zsh":  {"T\n" + died, ""},
+				"dash": {"T\n" + died, "words"},
+				"ksh":  {"T\nout=" + strconv.Itoa(256+usr1) + "\n", ""},
+			},
+		},
+		{
+			// The notice is the inner parentheses', written by the outer
+			// ones, and is not what this row is about: see unchecked.
+			"a subshell around it with a handler of its own",
+			trapped + `( trap 'echo S' USR1; (kill -USR1 0; echo in2); echo in1 ); echo out=$?`, "",
+			map[string]want{
+				"bash": {"S\nin1\nT\nout=0\n", unchecked},
+				"zsh":  {"S\nin1\nT\nout=0\n", ""},
+				"dash": {"S\nin1\nT\nout=0\n", "words"},
+			},
+		},
+		{
+			"a pipeline element around it", trapped + `: | { (kill -USR1 0; echo in2); echo in1; }; echo out=$?`, "",
+			map[string]want{
+				"bash": {"T\n" + died, unchecked},
+				"zsh":  {"T\nin1\nout=0\n", ""},
+				"dash": {"T\n" + died, unchecked},
+				"ksh":  {"T\nin1\nout=0\n", ""},
+			},
+		},
 	} {
 		for dialect, w := range c.want {
 			t.Run(dialect+"/"+c.name, func(t *testing.T) {
@@ -127,15 +189,20 @@ func TestASubshellThatSignalsItsOwnGroupDiesOfIt(t *testing.T) {
 	// nothing written: no `in`, no `out=`, and no notice for the subshell
 	// from a shell that is dead.
 	for _, dialect := range []string{"bash", "zsh", "dash", "ksh"} {
-		t.Run(dialect+"/untrapped", func(t *testing.T) {
-			ws, out, errs := runInAGroup(t, dialect, `(kill -USR1 0; echo in); echo out=$?`)
-			if !ws.Signaled() || ws.Signal() != syscall.SIGUSR1 {
-				t.Errorf("ended %v, want killed by USR1", ws)
-			}
-			if out != "" || errs != "" {
-				t.Errorf("wrote %q and %q, want nothing", out, errs)
-			}
-		})
+		for name, script := range map[string]string{
+			"untrapped":                         `(kill -USR1 0; echo in); echo out=$?`,
+			"untrapped, with a subshell around": `( (kill -USR1 0; echo in2); echo in1 ); echo out=$?`,
+		} {
+			t.Run(dialect+"/"+name, func(t *testing.T) {
+				ws, out, errs := runInAGroup(t, dialect, script)
+				if !ws.Signaled() || ws.Signal() != syscall.SIGUSR1 {
+					t.Errorf("ended %v, want killed by USR1", ws)
+				}
+				if out != "" || errs != "" {
+					t.Errorf("wrote %q and %q, want nothing", out, errs)
+				}
+			})
+		}
 	}
 }
 
@@ -167,10 +234,17 @@ func TestACommandKilledByASignalTheShellTrapsIsReportedBare(t *testing.T) {
 	}
 }
 
+// unchecked is a row whose stderr is not this test's question: a notice for
+// a body other than the parentheses the shell ran — the inner parentheses,
+// named by the ones around them, or a pipeline element — which is a gap of
+// its own (#7310, #7311).
+const unchecked = "unchecked"
+
 // checkGroupKillNotice checks stderr for the shape of notice want names.
 func checkGroupKillNotice(t *testing.T, errs, want, command string) {
 	t.Helper()
 	switch want {
+	case unchecked:
 	case "":
 		if errs != "" {
 			t.Errorf("wrote %q to stderr, want nothing", errs)

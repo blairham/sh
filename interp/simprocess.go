@@ -3,7 +3,10 @@
 
 package interp
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 // Process is the process a real shell would be running a body in, for a
 // question that is asked *per process* and that this shell, which forks
@@ -26,6 +29,25 @@ type Process struct {
 	mu    sync.Mutex
 	exits []func()
 	done  bool
+
+	// outer is the process of the body this one was forked from, and nil
+	// where that is the shell. A process always has one, anchor or not,
+	// which is why the bodies around a body are walked here rather than
+	// through the anchors: those exist only where a front end supplied
+	// ProcessAnchor, and a body is just as much inside another without one.
+	// See Runner.bodiesAround.
+	outer *Process
+	// anchor is the group this body leads where it has been given one, and
+	// what a copy of the body that aims at that group's number reaches. See
+	// selfkillbody.go.
+	anchor *procAnchor
+	// arrivals are the signals copies of this body left it — at its number,
+	// or at the process group every body around the sender is a member of —
+	// waiting for its next moment between commands, and posted says there
+	// are any, so the body can ask without taking the lock before every
+	// command it runs.
+	arrivals []bodyArrival
+	posted   atomic.Bool
 }
 
 // Process answers which process this runner's code would be running in. Nil
@@ -83,7 +105,8 @@ func (p *Process) ended() bool {
 // what ends it. Called beside the anchor at each of the five places a real
 // shell forks; see Runner.anchorForkedBody.
 func (c *Runner) forkProcess() func() {
-	p := &Process{}
+	// The process the clone inherited is the one it was forked from.
+	p := &Process{outer: c.process}
 	c.process = p
 	return p.exit
 }

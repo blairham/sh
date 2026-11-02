@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // How deep a start's stack goes, which is a cost of its own.
@@ -120,11 +121,11 @@ func startUnderCeiling(t *testing.T, dir, shell string, ceiling int, args ...str
 	t.Helper()
 	cmd := exec.Command(os.Args[0], "-test.run=^TestAStartStaysOnASmallStack$")
 	cmd.Args = append(cmd.Args, append([]string{"--"}, args...)...)
-	cmd.Env = append(os.Environ(),
+	cmd.Env = testenv.WithoutRaceExitPause(append(os.Environ(),
 		stackHelperShell+"="+shell,
 		stackHelperCeiling+"="+strconv.Itoa(ceiling),
 		"HOME="+dir, "ZDOTDIR="+dir, "ENV=", "BASH_ENV=",
-	)
+	))
 	cmd.Dir = dir
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out

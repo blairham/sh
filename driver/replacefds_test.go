@@ -31,7 +31,7 @@ func runAsShellReplacingItself(t *testing.T, name, src string, ran func(out stri
 		t.Fatal(err)
 	}
 	cmd := exec.Command(os.Args[0], "-test.run="+name)
-	cmd.Env = append(os.Environ(), helperScript+"="+script)
+	cmd.Env = testenv.WithoutRaceExitPause(append(os.Environ(), helperScript+"="+script))
 	// Deliberately no ExtraFiles: descriptor 3 is unopened here, so what
 	// the replacement finds on it is the script's doing and nothing
 	// else's.

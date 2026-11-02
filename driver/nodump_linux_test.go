@@ -11,6 +11,8 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // prSetDumpable and prGetDumpable are prctl's. Written out rather than taken
@@ -68,7 +70,7 @@ func TestWriteNoCoreLeavesTheProcessUndumpable(t *testing.T) {
 		os.Exit(0)
 	}
 	cmd := exec.Command(os.Args[0], "-test.run=TestWriteNoCoreLeavesTheProcessUndumpable")
-	cmd.Env = append(os.Environ(), notDumpableProbe+"=1")
+	cmd.Env = testenv.WithoutRaceExitPause(append(os.Environ(), notDumpableProbe+"=1"))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("the probe half failed: %v: %s", err, out)

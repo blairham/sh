@@ -47,7 +47,7 @@ func runMultios(t *testing.T, name, src string) (dir, out string) {
 		t.Fatal(err)
 	}
 	cmd := exec.Command(os.Args[0], "-test.run="+name)
-	cmd.Env = append(os.Environ(), multiosScript+"="+script)
+	cmd.Env = testenv.WithoutRaceExitPause(append(os.Environ(), multiosScript+"="+script))
 	cmd.Dir = dir
 	got, err := cmd.CombinedOutput()
 	var exit *exec.ExitError

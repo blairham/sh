@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/blairham/sh/internal/testenv"
 	"github.com/blairham/sh/interp"
 )
 
@@ -357,7 +358,7 @@ func signaledInAGroupOfItsOwn(t *testing.T, name string, o outsideSignal) (sysca
 		script = o.setup + o.hold
 	}
 	cmd.Env = append(os.Environ(), dyingScript+"="+script, "SCRATCH="+dir, "READY="+ready, "AGAIN="+again)
-	cmd.Env = append(cmd.Env, o.env...)
+	cmd.Env = testenv.WithoutRaceExitPause(append(cmd.Env, o.env...))
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	logPath := filepath.Join(dir, "out")
 	log, err := os.Create(logPath)

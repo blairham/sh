@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // collectorRoute names the entry point a re-executed copy of this test binary
@@ -77,7 +78,7 @@ func collectorAfter(t *testing.T, route string, env []string) (percent, limit in
 		}
 	}
 	cmd.Env = append(cmd.Env, collectorRoute+"="+route)
-	cmd.Env = append(cmd.Env, env...)
+	cmd.Env = testenv.WithoutRaceExitPause(append(cmd.Env, env...))
 	var errs strings.Builder
 	cmd.Stderr = &errs
 	out, err := cmd.Output()

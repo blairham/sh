@@ -127,7 +127,7 @@ func TestTheHomeCheckFailsTheRun(t *testing.T) {
 		return
 	}
 	cmd := exec.Command(os.Args[0], "-test.run=^TestTheHomeCheckFailsTheRun$")
-	cmd.Env = append(os.Environ(), touchHomeVar+"=1")
+	cmd.Env = testenv.WithoutRaceExitPause(append(os.Environ(), touchHomeVar+"=1"))
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("a run that wrote into its home passed:\n%s", out)

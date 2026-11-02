@@ -16,6 +16,7 @@ import (
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/internal/pty"
 	"github.com/blairham/sh/internal/smoke"
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // **With the line editor off, a ^C at the prompt gives up the line it was
@@ -163,7 +164,7 @@ func childShellSession(t *testing.T, rc string, args ...string) (*os.File, *smok
 	}
 	cmd := exec.Command(self, "-test.run=^TestChildShell$")
 	cmd.Dir = home
-	cmd.Env = []string{
+	cmd.Env = testenv.WithoutRaceExitPause([]string{
 		"HOME=" + home,
 		"PATH=/usr/bin:/bin",
 		"TERM=dumb",
@@ -173,7 +174,7 @@ func childShellSession(t *testing.T, rc string, args ...string) (*os.File, *smok
 		"SH_TEST_HOME=" + home,
 		childShellMode + "=" + t.TempDir(),
 		childShellArgs + "=" + strings.Join(args, "\n"),
-	}
+	})
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = terminal, terminal, terminal
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true}
 	if err := cmd.Start(); err != nil {

@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // The instrument's own machinery, tested against an agent that is not a
@@ -130,7 +132,7 @@ func dialFake(t *testing.T, script string, opts Options) *Client {
 	if err != nil {
 		t.Fatal(err)
 	}
-	opts.Env = append(os.Environ(), fakeAgentEnv+"="+script)
+	opts.Env = testenv.WithoutRaceExitPause(append(os.Environ(), fakeAgentEnv+"="+script))
 	opts.Dir = t.TempDir()
 	c, err := Dial(self, opts)
 	if err != nil {
@@ -293,8 +295,8 @@ func TestTheScriptedAgentRecordsWhatAClientGaveIt(t *testing.T) {
 	served := 0
 	c, err := Dial(self, Options{
 		Dir: dir,
-		Env: append(os.Environ(),
-			envAgentScript+"=read", envAgentOut+"="+report, envAgentTarget+"=/somewhere/x"),
+		Env: testenv.WithoutRaceExitPause(append(os.Environ(),
+			envAgentScript+"=read", envAgentOut+"="+report, envAgentTarget+"=/somewhere/x")),
 		Serve: func(method string, params json.RawMessage) (any, *RPCError) {
 			served++
 			if method != "fs/read_text_file" {
@@ -352,8 +354,8 @@ func TestTheScriptedAgentRecordsARefusalAsARefusal(t *testing.T) {
 	self, _ := os.Executable()
 	c, err := Dial(self, Options{
 		Dir: dir,
-		Env: append(os.Environ(),
-			envAgentScript+"=read", envAgentOut+"="+report, envAgentTarget+"=/denied"),
+		Env: testenv.WithoutRaceExitPause(append(os.Environ(),
+			envAgentScript+"=read", envAgentOut+"="+report, envAgentTarget+"=/denied")),
 		// Nil Serve: the client answers "I do not serve that", which is the
 		// shape a refusal arrives in.
 	})

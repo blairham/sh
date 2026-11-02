@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // A shell that aims a stop at itself is stopped by that very signal, and only
@@ -69,7 +71,7 @@ func stopsOfAShell(t *testing.T, src string) (syscall.Signal, string) {
 	defer devnull.Close()
 	self := []string{os.Args[0], "-test.run=^TestAStopAimedAtTheShellStopsTheProcessWithIt$"}
 	proc, err := os.StartProcess(os.Args[0], self, &os.ProcAttr{
-		Env:   append(os.Environ(), dyingScript+"="+src),
+		Env:   testenv.WithoutRaceExitPause(append(os.Environ(), dyingScript+"="+src)),
 		Files: []*os.File{devnull, outFile, outFile},
 		Sys:   &syscall.SysProcAttr{Setpgid: true},
 	})

@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/testenv"
 )
 
 // helperScript names the script a re-executed copy of this test binary should
@@ -46,7 +47,7 @@ func runAsShellWithADescriptor(t *testing.T, name, data, src string) string {
 	defer func() { _ = f.Close() }()
 
 	cmd := exec.Command(os.Args[0], "-test.run="+name)
-	cmd.Env = append(os.Environ(), helperScript+"="+script)
+	cmd.Env = testenv.WithoutRaceExitPause(append(os.Environ(), helperScript+"="+script))
 	// Entry 0 is descriptor 3 in the child, which is what `3<data` does.
 	cmd.ExtraFiles = []*os.File{f}
 	out, err := cmd.CombinedOutput()

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/testenv"
 	"github.com/blairham/sh/interp"
 )
 
@@ -112,7 +113,9 @@ func runAsShellParkingOn(t *testing.T, name string, fd int) (out string, placed 
 		t.Fatal(err)
 	}
 	cmd := exec.Command(os.Args[0], "-test.run="+name)
-	cmd.Env = append(os.Environ(), lowFdScript+"="+script, lowFdStall+"="+windowStall.String())
+	cmd.Env = testenv.WithoutRaceExitPause(
+		append(os.Environ(), lowFdScript+"="+script, lowFdStall+"="+windowStall.String()),
+	)
 	// Deliberately no ExtraFiles: every number this asks about has to be
 	// unopened at the start, so what ends up on it is the script's doing.
 	b, err := cmd.CombinedOutput()
@@ -251,7 +254,7 @@ func TestARuntimeDescriptorIsSaidAtAnExecAndKeptAtATail(t *testing.T) {
 	run := func(t *testing.T, src string) string {
 		t.Helper()
 		cmd := exec.Command(os.Args[0], "-test.run=TestARuntimeDescriptorIsSaidAtAnExecAndKeptAtATail")
-		cmd.Env = append(os.Environ(), lowFdCommand+"="+src)
+		cmd.Env = testenv.WithoutRaceExitPause(append(os.Environ(), lowFdCommand+"="+src))
 		b, err := cmd.CombinedOutput()
 		var exit *exec.ExitError
 		if err != nil && !errors.As(err, &exit) {

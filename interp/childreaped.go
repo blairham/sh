@@ -3,7 +3,16 @@
 
 package interp
 
-import "syscall"
+import (
+	"sync/atomic"
+	"syscall"
+)
+
+// afterAChildIsWaitedFor is nil outside a test. A test sets it to raise a
+// signal at the moment a child has just been reaped, which is the moment a
+// sender that exits at once leaves its arrival in the runtime's hands and not
+// yet on the shell's channel. See Runner.settleWhatAChildSent.
+var afterAChildIsWaitedFor atomic.Pointer[func()]
 
 // The `CHLD` trap fires once for every child the shell reaps, and this shell
 // has no child for most of what a real one forks.
@@ -107,6 +116,9 @@ func (r *Runner) childReaped() {
 // sites: a background job waits inside its own cloned runner, so the lists
 // touched here are never another goroutine's.
 func (r *Runner) childWaitedFor() {
+	if hook := afterAChildIsWaitedFor.Load(); hook != nil {
+		(*hook)()
+	}
 	// And the pipeline running has waited for a child, which is what a
 	// handler as it ends is shown. See Runner.answerArrivalsAsThePipelineEnds.
 	r.waitedForAChild = true

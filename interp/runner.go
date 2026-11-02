@@ -8830,6 +8830,7 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 	// What arrived from another process while the pipeline ran, answered as
 	// it ends and before a `!` inverts its status — after it, in the one case
 	// of one dialect's. See answerArrivalsAsThePipelineEnds.
+	r.settleWhatAChildSent()
 	inverts := p.Negated && r.negationInverts()
 	afterTheNegation := inverts && r.handlerSeesTheNegatedStatus(p)
 	if !afterTheNegation && r.ctl == controlNone {

@@ -182,3 +182,57 @@ func TestAnAppendOverAnIndexedArrayKeepsTheElementsAsWords(t *testing.T) {
 		}
 	}
 }
+
+// What refuses the subscripted reading is an indexed array *holding an
+// element*, not any indexed array: one that never held one reads the
+// subscripts of an append, and reads them as its own — expressions placing
+// values, the name left indexed — rather than as keys (#7323).
+//
+// The key is the array's history and not its count. An array emptied by
+// `unset` has `${#e[@]}` 0 as well and still keeps the text, so those rows read
+// the values back rather than the listing: where the kept word goes after an
+// emptied array is a different question from whether it is kept.
+//
+// Measured 2026-11-02 from a script file under `env -i PATH=/usr/bin:/bin` on
+// ksh93u+ 2012-08-01.
+func TestAnAppendOverAnIndexedArrayHoldingNoElementReadsTheSubscripts(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		// The issue's four rows: the declared array that has never held an
+		// element, and the three controls that already agreed.
+		{`typeset -a e; e+=([3]=y); typeset -p e`, "typeset -a e=([3]=y)\n"},
+		{`unset e; e+=([3]=y); typeset -p e`, "typeset -A e=([3]=y)\n"},
+		{`e=(7 8); e+=([3]=y); typeset -p e`, "typeset -a e=(7 8 '[3]=y')\n"},
+		{`e=s; e+=([3]=y); typeset -p e`, "typeset -A e=([0]=s [3]=y)\n"},
+		// Holding no element, however it came to: an empty literal ends the
+		// declared-only state without putting an element in.
+		{`typeset -a e=(); e+=([3]=y); typeset -p e`, "typeset -a e=([3]=y)\n"},
+		{`typeset -a e; e+=(); e+=([3]=y); typeset -p e`, "typeset -a e=([3]=y)\n"},
+		// Having held one and lost it is not the same state.
+		{`e=(7); unset 'e[0]'; e+=([3]=y); printf '<%s>\n' "${e[@]}"`, "<[3]=y>\n"},
+		{`typeset -a e; e[0]=q; unset 'e[0]'; e+=([3]=y); printf '<%s>\n' "${e[@]}"`, "<[3]=y>\n"},
+		// Every element is read, and the subscripts are expressions rather
+		// than keys: an unset name in one is 0.
+		{`typeset -a e; e+=([3]=y [5]=z); typeset -p e`, "typeset -a e=([3]=y [5]=z)\n"},
+		{`typeset -a e; e+=([1+1]=y); typeset -p e`, "typeset -a e=([2]=y)\n"},
+		{`typeset -a e; e+=([k]=y); typeset -p e`, "typeset -a e=(y)\n"},
+		{`typeset -a e; e+=([3]=y [3]+=z); typeset -p e`, "typeset -a e=([3]=yz)\n"},
+		{`typeset -ia e; e+=([3]=1+1); typeset -p e`, "typeset -a -i e=([3]=2)\n"},
+		// Once the append has placed an element the array holds one, so the
+		// next append keeps its text, after the highest subscript.
+		{`typeset -a e; e+=([3]=y); e+=([5]=z); typeset -p e`, "typeset -a e=([3]=y [4]='[5]=z')\n"},
+		// A literal that is not subscripted throughout is a word list by the
+		// grammar's rule, which no store rule reaches.
+		{`typeset -a e; e+=(x [3]=y); typeset -p e`, "typeset -a e=(x '[3]=y')\n"},
+		// The first element decides as it does for nesting: a literal of its
+		// own leading the list still builds a table.
+		{`typeset -a e; e+=([3]=y [4]=(p q)); typeset -p e`, "typeset -a e=([3]=y [4]=(p q) )\n"},
+		{`typeset -a e; e+=([3]=(p q) [4]=y); typeset -p e`, "typeset -A e=([3]=(p q) [4]=y)\n"},
+		{`typeset -a e; e+=([3]=(p q)); typeset -p e`, "typeset -A e=([3]=(p q) )\n"},
+	} {
+		if out, st := runKsh(t, dir, tc.src); out != tc.want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q at 0", tc.src, out, st, tc.want)
+		}
+	}
+}

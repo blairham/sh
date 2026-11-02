@@ -546,6 +546,27 @@ func sameWordList(a, b []*syntax.ArrayElem) bool {
 // The keyed name is not reached from here at all: a declared associative
 // array takes the assoc path above, which is the last row and which already
 // agreed.
+//
+// What refuses is an indexed array **holding an element**, though, and not
+// any indexed array. One that never held one reads the subscripts, and reads
+// them as the indexed array's own — expressions placing values, the name left
+// indexed — rather than as keys. Measured 2026-11-02 from a script file under
+// `env -i PATH=/usr/bin:/bin` on ksh93u+ 2012-08-01:
+//
+//	typeset -a e; e+=([3]=y)              typeset -a e=([3]=y)
+//	typeset -a e; e+=([3]=y [5]=z)        typeset -a e=([3]=y [5]=z)
+//	typeset -a e; e+=([1+1]=y)            typeset -a e=([2]=y)
+//	typeset -a e; e+=([k]=y)              typeset -a e=(y)
+//	typeset -a e=(); e+=([3]=y)           typeset -a e=([3]=y)
+//	typeset -a e; e+=([3]=y); e+=([5]=z)  typeset -a e=([3]=y [4]='[5]=z')
+//	e=(7); unset 'e[0]'; e+=([3]=y)       typeset -a e=([1]='[3]=y')
+//	typeset -a e; e+=(x [3]=y)            typeset -a e=(x '[3]=y')
+//
+// So the key is the array's history and not its count: the seventh row's
+// `${#e[@]}` is 0 too, and it keeps the text, because an array that has held
+// an element and lost it is the third state attrHeldAnElement records. The
+// sixth row is the same rule a second time, and the last is the grammar half
+// above, which no store rule reaches (#7323).
 func (r *Runner) literalReadsSubscripts(name string, elems []*syntax.ArrayElem, appendTo bool) bool {
 	if !r.lang().ArrayLiteralShapeFollowsTheFirstElement {
 		return true
@@ -559,8 +580,8 @@ func (r *Runner) literalReadsSubscripts(name string, elems []*syntax.ArrayElem, 
 	// arrayToAppendTo rather than the store, for the reason the append
 	// itself reads it that way: a *produced* array is holding elements too,
 	// and they are as much in the way of a keyed reading as stored ones.
-	_, indexed := r.arrayToAppendTo(name)
-	return !indexed
+	old, indexed := r.arrayToAppendTo(name)
+	return !indexed || old.Len() == 0 && !r.attrHas(name, attrHeldAnElement)
 }
 
 // literalShapeReadsSubscripts is the grammar half of the question above, and
@@ -656,8 +677,8 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appe
 		// assignment found. See interp/scopewarnings.go.
 		r.warnAboutTheScope(r.throughNameref(name), scopeWarningArray)
 	}
-	parsed, ok := r.literalElems(elems, r.literalReadsSubscripts(name, elems, appendTo),
-		r.bareLiteralElementIsOneValue(name, elems, false))
+	readsSubscripts := r.literalReadsSubscripts(name, elems, appendTo)
+	parsed, ok := r.literalElems(elems, readsSubscripts, r.bareLiteralElementIsOneValue(name, elems, false))
 	if !ok {
 		// The elements were not read, so there is nothing to store and the
 		// name keeps whatever it was holding — except in the column that
@@ -670,7 +691,7 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.ArrayElem, appe
 	if startOver != nil {
 		startOver()
 	}
-	if r.literalSubscriptIsAKey(name, parsed) {
+	if r.literalSubscriptIsAKey(name, parsed, appendTo && readsSubscripts) {
 		// The subscript is text rather than an expression, and a literal
 		// written with one declares a keyed array — one concept with two
 		// consequences, so the elements go where a declared name's would.
@@ -1197,14 +1218,31 @@ func (r *Runner) literalInto(name string, a Array, next int, parsed []literalEle
 // only an *unanswered* one still leans on the shortcut: a core that has
 // chosen no shell keeps `a=([2]=c)` usable rather than diagnosing it, and
 // complains where the two readings visibly part — `[1+1]`, `[i]`, `[k]`.
-func (r *Runner) literalSubscriptIsAKey(name string, parsed []literalElem) bool {
+//
+// appendRead is whether the literal is `+=` and literalReadsSubscripts read its
+// subscripts: one that did so over an indexed array leaves the array indexed.
+func (r *Runner) literalSubscriptIsAKey(name string, parsed []literalElem, appendRead bool) bool {
 	answer := r.sem().ArrayLiteralSubscriptIsAKey
 	if r.indexedLetterHere[name] {
 		// `typeset -a a=([5]=q)` — the indexed letter on the same command as
 		// the literal, which is the one route that puts the subscript back to
-		// being an expression. Not the attribute: every other way of reaching
+		// being an expression. Not the attribute: a *replacing* literal over
 		// an already-indexed name still reads the subscripts as keys.
 		return false
+	}
+	if appendRead && r.lang().ArrayLiteralShapeFollowsTheFirstElement &&
+		len(parsed) > 0 && !elementIsAValueOfItsOwn(parsed[0]) {
+		// The other route, and the append's own: `typeset -a e; e+=([1+1]=y)`
+		// is `typeset -a e=([2]=y)`, in the column whose literal shape gives
+		// an indexed array's subscripts up — where an append that read them
+		// has found the array holding none (#7323). The first element decides
+		// here as it does for nesting: one that is a literal of its own still
+		// builds a table, so `typeset -a e; e+=([3]=(p q) [4]=y)` is
+		// `typeset -A` and `e+=([3]=y [4]=(p q))` is `typeset -a`. Measured
+		// 2026-11-02 on ksh93u+ 2012-08-01.
+		if _, indexed := r.arrayToAppendTo(name); indexed {
+			return false
+		}
 	}
 	for _, e := range parsed {
 		if !e.subscripted {

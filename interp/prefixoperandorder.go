@@ -105,8 +105,9 @@ import (
 //
 // argv is the command's words so far, which name the utility.
 //
-// Reports whether the command may carry on — an unanswered axis is refused
-// like any other.
+// Reports whether the command may carry on. It may not where an axis went
+// unanswered, which r.unspecified says, or where a frozen entry was refused
+// and the refusal gave the command up, which has set its own status.
 func (r *Runner) prefixBeforeADeclarationsOperand(assigns []*syntax.Assign, argv []string, held *heldPrefix) bool {
 	if !aPrefixIsWritten(assigns) {
 		return true
@@ -122,6 +123,30 @@ func (r *Runner) prefixBeforeADeclarationsOperand(assigns []*syntax.Assign, argv
 	// interp/prefixdeclarationlocal.go.
 	local, answered := r.prefixLocalDeclaration(assigns, argv)
 	if !answered {
+		return false
+	}
+	// **A frozen entry is refused where this walk reaches it**, so nothing
+	// behind it, and no operand, is expanded. The early check's own walk and
+	// its own refusal, asked here rather than behind the operands: it stops at
+	// the frozen entry, writes the lines of the entries in front of it, and
+	// costs the command what the early check costs it. Measured 2026-11-02
+	// from `-c` and a script file under `env -i PATH=/usr/bin:/bin` against
+	// ksh93u+ 2012-08-01, `readonly r=0` first:
+	//
+	//	r=3 export y=$(echo s >&2)               the refusal; no `s`
+	//	v=1 r=3 typeset -a a=($(echo s >&2))     the same
+	//	r=$(echo R >&2) export y=$(echo s >&2)   `R`, then the refusal
+	//	r=3 v=$(echo V >&2) typeset y=$(…)       the refusal alone
+	//	set -x; v=1 r=3 typeset y=1              `+ v=1`, then the refusal
+	//
+	// This expanded, stored and traced every operand first and refused the
+	// entry behind them all (#7094). Where the early check does not refuse
+	// in front of this command it says so and nothing has moved: zsh checks
+	// the name with the command, and a prefix about to become the running
+	// function's locals is a different cell (see above). The entries in front
+	// of the refused one are left the way the early check leaves them, which
+	// is #7004's question and not this one's.
+	if local == "" && !r.prefixCheckedFirst && r.refusePrefixesEarly(assigns, argv) {
 		return false
 	}
 	// Held with the export attribute the declaration's route gives each

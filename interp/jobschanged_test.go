@@ -19,6 +19,7 @@ import (
 // it decides: which jobs the letter keeps, that a second listing keeps none of
 // them, and that a shell with nobody to tell has noticed nothing.
 func TestJobsListsOnlyWhatChangedSinceTheLastReport(t *testing.T) {
+	t.Parallel()
 	// A job that is still running and a job that has ended, with a listing
 	// in front of the `-n` so there is something for the change to be
 	// measured against.

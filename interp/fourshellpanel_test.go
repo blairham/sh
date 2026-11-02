@@ -449,6 +449,7 @@ var fourShellSubset = regexp.MustCompile(
 )
 
 func TestNoNewFourShellPanelInAnAxisDoc(t *testing.T) {
+	t.Parallel()
 	for _, path := range slices.Sorted(maps.Keys(fourShellPhraseBudget)) {
 		budget := fourShellPhraseBudget[path]
 		n := fourShellPanelLines(t, path)

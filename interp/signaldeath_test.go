@@ -184,6 +184,7 @@ func unrunnableShell(t *testing.T) (dir, path string) {
 // an assertion about signal encoding, because there it reads as "the status is
 // wrong" — a verdict about the code, taken from a fact about the machine.
 func TestARunThatNeverStartedIsAskedForAgain(t *testing.T) {
+	t.Parallel()
 	dir, path := unrunnableShell(t)
 
 	go func() {
@@ -207,6 +208,7 @@ func TestARunThatNeverStartedIsAskedForAgain(t *testing.T) {
 // bounded, carrying what the shell said — the same bargain the startup gate
 // makes with an exec the kernel refuses for good.
 func TestARunThatNeverStartsAtAllIsStillAFailure(t *testing.T) {
+	t.Parallel()
 	dir, _ := unrunnableShell(t)
 
 	out, st, tries := deathRunPersisting(t, No, `sh -c 'kill -PIPE $$'`, []string{"PATH=" + dir})

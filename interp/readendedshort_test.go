@@ -84,6 +84,7 @@ func TestAnExpiredReadAsksAboutItsCompleteFieldsOnlyWhereTheReadingsDiffer(t *te
 // trapped signal gives up, are where the readings part, and an unanswered axis
 // is refused there, by name, at 2.
 func TestAReadThatEndsShortIsAskedAboutItsCompleteFields(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, rest string }{
 		{"expired", expiresOn("x y", "read -t 0.05 -r a b"), "st=2 a=[A] b=[B] c=[C]\n"},
 		{"given up", givenUpOn("ab", "read -r a"), "T\nst=2 a=[A] b=[B] c=[C]\n"},
@@ -104,6 +105,7 @@ func TestAReadThatEndsShortIsAskedAboutItsCompleteFields(t *testing.T) {
 // leaves it to the ending: nothing at a deadline that keeps nothing, and what
 // arrived at a give-up, the names it does not reach cleared.
 func TestEachAnswerToAReadThatEndsShort(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		answer Answer

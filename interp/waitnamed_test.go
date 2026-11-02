@@ -54,6 +54,7 @@ func waitRun(t *testing.T, src string) (string, int) {
 // The bug: the function took no arguments at all, so `wait -n %2 %3` waited
 // for whichever job of *every* job the shell held finished first.
 func TestWaitDashNWaitsForTheJobsItWasGiven(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		wait string
@@ -65,9 +66,9 @@ func TestWaitDashNWaitsForTheJobsItWasGiven(t *testing.T) {
 		{"several operands take the first of those", "wait -n %1 %2", "st=4"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			// Side by side with each other and with nothing else: every row
-			// is a Runner and jobs of its own, the test itself stays serial,
-			// and the rows' time is their jobs' sleeps (#7290).
+			// Side by side with each other and with the package's other
+			// parallel tests: every row is a Runner and jobs of its own, and
+			// the rows' time is their jobs' sleeps (#7290).
 			t.Parallel()
 			out, st := waitRun(t, twoJobs+c.wait+"\necho \"st=$?\"\nwait\n")
 			if st != 0 {
@@ -83,6 +84,7 @@ func TestWaitDashNWaitsForTheJobsItWasGiven(t *testing.T) {
 // `wait -p var` stores the process id of the job the status came from. The
 // id is compared rather than printed, because the number is the machine's.
 func TestWaitDashPNamesTheJobTheStatusCameFrom(t *testing.T) {
+	t.Parallel()
 	const named = "echo \"st=$? named=$([ \"$V\" = \"$b1\" ] && echo yes || echo no)\"\n"
 
 	t.Run("the job it waited for", func(t *testing.T) {

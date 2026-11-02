@@ -5,7 +5,6 @@ package interp
 
 import (
 	"fmt"
-	"slices"
 	"testing"
 
 	"github.com/blairham/sh/syntax"
@@ -48,8 +47,15 @@ func freshProgramCache(t *testing.T) {
 // everything each one handed back. Under the race detector that is the
 // reading's share of the corpus — see casesForReading.
 //
-// The cases run side by side (see eachInParallel), each one's subjects in
-// order, and the answers come back in the order the corpus lists them.
+// Every question is a piece of work of its own, run side by side with the
+// rest (see eachInParallel), and the answers come back in the order the
+// corpus lists them: by case, then subject, then question.
+//
+// A piece is one question and not one case, because one case is nearly the
+// whole cost: under -race `(a|aa|aaa)##[a-z]` was 3.2s of a pass's 3.3s on
+// one goroutine, its two failing subjects 1.6s each, while the other 254
+// cases came to 0.1s between them (#7290). Pieces of one pattern also read
+// its kept facts at the same time, which is the shape the shell has.
 func factOutcomes(o patternOpts, k int) []string {
 	arm := armOrder{answer: Yes, ask: func() bool { return true }}
 	with := func(m matchReport, text string) string {
@@ -58,31 +64,37 @@ func factOutcomes(o patternOpts, k int) []string {
 	declined := func() EmptyMatchDeclinedPolicy { return EmptyMatchDeclinedAtTheEnd }
 	cases := casesForReading(allProgramCases(), k)
 	cases = append(cases, armFactCases...)
-	each := make([][]string, len(cases))
-	eachInParallel(len(cases), func(n int) {
-		c := cases[n]
-		var out []string
-		for _, subject := range c.subjects {
-			fresh := func() patternOpts {
-				p := o
-				p.where = &matchWhere{plan: planCapturesFor(c.pattern, p)}
-				return p
-			}
-			for _, anchor := range []byte{0, '#', '%'} {
-				for _, all := range []bool{false, true} {
-					out = append(out, replace(subject, c.pattern, replaceExprForTest(anchor, all), fresh(), arm, declined, with))
-				}
-			}
-			for _, op := range []syntax.ParamOp{syntax.ParamTrimPrefixLong, syntax.ParamTrimSuffixLong} {
-				for _, search := range []bool{false, true} {
-					lo, hi, m, ok := trimSpan(subject, c.pattern, op, fresh(), arm, search)
-					out = append(out, fmt.Sprintf("%d %d %v %v %v", lo, hi, ok, m.groups, m.whole))
-				}
+	// The questions, in the order their answers are listed: a substitution
+	// under each anchor, once and then for all, and then each longest trim,
+	// walked and then searched.
+	anchors := []byte{0, '#', '%'}
+	trims := []syntax.ParamOp{syntax.ParamTrimPrefixLong, syntax.ParamTrimSuffixLong}
+	questions := 2*len(anchors) + 2*len(trims)
+	type piece struct{ c, s, q int }
+	var pieces []piece
+	for c := range cases {
+		for s := range cases[c].subjects {
+			for q := range questions {
+				pieces = append(pieces, piece{c, s, q})
 			}
 		}
-		each[n] = out
+	}
+	out := make([]string, len(pieces))
+	eachInParallel(len(pieces), func(n int) {
+		p := pieces[n]
+		pattern, subject := cases[p.c].pattern, cases[p.c].subjects[p.s]
+		fresh := o
+		fresh.where = &matchWhere{plan: planCapturesFor(pattern, o)}
+		if p.q < 2*len(anchors) {
+			e := replaceExprForTest(anchors[p.q/2], p.q%2 == 1)
+			out[n] = replace(subject, pattern, e, fresh, arm, declined, with)
+			return
+		}
+		q := p.q - 2*len(anchors)
+		lo, hi, m, ok := trimSpan(subject, pattern, trims[q/2], fresh, arm, q%2 == 1)
+		out[n] = fmt.Sprintf("%d %d %v %v %v", lo, hi, ok, m.groups, m.whole)
 	})
-	return slices.Concat(each...)
+	return out
 }
 
 // TestTheKeptFactsAnswerWhatAFreshReadingAnswers runs the corpus three ways

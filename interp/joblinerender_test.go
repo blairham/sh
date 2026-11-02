@@ -13,6 +13,7 @@ import (
 // Three things about a listing's command column that are not the format
 // string, and each is a field because one shell does it and the others do not.
 func TestTheCommandColumnOfAJobsListing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		dg        Diagnostics

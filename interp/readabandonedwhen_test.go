@@ -35,6 +35,7 @@ const shellsDisagree = "the shells disagree here"
 // arrives for, and not for one that waits a while for its line. Every reading
 // waits for a byte and reads it alike until a signal comes.
 func TestAnOrdinaryReadAsksNothingAboutWhenASignalGivesItUp(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src string }{
 		{"no trap", `mkfifo p; exec 3<>p; echo hi >p; read -r l <&3; echo "st=$? [$l]"`},
 		{"a trap, nothing arriving", `mkfifo p; exec 3<>p; trap 'echo T' USR1; echo hi >p; ` +
@@ -70,6 +71,7 @@ func TestTheCoreVectorAsksNothingOfAReadWithATrapSet(t *testing.T) {
 // trapped signal arriving during the read is where the readings part, and an
 // unanswered axis is refused there, by name, at 2. The handler still runs.
 func TestWhenASignalGivesUpAReadIsAskedWhereOneArrives(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `mkfifo p; exec 3<>p; trap 'echo T' USR1; `+
 		`(sleep 0.2; kill -USR1 $$; sleep 0.3; echo late >p) & read -r l <&3; echo "st=$?"; wait`,
 		withSem(unansweredWhen()))
@@ -86,6 +88,7 @@ func TestWhenASignalGivesUpAReadIsAskedWhereOneArrives(t *testing.T) {
 // the rest; and a signal already waiting as the read begins, raised by a
 // command substitution in the read's own redirection, with nothing in yet.
 func TestEachReadingGivesUpAReadWhereItSays(t *testing.T) {
+	t.Parallel()
 	during := func(open string) string {
 		return `mkfifo p; ` + open + `; trap 'echo T' USR1; printf ab >p; ` +
 			`(sleep 0.2; kill -USR1 $$; sleep 0.3; printf 'cd\nend\n' >p) & ` +
@@ -109,11 +112,11 @@ func TestEachReadingGivesUpAReadWhereItSays(t *testing.T) {
 		{ReadAbandonedOnlyAtTheStartOfALine, readOn, gaveUp, readOnLate, gaveUpAtOnce},
 	} {
 		t.Run(tc.reading.String(), func(t *testing.T) {
-			// Side by side with each other and with nothing else: every
-			// reading is Runners, a fifo and a directory of its own, the
-			// `kill $$` is delivered to the Runner's own trap rather than to
-			// the process, the test itself stays serial, and the readings'
-			// time is their scripts' sleeps (#7290).
+			// Side by side with each other and with the package's other
+			// parallel tests: every reading is Runners, a fifo and a
+			// directory of its own, the `kill $$` is delivered to the
+			// Runner's own trap rather than to the process, and the
+			// readings' time is their scripts' sleeps (#7290).
 			t.Parallel()
 			sem := unansweredWhen()
 			sem.ReadAbandonedWhen = tc.reading

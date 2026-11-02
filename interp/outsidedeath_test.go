@@ -238,6 +238,7 @@ func TestAFatalSignalFromOutsideIsTakenOnlyWhereThereIsSomethingToRun(t *testing
 // shell gave up every wait the hook made at once, on a death it had already
 // taken.
 func TestAnExitHookWaitsOutWhatItWaitsForAfterAHangupFromOutside(t *testing.T) {
+	t.Parallel()
 	sem := CoreSemantics()
 	sem.HangupIsAnOrderlyExit, sem.ExitTrapRunsOnSignalDeath = Yes, No
 	sem.ExitHook = "zshexit"

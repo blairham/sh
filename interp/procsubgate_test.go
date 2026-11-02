@@ -86,6 +86,7 @@ func gated(t *testing.T, dir, src string, g Gate, sink Sink) (out, errs string, 
 // the construct has: the shell's own end of the pipe, a redirect naming the
 // pipe, and `.` reading one.
 func TestAProcessSubstitutionRunsUnderAPolicyThatConfinesWrites(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"an operand", `/bin/cat <(/bin/echo hi)`, "hi\n"},
 		{"a redirect reading one", `read x < <(/bin/echo hi); echo "got:$x"`, "got:hi\n"},
@@ -118,6 +119,7 @@ func TestAProcessSubstitutionRunsUnderAPolicyThatConfinesWrites(t *testing.T) {
 // contrived one: it is what somebody writes when they mean "read only what I
 // name".
 func TestAProcessSubstitutionRunsUnderAPolicyThatConfinesReads(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{"sourcing one", `. <(/bin/echo 'echo sourced')`, "sourced\n"},
 		{"a redirect writing one", `/bin/echo out > >(/bin/cat); /bin/sleep 0.3`, "out\n"},

@@ -58,6 +58,7 @@ func TestPlainPatternsAnswerAsTheMatcherDoes(t *testing.T) {
 		"abc", "", "ab", "xabcx", "a b", "é", "-p", "ABC", "x=y", "a*", `\377\376`,
 		"abab", "aXbYc", "acac", "éé", "x==y", "bcb",
 	}
+	scripts := make([]plainPatternScript, 0, len(plainPatternRuns))
 	for _, c := range plainPatternRuns {
 		var b strings.Builder
 		if c.records {
@@ -81,14 +82,11 @@ func TestPlainPatternsAnswerAsTheMatcherDoes(t *testing.T) {
 			}
 			b.WriteString("printf '\\n'\n")
 		}
-		src := b.String()
-		run := func(on bool) string {
-			was := SetPlainPatternShortcutForTest(on)
-			defer SetPlainPatternShortcutForTest(was)
-			out, st := runGrammar(t, src, c.enable, c.setup)
-			return fmt.Sprintf("%s|%d", out, st)
-		}
-		want, got := run(false), run(true)
+		scripts = append(scripts, plainPatternScript{c, b.String()})
+	}
+	wants, gots := answersWithTheShortcut(t, false, scripts), answersWithTheShortcut(t, true, scripts)
+	for i, c := range scripts {
+		want, got := wants[i], gots[i]
 		if got != want {
 			t.Errorf("%s: the shortcut changed the answers\nwith:    %q\nwithout: %q", c.name, got, want)
 		}
@@ -96,6 +94,36 @@ func TestPlainPatternsAnswerAsTheMatcherDoes(t *testing.T) {
 			t.Errorf("%s: the rows did not run: %q", c.name, want)
 		}
 	}
+}
+
+// plainPatternScript is one configuration and the script it runs both ways.
+type plainPatternScript struct {
+	plainPatternRun
+	src string
+}
+
+// answersWithTheShortcut runs every script with the shortcut held on or off,
+// and returns what each printed and its status, in the order given.
+//
+// The scripts run side by side, each a Runner of its own (#7290). The shortcut
+// is a package variable, so it is set before the first of them starts and put
+// back only after the last has finished — a t.Run does not return until the
+// parallel rows inside it have — and while they run they only read it.
+func answersWithTheShortcut(t *testing.T, on bool, scripts []plainPatternScript) []string {
+	t.Helper()
+	was := SetPlainPatternShortcutForTest(on)
+	defer SetPlainPatternShortcutForTest(was)
+	outs := make([]string, len(scripts))
+	t.Run(fmt.Sprintf("shortcut on=%v", on), func(t *testing.T) {
+		for i, c := range scripts {
+			t.Run(c.name, func(t *testing.T) {
+				t.Parallel()
+				out, st := runGrammar(t, c.src, c.enable, c.setup)
+				outs[i] = fmt.Sprintf("%s|%d", out, st)
+			})
+		}
+	})
+	return outs
 }
 
 // TestEscapedPatternsAnswerAsTheMatcherDoes is the same comparison for the
@@ -125,6 +153,7 @@ func TestEscapedPatternsAnswerAsTheMatcherDoes(t *testing.T) {
 			r.Semantics = &sem
 		},
 	})
+	var scripts []plainPatternScript
 	for _, c := range runs {
 		if c.extra != nil {
 			// The extended grammar's own patterns are the other test's;
@@ -155,14 +184,11 @@ func TestEscapedPatternsAnswerAsTheMatcherDoes(t *testing.T) {
 			}
 			b.WriteString("printf '\\n'\n")
 		}
-		src := b.String()
-		run := func(on bool) string {
-			was := SetPlainPatternShortcutForTest(on)
-			defer SetPlainPatternShortcutForTest(was)
-			out, st := runGrammar(t, src, c.enable, c.setup)
-			return fmt.Sprintf("%s|%d", out, st)
-		}
-		want, got := run(false), run(true)
+		scripts = append(scripts, plainPatternScript{c, b.String()})
+	}
+	wants, gots := answersWithTheShortcut(t, false, scripts), answersWithTheShortcut(t, true, scripts)
+	for n, c := range scripts {
+		want, got := wants[n], gots[n]
 		if got != want {
 			gl, wl := strings.Split(got, "\n"), strings.Split(want, "\n")
 			for i := range min(len(gl), len(wl)) {
@@ -211,6 +237,7 @@ func TestAngleLiteralsAnswerAsTheMatcherDoes(t *testing.T) {
 			r.Dialect = &d
 		},
 	})
+	var scripts []plainPatternScript
 	for _, c := range runs {
 		if c.extra != nil {
 			continue
@@ -231,14 +258,11 @@ func TestAngleLiteralsAnswerAsTheMatcherDoes(t *testing.T) {
 			}
 			b.WriteString("printf '\\n'\n")
 		}
-		src := b.String()
-		run := func(on bool) string {
-			was := SetPlainPatternShortcutForTest(on)
-			defer SetPlainPatternShortcutForTest(was)
-			out, st := runGrammar(t, src, c.enable, c.setup)
-			return fmt.Sprintf("%s|%d", out, st)
-		}
-		want, got := run(false), run(true)
+		scripts = append(scripts, plainPatternScript{c, b.String()})
+	}
+	wants, gots := answersWithTheShortcut(t, false, scripts), answersWithTheShortcut(t, true, scripts)
+	for n, c := range scripts {
+		want, got := wants[n], gots[n]
 		if got != want {
 			gl, wl := strings.Split(got, "\n"), strings.Split(want, "\n")
 			for i := range min(len(gl), len(wl)) {

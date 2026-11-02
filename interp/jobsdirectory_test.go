@@ -75,6 +75,7 @@ func jobsDirLines(t *testing.T, out string) []string {
 // it is the only one of the two that a listing reading the shell's own
 // directory gets wrong.
 func TestJobsDirectoryStaysWhereTheJobStarted(t *testing.T) {
+	t.Parallel()
 	setup, dirs := jobsDirTree(t)
 	a, b, _ := dirs()
 	out, st := run(t, `sleep 0.3 &
@@ -98,6 +99,7 @@ wait`, setup)
 // directory for the whole table — the first, the last, or its own — answers
 // this one wrong and the case above right.
 func TestTwoJobsNameTheirOwnDirectories(t *testing.T) {
+	t.Parallel()
 	setup, dirs := jobsDirTree(t)
 	a, b, c := dirs()
 	out, st := run(t, `sleep 0.3 &
@@ -120,6 +122,7 @@ wait`, setup)
 // long row, and a state filter keeps or drops a job's row and its directory
 // line together.
 func TestJobsDirectoryLineComposesWithTheOtherLetters(t *testing.T) {
+	t.Parallel()
 	setup, dirs := jobsDirTree(t)
 	a, _, _ := dirs()
 
@@ -167,6 +170,7 @@ func TestJobsDirectoryLineComposesWithTheOtherLetters(t *testing.T) {
 // through a Diagnostics of this test's own, so that the rule above is not
 // also an assertion about one shell's punctuation.
 func TestJobsDirectoryLineIsWorded(t *testing.T) {
+	t.Parallel()
 	setup, dirs := jobsDirTree(t)
 	a, _, _ := dirs()
 	out, st := run(t, "sleep 0.3 &\njobs -d\nwait", func(r *Runner) {
@@ -192,6 +196,7 @@ func TestJobsDirectoryLineIsWorded(t *testing.T) {
 // The same reading a prompt's own directory code gives, and the same helper —
 // a second one would drift from it.
 func TestJobsDirectoryAbbreviatesTheHomeDirectoryAtPrintTime(t *testing.T) {
+	t.Parallel()
 	setup, dirs := jobsDirTree(t)
 	a, b, _ := dirs()
 
@@ -222,6 +227,7 @@ func TestJobsDirectoryAbbreviatesTheHomeDirectoryAtPrintTime(t *testing.T) {
 // ask, which is what makes that true — and is worth pinning, because a
 // listing that resolved the path would refuse or print nothing instead.
 func TestJobsDirectorySurvivesTheDirectoryItNames(t *testing.T) {
+	t.Parallel()
 	setup, dirs := jobsDirTree(t)
 	a, b, _ := dirs()
 	out, st := run(t, `sleep 0.3 &
@@ -245,6 +251,7 @@ wait`, func(r *Runner) {
 // not carry `d` refuses it, and refuses it as an unknown letter rather than
 // silently listing without the line.
 func TestJobsDirectoryLetterIsTheDialectsToHave(t *testing.T) {
+	t.Parallel()
 	// The status is read where the refusal happened: a `wait` after it is a
 	// command of its own and leaves its own 0 behind.
 	out, st := jobsRun(t, "sleep 0.3 & jobs -d; echo d=$?; wait", nil)

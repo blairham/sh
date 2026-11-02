@@ -54,6 +54,7 @@ const waitingAsItBegins = `mkfifo p q; exec 4<>p 3<p; l=old; trap 'echo "T l=[$l
 // the name as it was and `$?` as the read found it, and the read then goes on
 // to the end of its line.
 func TestEachAnswerRunsAReadsHandlerWhereItSays(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		moment          ReadHandlerMoment
 		inAWait, before string
@@ -92,6 +93,7 @@ func TestEachAnswerRunsAReadsHandlerWhereItSays(t *testing.T) {
 // Measured 2026-10-31: bash 5.3.20 and 3.2.57 with INT raised in the read's
 // own redirection and USR1 landing mid-read run both before the line ends.
 func TestASignalLandingInAWaitRunsTheHandlersAlreadyWaitingToo(t *testing.T) {
+	t.Parallel()
 	src := `mkfifo p q; exec 4<>p 3<p; trap 'echo H' HUP; trap 'echo U' USR1; ` +
 		`(read y <q; sleep 1; kill -USR1 $$; sleep 1; echo W; echo cd >p) & ` +
 		`printf ab >p; echo >q; read -r l <&3 5>"$(kill -HUP $$)/dev/null"; echo "l=[$l]"; wait`
@@ -140,6 +142,7 @@ func TestAHandlerThatLeavesEndsTheReadWithNoNameTouched(t *testing.T) {
 // redirection left, not what came before the read. Measured 2026-10-31: zsh
 // 5.9.2's handler for USR1 landing mid-read reads 0 there after `false`.
 func TestAHandlerInTheMiddleOfAReadSeesTheStatusAsItStands(t *testing.T) {
+	t.Parallel()
 	sem := handlersOn(ReadHandlersRunAsSoonAsTheyArrive)
 	sem.SignalHandlerSeesEarlierStatus = Yes
 	src := `mkfifo p q; exec 4<>p 3<p; trap 'echo "T st=$?"' USR1; ` +
@@ -225,6 +228,7 @@ const aReturnAsItBegins = `mkfifo p; exec 4<>p 3<p; l=old; trap 'return 5' USR1;
 // the next reader's. Unanswered, it is refused by name at 2 with no name
 // touched.
 func TestAHandlersReturnInTheMiddleOfAReadAsksTheDialect(t *testing.T) {
+	t.Parallel()
 	const asked = "a `read` a handler's `return` left in the middle assigning what arrived: " + shellsDisagree
 	for _, tc := range []struct {
 		answer              Answer

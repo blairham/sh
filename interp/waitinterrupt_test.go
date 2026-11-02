@@ -33,6 +33,7 @@ func waitTrapSem(t *testing.T) Semantics {
 const waitTrapSrc = `trap 'echo T' USR1; (sleep 0.2; kill -USR1 $$) & `
 
 func TestABareWaitReportsTheSignalThatCutItShort(t *testing.T) {
+	t.Parallel()
 	sem := waitTrapSem(t)
 	sem.SignalDeathStatusIsTwoFiftySix = No
 	out, _ := run(t, waitTrapSrc+`wait; echo "st=$?"`, withSem(sem))
@@ -46,6 +47,7 @@ func TestABareWaitReportsTheSignalThatCutItShort(t *testing.T) {
 // what a command killed by a signal reports decides this, rather than a second
 // copy of the arithmetic.
 func TestAnInterruptedWaitUsesTheSignalDeathEncoding(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		two  Answer
@@ -70,6 +72,7 @@ func TestAnInterruptedWaitUsesTheSignalDeathEncoding(t *testing.T) {
 // keeps the signal's own status and the other reports a plain failure. Both
 // sides are somebody's, which is what makes it an axis rather than a bug.
 func TestWaitForAJobFailsWhenInterruptedIsAnAxis(t *testing.T) {
+	t.Parallel()
 	for _, form := range []string{`wait $!`, `wait %1`} {
 		t.Run(form, func(t *testing.T) {
 			sem := waitTrapSem(t)
@@ -93,6 +96,7 @@ func TestWaitForAJobFailsWhenInterruptedIsAnAxis(t *testing.T) {
 // axis and it is the shell whose *bare* wait still reports the signal, so the
 // two questions have to stay separate.
 func TestTheBareFormDoesNotAskTheOperandAxis(t *testing.T) {
+	t.Parallel()
 	sem := waitTrapSem(t)
 	sem.SignalDeathStatusIsTwoFiftySix = Yes
 	sem.WaitForAJobFailsWhenInterrupted = Yes

@@ -27,6 +27,7 @@ func finishedLeaves(t *testing.T, a Answer, src string) (string, int) {
 // job that has ended, so a spec naming a running job, a spec naming none,
 // and a listing of running jobs all answer with the vector unanswered.
 func TestAJobTableWithNothingFinishedAsksNothing(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ src, want string }{
 		{`/bin/sleep 0.3 & wait %%; echo "running=$?"`, "running=0\n"},
 		{`wait %1; echo "none=$?"`, "none=127\n"},
@@ -45,6 +46,7 @@ func TestAJobTableWithNothingFinishedAsksNothing(t *testing.T) {
 // **A finished job the shell has noticed is the disagreement**, so an
 // unanswered vector refuses it by name, and each answer does what it says.
 func TestAFinishedJobIsWhereTheAxisIsAsked(t *testing.T) {
+	t.Parallel()
 	src := `(exit 4) & /bin/sleep 0.3; wait %%; echo "cur=$?"`
 	if out, _ := finishedLeaves(
 		t,
@@ -70,6 +72,7 @@ func TestAFinishedJobIsWhereTheAxisIsAsked(t *testing.T) {
 // zsh 5.9.2 on a pseudo-terminal with `setopt nonotify`, where `jobs` lists
 // `exit 4` first — so the spec still finds it here.
 func TestAFinishedJobWithAReportComingStays(t *testing.T) {
+	t.Parallel()
 	out, _ := runGrammar(t, `set -m; (exit 4) & /bin/sleep 0.3; wait %%; echo "cur=$?"`, nil, func(r *Runner) {
 		s := *r.Semantics
 		s.FinishedJobLeavesTheTable = Yes

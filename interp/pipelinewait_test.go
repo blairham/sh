@@ -75,6 +75,7 @@ func (w *settledWriter) lateBytes() int {
 // `{ sleep 0.05; echo late >&2; } &` wrote after Run returned, and 0 of 200
 // runs of every pipeline shape below did.
 func TestAPipelinesWritesHaveAllArrivedWhenRunReturns(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, src, want string }{
 		{
 			name: "a slow element upstream",

@@ -389,6 +389,7 @@ func readsKeysAt(keeps Answer) func(*Runner) {
 // The status is the short read's either way, and unanswered is a refusal at 2
 // with the name left.
 func TestAnExpiredKeyReadAsksWhatAnExpiredLineReadAsks(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, read string
 		keeps      Answer

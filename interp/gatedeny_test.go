@@ -331,6 +331,7 @@ func TestDenyingEveryOpenDoesNotStopASubstitutionsOwnPipe(t *testing.T) {
 // control the test would pass against a shell that could not signal anything
 // at all.
 func TestADeniedSignalDoesNotReachTheProcess(t *testing.T) {
+	t.Parallel()
 	runKill := func(t *testing.T, pid int, gate Gate) (string, string, int) {
 		t.Helper()
 		var out, errs strings.Builder

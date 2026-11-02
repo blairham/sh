@@ -68,6 +68,7 @@ func subshellMonitorRun(t *testing.T, monitor bool, src string) string {
 // shipped before it does the reverse; nothing that keys on the subshell's
 // shape passes both.
 func TestASubshellSeesTheParentsJobsOnlyUnderTheMonitor(t *testing.T) {
+	t.Parallel()
 	const src = `/bin/sleep 0.4 & first=$!
 (jobs -p) >s.txt
 x=; read x <s.txt
@@ -90,6 +91,7 @@ wait`
 // shapes are varied with the monitor held fixed. A `&` body is in the table
 // deliberately — it is the row the other three do not even ask about.
 func TestUnderTheMonitorEveryBoundarySeesThem(t *testing.T) {
+	t.Parallel()
 	const tail = `
 x=; read x <s.txt
 case $x in "$first") echo parents;; "") echo none;; *) echo other;; esac
@@ -107,9 +109,9 @@ wait`
 		{"a background job's own body", `{ /bin/sleep 0.1; jobs -p >s.txt; } & wait`},
 	} {
 		t.Run(b.name, func(t *testing.T) {
-			// Side by side with each other and with nothing else: every row
-			// is a Runner, a directory and a job of its own, the test itself
-			// stays serial, and the rows' time is the job's sleep (#7290).
+			// Side by side with each other and with the package's other
+			// parallel tests: every row is a Runner, a directory and a job of
+			// its own, and the rows' time is the job's sleep (#7290).
 			t.Parallel()
 			src := "/bin/sleep 0.4 & first=$!\n" + b.body + tail
 			if got := subshellMonitorRun(t, true, src); got != "parents" {
@@ -130,6 +132,7 @@ wait`
 // subshell at all — so this is the positive control for the instrument as much
 // as a case of its own.
 func TestASubshellThatStartsAJobStopsShowingTheParentsUnderTheMonitor(t *testing.T) {
+	t.Parallel()
 	const src = `/bin/sleep 0.4 & first=$!
 (/bin/sleep 0.4 & printf '%s\n' "$(jobs -p)" >s.txt; wait)
 n=0; while read line; do n=$((n+1)); last=$line; done <s.txt
@@ -148,6 +151,7 @@ wait`
 // reap the parent's job out from under it and leave the parent listing one
 // job fewer than it started.
 func TestAnInheritedJobIsListedAndNotManipulable(t *testing.T) {
+	t.Parallel()
 	const src = `/bin/sleep 0.4 & first=$!
 (jobs -p >s.txt; wait %1; echo "wait=$?"; disown %1; echo "disown=$?")
 x=; read x <s.txt
@@ -185,6 +189,7 @@ wait`
 // `-r` filter to find. Eight tenths of a second of margin, and no clock in
 // the test.
 func TestABareWaitInAnInheritingSubshellWaitsForNothing(t *testing.T) {
+	t.Parallel()
 	const src = `/bin/sleep 1 &
 /bin/sleep 0.2
 (wait; echo "bare=$?")
@@ -206,6 +211,7 @@ wait`
 // spec gets, because the two spellings ask different questions and only one
 // of them is about the table.
 func TestWaitingForAnInheritedJobByNumber(t *testing.T) {
+	t.Parallel()
 	const src = `/bin/sleep 0.4 & first=$!
 (wait "$first"; echo "byid=$?")
 wait`
@@ -243,6 +249,7 @@ func TestSubshellJobsKeptUnderTheMonitorIsNamed(t *testing.T) {
 // on, a subshell whose guard was missing resumes the parent's job and waits
 // it out, which the last assertion is what notices.
 func TestFgAndBgRefuseAnInheritedJob(t *testing.T) {
+	t.Parallel()
 	const src = `set -m
 /bin/sleep 0.4 & first=$!
 (fg %1; echo "fg=$?")

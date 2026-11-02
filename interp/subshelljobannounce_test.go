@@ -28,6 +28,7 @@ import (
 // would have agreed with the reference on the first row and gone on announcing
 // in the other three.
 func TestASubshellDoesNotAnnounceTheJobsItStarts(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 	}{

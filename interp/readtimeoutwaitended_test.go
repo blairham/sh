@@ -35,11 +35,12 @@ func timedReadOn(base Semantics, bounded Answer) Semantics {
 // for reading alone with nothing in, USR1 trapped and sent a second in, and a
 // line written a second after that. first is written before the read.
 //
-// The tests that send it run their rows in parallel with each other and with no
-// other test in the package, so that a signal another test raises through the
-// kernel cannot reach a Runner here (#7040). The second is a margin for a
-// loaded runner under the race detector: a signal that lands before the read
-// is waiting is not one this asks about.
+// The tests that send it run in parallel, rows and all. A signal another test
+// raised through the kernel would reach a Runner here as well (#7040), and
+// none can: the tests that raise one at this process stay serial, and every
+// serial test has finished before the first parallel one starts. The second is
+// a margin for a loaded runner under the race detector: a signal that lands
+// before the read is waiting is not one this asks about.
 func signalLandsInTheFirstWait(first string) string {
 	return `mkfifo p; exec 4<>p 3<p; ` + first + `l=old; trap 'echo T' USR1; ` +
 		`(sleep 1; kill -USR1 $$; sleep 1; printf 'late\nend\n' >p) & ` +
@@ -55,6 +56,7 @@ func signalLandsInTheFirstWait(first string) string {
 // its deadline bounds. The last two rows are zsh's, bash 5.3's and bash 3.2's
 // answer as well, measured 2026-10-29.
 func TestAnOrdinaryTimedReadAsksNothingAboutASignalEndingItsWait(t *testing.T) {
+	t.Parallel()
 	// The core answers none of what the scripts pass on the way to the read
 	// either — whether the descriptors `exec` parks reach `mkfifo`, the jobs a
 	// command substitution sees, the status and parse of a trap body, whether
@@ -106,6 +108,7 @@ func TestAnOrdinaryTimedReadAsksNothingAboutASignalEndingItsWait(t *testing.T) {
 // unanswered axis is refused there, by name, at 2. The handler still runs,
 // and nothing was read, so the line written afterwards is the next read's.
 func TestASignalInATimedReadsFirstWaitIsAskedWhereItLands(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, signalLandsInTheFirstWait(""), withSem(timedReadOn(testSemantics(), No)))
 	if !strings.Contains(out, "a trapped signal ending a `read -t` still waiting for its first byte: "+shellsDisagree) ||
 		!strings.Contains(out, "T\nst=2 l=[old]\nnext [late]\n") {
@@ -118,6 +121,7 @@ func TestASignalInATimedReadsFirstWaitIsAskedWhereItLands(t *testing.T) {
 // would — the timeout's status, the name untouched, the line the next read's;
 // no reads on and takes it. With a byte in before the signal, both read on.
 func TestEachAnswerToASignalInATimedReadsFirstWait(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		answer            Answer
 		nothingIn, byteIn string
@@ -146,6 +150,7 @@ func TestEachAnswerToASignalInATimedReadsFirstWait(t *testing.T) {
 // Semantics.ReadAbandonedWhen — at the end of the input, the name cleared —
 // and the question about the first wait is never put.
 func TestATimedReadGivenUpForAnySignalAsksNothingAboutItsFirstWait(t *testing.T) {
+	t.Parallel()
 	sem := timedReadOn(testSemantics(), No)
 	sem.ReadIsAbandonedByATrappedSignal = Yes
 	sem.ReadAbandonedWhen = ReadAbandonedOnlyDuringAWait

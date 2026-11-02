@@ -45,6 +45,7 @@ import (
 // waiting for. Two files rather than a duration, so a loaded machine makes the
 // case slower and never makes it wrong.
 func TestABackgroundJobKeepsASubstitutionsPipeOpen(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, want string
 		// enable turns on the grammar a case needs by name, so the case

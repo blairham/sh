@@ -44,6 +44,7 @@ func jobsRun(t *testing.T, src string, adjust func(*Semantics)) (string, int) {
 // four shells, and the job's process *group* added to an ordinary listing in
 // the fourth. Both are reachable, and neither is the core's to pick.
 func TestJobsDashPIsTheProcessIdsAlone(t *testing.T) {
+	t.Parallel()
 	const src = `sleep 0.3 & echo "bang=$!"; jobs -p; wait`
 
 	t.Run("the ids alone", func(t *testing.T) {
@@ -79,6 +80,7 @@ func TestJobsDashPIsTheProcessIdsAlone(t *testing.T) {
 // `-l` is the one letter every shell in the panel has, so the core prints it
 // without asking anything.
 func TestJobsDashLPutsTheProcessIdInTheRow(t *testing.T) {
+	t.Parallel()
 	out, st := jobsRun(t, `sleep 0.3 & echo "bang=$!"; jobs -l; wait`, nil)
 	if st != 0 {
 		t.Fatalf("status %d: %s", st, out)
@@ -96,6 +98,7 @@ func TestJobsDashLPutsTheProcessIdInTheRow(t *testing.T) {
 // `-lp` is the ids and `-pl` the listing; where `-p` outranks `-l`, both
 // orders are the ids. See Semantics.JobsPidsLetterOutranksTheLongLetter.
 func TestJobsFormatLettersTheLastOneWins(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, opts string
 		outranks   Answer
@@ -110,9 +113,9 @@ func TestJobsFormatLettersTheLastOneWins(t *testing.T) {
 		{"-lp is the ids where -p outranks", "-lp", Yes, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			// Side by side with each other and with nothing else: every row
-			// is a Runner and a job of its own, the test itself stays serial,
-			// and the rows' time is the job's sleep (#7290).
+			// Side by side with each other and with the package's other
+			// parallel tests: every row is a Runner and a job of its own, and
+			// the rows' time is the job's sleep (#7290).
 			t.Parallel()
 			out, st := jobsRun(t, `sleep 0.3 & echo "bang=$!"; jobs `+tc.opts+`; wait`,
 				func(s *Semantics) {
@@ -147,6 +150,7 @@ func TestJobsRefusesALetterTheDialectDoesNotHave(t *testing.T) {
 // `-r` and `-s` pick a state. Alone they mean the same thing in both shells
 // that have them; together they are the one place those two disagree.
 func TestJobsStateFilters(t *testing.T) {
+	t.Parallel()
 	// A running job and nothing else, so `-r` shows it and `-s` does not.
 	const src = `sleep 0.3 & jobs %s; echo "end"; wait`
 
@@ -198,6 +202,7 @@ func TestJobsStateFilters(t *testing.T) {
 // A filtered listing and an ids-only one do not finish with a job the way a
 // listing of states does: the job is still there for the next bare `jobs`.
 func TestJobsOnlyAStateListingForgetsAFinishedJob(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, opts string
 		wantKept   bool
@@ -227,6 +232,7 @@ func TestJobsOnlyAStateListingForgetsAFinishedJob(t *testing.T) {
 // question in any of them, so a fix that asked unconditionally would refuse
 // every ordinary `jobs -p` in a shell with no answer (#602).
 func TestAPidListingMayFinishWithAJob(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name     string
 		answer   Answer
@@ -263,6 +269,7 @@ func TestAPidListingMayFinishWithAJob(t *testing.T) {
 // `jobs %2` printed `[1]` before this, because the row counted from the start
 // of the slice the listing had been handed.
 func TestJobsOperandsKeepTheirOrderAndTheirNumbers(t *testing.T) {
+	t.Parallel()
 	out, st := jobsRun(t, `sleep 0.3 & sleep 0.4 & jobs %2 %1; wait`, nil)
 	if st != 0 {
 		t.Fatalf("status %d: %s", st, out)
@@ -279,6 +286,7 @@ func TestJobsOperandsKeepTheirOrderAndTheirNumbers(t *testing.T) {
 // One job named twice is listed twice, and the number is the job's rather
 // than the row's — the shape a listing of one job could never have shown.
 func TestJobsOneJobNamedTwice(t *testing.T) {
+	t.Parallel()
 	out, _ := jobsRun(t, `sleep 0.3 & sleep 0.4 & jobs %2 %2; wait`, nil)
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	if len(lines) != 2 || !strings.HasPrefix(lines[0], "[2]") || !strings.HasPrefix(lines[1], "[2]") {
@@ -289,6 +297,7 @@ func TestJobsOneJobNamedTwice(t *testing.T) {
 // A spec that names nothing is reported after the jobs written before it have
 // been listed, which is unanimous and was the other way around here.
 func TestJobsABadSpecIsReportedAfterTheRowsBeforeIt(t *testing.T) {
+	t.Parallel()
 	out, st := jobsRun(t, `sleep 0.3 & jobs %1 %9; wait`, nil)
 	row, complaint := strings.Index(out, "[1]"), strings.Index(out, "no such job")
 	if row < 0 || complaint < 0 || row > complaint {

@@ -56,6 +56,7 @@ func notifyingWhileBusy(at Answer) func(*Runner) {
 // a script never draws one. A shell that wrote it regardless would pass both
 // `Yes` rows and fail these.
 func TestAFinishedJobIsReportedWhileTheShellIsBusy(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		src    string

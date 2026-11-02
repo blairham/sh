@@ -16,6 +16,7 @@ import (
 // the panel announces anything to `sh -c` — so both hang off the front end
 // having said there is someone to tell.
 func TestABackgroundedJobIsAnnounced(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		jobControl bool
@@ -246,6 +247,7 @@ func TestTheSliceOfJobsSurvivesTheTableBeingReaped(t *testing.T) {
 // forgets it — so the number in the expectation is the one this job actually
 // got rather than one the test invented.
 func TestAFinishedJobsNoticeNamesThePIDWhereTheAxisSaysSo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		axis  Answer

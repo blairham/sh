@@ -270,6 +270,31 @@ func letGoOfTheWatch() {
 	signal.Stop(fatalWatch.ch)
 	close(fatalWatch.ch)
 	fatalWatch.ch, fatalWatch.holding = nil, false
+	// HUP and INT are the two the runtime lets an ignore stand for, and it
+	// tells an inherited ignore from its own handler by what the disposition
+	// was when a subscription last put that handler on. A shell that ignored
+	// one — for a child's start, or for `trap ''` — and then handed it back to
+	// the watch (handBack, watchAgain) left the ignore recorded there, so the
+	// stop above put SIG_IGN back, and every command the process started
+	// afterwards was born ignoring it. In a test binary that was every shell
+	// half a later test re-executes, which then lived through the interrupt
+	// it was sent to die of.
+	//
+	// So where the process was not born ignoring it, the default goes back and
+	// a subscription taken and dropped puts the runtime's own handler on over
+	// it, now recorded over the default: how the signal stood before there was
+	// a watch.
+	for _, sig := range []syscall.Signal{syscall.SIGHUP, syscall.SIGINT} {
+		if fatalWatch.bornIgnoring[sig] || !ignoredByTheKernel(sig) {
+			continue
+		}
+		if restoreDefaultDisposition(sig) != nil {
+			continue
+		}
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, sig)
+		signal.Stop(c)
+	}
 }
 
 // subscribeTheWatch puts the watch on sigs, where there is a watch to put on

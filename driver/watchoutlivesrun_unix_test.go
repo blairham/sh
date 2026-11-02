@@ -9,6 +9,8 @@ import (
 	"context"
 	"io"
 	"os"
+	"os/exec"
+	"os/signal"
 	"strings"
 	"syscall"
 	"testing"
@@ -101,4 +103,63 @@ func trapAfterARun(t *testing.T, keep bool, src string) {
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// interruptProbe is a child that sends itself an interrupt: it says `survived`
+// only where it was born ignoring one.
+const interruptProbe = `kill -INT $$; echo survived`
+
+// And taking the watch down hands an interrupt back as it found it.
+//
+// The runtime lets an inherited ignore of HUP or INT stand, and tells one from
+// its own handler by what the disposition was when a subscription last put
+// that handler on. A shell that ignores INT and then hands it back to the
+// watch — `trap ” INT; trap - INT`, or the window a background job is started
+// in — leaves the ignore recorded there, so stopping the watch put SIG_IGN back
+// on the process. Every command it started afterwards was born ignoring INT,
+// and in this package that was every shell half a later test sent one to:
+// three tests' worth of shells lived through the interrupt they were to die of.
+//
+// The control is the test ignoring INT itself, which is what says the probe
+// can see an ignore at all.
+func TestARunThatReturnedLeavesNoInterruptIgnored(t *testing.T) {
+	for _, c := range []struct {
+		name     string
+		survives bool
+	}{
+		{name: "after a run that ignored and reset it", survives: false},
+		{name: "ignored by the test itself", survives: true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if os.Getenv(dyingScript) != "" {
+				probeAfterARun(t, c.survives)
+				return
+			}
+			name := "^TestARunThatReturnedLeavesNoInterruptIgnored$/^" + strings.ReplaceAll(c.name, " ", "_") + "$"
+			ws, out := waitStatusOfAShell(t, name, "trap '' INT; trap - INT")
+			if ws.Signaled() || ws.ExitStatus() != 0 {
+				t.Fatalf("the re-executed test ended %v\n%s", ws, out)
+			}
+			if got := strings.Contains(out, "survived"); got != c.survives {
+				t.Errorf("a child sent itself an interrupt and survived = %v, want %v\n%s", got, c.survives, out)
+			}
+		})
+	}
+}
+
+// probeAfterARun is the re-executed half: a front-end run of src in this
+// process, and then a child that sends itself an interrupt.
+func probeAfterARun(t *testing.T, ignore bool) {
+	sh := shell()
+	sh.Semantics.TrapBodyRunsWhatParsed = interp.Yes
+	sh.Semantics.SignalHandlerSeesEarlierStatus = interp.Yes
+	sh.Stdout, sh.Stderr = io.Discard, io.Discard
+	if code := driver.MainArgs(sh, []string{"testsh", "-c", os.Getenv(dyingScript)}); code != 0 {
+		t.Fatalf("the front-end run exited %d", code)
+	}
+	if ignore {
+		signal.Ignore(syscall.SIGINT)
+	}
+	out, _ := exec.Command("/bin/sh", "-c", interruptProbe).CombinedOutput()
+	_, _ = os.Stdout.Write(out)
 }

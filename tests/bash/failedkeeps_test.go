@@ -41,6 +41,38 @@ func TestAFailedOperandKeepsTheNameWithAnyLetter(t *testing.T) {
 			"declare -a v=([0]=\"1\" [1]=\"2\")\n")
 }
 
+// A bare literal that fails still makes a name that was not an array one —
+// an empty array where it was unset, its scalar at element zero where it held
+// one, its letters kept — and stores none of the elements; an array keeps
+// what it held, and a declaration's operand leaves an unset name unset.
+// Measured 2026-11-01 on bash 5.3.20 from a file, this script, byte for byte;
+// bash 3.2.57 differs only in quoting each listed array. We left every name
+// that was not an array as it was (#7078).
+func TestAFailedBareLiteralStillMakesTheNameAnArray(t *testing.T) {
+	t.Parallel()
+	checkFailedKeep(t, failedBareScript,
+		"declare -a b=()\n.\n"+
+			"declare -a b=([0]=\"s\")\n.\n"+
+			"declare -a b=()\n.\n"+
+			"declare -a b=([0]=\"s\")\n.\n"+
+			"declare -ai b=([0]=\"5\")\n.\n"+
+			"declare -ax b=([0]=\"s\")\n.\n"+
+			"declare -a b=([0]=\"7\")\n.\n"+
+			".\n")
+}
+
+// failedBareScript fails a bare literal over a name, each row in a subshell
+// of its own, and lists what is left of the name.
+const failedBareScript = "row() { ( trap 'typeset -p b 2>/dev/null; echo .' EXIT; eval \"$1\" ) 2>/dev/null; }\n" +
+	"row 'unset b; b=(1 $((1/0)) 3)'\n" +
+	"row 'b=s; b=(1 $((1/0)) 3)'\n" +
+	"row 'unset b; b+=(1 $((1/0)))'\n" +
+	"row 'b=s; b+=(1 $((1/0)))'\n" +
+	"row 'typeset -i b=5; b=(1 ${u?boom} 3)'\n" +
+	"row 'export b=s; b=([1]=x [2]=$((1/0)))'\n" +
+	"row 'b=(7); b=(1 $((1/0)) 3)'\n" +
+	"row 'unset b; typeset -a b=(1 $((1/0)))'\n"
+
 // failedTableScript appends to and assigns a table whose literal fails, each
 // row in a subshell of its own, and reads the keys back in a fixed order so
 // that no row depends on the order a table lists its keys in.

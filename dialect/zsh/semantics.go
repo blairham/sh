@@ -723,6 +723,9 @@ func Semantics() interp.Semantics {
 	// does not re-create a name whose literal failed.
 	s.FailedTableAppendKeepsThePairsItAdded = interp.No
 	s.FailedOperandLeavesTheLettersKind = interp.No
+	// Nor does a bare one make a name that was not an array one: `b=s;
+	// b=(1 $((1/0)))` leaves `typeset b=s` and an unset name unset (#7078).
+	s.FailedBareLiteralStillMakesTheNameAnArray = interp.No
 	// Asked only under `ksharrays`, which is what makes a bare name one
 	// element here: a table is read as an ordered list, so the element is the
 	// first value in the order this shell lists rather than the one keyed `0`

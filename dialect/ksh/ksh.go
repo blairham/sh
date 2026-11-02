@@ -2821,6 +2821,10 @@ func Semantics() interp.Semantics {
 	// `typeset -a a=(5 $((1/0)))` leaves `typeset -a a`. The only column.
 	s.FailedTableAppendKeepsThePairsItAdded = interp.No
 	s.FailedOperandLeavesTheLettersKind = interp.Yes
+	// A bare literal that fails leaves a name that was not an array as it
+	// was: `b=s; b=(1 $((1/0)))` is still `b=s`, and an unset name unset
+	// (#7078).
+	s.FailedBareLiteralStillMakesTheNameAnArray = interp.No
 	s.TraceAssignmentsSeparately = interp.Yes
 	// An unparseable `eval` is reported and survived here, unlike dash, but a
 	// file `.` cannot open still ends the script — so the two halves of the

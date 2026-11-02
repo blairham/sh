@@ -5577,6 +5577,50 @@ type Semantics struct {
 	// TestAFailedPlainLiteralWithALetterLeavesThatKind.
 	FailedOperandLeavesTheLettersKind Answer
 
+	// FailedBareLiteralStillMakesTheNameAnArray makes the name of a bare
+	// array assignment — not a declaration's operand — an indexed array when
+	// one of its literal's elements fails to expand, though none of the
+	// elements is stored: an unset name is left an empty array, and one
+	// holding a scalar the array of that one value at element zero. No leaves
+	// the name as it was. Measured 2026-11-01 from a script file under `env
+	// -i PATH=/usr/bin:/bin`, read by an exit trap:
+	//
+	//	written                          bash 5.3.20, 3.2.57   zsh 5.9.2, ksh93u+
+	//	unset b; b=(1 $((1/0)) 3)        b=()                  unset
+	//	b=s; b=(1 $((1/0)) 3)            b=([0]="s")           b=s
+	//	unset b; b+=(1 $((1/0)))         b=()                  unset
+	//	b=s; b+=(1 $((1/0)))             b=([0]="s")           b=s
+	//	unset b; b=(1 ${u?boom} 3)       b=()                  unset
+	//	b=(7); b=(1 $((1/0)) 3)          b=([0]="7")           b=(7)
+	//
+	// bash keeps the name's letters — `declare -i b=5` is left `declare -ai
+	// b=([0]="5")` and an exported scalar `-ax` — and reaches the same end
+	// for an unmatched pattern under failglob, an unset name under nounset
+	// and a literal whose first element names its subscript. A name already
+	// an array keeps what it held in every column. A declaration's operand is
+	// not this question: `unset b; declare -a b=(1 $((1/0)))` leaves the name
+	// unset in bash 5.3.20, where 3.2.57 leaves `declare -a b='()'` and no
+	// dialect here claims it — see FailedOperandLeavesTheLettersKind. See
+	// Runner.keepWhatAFailedLiteralStored (#7078).
+	//
+	// One row is not reached yet: bash leaves a name declared with no value
+	// an array that is declared and not assigned — `declare b; b=(1
+	// $((1/0)))` lists `declare -a b` — where this leaves it `declare -a
+	// b=()`, as it does an unset one.
+	//
+	// Asked only once a bare literal has failed over a name that is not an
+	// array; dash and BusyBox ash have no array literal.
+	//
+	// unpinned bash: no corpus row fails a bare literal over a name that is
+	// not an array; pinned by TestAFailedBareLiteralStillMakesTheNameAnArray.
+	//
+	// unpinned zsh: the same reach, pinned by
+	// TestAFailedBareLiteralStillMakesTheNameAnArrayIsTheAxis.
+	//
+	// unpinned ksh: the same reach, pinned by
+	// TestAFailedBareLiteralLeavesTheNameAsItWas.
+	FailedBareLiteralStillMakesTheNameAnArray Answer
+
 	// ElementSubscriptIsExpandedBeforeTheValue expands the words of an
 	// element write's subscript before its value: `a[$(f)]=$(g)` runs `f`
 	// first. Measured 2026-10-15 under `-c` and a script file, traced and

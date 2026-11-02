@@ -118,3 +118,72 @@ func trapReadBack(out string) string {
 	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
 	return lines[len(lines)-1]
 }
+
+// A bare literal that fails over a name that is not an array makes it one
+// where the axis says so — an empty one where the name was unset, the scalar
+// at element zero where it held one — and leaves the name as it was where it
+// does not. A name already an array, and a declaration's operand, end the
+// same under either answer (#7078).
+func TestAFailedBareLiteralStillMakesTheNameAnArrayIsTheAxis(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ src, makes, leaves string }{
+		{"unset b\nb=(1 $((1/0)) 3)\n", `declare -a b=()`, "absent"},
+		{"b=s\nb=(1 $((1/0)) 3)\n", `declare -a b=([0]="s")`, `declare -- b="s"`},
+		{"unset b\nb+=(1 $((1/0)))\n", `declare -a b=()`, "absent"},
+		{"b=s\nb+=(1 $((1/0)))\n", `declare -a b=([0]="s")`, `declare -- b="s"`},
+		{"b=s\nb=(1 ${u?boom} 3)\n", `declare -a b=([0]="s")`, `declare -- b="s"`},
+		{"b=(7)\nb=(1 $((1/0)) 3)\n", `declare -a b=([0]="7")`, `declare -a b=([0]="7")`},
+		{"unset b\ntypeset -a b=(1 $((1/0)))\n", "absent", "absent"},
+	} {
+		for _, makes := range []Answer{Yes, No} {
+			sem := failedBareSem(makes)
+			src := "trap 'typeset -p b 2>/dev/null || echo absent' EXIT\n" + c.src
+			out, _ := run(t, src, withSem(sem))
+			want := c.leaves
+			if makes == Yes {
+				want = c.makes
+			}
+			if got := trapReadBack(out); got != want {
+				t.Errorf("%q, makes an array=%v: read back %q, want %q", c.src, makes, got, want)
+			}
+		}
+	}
+}
+
+// Left unanswered, the axis is asked only of a bare literal that failed over
+// a name that is not an array.
+func TestAFailedBareLiteralAsksOnlyOverANameThatIsNotAnArray(t *testing.T) {
+	t.Parallel()
+	sem := failedBareSem(Unspecified)
+	const question = "still making its name an array"
+	for _, src := range []string{
+		"b=s\nb=(1 2)\n",
+		"b=(7)\nb=(1 $((1/0)))\n",
+		"b=(7)\nb+=(1 $((1/0)))\n",
+		"b=s\ntypeset -a b=(1 $((1/0)))\n",
+	} {
+		if out, _ := run(t, src, withSem(sem)); strings.Contains(out, question) {
+			t.Errorf("%q: said %q, want no question", src, out)
+		}
+	}
+	for _, src := range []string{
+		"b=s\nb=(1 $((1/0)))\n",
+		"unset b\nb+=(1 $((1/0)))\n",
+	} {
+		if out, _ := run(t, src, withSem(sem)); !strings.Contains(out, question) {
+			t.Errorf("%q: said %q, want the question", src, out)
+		}
+	}
+}
+
+// failedBareSem is failedKeepSem with the bare literal's answer chosen, and
+// a listing to read the kind back with: an unset name and an empty array
+// expand alike, and so do a scalar and an array of one.
+func failedBareSem(makes Answer) Semantics {
+	s := failedKeepSem(No, No)
+	s.FailedBareLiteralStillMakesTheNameAnArray = makes
+	s.DeclareListing = DeclareListingClustered
+	s.DeclareValueQuoting = ListingQuoteAlwaysDouble
+	s.DeclarePrintReportsAMissingName = Yes
+	return s
+}

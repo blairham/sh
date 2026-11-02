@@ -3105,6 +3105,32 @@ type Semantics struct {
 	// TestABareReferenceLetterOverAnAimedReferenceDeclaresItsTarget.
 	BareReferenceLetterFollowsTheReference Answer
 
+	// ElementWriteThroughAnElementReferenceNests takes an element written
+	// through a reference that is itself aimed at an element as the chain
+	// the two subscripts spell: with `e` aimed at `a[x]`, `e[k]=1` is
+	// `a[x][k]=1`, so the element becomes an indexed array of its own. No
+	// refuses the write, naming the element as a name that is not one.
+	//
+	// Measured 2026-11-02 from `-c` under `env -i PATH=/usr/bin:/bin`
+	// (#7113):
+	//
+	//	typeset -A a; typeset -n e='a[x]'; e[k]=1
+	//	  ksh93u+ 2012-08-01   0, `typeset -A a=([x]=(1) )`, `+ a[x][0]=1`
+	//	  bash 5.3.20          `` `a[x]': not a valid identifier ``, 1, `a`
+	//	                       as it was
+	//
+	// The rows that say it is the chain, and not a rule of its own, are in
+	// interp/namerefelementwrite.go. The plain `e=1` writes `a[x]` in both
+	// shells and never comes here.
+	//
+	// Read as a plain comparison, as the two axes above are: refusing is
+	// what every vector did before the axis existed. See
+	// Runner.elementWriteThroughAnElementReference.
+	//
+	// unpinned ksh: pinned by
+	// TestAnElementWriteThroughAnElementReferenceNestsTheElement.
+	ElementWriteThroughAnElementReferenceNests Answer
+
 	// DeclarationOperandSplitsAfterTheSubscript looks for a declaration
 	// operand's `=` after its subscript's closing bracket, so an `=` inside
 	// the subscript is part of the key. No cuts the operand at its first `=`.

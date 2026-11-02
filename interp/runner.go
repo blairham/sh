@@ -16441,6 +16441,12 @@ func (r *Runner) assignValue(a *syntax.Assign) string {
 // assign performs one assignment, which is three different things wearing the
 // same syntax: a scalar, a whole array, or one element of one.
 func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
+	if chain, ok := r.elementWriteThroughAnElementReference(a); ok {
+		// `e[k]=1` with `e` aimed at `a[x]`, in the column where that is
+		// `a[x][k]=1`. See interp/namerefelementwrite.go (#7113).
+		r.assignThroughAnElementReference(ctx, a, chain)
+		return
+	}
 	// Most assignments store a value and nothing else; see
 	// interp/plainstore.go, which answers every question below for them
 	// before anything is expanded.

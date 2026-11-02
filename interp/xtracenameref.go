@@ -86,6 +86,13 @@ func (r *Runner) tracedThroughTheReference(a *syntax.Assign, operandOf []string)
 	if a == nil || (a.Operand && operandOf == nil) {
 		return a
 	}
+	if chain, ok := r.elementWriteThroughAnElementReference(a); ok &&
+		r.diag().TraceAssignmentNamesTheReferencedVariable {
+		// An element written through a reference aimed at an element, in
+		// the column that stores it as the chain the two subscripts spell:
+		// the line is that chain's, `+ a[x][0]=1` (#7113).
+		return chain
+	}
 	whole := a.Index == nil && len(a.Leading) == 0 && !a.IsArray
 	name := r.nameTracedThroughTheReference(a.Name, whole, operandOf)
 	if name == a.Name {
@@ -101,7 +108,8 @@ func (r *Runner) tracedThroughTheReference(a *syntax.Assign, operandOf []string)
 // so, and name itself everywhere else — a name that is no reference, one aimed
 // at nothing or round a loop, a declaration's operand the utility does not
 // store through the reference, and an element written through a reference
-// that is itself aimed at an element, which nothing has measured. whole says
+// that is itself aimed at an element, whose line tracedThroughTheReference
+// writes as the chain the store makes of it where the store makes one. whole says
 // the store writes the whole variable rather than an element or a literal of
 // it; operandOf is as tracedThroughTheReference has it.
 func (r *Runner) nameTracedThroughTheReference(name string, whole bool, operandOf []string) string {

@@ -323,51 +323,59 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         run: make conformance-ratchet DIALECTS="${{ matrix.dialects }}"
 
-  packaging:
+  # Not report-only. `.goreleaser.yaml` is otherwise exercised for the first
+  # time by the release workflow, which runs when release-please's pull
+  # request merges -- so a mistake in it fails at the **last** step of a
+  # release, with every artifact built and the tag already public. One would
+  # have at v0.0.0: 188,381 characters of release body against GitHub's
+  # 125,000 limit (#2550). Nothing before the tag could have said so. This
+  # is what says so.
+  #
+  # The render is go-release.yml in snapshot mode: the workflow release.yml
+  # calls, so what is rendered here is built by the steps a release runs. It
+  # is `release --snapshot --skip=publish,sign` (a snapshot still runs `signs`,
+  # and cosign's keyless identity is an OIDC token this job does not have),
+  # the full history is checked out (GoReleaser reads it for the previous tag,
+  # which the release footer's compare link names), and it withholds every
+  # secret from GoReleaser whatever the caller passes -- this passes none -- so
+  # the render cannot reach the tap even if both skips were wrong. It hands
+  # dist/, the generated formula included, to `render-checks` as a workflow
+  # artifact. blairham/.github's baseline allows no other way to run
+  # GoReleaser outside release.yml.
+  #
+  # A reusable call is gated by a job-level `if:` or not at all, so on a pull
+  # request that leaves the packaging files alone this job and the one after
+  # it are skipped rather than run as no-ops. Neither is a required check, and
+  # go-release.yml's own header says to keep the render out of them.
+  #
+  # It renders on every push to main too, not only when the packaging files
+  # moved: go-changes answers every filter `true` outside a pull request.
+  # That is a few runner minutes beside the tests, never on the critical
+  # path.
+  render:
     name: Render a release
     needs: changes
+    if: fromJSON(needs.changes.outputs.matches).packaging == 'true'
+    permissions:
+      contents: read
+    uses: blairham/.github/.github/workflows/go-release.yml@2a975269ebbb74aa0b4ec96f45773d7d68cc7bcc # v0.0.3
+    with:
+      snapshot: true
+      # CI's own test jobs run the suite; a render only has to build.
+      test-command: ''
+      # dist/ is every platform's binaries and archives, and it is read once,
+      # by the job below.
+      snapshot-retention-days: 1
+
+  render-checks:
+    name: Render checks
+    needs: render
     runs-on: ubuntu-latest
-    # Not report-only. `.goreleaser.yaml` is otherwise exercised for the first
-    # time by the release workflow, which runs when release-please's pull
-    # request merges -- so a mistake in it fails at the **last** step of a
-    # release, with every artifact built and the tag already public. One would
-    # have at v0.0.0: 188,381 characters of release body against GitHub's
-    # 125,000 limit (#2550). Nothing before the tag could have said so. This
-    # is what says so.
-    #
-    # It renders on every push to main too, not only when the packaging files
-    # moved: go-changes answers every filter `true` outside a pull request.
-    # That is a few runner minutes beside the tests, never on the critical
-    # path, and it is not a required check.
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: fromJSON(needs.changes.outputs.matches).packaging == 'true'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          # GoReleaser reads the tag history for the previous tag, which the
-          # release footer's compare link names -- so a shallow checkout would
-          # render the first-tag case and never the ordinary one.
-          fetch-depth: 0
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: fromJSON(needs.changes.outputs.matches).packaging == 'true'
-        with:
-          go-version-file: go.mod
-          check-latest: true
-          cache: true
-      # `--snapshot` stands in for a tag and disables publishing on its own;
-      # `--skip=publish` says it a second time, because the tap token is the one
-      # thing in this config that writes to another repository. No secrets are
-      # passed to this step, deliberately: the render must not be able to reach
-      # the tap even if both guards were wrong. The formula is still written --
-      # to `dist/homebrew/Formula/` -- which is what the next step reads.
-      - name: Render a release, and publish none of it
-        if: fromJSON(needs.changes.outputs.matches).packaging == 'true'
-        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
-        with:
-          distribution: goreleaser
-          version: "~> v2"
-          # `sign` too: a snapshot still runs `signs`, and cosign's keyless
-          # identity is the OIDC token this job deliberately does not have.
-          args: release --snapshot --clean --skip=publish,sign
+          name: ${{ needs.render.outputs.snapshot-artifact }}
+          path: dist
       # Rendering proves the config parses and every target builds. It does not
       # prove the formula installs what the archive carries: the install list is
       # an explicit `libexec.install "sh", "bash", …` and `libexec.install`
@@ -381,7 +389,6 @@ jobs:
       # claim about a roster it cannot see, and goes stale the next time someone
       # adds a binary; derived, the check gets stronger when one is added.
       - name: Does the formula install every binary the build produced?
-        if: fromJSON(needs.changes.outputs.matches).packaging == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -396,7 +403,7 @@ jobs:
           fi
           echo "reading $formula"
 
-          # A scratch directory, so the job leaves nothing in the checkout.
+          # A scratch directory, so the job writes nothing into dist/.
           work=$(mktemp -d)
           built="$work/built.txt"
           installed="$work/installed.txt"

@@ -28,7 +28,10 @@ func TestARefusedReferenceAimCarriesOnHere(t *testing.T) {
 			"a loop over an aimed reference", `x=0; declare -n m=x; for m in 1; do :; done; echo st=$?`,
 			"p.sh: line 1: `1': not a valid identifier\nst=1\nnext\n",
 		},
-		{"a declaration", `declare -n m; declare m=1; echo t=$?`, "p.sh: line 1: declare: `1': not a valid identifier\nt=1\nnext\n"},
+		{
+			"a declaration", `declare -n m; declare m=1; echo t=$?`,
+			"p.sh: line 1: declare: `1': not a valid identifier\nt=1\nnext\n",
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

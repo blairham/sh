@@ -74,7 +74,8 @@ func TestARefusedReferenceAimIsAnInvalidVariableNameAndEndsTheShell(t *testing.T
 		},
 		{
 			"a keyword function's call ends alone", `function f { typeset -n m; m=1; echo in=$?; }; f; echo out=$?`,
-			"p.sh[1]: f: line 1: 1: invalid variable name\nout=1\nnext\n", "ksh: f: line 1: 1: invalid variable name\nout=1\nnext\n", 0,
+			"p.sh[1]: f: line 1: 1: invalid variable name\nout=1\nnext\n",
+			"ksh: f: line 1: 1: invalid variable name\nout=1\nnext\n", 0,
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -96,7 +97,8 @@ func TestARefusedReferenceAimIsAnInvalidVariableNameAndEndsTheShell(t *testing.T
 // statement about the word rather than about aiming.
 func TestAReferenceAimedAtANameIsStillTaken(t *testing.T) {
 	t.Parallel()
-	got, st := runKshFile(t, "typeset -n m; m=x; x=5; echo \"$m\"\nx=0; typeset -n r=x; for r in y; do :; done; typeset -p r\n")
+	got, st := runKshFile(t, "typeset -n m; m=x; x=5; echo \"$m\"\n"+
+		"x=0; typeset -n r=x; for r in y; do :; done; typeset -p r\n")
 	if want := "5\ntypeset -n r=y\n"; got != want || st != 0 {
 		t.Errorf("%q at %d, want %q at 0", got, st, want)
 	}

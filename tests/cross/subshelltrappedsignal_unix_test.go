@@ -183,15 +183,21 @@ func TestACopysSignalToTheShellIsAnsweredBeforeTheListGoesOn(t *testing.T) {
 // is a background job that signals once the left side asks it to, and the left
 // side ends once it has. The last two rows are controls: a left side ended by
 // `;`, or an `if` condition, was answered at the next statement already.
+//
+// Each row is this test binary as the shell, through the front end and in a
+// process group of its own, because the signal is a real one on the shell's
+// process: sent to the test binary, it would reach whatever an earlier test
+// left listening there.
 func TestASignalFromAnotherProcessIsAnsweredBeforeTheListGoesOn(t *testing.T) {
 	const trap = `trap 'echo U' USR1; `
 	const shown = `trap 'echo U $?' USR1; false; `
 	send := func(status string) string {
 		return `/bin/sh -c 'kill -USR1 $1; /bin/sleep 0.1; exit $2' sh $$ ` + status
 	}
-	const handshake = `/usr/bin/mkfifo go sent; /bin/sh -c 'read x <go; kill -USR1 $1; echo >sent' sh $$ & ` +
-		`/bin/sh -c 'echo >go; read x <sent; /bin/sleep 0.1; exit 3'`
 	for _, dialect := range []string{"bash", "zsh", "dash", "ksh"} {
+		handshake := `d='` + t.TempDir() + `'; /usr/bin/mkfifo "$d/go" "$d/sent"; ` +
+			`/bin/sh -c 'read x <"$2/go"; kill -USR1 $1; echo >"$2/sent"' sh $$ "$d" & ` +
+			`/bin/sh -c 'echo >"$1/go"; read x <"$1/sent"; /bin/sleep 0.1; exit 3' sh "$d"`
 		for _, c := range []struct{ src, want string }{
 			{trap + send("0") + ` && echo a`, "U a"},
 			{trap + send("0") + ` && echo a && echo b`, "U a b"},
@@ -206,12 +212,9 @@ func TestASignalFromAnotherProcessIsAnsweredBeforeTheListGoesOn(t *testing.T) {
 			{trap + send("0") + `; echo a`, "U a"},
 			{trap + `if ` + send("0") + `; then echo a; fi`, "U a"},
 		} {
-			out, st, err := presets[dialect].Combined(t, dialecttest.Base{Dir: t.TempDir()}, c.src)
-			if err != nil {
-				t.Fatalf("%s: %s: %v", dialect, c.src, err)
-			}
-			if got := strings.Join(strings.Fields(out), " "); got != c.want || st != 0 {
-				t.Errorf("%s: %s\n got %q at %d\nwant %q at 0", dialect, c.src, got, st, c.want)
+			ws, out := endsOnItsOwn(t, dialect, c.src)
+			if got := strings.Join(strings.Fields(out), " "); got != c.want || ws.Signaled() || ws.ExitStatus() != 0 {
+				t.Errorf("%s: %s\n got %q, ended %v\nwant %q at 0", dialect, c.src, got, ws, c.want)
 			}
 		}
 	}

@@ -461,6 +461,10 @@ func Semantics() interp.Semantics {
 	// the digest-pinned image, `w=$(echo S >&2) f > /nope/x` writes `can't
 	// create /nope/x` alone (#3449).
 	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsNever
+	// And so nothing of the prefix is stored when one fails: the open is
+	// refused before a value is reached, which is the measurement above
+	// (#6986).
+	s.PersistingPrefixStoredBeforeTheRedirections = interp.No
 	// Whether a command's trace line waits for its redirections. See
 	// interp.Semantics.TraceLineFollowsTheRedirections (#5547).
 	s.TraceLineFollowsTheRedirections = interp.Yes

@@ -1941,6 +1941,11 @@ func Semantics() interp.Semantics {
 	// `f` and `eval :` write their letter, `/usr/bin/true`, `true` and
 	// `print` write none.
 	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsWhereItPersists
+	// And stored there too, as the plain assignment it is: measured
+	// 2026-11-02, `x=0; x=5 f >/nope/x; echo $x` writes the complaint and
+	// then 5, `x=5 : >/nope/x` leaves 5 for an EXIT trap, and `x=0; x=5 f
+	// >out_$x` writes `out_5` (#6986).
+	s.PersistingPrefixStoredBeforeTheRedirections = interp.Yes
 	// Whether a command's trace line waits for its redirections. See
 	// interp.Semantics.TraceLineFollowsTheRedirections (#5547).
 	s.TraceLineFollowsTheRedirections = interp.No

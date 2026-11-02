@@ -1643,6 +1643,9 @@ func Semantics() interp.Semantics {
 	// never runs when one fails: measured 2026-09-18, `w=$(echo S >&2) f >
 	// /nope/x` writes the file complaint alone (#3449).
 	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsNever
+	// And so nothing of it is stored when one fails: measured 2026-11-02,
+	// `x=0; x=5 f >/nope/x; echo $x` and the same with `:` leave 0 (#6986).
+	s.PersistingPrefixStoredBeforeTheRedirections = interp.No
 	// Whether a command's trace line waits for its redirections. See
 	// interp.Semantics.TraceLineFollowsTheRedirections (#5547).
 	s.TraceLineFollowsTheRedirections = interp.Yes

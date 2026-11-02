@@ -1186,6 +1186,24 @@ type Semantics struct {
 	// answer, and for the written order that comes with it.
 	PrefixExpandedBeforeTheRedirections PrefixRedirectionOrder
 
+	// PersistingPrefixStoredBeforeTheRedirections makes the store of a prefix
+	// that persists — a special builtin's, or a function's where the dialect
+	// keeps that too — before the command's redirections are opened, so a
+	// redirection that fails leaves it stored and a redirection's own word
+	// reads it. No stores it behind them, where a failed one leaves the name
+	// as it was.
+	//
+	// The sibling of PrefixExpandedBeforeTheRedirections and not a face of
+	// it: bash under `--posix` keeps `:`'s prefix and expands it ahead of the
+	// redirections, and still leaves `x` at 0 after `x=0; x=5 : >/nope/x`,
+	// where ksh93u+ leaves 5. Yes in ksh93; No in bash 5.3 (in POSIX mode
+	// and out of it), zsh 5.9.2 and dash, measured 2026-11-02. See
+	// interp/prefixstoredahead.go for the panel (#6986).
+	//
+	// Asked only where the prefix was expanded ahead of the redirections and
+	// persists at the command.
+	PersistingPrefixStoredBeforeTheRedirections Answer
+
 	// PrefixExpandedBeforeADeclarationsOperand decides whether a command's
 	// assignment prefix is worked through **before** a declaration utility's
 	// operand is expanded, so that a substitution in a prefix value runs
@@ -37791,6 +37809,9 @@ func PosixSemantics() Semantics {
 		// is what zsh, dash and BusyBox ash do; bash and ksh93 are the
 		// departures and say so in their own presets.
 		PrefixExpandedBeforeTheRedirections: PrefixExpandedBeforeRedirectionsNever,
+		// And so a prefix that persists is stored behind them: a redirection
+		// that fails leaves the name as it was (#6986).
+		PersistingPrefixStoredBeforeTheRedirections: No,
 		// The same section puts the command's words in step 1 and the
 		// assignments in step 4, so the standard's answer is that the operand
 		// is reached first — which is what dash, the shell in the panel that
@@ -39692,6 +39713,9 @@ func CoreSemantics() Semantics {
 		// refusing `x=1 cmd`. bash and ksh93 are the departures and say so
 		// themselves. See interp/prefixredirorder.go.
 		PrefixExpandedBeforeTheRedirections: PrefixExpandedBeforeRedirectionsNever,
+		// And a prefix that persists is stored behind them, for the same
+		// reason and in the same four columns of five (#6986).
+		PersistingPrefixStoredBeforeTheRedirections: No,
 		// And the operand of a declaration utility is expanded before the
 		// prefix, which is five of the seven columns and is the order the
 		// standard's own steps give — XCU 2.9.1 expands the command's words

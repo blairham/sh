@@ -927,6 +927,10 @@ func Semantics() interp.Semantics {
 	// then the file complaint, where zsh, dash and BusyBox ash write the
 	// complaint alone (#3449).
 	s.PrefixExpandedBeforeTheRedirections = interp.PrefixExpandedBeforeRedirectionsAlways
+	// But stored behind them: measured 2026-11-02 on 5.3.20 under `--posix`,
+	// where `:` keeps its prefix, `x=0; x=5 : >/nope/x` leaves 0 for an EXIT
+	// trap and `x=0; x=5 : >out_$x` writes `out_0` (#6986).
+	s.PersistingPrefixStoredBeforeTheRedirections = interp.No
 	// Whether a command's trace line waits for its redirections. See
 	// interp.Semantics.TraceLineFollowsTheRedirections (#5547).
 	s.TraceLineFollowsTheRedirections = interp.No

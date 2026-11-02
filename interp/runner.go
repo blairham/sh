@@ -10413,6 +10413,13 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		if r.givesUpForAFailedPrefix(walk, r.prefixCommandOf(argv)) {
 			return nil
 		}
+		// And a prefix that persists is stored here too, in the dialect that
+		// makes it the plain assignment it is before opening anything — so a
+		// redirection that fails leaves it stored. See
+		// interp/prefixstoredahead.go (#6986).
+		if r.storeThePrefixAheadOfTheRedirections(ctx, c, argv, walk, local) {
+			return nil
+		}
 	}
 	if tracedHere {
 		// The prefix's lines are written; the command's is all that is left,
@@ -10935,8 +10942,6 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// holdCommandHashAcrossAPrefixedPath.
 			defer r.holdCommandHashAcrossAPrefixedPath()()
 		}
-		var undo []savedVar
-		var held []string
 		// The declaration this prefix becomes a local under, where it is one,
 		// so the store below lands in the running function's own cell. See
 		// interp/prefixdeclarationlocal.go.
@@ -10947,120 +10952,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// The marker was taken above the frozen names' values rather than
 		// here, so a value of theirs that would not expand is this walk's
 		// failure and gives the command up.
-		for _, a := range c.Assigns {
-			if r.prefixWalkFailed(walk) {
-				// Nothing behind a value that would not expand is expanded
-				// — see interp/prefixexpansionfailed.go.
-				break
-			}
-			if a.Operand {
-				// An argument to the builtin, not a prefix to it.
-				continue
-			}
-			if r.prefixAssignsPositional(ctx, a) {
-				// The parameters are not in the table the undo below saves,
-				// so this one is not taken back — which is measured, not a
-				// gap. See Runner.prefixAssignsPositional.
-				continue
-			}
-			if refused && r.prefixEntryIsFrozen(a) {
-				// Reported above, or deliberately not reported where the
-				// dialect says a regular builtin's prefix is no refusal at
-				// all. Either way the name keeps its value: the builtin runs
-				// with what the shell already holds, which is what every
-				// column shows a child through `export x; readonly x=1;
-				// x=2 env`.
-				continue
-			}
-			if r.subscriptedPrefixDropped(a) {
-				// Refused already, ahead of its own value — see the function
-				// route above and interp/prefixsubscript.go.
-				continue
-			}
-			if prefixIsSubscripted(a) && r.subscriptedPrefixReachesAChild(kind) {
-				// `command` in front of an external: a child runs it, an
-				// array reaches no child's environment, and the element is
-				// not this shell's to keep. The value is still expanded,
-				// which is measured — `arr[1]=$(echo side >&2; echo v)
-				// command /usr/bin/true` writes `side` — so it is expanded
-				// here and nothing is done with it.
-				_ = r.prefixExpansion(a)
-				continue
-			}
-			// Where the entry is a local of the running function, the value
-			// and then the cell, ahead of everything below that reads or
-			// resets the name: a reference the shell holds is not followed
-			// into a cell the body makes fresh, and a typed outer name is not
-			// the one reset. See interp/prefixdeclarationlocal.go.
-			r.prefixEntryBecomesLocalAfterItsValue(a, local)
-			// The name this prefix's entry is made on, which a reference
-			// moves off the word the script wrote — the same rule the
-			// function route above follows, and the same reason. See
-			// interp/namerefprefix.go (#4110).
-			landsOn := r.prefixEntryName(a.Name)
-			fresh := false
-			persists := r.prefixPersistsAtThisBuiltin(argv[0], kind)
-			takenBack := !persists &&
-				!r.rosterKeepsThisPrefix(argv, c.Redirs) &&
-				r.subscriptedPrefixTakenBack(a)
-			if takenBack {
-				// The second reason a prefix is not taken back, and it is a
-				// *different* one: one dialect keeps what stands in front of
-				// `alias` and `hash` while answering no to the specialness
-				// question above, for `:` and `shift` included. See
-				// Semantics.BuiltinsKeepingAnAssignmentPrefix.
-				undo = append(undo, r.saveVar(landsOn))
-				// And the prefix's own cell, asked only where the binding it
-				// displaces has just been saved: a prefix this shell *keeps*
-				// has nothing to give back and is an ordinary assignment to
-				// the name as it stands. See interp/prefixfreshcell.go.
-				if fresh = r.prefixEntryIsFresh(landsOn); fresh {
-					undo[len(undo)-1].freshened = true
-				}
-			}
-			if r.subscriptedPrefixIsAFreshArray(a, takenBack) && !slices.Contains(held, landsOn) {
-				// An element of a fresh array in the builtin's own scope,
-				// made once and written into by every entry behind it, so
-				// the subscript is read as an indexed name's and the name
-				// the shell holds is not touched — its words and value
-				// read first, from the name as it stands. See
-				// interp/prefixfresharray.go.
-				inTurn, read := r.readTheEntryAheadOfItsArray(a)
-				r.hideVar(landsOn)
-				r.emptyPrefixEntry(landsOn)
-				if !r.placeTheEntryInItsArray(a, inTurn, read) {
-					continue
-				}
-			}
-			if persists {
-				// And a value this shell keeps is not an enclosing call's to
-				// give back. See Runner.callPrefixesLetTheNameGo, which is
-				// the other end of the frames an `unset` reaches into.
-				r.callPrefixesLetTheNameGo(landsOn)
-				r.persistingPrefixResetsATypedName(a, landsOn)
-			}
-			// Whether a discipline hears about it is whether there is a
-			// store for it to hear about. A *regular* builtin's prefix is the
-			// environment it is handed and nothing else, so the assignment
-			// below is this shell showing it the value rather than a write
-			// the name's owner is told of; a special builtin's persists, and
-			// a prefix that reached here through `command` before an
-			// external is the child's store. See interp/prefixdiscipline.go.
-			r.storePrefixQuietlyIfTakenBack(ctx, a, landsOn, kind.kind != prefixBeforeRegularBuiltin, fresh, takenBack)
-			held = append(held, landsOn)
-			if r.prefixStoresAnArray(a) {
-				// An array takes no export attribute, through `command` or
-				// otherwise, and drops one the name had. See
-				// Runner.prefixStoresAnArray.
-				r.exportedPut(landsOn, false)
-			} else if on, moves := r.prefixExportAtThisBuiltin(kind, landsOn, true); moves {
-				// The attribute is put back by restoreVars along with the
-				// value: savedVar records the export tri-state precisely so
-				// a name that was never exported goes back to unspoken
-				// rather than to a recorded `false`.
-				r.exportedPut(landsOn, on)
-			}
-		}
+		undo, held := r.applyTheBuiltinPrefix(ctx, c, argv, kind, walk, refused, local)
 		// A `{name}` this command stored, seen through the prefix — the same
 		// as the function route above. See interp/fdvarprefix.go.
 		r.fdVarStoresThroughThePrefix(c.Assigns, fdStores)
@@ -14012,6 +13904,11 @@ func (r *Runner) applyTheFunctionPrefix(
 	walk prefixWalk,
 	refused, scoped bool,
 ) (undo []savedVar, callHeld []string) {
+	if !scoped && r.prefixStoredAhead.made {
+		// The shell's own stores, made already ahead of the redirections.
+		// See interp/prefixstoredahead.go.
+		return r.prefixStoredAhead.undo, r.prefixStoredAhead.held
+	}
 	for _, a := range assigns {
 		if r.prefixWalkFailed(walk) {
 			// Nothing behind a value that would not expand is expanded
@@ -14172,6 +14069,142 @@ func (r *Runner) applyTheFunctionPrefix(
 		}
 	}
 	return undo, callHeld
+}
+
+// applyTheBuiltinPrefix makes the stores of a prefix in front of a builtin, and
+// hands back what the take-back puts back and the names the builtin is holding
+// — the builtin route's counterpart of applyTheFunctionPrefix.
+//
+// Where the dialect stored a persisting prefix ahead of the command's
+// redirections, the stores are made already, and what they handed back is
+// handed back again. See interp/prefixstoredahead.go.
+func (r *Runner) applyTheBuiltinPrefix(
+	ctx context.Context,
+	c *syntax.SimpleCmd,
+	argv []string,
+	kind prefixCommand,
+	walk prefixWalk,
+	refused bool,
+	local string,
+) (undo []savedVar, held []string) {
+	if r.prefixStoredAhead.made {
+		return r.prefixStoredAhead.undo, r.prefixStoredAhead.held
+	}
+	for _, a := range c.Assigns {
+		if r.prefixWalkFailed(walk) {
+			// Nothing behind a value that would not expand is expanded
+			// — see interp/prefixexpansionfailed.go.
+			break
+		}
+		if a.Operand {
+			// An argument to the builtin, not a prefix to it.
+			continue
+		}
+		if r.prefixAssignsPositional(ctx, a) {
+			// The parameters are not in the table the undo below saves,
+			// so this one is not taken back — which is measured, not a
+			// gap. See Runner.prefixAssignsPositional.
+			continue
+		}
+		if refused && r.prefixEntryIsFrozen(a) {
+			// Reported above, or deliberately not reported where the
+			// dialect says a regular builtin's prefix is no refusal at
+			// all. Either way the name keeps its value: the builtin runs
+			// with what the shell already holds, which is what every
+			// column shows a child through `export x; readonly x=1;
+			// x=2 env`.
+			continue
+		}
+		if r.subscriptedPrefixDropped(a) {
+			// Refused already, ahead of its own value — see the function
+			// route above and interp/prefixsubscript.go.
+			continue
+		}
+		if prefixIsSubscripted(a) && r.subscriptedPrefixReachesAChild(kind) {
+			// `command` in front of an external: a child runs it, an
+			// array reaches no child's environment, and the element is
+			// not this shell's to keep. The value is still expanded,
+			// which is measured — `arr[1]=$(echo side >&2; echo v)
+			// command /usr/bin/true` writes `side` — so it is expanded
+			// here and nothing is done with it.
+			_ = r.prefixExpansion(a)
+			continue
+		}
+		// Where the entry is a local of the running function, the value
+		// and then the cell, ahead of everything below that reads or
+		// resets the name: a reference the shell holds is not followed
+		// into a cell the body makes fresh, and a typed outer name is not
+		// the one reset. See interp/prefixdeclarationlocal.go.
+		r.prefixEntryBecomesLocalAfterItsValue(a, local)
+		// The name this prefix's entry is made on, which a reference
+		// moves off the word the script wrote — the same rule the
+		// function route above follows, and the same reason. See
+		// interp/namerefprefix.go (#4110).
+		landsOn := r.prefixEntryName(a.Name)
+		fresh := false
+		persists := r.prefixPersistsAtThisBuiltin(argv[0], kind)
+		takenBack := !persists &&
+			!r.rosterKeepsThisPrefix(argv, c.Redirs) &&
+			r.subscriptedPrefixTakenBack(a)
+		if takenBack {
+			// The second reason a prefix is not taken back, and it is a
+			// *different* one: one dialect keeps what stands in front of
+			// `alias` and `hash` while answering no to the specialness
+			// question above, for `:` and `shift` included. See
+			// Semantics.BuiltinsKeepingAnAssignmentPrefix.
+			undo = append(undo, r.saveVar(landsOn))
+			// And the prefix's own cell, asked only where the binding it
+			// displaces has just been saved: a prefix this shell *keeps*
+			// has nothing to give back and is an ordinary assignment to
+			// the name as it stands. See interp/prefixfreshcell.go.
+			if fresh = r.prefixEntryIsFresh(landsOn); fresh {
+				undo[len(undo)-1].freshened = true
+			}
+		}
+		if r.subscriptedPrefixIsAFreshArray(a, takenBack) && !slices.Contains(held, landsOn) {
+			// An element of a fresh array in the builtin's own scope,
+			// made once and written into by every entry behind it, so
+			// the subscript is read as an indexed name's and the name
+			// the shell holds is not touched — its words and value
+			// read first, from the name as it stands. See
+			// interp/prefixfresharray.go.
+			inTurn, read := r.readTheEntryAheadOfItsArray(a)
+			r.hideVar(landsOn)
+			r.emptyPrefixEntry(landsOn)
+			if !r.placeTheEntryInItsArray(a, inTurn, read) {
+				continue
+			}
+		}
+		if persists {
+			// And a value this shell keeps is not an enclosing call's to
+			// give back. See Runner.callPrefixesLetTheNameGo, which is
+			// the other end of the frames an `unset` reaches into.
+			r.callPrefixesLetTheNameGo(landsOn)
+			r.persistingPrefixResetsATypedName(a, landsOn)
+		}
+		// Whether a discipline hears about it is whether there is a
+		// store for it to hear about. A *regular* builtin's prefix is the
+		// environment it is handed and nothing else, so the assignment
+		// below is this shell showing it the value rather than a write
+		// the name's owner is told of; a special builtin's persists, and
+		// a prefix that reached here through `command` before an
+		// external is the child's store. See interp/prefixdiscipline.go.
+		r.storePrefixQuietlyIfTakenBack(ctx, a, landsOn, kind.kind != prefixBeforeRegularBuiltin, fresh, takenBack)
+		held = append(held, landsOn)
+		if r.prefixStoresAnArray(a) {
+			// An array takes no export attribute, through `command` or
+			// otherwise, and drops one the name had. See
+			// Runner.prefixStoresAnArray.
+			r.exportedPut(landsOn, false)
+		} else if on, moves := r.prefixExportAtThisBuiltin(kind, landsOn, true); moves {
+			// The attribute is put back by restoreVars along with the
+			// value: savedVar records the export tri-state precisely so
+			// a name that was never exported goes back to unspoken
+			// rather than to a recorded `false`.
+			r.exportedPut(landsOn, on)
+		}
+	}
+	return undo, held
 }
 
 // takeBackFunctionPrefix ends an assignment prefix that stood in front of a

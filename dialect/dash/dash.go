@@ -1854,6 +1854,9 @@ func Semantics() interp.Semantics {
 	// includes EXIT is left unanswered: nothing is ever kept to ask it of.
 	s.SubshellKeepsTrapListing = interp.No
 	s.PipelineElementKeepsTrapListing = interp.No
+	// And the element dies of a handled signal it is sent, as the reset
+	// says it should. Measured 2026-11-02 (#7327).
+	s.PipelineElementKeepsTheTraps = interp.No
 	s.ALoneTrapCommandKeepsTrapListing = interp.No
 	s.BackgroundJobKeepsTrapListing = interp.No
 	s.SubshellHidesInheritedIgnoredTraps = interp.No

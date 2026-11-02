@@ -3448,6 +3448,11 @@ func Semantics() interp.Semantics {
 	// EXIT trap from it: `trap 'echo x' USR1; trap | cat` prints the trap
 	// and the same shape with an EXIT trap prints nothing. Measured, each.
 	s.PipelineElementKeepsTrapListing = interp.Yes
+	// And what it lists is the traps themselves, still working: `trap 'echo T'
+	// USR1; { kill -USR1 $sysparams[pid]; echo in; } | cat` writes T and in
+	// through the pipe, where the element of every other column dies of the
+	// signal. Measured 2026-11-02 on 5.9.2 (#7327).
+	s.PipelineElementKeepsTheTraps = interp.Yes
 	s.ALoneTrapCommandKeepsTrapListing = interp.No
 	s.KeptTrapListingIncludesExit = interp.No
 	s.SubshellHidesInheritedIgnoredTraps = interp.Yes

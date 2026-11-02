@@ -195,6 +195,23 @@ var groupOperand = regexp.MustCompile(`\(-[0-9]+\)`)
 // what a shell binary does for itself — see driver/procanchor.go. Without one
 // `$BASHPID` in a forked body is empty and none of the cases above has a
 // number to aim at.
+// A pipeline element that sends its own `$BASHPID` a signal the parent trapped
+// dies of it: the element keeps a listing of the parent's traps and not the
+// traps, so no handler runs and the shell carries on past the pipeline —
+// interp.Semantics.PipelineElementKeepsTheTraps, which zsh answers the other
+// way (#7327). Measured 2026-11-02 under `-c` against bash 5.3.20 and 3.2.57:
+// `out=0` alone, and `in` too with the signal ignored in place of the handler.
+func TestAPipelineElementThatSignalsItselfDiesOfTheDefault(t *testing.T) {
+	got := runBashAnchored(t, `trap 'echo T' USR1; { kill -USR1 $BASHPID; echo in; } | /bin/cat; echo out=$?`)
+	if want := "out=0\n"; got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+	got = runBashAnchored(t, `trap '' USR1; { kill -USR1 $BASHPID; echo in; } | /bin/cat; echo out=$?`)
+	if want := "in\nout=0\n"; got != want {
+		t.Errorf("ignored: output = %q, want %q", got, want)
+	}
+}
+
 func runBashAnchored(t *testing.T, src string) string {
 	t.Helper()
 	anchor, err := exec.LookPath("cat")

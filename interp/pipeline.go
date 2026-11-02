@@ -607,6 +607,9 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		// different pair of shells than `( … )` does, so the boundary says
 		// what kind it is.
 		sub.retagTrapBoundary(loneTrapBoundary(trapContextPipeline, loneCommandIn(p.Cmds[i], "trap")))
+		// And in the dialect whose element keeps the parent's traps working
+		// rather than only listed, the handlers come back (#7327).
+		sub.keepTheParentsTraps(r, p.Cmds[i])
 		// And a different question again for the job table, which one
 		// dialect answers by the *shape* of the element: `jobs -p | cat`
 		// lists the parent's jobs there and `{ jobs -p; } | cat` does not.

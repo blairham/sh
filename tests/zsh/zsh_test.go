@@ -346,6 +346,7 @@ func TestSemantics(t *testing.T) {
 		// listing and still drops the EXIT trap from it.
 		{"SubshellKeepsTrapListing", s.SubshellKeepsTrapListing, interp.No},
 		{"PipelineElementKeepsTrapListing", s.PipelineElementKeepsTrapListing, interp.Yes},
+		{"PipelineElementKeepsTheTraps", s.PipelineElementKeepsTheTraps, interp.Yes},
 		{"BackgroundJobKeepsTrapListing", s.BackgroundJobKeepsTrapListing, interp.No},
 		{"KeptTrapListingIncludesExit", s.KeptTrapListingIncludesExit, interp.No},
 		{"SubshellHidesInheritedIgnoredTraps", s.SubshellHidesInheritedIgnoredTraps, interp.Yes},

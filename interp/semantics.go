@@ -33477,8 +33477,58 @@ type Semantics struct {
 	// pairs off the other way: bash and zsh keep the listing there, ksh93
 	// and dash do not. `trap 'echo x' USR1; trap | cat` prints the trap in
 	// bash and zsh and nothing in the other two — the shape issue #339
-	// measured.
+	// measured. In zsh what it lists is the traps themselves, which is the
+	// question below.
 	PipelineElementKeepsTrapListing Answer
+
+	// PipelineElementKeepsTheTraps makes a pipeline element the shell forks
+	// keep the parent's signal traps as its own, working, where the listing
+	// above is only a picture of them: a handler set before the pipeline
+	// runs inside the element for a signal the element is sent, and the
+	// element carries on.
+	//
+	//	trap 'echo T' USR1; { kill -USR1 <the element's pid>; echo in; } | cat
+	//
+	// writes `T` and `in` through the pipe in zsh 5.9.2 and nothing in bash
+	// 5.3.20, bash 3.2.57, ksh93u+ 2012-08-01, dash or BusyBox ash 1.37.0,
+	// whose element dies of the default action. Measured 2026-11-02 under
+	// `-c`, each shell in a process group of its own, the element's pid read
+	// as the parent pid of a child it started — and as `$BASHPID` and
+	// `$sysparams[pid]` where the shell has one — with `trap ''` in place of
+	// the handler as the control: every column's element then writes `in`.
+	//
+	// The noun is the pipeline element and not its shape. In zsh the
+	// handler runs in a brace group, a function call, a `while`, an `if`,
+	// a simple command and an element in the middle of the pipeline alike,
+	// for USR1, TERM, INT and HUP, and for one spelled `TRAPUSR1` — though
+	// a simple command whose last act is the `kill` runs no handler here
+	// whatever the traps, a split of its own (#7345). It does
+	// not run in a `( … )` element, which is a subshell and puts its handled
+	// traps back as every subshell does, nor in a background job, a command
+	// substitution or a process substitution. The EXIT trap does not cross.
+	// That the traps are the element's own shows in its listing too: `trap
+	// 'echo T' USR1; { trap '' USR2; trap; } | cat` lists both in zsh, where
+	// bash's kept picture is dropped by the change and lists USR2 alone
+	// (#7327).
+	//
+	// Asked only behind PipelineElementKeepsTrapListing's yes, since an
+	// element that keeps the traps lists them, at an element the shell
+	// forks that is not `( … )`, and only where the parent holds a handler.
+	// See Runner.keepTheParentsTraps.
+	//
+	// unpinned bash: no corpus row signals a pipeline element's own pid;
+	// pinned by TestAPipelineElementThatSignalsItselfDiesOfTheDefault.
+	//
+	// unpinned zsh: the same reach; pinned by
+	// TestAPipelineElementKeepsTheParentsTraps.
+	//
+	// unpinned ksh: behind PipelineElementKeepsTrapListing's no, so never
+	// reached; the element dies of the default, measured.
+	//
+	// unpinned dash: the same, measured the same way.
+	//
+	// unpinned ash: the same, measured in the pinned alpine.
+	PipelineElementKeepsTheTraps Answer
 
 	// ALoneTrapCommandKeepsTrapListing keeps the parent's listing across a
 	// pipeline element or a substitution whose answer above is no, where

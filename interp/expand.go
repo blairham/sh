@@ -2326,6 +2326,14 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 	if named, ok := r.elementMemberAsAName(e); ok {
 		e = named
 	}
+	// `${e[k]}` through a reference aimed at `a[x]`, in the column where that
+	// is `${a[x][k]}`: the node becomes the chain, and the span with it, so
+	// a conditional's test below reads the chain too. See
+	// interp/namerefelementread.go (#7366).
+	if chain, ok := r.elementReadThroughAnElementReference(e); ok {
+		e = chain
+		s.Param = chain
+	}
 	// `${+name}` is a count of set-ness and not a value, so none of the
 	// shapes below applies to it — and this stands in front of the bare-array
 	// rewrite in particular, which would otherwise turn `${+a}` into
@@ -2531,7 +2539,15 @@ func (r *Runner) expandAtList(s syntax.Span, sp splitPolicy, head bool) ([]strin
 			// Through a name reference like every other reading of the
 			// name: `typeset -n r=v; v=(1 2)` answers `${!r[@]}` with the
 			// subscripts of `v`. See interp/nameref.go.
-			elems = r.subscriptsOf(r.throughNamerefName(e.Name), len(elems))
+			//
+			// A chain that reaches into a nested element lists *that*
+			// array's subscripts, not the name's. See
+			// Runner.nestedChainSubscripts (#7366).
+			if len(e.Leading) > 0 && r.sem().ChainedSubscriptReadsANestedValue == Yes {
+				elems = r.nestedChainSubscripts(e)
+			} else {
+				elems = r.subscriptsOf(r.throughNamerefName(e.Name), len(elems))
+			}
 		}
 		if e.Op == syntax.ParamSubstring && !dotRanged(e) {
 			// A range has sliced itself: its offset is not counted from the
@@ -3945,6 +3961,11 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	// it. See interp/subcompound.go.
 	if named, ok := r.elementMemberAsAName(e); ok {
 		e = named
+	}
+	// `${e[k]}` through a reference aimed at `a[x]`, in the column where that
+	// is `${a[x][k]}`. See interp/namerefelementread.go (#7366).
+	if chain, ok := r.elementReadThroughAnElementReference(e); ok {
+		e = chain
 	}
 	if e.HasFlags {
 		// Normally intercepted in expandAt; reached directly where a single

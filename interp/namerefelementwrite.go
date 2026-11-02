@@ -38,8 +38,8 @@ import (
 // into that chain and stored by Runner.assignChainedElement, which has all
 // of those rows already, rather than given a store of its own.
 //
-// What a read through the same reference answers — `${e[0]}` and `${#e[@]}`
-// are 1 and 1 there — is a second question and is not this.
+// A read through the same reference — `${e[0]}` and `${#e[@]}` are 1 and 1
+// there — is the same chain read back, and is interp/namerefelementread.go.
 //
 // bash 5.3.20 refuses the write: `declare -A a; declare -n e='a[x]'; e[k]=1`
 // is `` `a[x]': not a valid identifier `` and `a` keeps nothing, which is what

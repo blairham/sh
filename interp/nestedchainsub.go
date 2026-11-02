@@ -54,14 +54,7 @@ import "github.com/blairham/sh/syntax"
 // is the distinction `${a[9][0]-none}` turns on; an empty slice is a whole-
 // array subscript that named no elements, which is set and has none.
 func (r *Runner) nestedChainSubscript(e *syntax.ParamExpr) ([]string, bool) {
-	held, there := r.nestedChainRoot(e)
-	for i := 1; i < len(e.Leading) && there; i++ {
-		idx, ok := r.chainLinkIndex(r.chainLink(e, i))
-		if !ok {
-			return nil, true
-		}
-		held, there = r.nestedElementAt(held, idx)
-	}
+	held, there := r.nestedChainHeld(e)
 	if !there {
 		return nil, true
 	}
@@ -79,6 +72,40 @@ func (r *Runner) nestedChainSubscript(e *syntax.ParamExpr) ([]string, bool) {
 		return nil, true
 	}
 	return []string{r.elemText(last)}, true
+}
+
+// nestedChainHeld walks every link of the chain before its last subscript:
+// the element that subscript reads. False where a link named nothing, or had a
+// subscript that would not evaluate.
+func (r *Runner) nestedChainHeld(e *syntax.ParamExpr) (Element, bool) {
+	held, there := r.nestedChainRoot(e)
+	for i := 1; i < len(e.Leading) && there; i++ {
+		idx, ok := r.chainLinkIndex(r.chainLink(e, i))
+		if !ok {
+			return Element{}, false
+		}
+		held, there = r.nestedElementAt(held, idx)
+	}
+	return held, there
+}
+
+// nestedChainSubscripts is `${!a[x][@]}`: the subscripts of the array the chain
+// reaches, where `${!a[@]}` lists the name's own. Measured 2026-11-02 on ksh93u+
+// 2012-08-01, `typeset -A a; a[x][0]=1; a[x][3]=q` lists `0 3`, where this
+// listed `x`, the table's key (#7366). An element holding a string has no
+// subscripts here, for the reason nestedElements gives it no elements.
+func (r *Runner) nestedChainSubscripts(e *syntax.ParamExpr) []string {
+	held, there := r.nestedChainHeld(e)
+	if !there || held.Nested == nil {
+		return []string{}
+	}
+	keys := r.arrayKeys(held.Nested)
+	base := r.arrayBase()
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, itoa(k+base))
+	}
+	return out
 }
 
 // nestedChainRoot resolves the first subscript against the *name*, which is

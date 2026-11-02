@@ -336,7 +336,12 @@ func (r *Runner) readThroughNamerefElement(base, sub string) (string, bool) {
 			sub = key
 		}
 		v, there := a[sub]
-		return v.Str, there
+		// The element's text, which is what `${m[k]}` reads, and not Str: an
+		// element holding a nested array or a compound has nothing there.
+		// Measured 2026-11-02 on ksh93u+ 2012-08-01, `typeset -A a; typeset
+		// -n e='a[x]'; e[k]=1; echo "$e"` is `1`, as `${a[x]}` is, where this
+		// read nothing (#7366).
+		return r.elemText(v), there
 	}
 	idx, err := r.subscriptValueOfReference(sub)
 	if err != nil {

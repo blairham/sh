@@ -83,6 +83,16 @@ func startProcAnchor(argv []string) (*exec.Cmd, *os.File, error) {
 // The window between this answer and the fork is real and cannot be closed
 // from here. It is the same race a real shell has with a signal arriving
 // between its own fork and exec, and it is narrow where this was certain.
+//
+// Narrower now than when that was written. A negative pid used to be the
+// sure way in: a pipeline element running `kill -- -$BASHPID` beside a
+// `/bin/cat` killed the group while the cat was being checked into it, and
+// the cat failed every time (#7238). The `kill` builtin now refuses a group
+// kill aimed at a body forked with the monitor off, as both references do,
+// because no shell that forks has that group — see aimedAtAGroupNoForkLeads.
+// What still reaches the placeholder is a kill this shell does not answer: a
+// group kill under the monitor, where the group is a real one, and a signal
+// sent from another program, `/bin/kill` included.
 func procGroupExists(pgid int) bool {
 	return syscall.Kill(-pgid, 0) == nil
 }

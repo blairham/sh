@@ -170,6 +170,55 @@ func TestACopysSignalToTheShellIsAnsweredBeforeTheListGoesOn(t *testing.T) {
 	}
 }
 
+// What a command substitution's own `kill` aims at `$$` is answered as the
+// simple command that held it ends, inside a group's or an `eval`'s
+// redirection, the handler in zsh showing the status from before the command
+// (#7361). Where it waited for the next statement the handler wrote outside
+// the redirection, and zsh's was shown the substitution's status at the
+// and-or list's step.
+//
+// Measured 2026-11-02 under `-c`, each shell in a process group of its own,
+// against bash 5.3.20, bash 3.2.57, zsh 5.9.2, ksh93u+ 2012-08-01 and dash,
+// which agree on the redirection rows. The control is the command's own
+// redirection, which bash, ksh93 and dash have undone before the handler
+// runs; zsh runs it as it arrives and writes nothing there (#7224), which is
+// not modeled. ksh93's `$( … )` ends at 256 + N where the signal lands
+// (TestASubshellEndsOnATrappedSignalToTheShellInOneDialect), so its status
+// row reads 286 for USR1.
+func TestASubstitutionsOwnSignalToTheShellIsAnsweredAsTheCommandEnds(t *testing.T) {
+	const trap = `trap 'echo U' USR1; `
+	const toStderr = `trap 'echo U >&2' USR1; `
+	const shown = `trap 'echo U $?' USR1; false; `
+	killed := strconv.Itoa(256 + int(syscall.SIGUSR1))
+	status := shown + `x=$(kill -USR1 $$; exit 3) || echo a$?`
+	type row struct{ src, want string }
+	every := []row{
+		{toStderr + `{ x=$(kill -USR1 $$); } 2>/dev/null; echo b`, "b"},
+		{toStderr + "{ x=`kill -USR1 $$`; } 2>/dev/null; echo b", "b"},
+		{trap + `eval 'x=$(kill -USR1 $$)' >/dev/null; echo b`, "b"},
+	}
+	rows := map[string][]row{
+		"bash": {{status, "U 3 a3"}, {trap + `x=$(kill -USR1 $$) >/dev/null; echo b`, "U b"}},
+		"dash": {{status, "U 3 a3"}, {trap + `x=$(kill -USR1 $$) >/dev/null; echo b`, "U b"}},
+		"zsh":  {{status, "U 1 a3"}},
+		"ksh": {
+			{status, "U " + killed + " a" + killed},
+			{trap + `x=$(kill -USR1 $$) >/dev/null; echo b`, "U b"},
+		},
+	}
+	for dialect, own := range rows {
+		for _, c := range append(own, every...) {
+			out, st, err := presets[dialect].Combined(t, dialecttest.Base{Dir: t.TempDir()}, c.src)
+			if err != nil {
+				t.Fatalf("%s: %s: %v", dialect, c.src, err)
+			}
+			if got := strings.Join(strings.Fields(out), " "); got != c.want || st != 0 {
+				t.Errorf("%s: %s\n got %q at %d\nwant %q at 0", dialect, c.src, got, st, c.want)
+			}
+		}
+	}
+}
+
 // A signal from another process that lands while an and-or list's left side
 // runs is answered before the list goes on, the handler showing the left
 // side's status (#7362). Where it waited for the next statement the handler

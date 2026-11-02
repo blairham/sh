@@ -104,3 +104,45 @@ func PutBack(sigs ...os.Signal) {
 		}
 	}
 }
+
+// probe is the channel Settle subscribes for a moment, reused because every
+// use of it is under book.mu.
+var probe = make(chan os.Signal, 1)
+
+// Settle returns once os/signal has handed c every signal the runtime had
+// already received when Settle was called.
+//
+// The runtime's handler does not write to c. It records the arrival and wakes
+// a goroutine of os/signal's, which writes to every subscribed channel when it
+// is next scheduled — so a signal the kernel delivered before some event this
+// program has just seen, a child's exit, can still be on its way to c when
+// the program goes to look. signal.Stop is the one call that waits for that
+// goroutine to catch up: it returns only once the runtime's queue is empty and
+// nothing is being delivered, which is how it can promise its channel nothing
+// more. So Settle subscribes a channel of its own to one of c's signals and
+// stops it again.
+//
+// One of c's signals, and one the process is handling, because that
+// subscription and its end change no disposition: os/signal counts
+// subscribers, and only the first and the last touch the process. A caller
+// keeps a window that ignores signals on the whole process from opening
+// meanwhile, since inside one this would give the signal a handler back.
+//
+// What Settle waits for is only what has arrived already: a signal not yet
+// sent is not waited for, and with nothing on its way, the wait is two loads.
+func Settle(c chan<- os.Signal) {
+	book.mu.Lock()
+	defer book.mu.Unlock()
+	for sig := range book.subs[c] {
+		if signal.Ignored(sig) {
+			continue
+		}
+		signal.Notify(probe, sig)
+		signal.Stop(probe)
+		select {
+		case <-probe:
+		default:
+		}
+		return
+	}
+}

@@ -6,6 +6,7 @@ package interp
 import (
 	"context"
 
+	"github.com/blairham/sh/internal/sigbook"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -83,6 +84,48 @@ func (r *Runner) answerArrivalsAsThePipelineEnds(ctx context.Context) {
 		seen = r.status
 	}
 	r.runPendingTrapsShowing(ctx, seen)
+}
+
+// settleWhatAChildSent waits, as a pipeline that waited for a child ends, for
+// the runtime to hand this shell whatever signals it has already received
+// (#7378).
+//
+// A signal another process sends reaches this process before the sender
+// exits, and the kernel hands it to the runtime's handler then — on whichever
+// thread it chose. But the handler does not write to the channel the shell
+// reads: a goroutine of os/signal's does, when it is next scheduled, and the
+// shell that had just reaped the sender went on to look before that goroutine
+// had run. Measured 2026-11-02 over 1000 runs each of `trap 'echo U' USR1;
+// /bin/kill -USR1 $$; echo b`, bash 5.3.20, bash 3.2.57, zsh 5.9.2, ksh93u+
+// and dash wrote `U b` every time; this shell wrote `b U` or a bare `b` — the
+// handler a command late, or never — in 174 of 1000 on Linux at idle and 54
+// of 1000 on macOS with every core busy, and in none with a sender that
+// lingers. A probe of this wait found the arrival still on its way in 195
+// runs of 1000 on Linux, about as many as had been late.
+//
+// So "a child this shell waited for has ended" is a barrier: what the
+// runtime had received by then is on the channel before the shell looks. It
+// costs a lock and a map lookup where no handler is set, and a subscription
+// taken and dropped where one is; it waits only while an arrival the runtime
+// already has is on its way, so one sent later is answered where it lands, as
+// before.
+//
+// A signal the kernel has given a thread that has yet to run its handler is
+// not the runtime's yet, and nothing here can see it: the kernel picks the
+// thread, and a shell of one thread is always the one it picks. With this
+// barrier the same runs came to 1 in 3000 at idle on Linux and 5 in 1000 with
+// every core busy, and none in 1000 on macOS either way (#7380).
+//
+// Only the shell at the top: it is the one whose handlers the process runs.
+// And with no window open that ignores signals on the whole process, since
+// sigbook.Settle subscribes for a moment to a signal the shell holds.
+func (r *Runner) settleWhatAChildSent() {
+	if !r.waitedForAChild || r.inSubshell || r.ctl != controlNone || r.signals == nil {
+		return
+	}
+	spawnDispositions.RLock()
+	defer spawnDispositions.RUnlock()
+	sigbook.Settle(r.signals.ch)
 }
 
 // handlerSeesTheNegatedStatus reports whether what arrived from another

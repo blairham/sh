@@ -94,3 +94,10 @@ const PrivateCopyFloorForTest = privateCopyFloor
 func InTransientFdWindowForTest(f func()) {
 	_ = withTransientFds(func() error { f(); return nil })
 }
+
+// SetAfterAChildIsWaitedFor installs f to run on the shell's goroutine each
+// time it has reaped a child, and returns what takes it out again.
+func SetAfterAChildIsWaitedFor(f func()) func() {
+	afterAChildIsWaitedFor.Store(&f)
+	return func() { afterAChildIsWaitedFor.Store(nil) }
+}

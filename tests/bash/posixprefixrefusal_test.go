@@ -5,6 +5,8 @@ package bash_test
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -84,5 +86,81 @@ func TestPosixPrefixRefusalFromACommandStringEndsTheShell(t *testing.T) {
 	}
 	if !strings.Contains(errs.String(), "v: readonly variable") {
 		t.Errorf("err %q, want the refusal", errs.String())
+	}
+}
+
+// POSIX mode makes a refused **subscripted** prefix word cost the command the
+// way a frozen name's refusal does, and a refused reference aim written as an
+// assignment of its own end the shell. Each row is a transcript measured
+// 2026-11-02 on GNU bash 5.3.20 under `env -i PATH=/usr/bin:/bin` with a
+// scratch HOME, `set -o posix` in front of the line: once as a `-c` string, and
+// once as a script file with `echo next=$?` on the line after it. Before this,
+// every subscripted row carried on to `after=0`, the aim gave up its line and
+// reached `next=1`, and the frozen name's `r=2 :` ended a `-c` string at 1
+// (#7343).
+//
+// The minimal pair is what keys it: `:`, `export` and `eval` end the shell —
+// at 127 from `-c`, at 1 from a file — and `true`, `command :`, an external
+// and a function give up the line instead, which from `-c` is the whole
+// string at 1. The two controls are the issue's: a `for` over an aimed
+// reference carries on, and the frozen name still ends the shell.
+func TestPosixModeSharpensASubscriptedPrefixAndAnAim(t *testing.T) {
+	t.Parallel()
+	const (
+		ident = "`a[1]': not a valid identifier\n"
+		aim   = "`1': not a valid identifier\n"
+		ro    = "r: readonly variable\n"
+	)
+	for _, c := range []struct {
+		name, src, said string
+		// What follows the complaint, and the exit status, on each route.
+		cTail string
+		cCode int
+		fTail string
+		fCode int
+	}{
+		{"a special builtin", `a[1]=x :; echo after=$?`, ident, "", 127, "", 1},
+		{"an external", `a[1]=x /usr/bin/true; echo after=$?`, ident, "", 1, "next=1\n", 0},
+		{"a function", `f(){ :; }; a[1]=x f; echo after=$?`, ident, "", 1, "next=1\n", 0},
+		{"a refused aim", `typeset -n m; m=1; echo after=$?`, aim, "", 127, "", 1},
+		{
+			"an element through an unaimed reference", `typeset -n ref; ref[0]=foo; echo after=$?`,
+			"`': not a valid identifier\n", "", 127, "", 1,
+		},
+		{"pair: export", `a[1]=x export y=1; echo after=$?`, ident, "", 127, "", 1},
+		{"pair: eval", `a[1]=x eval :; echo after=$?`, ident, "", 127, "", 1},
+		{"pair: a regular builtin", `a[1]=x true; echo after=$?`, ident, "", 1, "next=1\n", 0},
+		{"pair: command in front of a special", `a[1]=x command :; echo after=$?`, ident, "", 1, "next=1\n", 0},
+		{
+			"pair: command in front of a special, frozen", `readonly r=1; r=2 command :; echo after=$?`,
+			ro, "", 1, "next=1\n", 0,
+		},
+		{"the walk stops at the first", `a[1]=x c[2]=y true; echo after=$?`, ident, "", 1, "next=1\n", 0},
+		{
+			"control: a loop over an aimed reference", `x=0; typeset -n m=x; for m in 1; do :; done; echo after=$?`,
+			aim, "after=1\n", 0, "after=1\nnext=0\n", 0,
+		},
+		{"control: a frozen name", `readonly r=1; r=2 :; echo after=$?`, ro, "", 127, "", 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			src := "set -o posix; " + c.src
+			var both bytes.Buffer
+			code := driver.MainArgs(bashShell(&both, &both), []string{"bash", "-c", src})
+			if want := "bash: line 1: " + c.said + c.cTail; both.String() != want || code != c.cCode {
+				t.Errorf("-c: %q at %d, want %q at %d", both.String(), code, want, c.cCode)
+			}
+			dir := t.TempDir()
+			path := filepath.Join(dir, "p.sh")
+			if err := os.WriteFile(path, []byte(src+"\necho next=$?\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			both.Reset()
+			code = driver.MainArgs(bashShell(&both, &both), []string{"bash", path})
+			got := strings.ReplaceAll(both.String(), dir+string(filepath.Separator), "")
+			if want := "p.sh: line 1: " + c.said + c.fTail; got != want || code != c.fCode {
+				t.Errorf("file: %q at %d, want %q at %d", got, code, want, c.fCode)
+			}
+		})
 	}
 }

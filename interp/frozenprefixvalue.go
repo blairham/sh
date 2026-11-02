@@ -106,6 +106,7 @@ func (r *Runner) expandThePrefixUpToTheFrozenName(
 	refuseEach func(name string),
 	traceEach bool,
 	held *heldPrefix,
+	p prefixCommand,
 ) bool {
 	if len(r.frozenPrefixNames(assigns)) == 0 {
 		return false
@@ -147,9 +148,15 @@ func (r *Runner) expandThePrefixUpToTheFrozenName(
 			// is refused here, where it stands: the ordered walk behind this
 			// one meets it again and says nothing the second time. An
 			// unanswered reading is left to that walk to ask.
+			//
+			// In POSIX mode that refusal stops the command, and it stops
+			// this walk with it: the frozen entry behind it is never
+			// reached, so its refusal is never written. The command is
+			// already unwound, which is what the caller's give-up reads.
 			if prefixIsSubscripted(a) &&
-				r.sem().SubscriptedAssignmentPrefix == SubscriptedPrefixIsRefused {
-				r.refuseOneSubscriptedPrefix(a)
+				r.sem().SubscriptedAssignmentPrefix == SubscriptedPrefixIsRefused &&
+				r.refuseOneSubscriptedPrefix(a, p) {
+				return true
 			}
 			continue
 		}

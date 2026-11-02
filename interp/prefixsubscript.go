@@ -109,16 +109,24 @@ func subscriptedPrefixSpelling(a *syntax.Assign, layout syntax.Layout) string {
 // which asks the vector again rather than being handed a list — a prefix is
 // one, two or three assignments, and a list is the shape of state a route
 // forgets to clear.
-func (r *Runner) refuseSubscriptedPrefixes(assigns []*syntax.Assign) {
+//
+// Except in POSIX mode, where the refusal costs the command: it reports
+// whether it did, and the caller gives the command up. See
+// Runner.refuseOneSubscriptedPrefix.
+func (r *Runner) refuseSubscriptedPrefixes(assigns []*syntax.Assign, argv []string) bool {
 	if !r.subscriptedPrefixRefusalAnswered(assigns) {
-		return
+		return false
 	}
+	p := r.prefixCommandOf(argv)
 	for _, a := range assigns {
 		if !prefixIsSubscripted(a) {
 			continue
 		}
-		r.refuseOneSubscriptedPrefix(a)
+		if r.refuseOneSubscriptedPrefix(a, p) {
+			return true
+		}
 	}
+	return false
 }
 
 // subscriptedPrefixRefusalAnswered settles the dialect's reading of a
@@ -150,13 +158,26 @@ func (r *Runner) subscriptedPrefixRefusalAnswered(assigns []*syntax.Assign) bool
 // everything else meets the word on its way to the frozen entry, and the
 // ordered walk behind it meets it again. The first is where the word stands
 // in written order. See Runner.expandThePrefixUpToTheFrozenName (#7095).
-func (r *Runner) refuseOneSubscriptedPrefix(a *syntax.Assign) {
+//
+// It reports whether the refusal **stopped** the command, which only POSIX
+// mode makes it do: there it is a refused prefix like a frozen name's, ending
+// the shell in front of a special builtin and giving up the line in front of
+// anything else, and the walk that met it goes no further. p is the command
+// the prefix stands in front of. See Semantics.PosixModeSharpensAPrefixRefusal
+// (#7343).
+func (r *Runner) refuseOneSubscriptedPrefix(a *syntax.Assign, p prefixCommand) bool {
 	if slices.Contains(r.prefixSubscriptsRefused, a) {
-		return
+		return false
 	}
 	r.prefixSubscriptsRefused = append(r.prefixSubscriptsRefused, a)
 	r.diagf("%s\n", Wording(r.diag().SubscriptedPrefixIsNotAName,
 		"`%[1]s': not a valid identifier", subscriptedPrefixSpelling(a, r.wordAsWrittenLayout())))
+	sharpened, fatal := r.posixModeSharpensThePrefixRefusal(p)
+	if !sharpened {
+		return false
+	}
+	r.stopForARefusedPrefix(fatal)
+	return true
 }
 
 // subscriptedPrefixDropped reports whether a prefix entry is one this dialect

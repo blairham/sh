@@ -1831,8 +1831,9 @@ type Semantics struct {
 
 	// PosixModeSharpensAPrefixRefusal moves both answers above while the
 	// shell is in POSIX mode: a refusal in front of a **special builtin**
-	// ends the script, and one in front of anything else gives up the rest of
-	// the command list instead of running the command.
+	// ends the script, and one in front of anything else — `command :`
+	// included — gives up the rest of the command list instead of running the
+	// command.
 	//
 	// The second half is the fourth outcome PrefixRefusalFatalityPolicy's
 	// doc comment records as having no value: a shell that reports, drops the
@@ -1856,8 +1857,33 @@ type Semantics struct {
 	// mode the same lines print the complaint, run the command and report 0,
 	// which is what PrefixRefusalCostsTheCommand records.
 	//
-	// Asked only in POSIX mode and only once a name in the prefix is really
-	// frozen, so it is two questions deep off the common path. Answered by
+	// **A subscripted word the dialect refuses is the same refusal**, and the
+	// mode moves it the same way (#7343). Measured 2026-11-02 on bash 5.3.20
+	// under `env -i PATH=/usr/bin:/bin`, `set -o posix` first and `echo
+	// next=$?` on the line after it in the file:
+	//
+	//	                       -c          script file
+	//	a[1]=x :               ends, 127   ends, 1
+	//	a[1]=x export y=1      ends, 127   ends, 1
+	//	a[1]=x eval :          ends, 127   ends, 1
+	//	a[1]=x true            ends, 1     next=1
+	//	a[1]=x command :       ends, 1     next=1
+	//	a[1]=x /usr/bin/true   ends, 1     next=1
+	//	f(){ :; }; a[1]=x f    ends, 1     next=1
+	//
+	// So the key is the **special builtin that runs**: `command` in front of
+	// `:` takes the specialness away and gives up the line instead, and it
+	// does so for a frozen name too — `r=2 command :` is `next=1`. A command
+	// string's line is the whole string, which is why the second half reads
+	// as the shell ending at 1 there. The 127 is the command string's number
+	// for a fatal failure, with the same boundaries — a function keeps it, a
+	// subshell does not; see Diagnostics.ExpansionFailureStatusFromCommandString
+	// — and a frozen name's `r=2 :` takes it as well. The walk stops at the
+	// refused word as it does at a frozen one: nothing behind it is expanded,
+	// refused or traced, and no redirection is opened.
+	//
+	// Asked only in POSIX mode and only once a word in the prefix is really
+	// refused, so it is two questions deep off the common path. Answered by
 	// the one dialect measured in the mode: zsh, ksh93, dash and BusyBox ash
 	// reach it only under the `sh` name and what they do there is
 	// unmeasured, so the preset declines the move rather than asserting the
@@ -2846,6 +2872,38 @@ type Semantics struct {
 	// vector did before the axis existed, and a vector with no references in
 	// it never reaches the question.
 	RefusedReferenceAimIsFatal Answer
+
+	// PosixModeSharpensARefusedReferenceAim ends the shell, while it is in
+	// POSIX mode, when the refused aim was written as an **assignment of its
+	// own** — `typeset -n m; m=1`, or `ref[0]=v` through a reference with
+	// nothing to point at. The `for` and the declaration still carry on: this
+	// is POSIX's rule for a failed assignment statement, which bash keeps in
+	// the mode, and not a rule about references (#7343).
+	//
+	// Measured 2026-11-02 on bash 5.3.20 under `env -i PATH=/usr/bin:/bin`
+	// with a scratch HOME, `set -o posix` in front of each line and `echo
+	// next` on the line after it in the file:
+	//
+	//	                                        -c          script file
+	//	typeset -n m; m=1; echo st=$?           ends, 127   ends, 1
+	//	typeset -n ref; ref[0]=foo; echo st=$?  ends, 127   ends, 1
+	//	typeset -n m; f(){ m=1; }; f            ends, 127   —
+	//	typeset -n m; eval m=1                  ends, 127   —
+	//	typeset -n m; (m=1); echo st=$?         st=1        —
+	//	x=0; typeset -n m=x; for m in 1; …      st=1, next  st=1, next
+	//	typeset -n m; typeset m=1               st=1, next  st=1, next
+	//
+	// Without the mode the first two give up their line and the next one
+	// runs. The 127 is the command string's number for a fatal failure, with
+	// the same boundaries — a function keeps it and a subshell does not; see
+	// Diagnostics.ExpansionFailureStatusFromCommandString.
+	//
+	// Asked only in POSIX mode, only for the bare form, and only where
+	// RefusedReferenceAimIsFatal has not already ended the shell. The
+	// preset's No declines the move for the reason
+	// PosixModeSharpensAPrefixRefusal's does: bash is the one column with
+	// references that was measured in the mode.
+	PosixModeSharpensARefusedReferenceAim Answer
 
 	// DeclarationThroughAReferenceNamesTheOperand speaks a refusal a
 	// declaration reaches **through a name reference** under the name the
@@ -37831,6 +37889,8 @@ func PosixSemantics() Semantics {
 		// BusyBox ash reach the mode only as `sh`, where they were not
 		// measured.
 		PosixModeSharpensAPrefixRefusal: No,
+		// POSIX has no name references, and the same holds for the mode.
+		PosixModeSharpensARefusedReferenceAim: No,
 		// XCU makes an expansion error fatal to a non-interactive shell, so
 		// the standard's preset does not survive one.
 		FailedExpansionAbandonsTheLine:         No,

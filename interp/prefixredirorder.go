@@ -213,6 +213,12 @@ func (r *Runner) walkThePrefixBeforeTheRedirections(
 	if r.unspecified {
 		return false
 	}
+	// The command the prefix stands in front of, which says what a refusal
+	// costs in POSIX mode. Read only where there is a word to refuse.
+	var p prefixCommand
+	if refuses {
+		p = r.prefixCommandOf(argv)
+	}
 	d := r.diag()
 	// What this walk has expanded so far, visible to the entries behind it
 	// and put back before the route below makes the stores for real. The
@@ -235,9 +241,11 @@ func (r *Runner) walkThePrefixBeforeTheRedirections(
 		}
 		if r.subscriptedPrefixDropped(a) {
 			// The refusal, said where the word stands rather than in a pass
-			// of its own, and the word's own value is not expanded.
-			if refuses {
-				r.refuseOneSubscriptedPrefix(a)
+			// of its own, and the word's own value is not expanded. Where it
+			// stops the command nothing behind it is walked, and the
+			// caller's give-up finds the command already unwound.
+			if refuses && r.refuseOneSubscriptedPrefix(a, p) {
+				break
 			}
 			continue
 		}

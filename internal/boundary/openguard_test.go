@@ -199,6 +199,11 @@ var exempt = map[string]string{
 		"os.ReadDir calls are the no-gate and watch-only forms.",
 	"interp.openGatedFile": "verifyopen.go: the open the gate has just agreed to, verified against " +
 		"the object it reached before the descriptor is returned. The seam itself.",
+	"interp.openRegularRaised": "dupfd_unix.go's os.Stat of the path a redirection is about to " +
+		"open, asked only to choose whether the open is made inside the lock a substitution's park " +
+		"waits on (#7335). The redirection has already passed ActionOpen on this very path, and the " +
+		"stat is made only where no Gate is set; what it answers decides which of two ways the same " +
+		"open is made, and nothing read here reaches a script.",
 	"interp.readFileGatedBytes": "verifyopen.go: the same, for the read-whole-file form. The\n\touter openGated and readFileGated are the errno-recording wrappers around\n\tthese two and reach nothing themselves.",
 	// The one read here that is not about a path a script named. The locale
 	// database is the host's, at a fixed root, and the only part a variable

@@ -106,6 +106,14 @@ func stopsOfAShell(t *testing.T, src string) (syscall.Signal, string) {
 	// most needs the answer.
 	if w.ws&0x7f == 0x7f {
 		stoppedBy = syscall.Signal((w.ws >> 8) & 0xff)
+		// Stopped in the kill, as a shell with one thread is: nothing after
+		// it has run yet. A stop that landed late, on some other thread of
+		// this Go program, let the echo through first (#7290).
+		if early, err := os.ReadFile(outFile.Name()); err != nil {
+			t.Fatal(err)
+		} else if len(early) > 0 {
+			t.Errorf("%s: wrote %q before it stopped; the stop is taken in the kill", src, early)
+		}
 		if err := syscall.Kill(proc.Pid, syscall.SIGCONT); err != nil {
 			t.Fatalf("continue: %v", err)
 		}

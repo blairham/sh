@@ -3,10 +3,7 @@
 
 package driver
 
-import (
-	"os"
-	"syscall"
-)
+import "syscall"
 
 // stopThisProcess stops the shell with sig until something continues it, which
 // is what `suspend` asks for and what `kill -TSTP $$` asks for.
@@ -31,7 +28,8 @@ import (
 //
 // It returns when a SIGCONT arrives, or at once where the kernel declined the
 // stop, which is why `suspend`'s success is reported after this rather than
-// before it.
+// before it. That promise is raiseStop's to keep, and on Linux it is not kept
+// by a signal aimed at the process: see stop_linux.go.
 func stopThisProcess(sig syscall.Signal) error {
-	return syscall.Kill(os.Getpid(), sig)
+	return raiseStop(sig)
 }

@@ -3857,6 +3857,36 @@ there is no axis. Before #7233 the copy's signal reached the body's
 placeholder, no handler ran, and a pipeline's next external, started into the
 placeholder's group as it died, failed with `operation not permitted`.
 
+**A group kill at that number finds no group, unless the body was forked under
+the monitor.** A shell that forks puts a child in a process group of its own
+only for job control, so a subshell, a pipeline element, a command
+substitution, a background job or a `<(…)` forked with the monitor off leads
+nothing, and
+`kill -- -$BASHPID` names a group that is not there:
+
+    ( p=$BASHPID; { kill -- -$p; echo k=$?; } | /bin/cat; /bin/echo after )
+    ( p=$BASHPID; kill -0 -$p; echo k=$? )
+
+    bash 5.3.20, zsh 5.9.2 ($sysparams[pid])  → kill: no such process, k=1, after;  k=1
+
+The same from the body itself, from a nested `( … )`, with a named signal, and
+from inside `$( … )`, `{ … } &` and `<(…)`. The monitor that decides is the one the body was forked
+under, not the one in force at the `kill`: `( set -m; kill -0 -- -$BASHPID )`
+is still refused in bash, and `set -m; ( set +m; kill -0 -- -$BASHPID )`
+succeeds. Forked under the monitor — an interactive zsh on a terminal, `zsh -m`
+on one, bash after `set -m` — a `( … )` is a group, and so is a `<(…)` in zsh.
+Measured 2026-11-01 under `-c` and on a pseudo-terminal; ksh93u+ and dash have
+no parameter that names the body and cannot reach the shape.
+
+Here the number is a group whatever the monitor, led by a placeholder, so the
+kill succeeded and the placeholder died: the pipeline's `/bin/cat`, checked
+into the group a moment before, failed with `operation not permitted` and took
+`k=0` with it (#7238). So `kill` refuses a group kill aimed at the group of this
+body, or of one it was copied from, when that body was forked with the monitor
+off: ESRCH, nothing sent, the dialect's own "no such process" wording and
+status. Under the monitor nothing changes. Not an axis, since the references
+agree.
+
 ## The other fatal signal, which is fatal without being a death
 
     kill -HUP $$; echo after

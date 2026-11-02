@@ -280,3 +280,63 @@ func (r *Runner) settleCopiesSignals() bool {
 	}
 	return false
 }
+
+// A **group** kill aimed at that same number — `kill -- -$BASHPID`, `kill
+// -TERM -$sysparams[pid]`, `kill -0 -$p`, from the body itself or from a copy
+// of it — is refused as a group that is not there, where the body was forked
+// with the monitor off.
+//
+// The number is a group here because a placeholder leads one (procanchor.go).
+// A shell that forks puts a child in a group of its own only for job control,
+// so in the references the body leads nothing and there is no group of that
+// number to signal. Measured 2026-11-01 under `-c` against bash 5.3.20
+// (`$BASHPID`) and zsh 5.9.2 (`$sysparams[pid]` after `zmodload
+// zsh/system`), which agree in every row they can both reach; ksh93u+ 2012 and
+// dash have no such parameter and cannot reach the shape:
+//
+//	( p=<pid>; { kill -- -$p; echo k=$?; } | /bin/cat; /bin/echo after )
+//	        no such process, k=1, after
+//	        here, before: `/bin/cat: … operation not permitted`, after —
+//	        k=0 went to the cat that never started
+//	( p=<pid>; kill -- -$p; echo k=$? )           no such process, k=1
+//	        here, before: k=0
+//	( p=<pid>; (kill -- -$p; echo k=$?) )         the same
+//	… kill -TERM -$p, kill -s USR1 -- -$p, kill -0 -$p   the same
+//	cat <( p=<pid>; kill -0 -$p; echo k=$? )      the same
+//	( set -m; p=$BASHPID; kill -0 -- -$p )        the same — bash
+//	set -m; ( set +m; p=$BASHPID; kill -0 -- -$p )        k=0 — bash
+//
+// The last pair is the noun. Whether the group is there is settled when the
+// body is forked, by the monitor of the shell that forks it, and not by the
+// monitor at the `kill`: turned on inside the body it makes no group, and
+// turned off inside a body forked under it leaves the group standing. So the
+// anchor records the monitor at the fork (procAnchor.monitored), and a body
+// forked under the monitor keeps its group and every answer it had — in
+// interactive zsh, on a terminal, both `( … )` and `<(…)` answer `kill -0
+// -$sysparams[pid]` with 0, which is the shape the scripts procanchor.go was
+// written for spend the number on. What bash does with that group under `set
+// -m` is #7246's and not this rule's.
+//
+// The refusal is ESRCH with nothing sent and the gate not asked, for the
+// reason aimsAJobSpecAtItsGroup gives the same answer: the target is absent by
+// construction, and a kill(2) made to find that out would reach the
+// placeholder. Signal 0 included, since `kill -0 -$p` is the same refusal in
+// both references. Not a dialect split, so nothing asks a Semantics axis. The
+// group is this body's or one it was copied from, the same walk
+// bodyAroundNamed makes, and whether that body is still running does not
+// matter: it never had a group to signal.
+
+// aimedAtAGroupNoForkLeads reports that pid names, as a process group, the
+// group this body or one it was copied from leads here and would not lead in
+// a shell that forks: a body forked with the monitor off.
+func (r *Runner) aimedAtAGroupNoForkLeads(pid int) bool {
+	if pid >= allProcesses {
+		return false
+	}
+	for a := r.bodyAnchor; a != nil; a = a.outer {
+		if a.leads(-pid) {
+			return !a.monitored
+		}
+	}
+	return false
+}

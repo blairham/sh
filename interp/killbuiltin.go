@@ -1173,6 +1173,14 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 	// as for the shell, so they go to the kernel — and where the group is the
 	// shell's own, the shell's copy is answered at the send. See
 	// signalTheShellsOwnGroup (#7043).
+	//
+	// Except a group only this shell has: the one a placeholder leads for a
+	// body forked with the monitor off, which leads nothing in a shell that
+	// forks. Before the probe, because `kill -0 -N` is the same refusal
+	// (#7238). See aimedAtAGroupNoForkLeads.
+	if r.aimedAtAGroupNoForkLeads(pid) {
+		return syscall.ESRCH
+	}
 	if sig == 0 {
 		return r.killProcess(pid, sig)
 	}

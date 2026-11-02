@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -60,6 +61,21 @@ func TestAPipelineElementThatKillsTheBodysPidRunsTheBodysTrap(t *testing.T) {
 	got := runZshAnchored(t, `( trap 'print -r -- U' USR1; p=$sysparams[pid]
   { kill -USR1 $p } | /bin/cat; print -r -- after )`)
 	if want := "U\nafter\n"; got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
+// A **group** kill at the body's number from a pipeline element is refused as
+// no such process, and the element beside it starts (#7238). In zsh the
+// subshell is a fork that leads no group without the monitor, so the group is
+// not there. Measured 2026-11-01 under `-c` in zsh 5.9.2: `kill -N failed: no
+// such process`, `k=1`, `after`. Here the kill reached the placeholder, and the
+// `/bin/cat` checked into its group failed with `operation not permitted`.
+func TestAPipelineElementsGroupKillAtTheBodysPidIsNoSuchProcess(t *testing.T) {
+	got := runZshAnchored(t, `( p=$sysparams[pid]; { kill -- -$p; print -r -- k=$? } | /bin/cat
+  /bin/echo after )`)
+	got = regexp.MustCompile(`kill -[0-9]+ failed`).ReplaceAllString(got, "kill -N failed")
+	if want := "k=1\nafter\nzsh:kill:1: kill -N failed: no such process\n"; got != want {
 		t.Errorf("output = %q, want %q", got, want)
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"os/exec"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -137,6 +138,58 @@ func TestABodysOwnSignalArrivingAgainRunsItsHandlerOnce(t *testing.T) {
 		t.Errorf("output = %q, want %q", got, want)
 	}
 }
+
+// A **group** kill at `$BASHPID` is refused as no such process, from wherever
+// in the subshell it is sent, and nothing is signaled (#7238).
+//
+// The number is a group here because a placeholder leads one. In bash the
+// subshell is a fork that leads no group unless the monitor was on when it was
+// forked, so there is nothing of that number to signal. Measured 2026-11-01
+// under `-c` on bash 5.3.20: every row is `kill: (-N) - No such process` and 1,
+// and zsh 5.9.2 answers the same with `$sysparams[pid]`. The pipeline row is
+// the issue's own: the kill reached the placeholder, and the `/bin/cat` beside
+// it, checked into the group a moment before it went, failed with `fork/exec
+// /bin/cat: operation not permitted` and took `k=0` with it.
+func TestAGroupKillAtBashPidIsNoSuchProcess(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"from a pipeline element",
+			`( p=$BASHPID; { kill -- -$p; echo k=$?; } | /bin/cat; /bin/echo after )`, "k=1\nafter\n",
+		},
+		{"from the body itself", `( p=$BASHPID; kill -- -$p; echo k=$?; /bin/echo after )`, "k=1\nafter\n"},
+		{"from a nested subshell", `( p=$BASHPID; (kill -- -$p; echo k=$?); /bin/echo after )`, "k=1\nafter\n"},
+		{"with a named signal", `( p=$BASHPID; kill -TERM -$p; echo k=$? )`, "k=1\n"},
+		{"as the existence probe", `( p=$BASHPID; kill -0 -$p; echo k=$? )`, "k=1\n"},
+		// The monitor that decides is the one the subshell was forked
+		// under: turned on inside it, it makes no group. The pair to this
+		// row is the test below.
+		{"with the monitor turned on inside", `( set -m; p=$BASHPID; kill -0 -- -$p; echo k=$? )`, "k=1\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := runBashAnchored(t, tc.src+"\necho \"outer $?\"")
+			got = groupOperand.ReplaceAllString(got, "(-N)")
+			if want := tc.want + "outer 0\nbash: line 1: kill: (-N) - No such process\n"; got != want {
+				t.Errorf("output = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// And the half that stays: a subshell forked while the monitor was on is a
+// group of its own in bash, so the same probe finds it — even once the
+// subshell has turned the monitor off. Measured 2026-11-01 on bash 5.3.20,
+// `k=0`. With the row above, this is what says the rule is keyed on the
+// monitor at the fork and not on the monitor at the `kill`.
+func TestAGroupKillAtBashPidReachesASubshellForkedUnderTheMonitor(t *testing.T) {
+	got := runBashAnchored(t, `set -m; ( set +m; p=$BASHPID; kill -0 -- -$p; echo k=$? )`)
+	if want := "k=0\n"; got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
+// groupOperand is the negative pid bash quotes back in a refusal, which is a
+// different number every run.
+var groupOperand = regexp.MustCompile(`\(-[0-9]+\)`)
 
 // runBashAnchored runs a script with a placeholder program supplied, which is
 // what a shell binary does for itself — see driver/procanchor.go. Without one

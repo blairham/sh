@@ -59,6 +59,13 @@ import (
 // deviation is recorded where the parameter is answered rather than hidden
 // here. See dialect/zsh's subshellPid.
 //
+// The teardown is a real group kill only where the references have a group to
+// kill, which is a body forked with the monitor on — an interactive shell, the
+// one those four scripts run in. Forked with it off, both references lead no
+// group from the body and refuse `kill -- -$pgid` as no such process, and so
+// does this shell rather than killing the placeholder (#7238). See
+// aimedAtAGroupNoForkLeads.
+//
 // # Lazily, and only for a body that asks
 //
 // The anchor is started at the first read and never otherwise. A body that
@@ -136,6 +143,13 @@ type procAnchor struct {
 	// taking the lock before every command it runs.
 	arrivals []bodyArrival
 	posted   atomic.Bool
+
+	// monitored records that the body was forked while the monitor was on,
+	// which is when a real shell can have made it a group of its own.
+	// Without it the group is this shell's arrangement and no reference's,
+	// and a script aiming a group kill at it is refused. See
+	// aimedAtAGroupNoForkLeads.
+	monitored bool
 }
 
 // newProcAnchor makes the anchor for one substitution body, unstarted.
@@ -271,6 +285,10 @@ func (c *Runner) anchorForkedBody() func() {
 	}
 	a.outer = c.bodyAnchor
 	a.body = c.process
+	// The clone has not run anything yet, so its monitor is still the one
+	// of the shell that forked it — the one that decided whether a real
+	// shell's fork would have led a group.
+	a.monitored = c.monitor
 	c.bodyAnchor = a
 	return func() {
 		a.stop()

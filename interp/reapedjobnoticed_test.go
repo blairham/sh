@@ -96,33 +96,40 @@ func TestAProgramThatExitedUnreapedIsNoticedBeforeTheTableIsRead(t *testing.T) {
 	poll := `/bin/sh -c 'exit 3' & p=$!
 /bin/sh -c 'i=0; until ` + zombieTest + ` || [ $i -ge 1000 ]; do /bin/sleep 0.01; i=$((i+1)); done' poll $p
 `
-	for _, tc := range []struct{ then, want string }{
+	// Held for the whole test and let go once both rows have finished: the
+	// hook is the package's, so the test stays serial, and the rows run side
+	// by side, each a Runner and a job of its own, since their time is the
+	// window (#7290).
+	holdTheWindow(t, &beforeAJobsProgramIsWaitedFor, 2*time.Second)
+	for _, tc := range []struct{ name, then, want string }{
 		// The table, read while the program is a zombie nobody has reaped.
-		{"jobs\n", "[1]+  Done                    /bin/sh -c 'exit 3'\n"},
+		{"the table", "jobs\n", "[1]+  Done                    /bin/sh -c 'exit 3'\n"},
 		// And the status, which the peek must leave for the goroutine's own
 		// wait to collect: a peek that reaped would leave that wait with no
 		// child, and the 3 would be lost.
-		{`wait %1; echo "st=$?"` + "\n", "st=3\n"},
+		{"the status", `wait %1; echo "st=$?"` + "\n", "st=3\n"},
 	} {
-		holdTheWindow(t, &beforeAJobsProgramIsWaitedFor, 2*time.Second)
-		f, err := syntax.Parse(poll+tc.then+"echo end", syntax.Core())
-		if err != nil {
-			t.Fatal(err)
-		}
-		sem := PosixSemantics()
-		sem.JobsListFinishedJobs = Yes
-		sem.JobsShowBackgroundCommand = Yes
-		out := &strings.Builder{}
-		r := newTestRunner(t, &Runner{
-			Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
-			Stdout: out, Stderr: out, Env: []string{"PATH=/usr/bin:/bin"},
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			f, err := syntax.Parse(poll+tc.then+"echo end", syntax.Core())
+			if err != nil {
+				t.Fatal(err)
+			}
+			sem := PosixSemantics()
+			sem.JobsListFinishedJobs = Yes
+			sem.JobsShowBackgroundCommand = Yes
+			out := &strings.Builder{}
+			r := newTestRunner(t, &Runner{
+				Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
+				Stdout: out, Stderr: out, Env: []string{"PATH=/usr/bin:/bin"},
+			})
+			if _, err := r.Run(context.Background(), f); err != nil {
+				t.Fatal(err)
+			}
+			if got, want := out.String(), tc.want+"end\n"; got != want {
+				t.Errorf("then %q: got %q, want %q", tc.then, got, want)
+			}
 		})
-		if _, err := r.Run(context.Background(), f); err != nil {
-			t.Fatal(err)
-		}
-		if got, want := out.String(), tc.want+"end\n"; got != want {
-			t.Errorf("then %q: got %q, want %q", tc.then, got, want)
-		}
 	}
 }
 

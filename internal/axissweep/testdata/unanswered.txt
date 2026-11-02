@@ -116,6 +116,7 @@ ash   DeclarationArrayOperandsAreStoredInTurn
 ash   DeclarationListingFilter
 ash   DeclarationOperandSplitsAfterTheSubscript
 ash   DeclarationRereadsAParenthesizedValue
+ash   DeclarationThroughAReferenceMakesTheTargetLocal
 ash   DeclarationThroughAReferenceNamesTheOperand
 ash   DeclareGlobalReachesPastALocal
 ash   DeclareHideInScopeLetter
@@ -515,6 +516,7 @@ dash  DeclarationArrayOperandsAreStoredInTurn
 dash  DeclarationListingFilter
 dash  DeclarationOperandSplitsAfterTheSubscript
 dash  DeclarationRereadsAParenthesizedValue
+dash  DeclarationThroughAReferenceMakesTheTargetLocal
 dash  DeclarationThroughAReferenceNamesTheOperand
 dash  DeclareGlobalReachesPastALocal
 dash  DeclareHideInScopeLetter
@@ -874,6 +876,7 @@ zsh   BraceMakesAProducedStarOrBracketText
 zsh   ContainerWriteThroughAReferenceNamesTheReference
 zsh   DeclarationMayShadowAnEnclosingScopesReadonly
 zsh   DeclarationRereadsAParenthesizedValue
+zsh   DeclarationThroughAReferenceMakesTheTargetLocal
 zsh   DeclarationThroughAReferenceNamesTheOperand
 zsh   ErrtraceReachesSubshells
 zsh   ExitTrapFiresWhereTheScriptStopped

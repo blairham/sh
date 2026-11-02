@@ -43,6 +43,10 @@ func namerefAimSemantics() Semantics {
 	// looked up again at every read — the other answer is its own subject,
 	// in interp/namerefsettled_test.go.
 	sem.NamerefTargetResolvedWhenAimed = No
+	// A declaration through a function's own reference makes the target a
+	// local of the call, bash's answer and the one interp/namerefredeclared_test.go
+	// was measured with. The other is ksh93's (#7352).
+	sem.DeclarationThroughAReferenceMakesTheTargetLocal = Yes
 	// The letters `local` takes, and the two axes a case walks past on its
 	// way to this one: `${!r}` naming the reference's target rather than
 	// expanding it twice, and a valueless declaration bringing the name into

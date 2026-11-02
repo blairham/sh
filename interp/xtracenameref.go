@@ -65,6 +65,10 @@ import (
 //	typeset -n m=y; nameref m=y   `+ m=y`, `+ typeset -n m`
 //	function f { typeset m=7; }   `+ m=7`, `+ typeset m`
 //
+// A reference the function made itself is not replaced, so the operand goes
+// through it there: `function f { typeset -n m=x; typeset m=3; }` is `+ x=3`
+// and `+ typeset m`, and leaves the global `x` holding 3 (#7352).
+//
 // bash 5.3.20 writes `declare m=3` and `export m=4` through `declare -n m=x`
 // as it always has, on the command's own line. See
 // Runner.operandStoresThroughTheReference.
@@ -106,7 +110,7 @@ func (r *Runner) nameTracedThroughTheReference(name string, whole bool, operandO
 	if cycle || !aimed || target == name {
 		return name
 	}
-	if operandOf != nil && !r.operandStoresThroughTheReference(operandOf) {
+	if operandOf != nil && !r.operandStoresThroughTheReference(name, operandOf) {
 		return name
 	}
 	base, sub, ok := operandSubscriptOf(target)
@@ -121,13 +125,13 @@ func (r *Runner) nameTracedThroughTheReference(name string, whole bool, operandO
 }
 
 // operandStoresThroughTheReference reports whether the declaration utility
-// argv names stores an operand through the reference its name holds. It does
-// not where it carries the reference letter under a minus — `typeset -n
-// m=y`, and `nameref`, which is that — since the operand then re-aims the
-// reference, nor where it makes the name a local of the running function.
-// ksh93u+ writes `typeset -n +n m=8` as `+ m=8` too, so any minus `n` among
-// the letters counts.
-func (r *Runner) operandStoresThroughTheReference(argv []string) bool {
+// argv names stores an operand through the reference name holds. It does not
+// where it carries the reference letter under a minus — `typeset -n m=y`, and
+// `nameref`, which is that — since the operand then re-aims the reference, nor
+// where it gives name a fresh binding of the running function's own, which
+// drops the reference. ksh93u+ writes `typeset -n +n m=8` as `+ m=8` too, so
+// any minus `n` among the letters counts.
+func (r *Runner) operandStoresThroughTheReference(name string, argv []string) bool {
 	for _, w := range argv[min(traceDeclarationUtilityWord(argv)+1, len(argv)):] {
 		if w == "--" || len(w) < 2 || (w[0] != '-' && w[0] != '+') {
 			break
@@ -136,5 +140,5 @@ func (r *Runner) operandStoresThroughTheReference(argv []string) bool {
 			return false
 		}
 	}
-	return !r.operandsAreLocalsOfTheCall(argv)
+	return !r.operandMakesAFreshLocal(name, argv)
 }

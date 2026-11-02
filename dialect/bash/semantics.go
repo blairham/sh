@@ -1153,6 +1153,11 @@ func Semantics() interp.Semantics {
 	// The element and array writes beside it, measured 2026-10-16 (#6763): see
 	// interp.Semantics.ContainerWriteThroughAReferenceNamesTheReference.
 	s.ContainerWriteThroughAReferenceNamesTheReference = interp.Yes
+	// And a function's declaration through its own reference makes the
+	// target a local of the call: measured 2026-11-02 on 5.3.20, `x=0; f() {
+	// declare -n m=x; declare m=3; }; f` leaves `x=0` (#4088, #7352). See
+	// interp.Semantics.DeclarationThroughAReferenceMakesTheTargetLocal.
+	s.DeclarationThroughAReferenceMakesTheTargetLocal = interp.Yes
 	// Measured 2026-10-16 (#6781): see
 	// interp.Semantics.DeclarationOperandSplitsAfterTheSubscript.
 	s.DeclarationOperandSplitsAfterTheSubscript = interp.Yes

@@ -1892,6 +1892,13 @@ func (r *Runner) declarationThroughAReferenceShadowsTheTarget(
 	if len(r.scopes) == 0 {
 		return fresh, redeclared
 	}
+	if !r.ask(r.sem().DeclarationThroughAReferenceMakesTheTargetLocal,
+		"a declaration through a function's own reference making the target local") {
+		// ksh93 writes the target the reference reaches, so the line makes
+		// no binding and is writing over whatever is standing there — the
+		// answer the no-scope case gives (#7352).
+		return false, true
+	}
 	// Both answers are the target's, because the target is the name being
 	// declared: the cell that matters is its, and so is whether the binding
 	// is one this declaration makes. See Runner.shadow for why the two are

@@ -275,7 +275,14 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// group it shares with the shell killed both at once, and a shell
 		// that is dead says nothing about its child. See
 		// signalTheGroupFromASubshell.
-		if sub.diedOfItsOwnSignal() && !sub.diedAsAJob && !r.dyingOfASubshellsSignal() {
+		//
+		// And nor one that this body is dying of. The same signal reached
+		// every body around the sender, which is a member of the group too,
+		// and a real one died of it while it waited — so what it left is
+		// settled here, before anything else of this body's runs, rather
+		// than at its next command.
+		dying := r.settleCopiesSignals()
+		if sub.diedOfItsOwnSignal() && !sub.diedAsAJob && !r.dyingOfASubshellsSignal() && !dying {
 			// The group the body leads is its process id as far as anything
 			// that asked is concerned, and asking is how the script got the
 			// number it signaled — so it is already started and this starts

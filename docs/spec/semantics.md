@@ -2274,6 +2274,34 @@ answered at the write is. An ignored signal, and a fatal or stopping one
 nobody trapped, act on the shell as the kernel delivers them, which is
 what every reference does and agreed already.
 
+A subshell that sends the group a signal is a member of it, and so is
+every body around it — the parentheses, command substitutions and
+pipeline elements a real shell forked on the way down. Each has the
+shell's handled signals back at their defaults, so each one that does
+not trap the signal itself dies of it, and the shell runs its handler
+once before its next command (#7165, #7245). Measured 2026-11-01, each
+shell in a process group of its own, against bash 5.3.20, bash 3.2.57,
+ksh93u+ 2012-08-01, zsh 5.9.2 and dash:
+
+    trap 'echo T' USR1; ( (kill -USR1 0; echo in2); echo in1 ); echo out=$?
+                                         T, out=158 in all five (ksh93 286)
+    …with a third level around it        the same
+    trap 'echo T' USR1; ( trap 'echo S' USR1; (kill -USR1 0; echo in2);
+      echo in1 ); echo out=$?            S, in1, T, out=0; ksh93 crashes
+    trap 'echo T' USR1; : | { (kill -USR1 0; echo in2); echo in1; }
+                                         T, out=158 where the last element
+                                         is forked; T, in1, out=0 where it
+                                         is the shell (zsh, ksh93)
+    ( (kill -USR1 0; echo in2); echo in1 ); echo out=$?
+                                         nothing: the whole group is killed
+
+Not a dialect split. A body that dies of it says nothing about the
+child that died of it with it: bash 5.3's one notice is the shell's,
+for the outermost parentheses, and bare because the shell traps the
+signal. ksh93 runs a `( … )` in its own process, so there the
+subshell's copy is the shell's, and the rule that ends it at the shell's
+answer ends every unforked subshell around it as well.
+
 The lesson is about the instrument: a corpus records what a shell does,
 and it cannot record a *sometimes*. Anything measured has to be
 deterministic first, or the measurement is of the machine rather than of

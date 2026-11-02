@@ -210,7 +210,7 @@ func (r *Runner) selfSignaledBody(key string) {
 //	        after            here, before: cat not permitted, after
 //
 // So every row is the body's own `kill $BASHPID`, answered once the copy has
-// finished: the copy posts the signal on the body's anchor, and the body
+// finished: the copy posts the signal on the body's process, and the body
 // settles it through signalThisBody at its next moment between commands —
 // the same switch, on the goroutine that owns the table it reads. Not a
 // dialect split, so nothing asks a Semantics axis.
@@ -224,28 +224,45 @@ type bodyArrival struct {
 	sig  syscall.Signal
 }
 
+// bodiesAround yields each body around this runner that is still running,
+// innermost first: the body this one was copied from, then the one that was
+// copied from, out to the shell, which is not one of them. A body that has
+// ended is passed over and the walk goes on past it, since a job a body
+// backgrounded outlives the body and not necessarily the bodies around it.
+//
+// The one walk outward, for both of the questions asked of it: which body a
+// number names (bodyAroundNamed), and which bodies a signal to the group they
+// share reaches (signalTheGroupFromASubshell).
+func (r *Runner) bodiesAround(yield func(*Process) bool) {
+	if r.process == nil {
+		return
+	}
+	for p := r.process.outer; p != nil; p = p.outer {
+		if !p.ended() && !yield(p) {
+			return
+		}
+	}
+}
+
 // bodyAroundNamed is the running body around this runner whose group pid is,
 // if there is one: the body this one was copied from, or one further out.
-func (r *Runner) bodyAroundNamed(pid int) *procAnchor {
-	if r.bodyAnchor == nil {
-		return nil
-	}
-	for a := r.bodyAnchor.outer; a != nil; a = a.outer {
-		if a.leads(pid) && !a.body.ended() {
-			return a
+func (r *Runner) bodyAroundNamed(pid int) *Process {
+	for p := range r.bodiesAround {
+		if p.anchor.leads(pid) {
+			return p
 		}
 	}
 	return nil
 }
 
-// signalTheBodyAround leaves a signal for the body around this runner that
-// it names. Locked, because the copy and the body are different goroutines,
-// and a job the body backgrounded runs beside it rather than before it.
-func (r *Runner) signalTheBodyAround(a *procAnchor, name string, sig syscall.Signal) {
-	a.mu.Lock()
-	a.arrivals = append(a.arrivals, bodyArrival{name: name, sig: sig})
-	a.posted.Store(true)
-	a.mu.Unlock()
+// signalTheBodyAround leaves a signal for a body around this runner. Locked,
+// because the copy and the body are different goroutines, and a job the body
+// backgrounded runs beside it rather than before it.
+func (r *Runner) signalTheBodyAround(p *Process, name string, sig syscall.Signal) {
+	p.mu.Lock()
+	p.arrivals = append(p.arrivals, bodyArrival{name: name, sig: sig})
+	p.posted.Store(true)
+	p.mu.Unlock()
 	s := r.sigs()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -254,7 +271,7 @@ func (r *Runner) signalTheBodyAround(a *procAnchor, name string, sig syscall.Sig
 
 // copiesSignaled reports that a copy of this body has left it something.
 func (r *Runner) copiesSignaled() bool {
-	return r.bodyAnchor != nil && r.bodyAnchor.posted.Load()
+	return r.process != nil && r.process.posted.Load()
 }
 
 // settleCopiesSignals answers what copies of this body aimed at it, as its
@@ -263,12 +280,12 @@ func (r *Runner) settleCopiesSignals() bool {
 	if !r.copiesSignaled() {
 		return false
 	}
-	a := r.bodyAnchor
-	a.mu.Lock()
-	got := a.arrivals
-	a.arrivals = nil
-	a.posted.Store(false)
-	a.mu.Unlock()
+	p := r.process
+	p.mu.Lock()
+	got := p.arrivals
+	p.arrivals = nil
+	p.posted.Store(false)
+	p.mu.Unlock()
 	for _, s := range got {
 		was := r.ctl
 		_ = r.signalThisBody(s.name, s.sig)
@@ -322,9 +339,9 @@ func (r *Runner) settleCopiesSignals() bool {
 // construction, and a kill(2) made to find that out would reach the
 // placeholder. Signal 0 included, since `kill -0 -$p` is the same refusal in
 // both references. Not a dialect split, so nothing asks a Semantics axis. The
-// group is this body's or one it was copied from, the same walk
-// bodyAroundNamed makes, and whether that body is still running does not
-// matter: it never had a group to signal.
+// group is this body's or one it was copied from, found out through the
+// anchors, and whether that body is still running does not matter: it never
+// had a group to signal.
 
 // aimedAtAGroupNoForkLeads reports that pid names, as a process group, the
 // group this body or one it was copied from leads here and would not lead in

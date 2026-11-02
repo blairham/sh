@@ -5068,6 +5068,10 @@ type Runner struct {
 	// leaves a signal it aimed at the job, for the body's own traps. Nil
 	// everywhere else, a subshell of the body included. See bodyinbox.go.
 	inbox *bodyInbox
+	// arrivalsHeldPastTheNextMoment says what arrived while a `&` waited for
+	// its job's pid waits past the next moment between commands. See
+	// waitinabody.go.
+	arrivalsHeldPastTheNextMoment bool
 	// diedAsAJob says the signal this runner died of was aimed at it as a
 	// background job, which the job's own notice reports rather than the
 	// parentheses that hold it. See bodyinbox.go.

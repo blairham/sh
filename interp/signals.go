@@ -1338,16 +1338,19 @@ func (r *Runner) arrivalMark() int {
 // three seconds, every shell measured came back inside the signal's own 200ms
 // rather than at the end of the job.
 //
-// A subshell is left to block. Its traps are its own table and what is in the
-// shared state belongs to the shell at the top, so a subshell returning from
-// one would be reacting to a signal it is never going to handle.
+// A subshell does not ask the shared state. Its traps are its own table and
+// what is in the shared state belongs to the shell at the top, so a subshell
+// returning from one would be reacting to a signal it is never going to
+// handle. It asks its own lists instead — what was sent to it as a job, what a
+// copy of it aimed at its number — which is what cuts a body's `wait` short
+// as the shell's is (#7086). See waitinabody.go.
 //
 // giveUp is a second way out, for the caller that has one: `wait` in the
 // dialect that does not go on waiting for a job it has been told *stopped*
 // (#2227). nil is the common case and needs no guard — a receive on a nil
 // channel is never ready, so a caller with no second way out cannot take one.
 func (r *Runner) awaitOrTrap(done, giveUp <-chan struct{}) (sig syscall.Signal, trapped, gaveUp bool) {
-	return r.awaitOrArrival(done, giveUp, r.pendingTrap)
+	return r.awaitOrArrivalFor(done, giveUp, r.pendingTrap, r.aBodysTrappedArrival)
 }
 
 // awaitOrArrival is awaitOrTrap with the question of which arrival ends the
@@ -1363,6 +1366,17 @@ func (r *Runner) awaitOrArrival(
 	done, giveUp <-chan struct{},
 	arrived func() (syscall.Signal, bool),
 ) (sig syscall.Signal, trapped, gaveUp bool) {
+	return r.awaitOrArrivalFor(done, giveUp, arrived, nil)
+}
+
+// awaitOrArrivalFor is awaitOrArrival with the question a subshell asks of
+// its own lists handed in as well, nil where the caller's wait is not one an
+// arrival for the body ends — a `read`, whose dialects disagree about that
+// at the top level and which nobody has measured in a body.
+func (r *Runner) awaitOrArrivalFor(
+	done, giveUp <-chan struct{},
+	arrived, bodyArrived func() (syscall.Signal, bool),
+) (sig syscall.Signal, trapped, gaveUp bool) {
 	s := r.signals
 	// Closed once the shell has been handed a fatal signal from outside to
 	// die of, and nil where nothing could be: a wait given up for it ends as
@@ -1370,10 +1384,32 @@ func (r *Runner) awaitOrArrival(
 	// command. See outsidedeath.go.
 	dying := r.abandonsForADeath()
 	if s == nil || r.inSubshell {
+		if !r.inSubshell {
+			bodyArrived = nil
+		}
+		// What this body's own lists poke, nil where nothing asks them.
+		var fromTheShell, fromACopy <-chan struct{}
+		if bodyArrived != nil {
+			fromTheShell, fromACopy = r.bodysWakes()
+		}
 		for {
+			if bodyArrived != nil {
+				if sig, ok := bodyArrived(); ok {
+					return sig, true, false
+				}
+			}
 			select {
 			case <-done:
+				// Asked once more, for the reason the shell's own wait
+				// below gives: the arrival wins where both are ready.
+				if bodyArrived != nil {
+					if sig, ok := bodyArrived(); ok {
+						return sig, true, false
+					}
+				}
 				return 0, false, false
+			case <-fromTheShell:
+			case <-fromACopy:
 			case <-giveUp:
 				return 0, false, true
 			case <-dying:
@@ -1472,6 +1508,9 @@ func signalName(s os.Signal) (string, bool) {
 // the *handler* sees is an axis — zsh shows the one from before the command
 // that triggered it, the other three the one that command produced.
 func (r *Runner) runPendingTraps(ctx context.Context) {
+	// Taken at every moment, so that it is this moment it holds past and
+	// never a later one. A death is not held. See waitinabody.go.
+	held := r.takeTheHold()
 	if !r.inSubshell {
 		// Between statements is where a `trap` has taken effect, so it is
 		// where the front end hears whether there is an EXIT trap to hand a
@@ -1518,6 +1557,9 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 		if r.settleCopiesSignals() {
 			return
 		}
+		if held {
+			return
+		}
 		pending := r.takeSelfPending()
 		if r.inbox != nil {
 			pending = append(pending, r.inbox.take()...)
@@ -1558,6 +1600,9 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 		if d.byAKill {
 			r.showTheExitTrap(shown, d.name, d.sig)
 		}
+		return
+	}
+	if held {
 		return
 	}
 	s := r.sigs()

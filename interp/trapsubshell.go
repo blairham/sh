@@ -82,6 +82,9 @@ func (c *Runner) inheritTraps(r *Runner) {
 	// an undelivered arrival of its own would otherwise hand a copy of it to
 	// every child it started.
 	c.selfPending = nil
+	// And nothing held for the parent's next moment: that is the parent's.
+	// See waitinabody.go.
+	c.arrivalsHeldPastTheNextMoment = false
 	// And no inbox: a subshell of a background body is a fork of its own,
 	// which a signal aimed at the job does not reach. See bodyinbox.go.
 	c.inbox, c.inboxGoesToTheParentheses = nil, false

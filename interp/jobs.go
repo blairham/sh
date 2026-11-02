@@ -1076,6 +1076,10 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		})
 	}
 	r.abandonOnDeath(job, ended)
+	// Whether something was already waiting for this shell, so that what the
+	// job raises before its pid settles can be told from it. See
+	// waitinabody.go.
+	arrivedBefore := r.anArrivalWaits()
 	r.spawn(func() {
 		// Errors inside a background job are reported where the job runs;
 		// there is nowhere to return them to.
@@ -1122,6 +1126,9 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// settles the pid and the rest are pieces this gate counts — see
 	// Job.expectPart.
 	<-job.started
+	// What the job raised meanwhile lands, in a shell that forks, once this
+	// shell has gone on. See waitinabody.go.
+	r.holdWhatTheJobRaised(arrivedBefore)
 
 	// A disowned job — `cmd &!` — is started and then let go of, so it never
 	// reaches the table: nothing lists it, `fg` cannot name it, and the next

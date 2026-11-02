@@ -270,6 +270,9 @@ func (r *Runner) signalTheBodyAround(p *Process, name string, sig syscall.Signal
 	p.arrivals = append(p.arrivals, bodyArrival{name: name, sig: sig})
 	p.posted.Store(true)
 	p.mu.Unlock()
+	// And the body's own wake, for a `wait` it is sitting in. See
+	// waitinabody.go.
+	pokeWake(p.wake)
 	s := r.sigs()
 	s.mu.Lock()
 	defer s.mu.Unlock()

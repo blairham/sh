@@ -48,6 +48,9 @@ type Process struct {
 	// command it runs.
 	arrivals []bodyArrival
 	posted   atomic.Bool
+	// wake is poked as a copy leaves an arrival, for a body sitting in
+	// `wait`. See waitinabody.go.
+	wake chan struct{}
 
 	// monitored records that the body was forked by a shell running job
 	// control — the shell itself with the monitor on, or a body that ran `set
@@ -154,7 +157,11 @@ func (c *Runner) forkProcess() func() {
 	// the shell that forked it — which ran job control under it only where
 	// the monitor was its own: the shell itself, or a body that ran `set -m`
 	// after it was forked (#7329).
-	p := &Process{outer: c.process, monitored: c.monitor && !c.monitorInherited}
+	p := &Process{
+		outer:     c.process,
+		monitored: c.monitor && !c.monitorInherited,
+		wake:      make(chan struct{}, 1),
+	}
 	c.process = p
 	// And this body runs none of its own, keeping the option all the same,
 	// until it says `set -m` itself. See Runner.monitorInherited.

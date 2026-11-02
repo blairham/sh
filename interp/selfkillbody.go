@@ -433,9 +433,37 @@ func (r *Runner) aCopysArrivalWaits() bool {
 
 // aCopysArrivalWaits reports whether an arrival waiting for the shell came
 // from a copy of it: a death recordSharedDeath noted, or a signal a copy's
-// `kill` raised on `$$`, which selfSignaled records as originElsewhere. A
-// substitution's own `kill $$` is not one: its moment is
-// Semantics.HandlersRunAsASubstitutionEnds's question and is left there.
+// `kill` raised on `$$` — a `( … )`'s or a pipeline element's, which
+// selfSignaled records as originElsewhere, or a command substitution's own,
+// originSubstitution. Only the shell's own `kill $$` is left out, and it
+// answers itself as the builtin returns.
+//
+// A substitution's own `kill $$` is a copy's like the others, and is answered
+// as the simple command that held it ends (#7361). Waiting for the next
+// statement ran the handler outside a group's or an `eval`'s redirection the
+// command was in. Measured 2026-11-02 under `-c`, each shell in a process
+// group of its own, against bash 5.3.20, bash 3.2.57, zsh 5.9.2, ksh93u+
+// 2012-08-01 and dash:
+//
+//	trap "echo U >&2" USR1; { x=$(kill -USR1 $$); } 2>/dev/null; echo b
+//	        b            all five; here, before: U, b
+//	trap "echo U" USR1; eval 'x=$(kill -USR1 $$)' >/dev/null; echo b
+//	        b            all five; here, before: U, b
+//	… { x=`kill -USR1 $$`; } 2>/dev/null; echo b    the same: backquotes
+//	trap 'echo U $?' USR1; false; x=$(kill -USR1 $$; exit 3) || echo a$?
+//	        U 3, a3      bash 5.3, 3.2 and dash; zsh U 1, the status from
+//	                     before the command; here, before: U 3 in zsh too
+//	trap "echo U" USR1; x=$(kill -USR1 $$) >/dev/null; echo b
+//	        U, b         bash 5.3, 3.2, ksh93 and dash: the command's own
+//	                     redirection is over by then; zsh b (#7224)
+//
+// So it is not a split, and nothing asks a Semantics axis: the five agree
+// wherever the moment is the command's end, ksh93 whose `$( … )` runs in the
+// shell's own process included. What zsh does with it sooner — as it arrives,
+// while the substitution still runs — is #7224's and is not modeled here, and
+// neither is ksh93 losing it to a second substitution (#7225).
+// Semantics.HandlersRunAsASubstitutionEnds is the question for a signal from
+// elsewhere during a substitution, and is asked as it was.
 func (s *signalState) aCopysArrivalWaits() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -443,11 +471,17 @@ func (s *signalState) aCopysArrivalWaits() bool {
 		return true
 	}
 	for _, name := range s.pending {
-		if slices.Contains(s.origins[name], originElsewhere) {
+		if slices.ContainsFunc(s.origins[name], raisedByACopy) {
 			return true
 		}
 	}
 	return false
+}
+
+// raisedByACopy reports that an arrival was raised on `$$` by a copy of the
+// shell rather than by the shell's own `kill`.
+func raisedByACopy(o trapOrigin) bool {
+	return o == originElsewhere || o == originSubstitution
 }
 
 // A **group** kill aimed at that same number — `kill -- -$BASHPID`, `kill

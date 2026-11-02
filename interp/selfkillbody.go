@@ -402,11 +402,19 @@ func (r *Runner) settleCopiesSignals() bool {
 // A body answers what its copies posted and anything else it raised on
 // itself (Runner.selfPending). The shell at the top answers only where a copy
 // aimed at `$$` — a fatal signal it sent, or a trapped one it raised — so a
-// signal from another process still waits for the next statement.
+// signal from another process waits for the next statement here; at an
+// and-or list's step it does not (answerArrivalsBeforeTheListGoesOn).
 func (r *Runner) answerCopiesAsTheWaitEnds(ctx context.Context, seen int) {
 	if r.ctl != controlNone || !r.aCopysArrivalWaits() {
 		return
 	}
+	r.runPendingTrapsShowing(ctx, seen)
+}
+
+// runPendingTrapsShowing runs the handlers waiting, as runPendingTraps does,
+// with seen as the status from before the command in the dialect whose
+// handler is shown that one.
+func (r *Runner) runPendingTrapsShowing(ctx context.Context, seen int) {
 	before := r.statusBefore
 	r.statusBefore = seen
 	r.runPendingTraps(ctx)

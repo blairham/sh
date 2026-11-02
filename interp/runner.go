@@ -8644,12 +8644,14 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 		if err != nil {
 			return err
 		}
-		// What a copy the left side ran aimed at this shell, answered before
-		// the list goes on and showing the left side's status. See
-		// answerCopiesAsTheWaitEnds. A handler that ended the shell ends the
-		// list; a left side that stopped on its own is judged below as before.
+		// What arrived while the left side ran — from a copy the left side
+		// ran, or from another process — answered before the list goes on
+		// and showing the left side's status. See
+		// answerArrivalsBeforeTheListGoesOn. A handler that ended the shell
+		// ends the list; a left side that stopped on its own is judged below
+		// as before.
 		if r.ctl == controlNone {
-			r.answerCopiesAsTheWaitEnds(ctx, r.status)
+			r.answerArrivalsBeforeTheListGoesOn(ctx, r.status)
 			if r.ctl != controlNone {
 				return nil
 			}

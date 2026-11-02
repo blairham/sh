@@ -169,3 +169,53 @@ func TestACopysSignalToTheShellIsAnsweredBeforeTheListGoesOn(t *testing.T) {
 		}
 	}
 }
+
+// A signal from another process that lands while an and-or list's left side
+// runs is answered before the list goes on, the handler showing the left
+// side's status (#7362). Where it waited for the next statement the handler
+// ran after the rest of the list: a, U for the first row.
+//
+// Measured 2026-11-02 under `-c`, each shell in a process group of its own,
+// against bash 5.3.20, bash 3.2.57, zsh 5.9.2, ksh93u+ 2012-08-01 and dash,
+// which agree on every row; `/bin/kill -USR1 $$ && echo a` is U, a in all five
+// too. The sender lingers a tenth of a second before it exits, so the arrival
+// has reached the shell by the time the left side ends. The fifo row's sender
+// is a background job that signals once the left side asks it to, and the left
+// side ends once it has. The last two rows are controls: a left side ended by
+// `;`, or an `if` condition, was answered at the next statement already.
+//
+// Each row is this test binary as the shell, through the front end and in a
+// process group of its own, because the signal is a real one on the shell's
+// process: sent to the test binary, it would reach whatever an earlier test
+// left listening there.
+func TestASignalFromAnotherProcessIsAnsweredBeforeTheListGoesOn(t *testing.T) {
+	const trap = `trap 'echo U' USR1; `
+	const shown = `trap 'echo U $?' USR1; false; `
+	send := func(status string) string {
+		return `/bin/sh -c 'kill -USR1 $1; /bin/sleep 0.1; exit $2' sh $$ ` + status
+	}
+	for _, dialect := range []string{"bash", "zsh", "dash", "ksh"} {
+		handshake := `d='` + t.TempDir() + `'; /usr/bin/mkfifo "$d/go" "$d/sent"; ` +
+			`/bin/sh -c 'read x <"$2/go"; kill -USR1 $1; echo >"$2/sent"' sh $$ "$d" & ` +
+			`/bin/sh -c 'echo >"$1/go"; read x <"$1/sent"; /bin/sleep 0.1; exit 3' sh "$d"`
+		for _, c := range []struct{ src, want string }{
+			{trap + send("0") + ` && echo a`, "U a"},
+			{trap + send("0") + ` && echo a && echo b`, "U a b"},
+			{shown + send("3") + ` || echo a$?`, "U 3 a3"},
+			{shown + send("0") + ` && echo a$?`, "U 0 a0"},
+			{trap + `! ` + send("0") + ` || echo a`, "U a"},
+			{trap + `{ ` + send("0") + `; } && echo a`, "U a"},
+			{trap + send("0") + ` | /bin/cat && echo a`, "U a"},
+			{trap + `f() { ` + send("0") + ` && echo a; }; f`, "U a"},
+			{trap + `x=$(` + send("0") + `) && echo a`, "U a"},
+			{shown + handshake + ` || echo a$?; wait`, "U 3 a3"},
+			{trap + send("0") + `; echo a`, "U a"},
+			{trap + `if ` + send("0") + `; then echo a; fi`, "U a"},
+		} {
+			ws, out := endsOnItsOwn(t, dialect, c.src)
+			if got := strings.Join(strings.Fields(out), " "); got != c.want || ws.Signaled() || ws.ExitStatus() != 0 {
+				t.Errorf("%s: %s\n got %q, ended %v\nwant %q at 0", dialect, c.src, got, ws, c.want)
+			}
+		}
+	}
+}

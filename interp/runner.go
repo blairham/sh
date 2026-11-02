@@ -9543,10 +9543,13 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	// of its own. Under the command's own rule for a failed expansion, which
 	// is the rule once every word is expanded, whenever it runs. See
 	// interp/pathnamestage.go (#6768).
-	matchTheHeldWords := func() {
+	//
+	// The list is handed in and back rather than captured, which would
+	// move argv off this frame for every command.
+	matchTheHeldWords := func(built []string) []string {
 		rule := r.failedExpansionStatus
 		r.failedExpansionStatus = statusBefore
-		argv = r.pathnameStage(argv, waiting, func(list []string) {
+		built = r.pathnameStage(built, waiting, func(list []string) {
 			r.armProgramGlob(list, modifierWords, stoppedAtCommand)
 		})
 		r.failedExpansionStatus = rule
@@ -9562,12 +9565,13 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		operandAt = kept
 		for _, from := range lexedFrom {
 			if cameToOneField(waiting, from) {
-				lexedAt = append(lexedAt, argv[shiftedBy(waiting, from)])
+				lexedAt = append(lexedAt, built[shiftedBy(waiting, from)])
 			}
 		}
 		// Matched, so nothing is held: a run held after this is built at a
 		// position the list already has.
 		waiting, lexedFrom = waiting[:0], lexedFrom[:0]
+		return built
 	}
 	// How many written words open the command as modifiers, so that the word
 	// at i names the command when i is no more than this. See
@@ -9621,7 +9625,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			// unexpanded. See
 			// Semantics.DeclarationWordsAreMatchedInTurnFromAnAssignment
 			// (#7125).
-			matchTheHeldWords()
+			argv = matchTheHeldWords(argv)
 			if r.pathnameStageStopped() {
 				break
 			}
@@ -9885,7 +9889,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	// Every word is expanded, so the pathname stage runs over the list now,
 	// word by word, and stops at the first word it refuses. See
 	// matchTheHeldWords (#6768).
-	matchTheHeldWords()
+	argv = matchTheHeldWords(argv)
 	if len(argv) > modifierWords {
 		r.armProgramGlob(argv, modifierWords, stoppedAtCommand)
 	}

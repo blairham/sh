@@ -67,3 +67,45 @@ func kernelPipeCopies(err error) int {
 	}
 	return 1
 }
+
+// A builtin can fail more than one write, and each one raised its own.
+//
+// writeFailed keeps one error for builtinWriteStatus to answer, but the kernel
+// raised SIGPIPE for every write that found the reader gone, and `printf` writes
+// once per pass over its format. `{ printf '%s\n' "$big" "$big" "$big" "$big";
+// } | true` under `trap 'echo outer >&2' PIPE` is four failed writes and four
+// SIGPIPEs. Credited for the last write alone, the other three reached the shell
+// around the pipeline as PIPEs from outside, and its handler ran three times for
+// the element's broken pipe: 200 of 200 runs of a race build in Linux, and the
+// same three when the element had a handler of its own (#7288). Measured
+// 2026-11-01 on that printf, bash 5.3.20, bash 3.2, dash and ksh93 never run the
+// outer handler, and run an element's own handler once.
+//
+// So every failed write is counted, and the credit is the total.
+
+// writeFailedAfter records a builtin's output write that wrote n bytes and then
+// failed with err: the error the dispatcher answers, and the copies it raised.
+func (r *Runner) writeFailedAfter(n int, err error) {
+	err = failedPartWay(n, err)
+	r.writeFailed = err
+	r.countPipeCopies(err)
+}
+
+// heldWriteFailed records what writing out a held builtin's output did. The
+// first failure is the one answered, and every one is counted.
+func (r *Runner) heldWriteFailed(err error) {
+	if err == nil {
+		return
+	}
+	if r.writeFailed == nil {
+		r.writeFailed = err
+	}
+	r.countPipeCopies(err)
+}
+
+// countPipeCopies adds the SIGPIPEs a failed write with err may have raised.
+func (r *Runner) countPipeCopies(err error) {
+	if errors.Is(err, syscall.EPIPE) {
+		r.writePipeCopies += kernelPipeCopies(err)
+	}
+}

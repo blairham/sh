@@ -248,3 +248,38 @@ func TestAPipelineElementInheritsTheIgnoreAndNotTheHandler(t *testing.T) {
 		}
 	}
 }
+
+// The inherited-handler row above, with a handler that prints. The element dies
+// of the default, and the outer handler does not run for that death either: no
+// panel shell runs it, because a real element is a process of its own (#7288).
+// The same for a `printf` that fails a write on every pass over its format.
+//
+// Only Linux can fail this. Its kernel raises SIGPIPE for each of the element's
+// writes, and the outer trap has the process subscribed, so the runtime forwards
+// the copies to the outer shell. macOS raises none for these writes. The
+// deterministic form, with the copies put on the channel by hand, is in
+// elementpipedeath_test.go.
+func TestAnElementDyingOfTheDefaultPipeRunsNoOuterHandler(t *testing.T) {
+	const big = `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; `
+	for _, write := range []string{`echo "$v"`, `printf '%s\n' "$v" "$v" "$v" "$v"`} {
+		src := big + `trap 'echo outer >&2' PIPE; { ` + write + `; echo reached >&2; } | true; echo after >&2`
+		f, err := syntax.Parse(src, syntax.Core())
+		if err != nil {
+			t.Fatalf("parse %q: %v", src, err)
+		}
+		sem, diag := failingWrites()
+		// Every arrival runs its handler. Left unanswered, two copies in one
+		// batch would run nothing at all, and the row would pass on a refusal.
+		sem.WaitingSignalArrivingAgainRunsOnce = No
+		var e bytes.Buffer
+		r := newTestRunner(t, &Runner{Stdout: brokenPipe{}, Stderr: &e, Semantics: &sem, Diagnostics: &diag})
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatalf("run %q: %v", src, err)
+		}
+		// The element dies silently and the shell carries on, so `after` is the
+		// whole of standard error: a run of the outer handler is a line more.
+		if got := e.String(); got != "after\n" {
+			t.Errorf("%s: stderr = %q, want only %q", write, got, "after\n")
+		}
+	}
+}

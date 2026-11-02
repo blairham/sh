@@ -2783,25 +2783,39 @@ func (r *Runner) redirectStdout(w io.Writer) {
 }
 
 func (r *Runner) builtinWriteStatus(name string, st int) int {
-	err := r.writeFailed
-	r.writeFailed = nil
+	err, copies := r.writeFailed, r.writePipeCopies
+	r.writeFailed, r.writePipeCopies = nil, 0
 	if err == nil || r.unspecified {
 		return st
 	}
 	if errors.Is(err, syscall.EPIPE) {
 		arranged := r.signalArranged("PIPE")
+		// The signal is answered here rather than left to the runtime's copy
+		// of it. A handler runs between commands and not at the write, so it
+		// is delivered rather than run — to whichever shell set it, which for
+		// an element that trapped PIPE for itself is the element. The *outer*
+		// shell's handler is nobody's here, and stays so: signalArranged read
+		// the element's own table, so an inherited handler was never one of
+		// these.
+		//
+		// Taken out of the runtime's hands on the death below as well, as
+		// answerAWritePastTheFileSizeLimit does for XFSZ. An element that dies
+		// of the default answered its own signal by dying of it, and the kernel
+		// raised that signal for the write all the same, so with a handler set
+		// around the pipeline the runtime forwards the copy to the shell that
+		// started it. Uncredited, it ran that shell's handler for an element's
+		// death (#7288): `trap ':' PIPE; { echo "$big"; } | true`, measured in
+		// Linux. No panel shell does that, because a real element is a process
+		// of its own and its signal never reaches its parent.
+		//
+		// Every failed write of the builtin's is credited, not the last one
+		// alone: see writeFailedAfter. The answered error's own count is the
+		// floor, for a failure recorded without being counted.
+		r.writeSignalAbsorbed("PIPE", arranged == signalHandledBy, max(copies, kernelPipeCopies(err)))
 		if arranged == signalFatal {
 			r.signalDeath("PIPE", syscall.SIGPIPE)
 			return r.status
 		}
-		// Not a death, so the signal is answered here rather than left to the
-		// runtime's copy of it. A handler runs between commands and not at
-		// the write, so it is delivered rather than run — to whichever shell
-		// set it, which for an element that trapped PIPE for itself is the
-		// element. The *outer* shell's handler is nobody's here, and stays
-		// so: signalArranged read the element's own table, so an inherited
-		// handler was never one of these.
-		r.writeSignalAbsorbed("PIPE", arranged == signalHandledBy, kernelPipeCopies(err))
 	}
 	// A write past `ulimit -f` is the same shape with another signal. See
 	// filesizedeath.go.

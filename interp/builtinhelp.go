@@ -80,7 +80,7 @@ func (r *Runner) callBuiltin(ctx context.Context, name string, fn Builtin, args 
 			return status
 		}
 	}
-	r.writeFailed = nil
+	r.writeFailed, r.writePipeCopies = nil, 0
 	refused := r.refusedInACommand
 	r.refusedInACommand = false
 	var hold builtinHold

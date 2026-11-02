@@ -143,17 +143,13 @@ func (r *Runner) endBuiltinHold(b builtinHold) {
 		return
 	}
 	if b.nested {
-		if err := b.h.flush(); err != nil && r.writeFailed == nil {
-			r.writeFailed = err
-		}
+		r.heldWriteFailed(b.h.flush())
 		return
 	}
 	if r.Stdout == b.h {
 		r.Stdout = b.h.to
 	}
-	if err := b.h.release(); err != nil && r.writeFailed == nil {
-		r.writeFailed = err
-	}
+	r.heldWriteFailed(b.h.release())
 }
 
 // stdoutIsACharDevice reports whether standard output is a character device,

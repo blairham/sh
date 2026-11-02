@@ -139,6 +139,48 @@ func TestABodysOwnSignalArrivingAgainRunsItsHandlerOnce(t *testing.T) {
 	}
 }
 
+// A body's own signal is handled before its `kill` returns, as the shell's is
+// (#5359) — so a body whose last command is that `kill` still runs the
+// handler, and an and-or list after it sees the handler first (#7345).
+//
+// The body here is a pipeline element or a `&` job that is one simple
+// command, which has no moment between commands after the `kill` for the
+// handler to wait for: it ran nothing at all. Measured 2026-11-02 under `-c`,
+// each shell in a process group of its own, against bash 5.3.20 and 3.2.57
+// (3.2 reading the pid back from a child's `$PPID`); zsh 5.9.2, ksh93u+ and
+// dash agree on every row they can reach. Each row's want is what they wrote.
+func TestABodyRunsTheHandlerForItsOwnSignalAsKillReturns(t *testing.T) {
+	const own = `trap "echo U" USR1; kill -USR1 $BASHPID`
+	for _, c := range []struct{ name, src, want string }{
+		{"a simple-command element", `eval '` + own + `' | /bin/cat; echo out=$?`, "U\nout=0\n"},
+		{"a simple-command job", `eval '` + own + `' & wait $!; echo out=$?`, "U\nout=0\n"},
+		{"before the and-or list goes on", `( trap 'echo U' USR1; kill -USR1 $BASHPID && echo a )`, "U\na\n"},
+		{
+			"a handler that exits ends the element with its status",
+			`eval 'trap "echo U; exit 7" USR1; kill -USR1 $BASHPID' | /bin/cat; echo st=${PIPESTATUS[0]}`,
+			"U\nst=7\n",
+		},
+		{
+			"before the element's EXIT trap",
+			`eval 'trap "echo X" EXIT; ` + own + `' | /bin/cat`,
+			"U\nX\n",
+		},
+		// Inside the `eval`'s own redirection, which is what says the
+		// moment is the `kill` returning and not the element ending.
+		{
+			"inside the command's redirections",
+			`eval 'trap "echo U >&2" USR1; kill -USR1 $BASHPID' 2>/dev/null | /bin/cat; echo out=$?`,
+			"out=0\n",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := runBashAnchored(t, c.src); got != c.want {
+				t.Errorf("%s\n got %q\nwant %q", c.src, got, c.want)
+			}
+		})
+	}
+}
+
 // A **group** kill at `$BASHPID` is refused as no such process, from wherever
 // in the subshell it is sent, and nothing is signaled (#7238).
 //

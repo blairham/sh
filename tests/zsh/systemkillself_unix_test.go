@@ -242,3 +242,32 @@ func TestABodysOwnSignalArrivingAgainRunsItsHandlerEachTime(t *testing.T) {
 		t.Errorf("output = %q, want %q", got, want)
 	}
 }
+
+// A body's own signal is handled before its `kill` returns, so a pipeline
+// element that is one simple command and ends on that `kill` still runs the
+// handler — its own, or the one it keeps from the shell (#7327) — and an
+// and-or list after the `kill` sees the handler first (#7345). It ran
+// nothing, having no moment between commands left to wait for.
+//
+// Measured 2026-11-02 under `-c` against zsh 5.9.2 in a process group of its
+// own; bash 5.3.20, bash 3.2.57, ksh93u+ and dash agree on every row they can
+// reach. Each row's want is what zsh wrote.
+func TestABodyRunsTheHandlerForItsOwnSignalAsKillReturns(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{
+			`eval 'trap "print -r -- U" USR1; kill -USR1 $sysparams[pid]' | /bin/cat; print -r -- out=$?`,
+			"U\nout=0\n",
+		},
+		{`trap 'print -r -- T' USR1; kill -USR1 $sysparams[pid] | /bin/cat; print -r -- out=$?`, "T\nout=0\n"},
+		{`( trap 'print -r -- U' USR1; kill -USR1 $sysparams[pid] && print -r -- a )`, "U\na\n"},
+		{
+			`eval 'trap "print -r -- U; exit 7" USR1; kill -USR1 $sysparams[pid]' | /bin/cat
+print -r -- st=$pipestatus[1]`,
+			"U\nst=7\n",
+		},
+	} {
+		if got := runZshAnchored(t, c.src); got != c.want {
+			t.Errorf("%s\n got %q\nwant %q", c.src, got, c.want)
+		}
+	}
+}

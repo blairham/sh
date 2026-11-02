@@ -123,7 +123,7 @@ func TestANamedSuiteThatIsNotThereIsAnError(t *testing.T) {
 // and a plain `go test`.
 func TestNothingEntersTheSurfaceWithoutACase(t *testing.T) {
 	if testenv.RaceDetector {
-		t.Skip("one goroutine and nothing beside it, so -race can find nothing; the uninstrumented legs hold the zero whole (#7290)")
+		t.Skip("one goroutine with nothing beside it, so -race can find nothing; uninstrumented legs hold it (#7290)")
 	}
 	root := filepath.Join("..", "..", "..", filepath.FromSlash(DefaultSuite))
 	fromSuite, err := suiteSources(root)

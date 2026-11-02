@@ -112,7 +112,7 @@ jobs:
   # meant to hold, so a route that got out is a regression by definition.
   ci:
     name: CI
-    uses: blairham/.github/.github/workflows/go-ci.yml@9711060ad4860f35860bcbf90d90f103617082d2 # v0.0.1
+    uses: blairham/.github/.github/workflows/go-ci.yml@2a975269ebbb74aa0b4ec96f45773d7d68cc7bcc # v0.0.3
     with:
       os: '["ubuntu-latest","macos-latest"]'
       golangci-lint-hook: false

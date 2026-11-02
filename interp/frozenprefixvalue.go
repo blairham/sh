@@ -52,9 +52,21 @@ import "github.com/blairham/sh/syntax"
 // walk and the refusal is **never written** — `a=$((1/0)) r=2 echo RAN` is the
 // division alone in all four. The values are held for the entries behind them
 // as they expand, exactly as the two other walks hold them, so
-// `a=1 b=${a}X r=2 cmd` reads `b` from this walk's own `a`. And a refused
-// subscripted word is left where it stands rather than expanded here: its
-// refusal belongs to the ordered walk that owns it.
+// `a=1 b=${a}X r=2 cmd` reads `b` from this walk's own `a`.
+//
+// **A refused subscripted word is refused here too, where it stands**, and its
+// value is not expanded. Measured 2026-11-02 against GNU bash 5.3.20 from `-c`
+// under `env -i PATH=/usr/bin:/bin`, `readonly r=1` first:
+//
+//	a[1]=x r=2 :                       the identifier, then the readonly
+//	f() { :; }; a[1]=x r=2 f           the same, and `f` runs
+//	a[1]=x r=2 /usr/bin/true           the same, `/usr/bin/true` at 0
+//	w=$(echo W >&2) a[1]=x r=2 b[2]=y q=$(echo Q >&2) :
+//	        W, a[1]'s, r's, b[2]'s, then Q
+//
+// The control is `r=2 a[1]=x :`, the readonly first. This walk left the word
+// to the ordered walk behind it, so every frozen entry's refusal and every
+// value behind one came out ahead of the subscripted words' refusals (#7095).
 //
 // Asked only where there **is** a frozen name, so an ordinary prefix walks
 // nothing here and a dialect with no answer refuses only the line the question
@@ -131,8 +143,14 @@ func (r *Runner) expandThePrefixUpToTheFrozenName(
 		}
 		if !frozen && !r.prefixEntryHasATraceableValue(a) {
 			// A subscripted word the dialect refuses, whose value is never
-			// expanded and whose refusal is the ordered walk's to write, or
-			// the splice form, which has no one value.
+			// expanded, or the splice form, which has no one value. The first
+			// is refused here, where it stands: the ordered walk behind this
+			// one meets it again and says nothing the second time. An
+			// unanswered reading is left to that walk to ask.
+			if prefixIsSubscripted(a) &&
+				r.sem().SubscriptedAssignmentPrefix == SubscriptedPrefixIsRefused {
+				r.refuseOneSubscriptedPrefix(a)
+			}
 			continue
 		}
 		// An element write's subscript, read where the entry stands, in the

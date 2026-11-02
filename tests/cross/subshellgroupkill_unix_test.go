@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/pty"
 	"github.com/blairham/sh/internal/testenv"
 )
 
@@ -347,6 +348,95 @@ func TestAJobForkedUnderTheMonitorIsAGroupOfItsOwn(t *testing.T) {
 	})
 }
 
+// **Under the monitor a pipeline is a group of its own in four dialects, and a
+// `<(…)` in one** — the two splits #7246 left, each an axis
+// (Semantics.MonitoredPipelineIsAGroupOfItsOwn, #7318;
+// Semantics.MonitoredProcessSubstitutionIsAGroupOfItsOwn, #7306).
+//
+// Measured 2026-11-01 on a pseudo-terminal, where zsh and dash grant `set -m`,
+// and with no terminal for bash and ksh93, each shell in a process group of
+// its own, against bash 5.3.20, zsh 5.9.2, dash and ksh93u+ 2012-08-01:
+//
+//	set -m; trap 'echo T' USR1; : | (kill -USR1 0; echo in); echo out=$?
+//	        bash, zsh, dash: out=158, no T; ksh93: T, out=286; here,
+//	        before: T in every dialect
+//	…the element first, `( … ) | /bin/cat`        bash: out=0, no T
+//	…without `set -m`                              T in every column
+//	…untrapped                                     bash: out=158; here,
+//	        before: the whole shell killed
+//	…`: | { kill -USR1 -$BASHPID; echo in k=$?; }`  bash: no such process,
+//	        in k=1: a later element leads no group; here, before: k=0
+//	…`{ kill -USR1 -$BASHPID; … } | /bin/cat`      bash: out=0, the
+//	        first element leads the group; here, before: in k=0
+//	set -m; cat <( p=$BASHPID; kill -0 -- -$p; echo k=$? )
+//	        bash: no such process, k=1; zsh, with $sysparams[pid]: k=0;
+//	        here, before: k=0 in both
+//	set -m; trap 'echo T' USR1; cat <(kill -USR1 0; echo in); echo after
+//	        bash, ksh93: T; zsh: no T; here, before: T in all three
+//
+// The notices are not this test's question: a pipeline element's is a gap of
+// its own, and ksh93's for the `cat` its group kill also reached is #7238's.
+func TestAMonitoredPipelineOrProcessSubstitutionIsAGroupInOneDialect(t *testing.T) {
+	usr1 := int(syscall.SIGUSR1)
+	died := "out=" + strconv.Itoa(128+usr1) + "\n"
+	const trapped = `set -m; trap 'echo T' USR1; `
+	const procSubKill = trapped + `/bin/cat <(kill -USR1 0; echo in); echo after`
+	for _, c := range []struct {
+		name, dialect, script, out string
+		// terminal runs the shell on a pseudo-terminal, which is what zsh and
+		// dash grant `set -m` on.
+		terminal bool
+	}{
+		{"bash/the last element", "bash", trapped + `: | (kill -USR1 0; echo in); echo out=$?`, died, false},
+		{"bash/the first element", "bash", trapped + `(kill -USR1 0; echo in) | /bin/cat; echo out=$?`, "out=0\n", false},
+		{
+			"bash/without the monitor", "bash", `trap 'echo T' USR1; : | (kill -USR1 0; echo in); echo out=$?`,
+			"T\n" + died, false,
+		},
+		{"bash/untrapped", "bash", `set -m; : | (kill -USR1 0; echo in); echo out=$?`, died, false},
+		{
+			"bash/a later element's own number", "bash",
+			trapped + `: | { kill -USR1 -$BASHPID; echo in k=$?; }; echo out=$?`, "in k=1\nout=0\n", false,
+		},
+		{
+			"bash/the first element's own number", "bash",
+			trapped + `{ kill -USR1 -$BASHPID; echo in k=$?; } | /bin/cat; echo out=$?`, "out=0\n", false,
+		},
+		{
+			"ksh/the last element", "ksh", trapped + `: | (kill -USR1 0; echo in); echo out=$?`,
+			"T\nout=" + strconv.Itoa(256+usr1) + "\n", false,
+		},
+		{"zsh/the last element", "zsh", trapped + `: | (kill -USR1 0; echo in); echo out=$?`, died, true},
+		{"dash/the last element", "dash", trapped + `: | (kill -USR1 0; echo in); echo out=$?`, died, true},
+		{
+			"bash/a process substitution's own number", "bash",
+			`set -m; /bin/cat <( p=$BASHPID; kill -0 -- -$p; echo k=$? ); echo outer $?`, "k=1\nouter 0\n", false,
+		},
+		{"bash/a process substitution's group kill", "bash", procSubKill, "T\nafter\n", false},
+		{
+			"zsh/a process substitution's own number", "zsh",
+			`zmodload zsh/system; set -m; /bin/cat <( p=$sysparams[pid]; kill -0 -$p; echo k=$? ); echo outer $?`,
+			"k=0\nouter 0\n", true,
+		},
+		{"zsh/a process substitution's group kill", "zsh", procSubKill, "after\n", true},
+		{"ksh/a process substitution's group kill", "ksh", procSubKill, "T\nafter\n", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			run := runInAGroup
+			if c.terminal {
+				run = runOnATerminal
+			}
+			ws, out, errs := run(t, c.dialect, c.script)
+			if ws.Signaled() || ws.ExitStatus() != 0 {
+				t.Errorf("ended %v, want an exit at 0 (stderr %q)", ws, errs)
+			}
+			if out != c.out {
+				t.Errorf("wrote %q, want %q (stderr %q)", out, c.out, errs)
+			}
+		})
+	}
+}
+
 // unchecked is a row whose stderr is not this test's question: a notice for
 // a body other than the parentheses the shell ran — the inner parentheses,
 // named by the ones around them, or a pipeline element — which is a gap of
@@ -383,6 +473,33 @@ func checkGroupKillNotice(t *testing.T, errs, want, command string) {
 // it wrote to each stream.
 func runInAGroup(t *testing.T, dialect, script string) (ws syscall.WaitStatus, out, errs string) {
 	t.Helper()
+	return runInAGroupWith(t, dialect, script, nil)
+}
+
+// runOnATerminal is runInAGroup with the shell on a pseudo-terminal of its
+// own, as the leader of a session the terminal belongs to, which is where zsh
+// and dash grant `set -m`. Only its input is the terminal, so what it writes
+// is read back as runInAGroup reads it.
+func runOnATerminal(t *testing.T, dialect, script string) (ws syscall.WaitStatus, out, errs string) {
+	t.Helper()
+	control, terminal, err := pty.Open()
+	if err != nil {
+		t.Skipf("no pseudo-terminal: %v", err)
+	}
+	defer control.Close()
+	defer terminal.Close()
+	return runInAGroupWith(t, dialect, script, func(cmd *exec.Cmd) {
+		cmd.Stdin = terminal
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
+	})
+}
+
+// runInAGroupWith is runInAGroup with setup, when given, making the last
+// changes to the command before it starts.
+func runInAGroupWith(
+	t *testing.T, dialect, script string, setup func(*exec.Cmd),
+) (ws syscall.WaitStatus, out, errs string) {
+	t.Helper()
 	const deadline = 30 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), deadline)
 	defer cancel()
@@ -392,6 +509,9 @@ func runInAGroup(t *testing.T, dialect, script string) (ws syscall.WaitStatus, o
 	cmd.WaitDelay = time.Second
 	var o, e bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &o, &e
+	if setup != nil {
+		setup(cmd)
+	}
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}

@@ -3655,6 +3655,15 @@ func Semantics() interp.Semantics {
 	// in); echo "after $?"` writes `in`, `T` and `after 0`. Measured
 	// 2026-11-01 on bash 5.3.20 (#7168).
 	s.SubshellEndsWhenItSendsTheShellATrappedSignal = interp.No
+	// Under the monitor a foreground pipeline is a group of its own, led by
+	// its first element, and a `<(…)` leads none: measured 2026-11-01 on
+	// 5.3.20 and 3.2.57, `set -m; trap 'echo T' USR1; : | (kill -USR1 0;
+	// echo in)` writes no T and out=158, and `set -m; cat <( p=$BASHPID; kill
+	// -0 -- -$p )` is `No such process` (#7318, #7306). See
+	// interp.Semantics.MonitoredPipelineIsAGroupOfItsOwn and
+	// interp.Semantics.MonitoredProcessSubstitutionIsAGroupOfItsOwn.
+	s.MonitoredPipelineIsAGroupOfItsOwn = interp.Yes
+	s.MonitoredProcessSubstitutionIsAGroupOfItsOwn = interp.No
 	// And bash is the one member of the panel that announces nothing on
 	// this route. Measured on `-i script.sh` through a pseudo-terminal:
 	// 5.3.15, 3.2.57 and 3.2 run as `sh` all print neither the start nor

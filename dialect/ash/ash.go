@@ -2348,6 +2348,14 @@ func Semantics() interp.Semantics {
 	// Not measured with the signal trapped (#7168), and the fork above is
 	// the reason the subshell would run on.
 	s.SubshellEndsWhenItSendsTheShellATrappedSignal = interp.No
+	// Under the monitor a foreground pipeline is a group of its own: measured
+	// 2026-11-01 on BusyBox 1.37.0 in the pinned alpine, on docker's terminal,
+	// `set -m; trap 'echo T' USR1; : | (kill -USR1 0; echo in)` writes the
+	// notice, no T and out=138 (#7318). See
+	// interp.Semantics.MonitoredPipelineIsAGroupOfItsOwn.
+	s.MonitoredPipelineIsAGroupOfItsOwn = interp.Yes
+	// unanswered MonitoredProcessSubstitutionIsAGroupOfItsOwn: this shell
+	// has no process substitution, so nothing is forked to ask about.
 	// Only numbers and the `%%`, `%+`, `%-` forms resolve; `%name` is a job
 	// that is not there, and `wait`, `jobs`, `fg` and `bg` each say so.
 	s.JobSpecsByName = interp.No

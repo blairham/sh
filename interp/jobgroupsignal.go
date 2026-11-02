@@ -47,11 +47,36 @@ import "syscall"
 // both parentheses and the shell writes no T, in bash, zsh and dash alike on
 // a terminal.
 //
-// Not a pipeline element yet. bash, zsh and dash give a foreground pipeline
-// a group of its own under the monitor, and ksh93 leaves its elements in the
-// shell's group under `-c` even on a terminal, which is a split for an axis
-// to answer (#7318). Nor `$( … )`, which bash does not fork as a job (T in
-// every column), nor `<(…)`, which is #7306's.
+// **A foreground pipeline and a `<(…)` are the same question with a split in
+// each**, so each is a Semantics axis, asked only at a group kill from inside
+// the body the shell itself forked under the monitor. Measured 2026-11-01 on
+// a pseudo-terminal (`script -q /dev/null`), bash 5.3.20 and 3.2.57 and
+// ksh93u+ also with no terminal and each shell in a group of its own, BusyBox
+// ash 1.37.0 in the pinned alpine on docker's terminal:
+//
+//	set -m; trap 'echo T' USR1; : | (kill -USR1 0; echo in); echo out=$?
+//	        bash, zsh, dash, ash: out=158 (138), no T; ksh93: T, out=286
+//	…without `set -m`                      T in every column
+//	…with the element first, `( … ) | /bin/cat`    the same split
+//	set -m; : | (kill -USR1 0; echo in); echo out=$?
+//	        bash, zsh, dash, ash: out=158; ksh93: the whole shell killed
+//	set -m; : | { kill -USR1 -$BASHPID; echo in k=$?; }
+//	        bash: no such process, in k=1 — a later element leads no group
+//	set -m; { kill -USR1 -$BASHPID; echo in k=$?; } | /bin/cat
+//	        bash: no T, out=0 — the first element leads the pipeline's
+//	set -m; cat <( p=$BASHPID; kill -0 -- -$p; echo k=$? )
+//	        bash: no such process, k=1; zsh (with $sysparams[pid]): k=0;
+//	        ksh93 (the pid read back from a child): no such process
+//	set -m; trap 'echo T' USR1; cat <(kill -USR1 0; echo in); echo out=$?
+//	        bash: T, out=0; zsh: out=0, no T; ksh93: T, out=286
+//
+// So Semantics.MonitoredPipelineIsAGroupOfItsOwn (#7318) and
+// Semantics.MonitoredProcessSubstitutionIsAGroupOfItsOwn (#7306). The noun is
+// the same as above, the monitor at the fork of the body the shell forked,
+// with **which body** added: a pipeline element is in the pipeline's group and
+// only the first leads it, and a `<(…)` leads its own. A `$( … )` is neither,
+// and is not asked: no shell forks it as a job (T in every column), though its
+// own number under the monitor is #7324's.
 //
 // **Nothing goes to the kernel.** Not the shell's group: that is this
 // process, which is the shell, and is what killed the whole shell for an
@@ -73,14 +98,54 @@ import "syscall"
 // — where a real shell forked that as a job with the monitor on. Nil
 // otherwise, which is every body in a shell without the monitor.
 func (r *Runner) theJobAround() *Process {
+	top := r.theBodyTheShellForked()
+	if top == nil || !top.monitored || top.job == notAJob || !r.jobIsAGroupOfItsOwn(top) {
+		return nil
+	}
+	return top
+}
+
+// theJobAGroupKillReaches is theJobAround for a kill aimed at pid, where pid
+// is 0 or the group the job's body leads: nil for any other target, which
+// asks the dialect nothing.
+func (r *Runner) theJobAGroupKillReaches(pid int) *Process {
+	if top := r.theBodyTheShellForked(); top == nil || pid != 0 && !top.anchor.leads(-pid) {
+		return nil
+	}
+	return r.theJobAround()
+}
+
+// theBodyTheShellForked is the outermost body around this runner: the one the
+// shell itself forked, which is the only one job control was on for.
+func (r *Runner) theBodyTheShellForked() *Process {
 	var top *Process
 	for p := r.process; p != nil; p = p.outer {
 		top = p
 	}
-	if top == nil || !top.job || !top.monitored {
-		return nil
-	}
 	return top
+}
+
+// jobIsAGroupOfItsOwn reports that p, forked by the shell under the monitor,
+// is in a process group the shell is not in. Asked, where the dialect decides.
+func (r *Runner) jobIsAGroupOfItsOwn(p *Process) bool {
+	switch p.job {
+	case aJob:
+		return true
+	case aPipelineLeader, aPipelineElement:
+		return r.ask(r.sem().MonitoredPipelineIsAGroupOfItsOwn,
+			"whether a pipeline forked under the monitor is a process group of its own")
+	case aProcessSubstitution:
+		return r.ask(r.sem().MonitoredProcessSubstitutionIsAGroupOfItsOwn,
+			"whether a process substitution forked under the monitor is a process group of its own")
+	}
+	return false
+}
+
+// jobLeadsItsGroup reports that p's own number names the group it is in: a
+// job of its own does, and so does a pipeline's first element, while a later
+// element is in the group the first one leads and never leads one itself.
+func (r *Runner) jobLeadsItsGroup(p *Process) bool {
+	return p.job != aPipelineElement && r.jobIsAGroupOfItsOwn(p)
 }
 
 // signalTheJobsGroup answers a signal this runner sent the group of the job it

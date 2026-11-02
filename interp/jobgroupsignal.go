@@ -75,8 +75,9 @@ import "syscall"
 // the same as above, the monitor at the fork of the body the shell forked,
 // with **which body** added: a pipeline element is in the pipeline's group and
 // only the first leads it, and a `<(…)` leads its own. A `$( … )` is neither,
-// and is not asked: no shell forks it as a job (T in every column), though its
-// own number under the monitor is #7324's.
+// and is not asked: no shell forks it as a job (T in every column), so its own
+// number names no group either, which aimedAtAGroupNoForkLeads refuses
+// (#7324).
 //
 // **Nothing goes to the kernel.** Not the shell's group: that is this
 // process, which is the shell, and is what killed the whole shell for an

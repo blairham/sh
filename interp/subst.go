@@ -260,6 +260,11 @@ func (r *Runner) runCommandSubst(ctx context.Context, span syntax.Span) string {
 	// The same group a subshell gets, and the same lifetime: the expansion
 	// does not finish until the body has. See Runner.anchorForkedBody.
 	defer sub.anchorForkedBody()()
+	// And what a real shell forks it as, which is never a job: the group the
+	// anchor leads is this shell's arrangement under the monitor too, and a
+	// kill aimed at it is refused. Read rather than asked: see
+	// aimedAtAGroupNoForkLeads (#7324).
+	sub.process.job = aCommandSubstitution
 	if _, err := sub.Run(ctx, f); err != nil {
 		r.diagf("%v\n", err)
 		return ""

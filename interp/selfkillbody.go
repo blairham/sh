@@ -350,18 +350,40 @@ func (r *Runner) settleCopiesSignals() bool {
 // first element and a `<(…)` do where the dialect gives them a group at all.
 // That one is a split and asks its axis, and only here, at a kill aimed at
 // the body's own number (#7318, #7306). See jobgroupsignal.go.
+//
+// A `$( … )` is not a split and asks nothing: no shell forks it as a job, so
+// it leads no group with the monitor or without it, forked by the shell itself
+// or inside another body. Measured 2026-11-01, bash 5.3.20 and 3.2.57 and dash
+// with the number read back from a child (`p=$(exec /bin/sh -c 'echo
+// $PPID')`), bash 5.3.20 also with `$BASHPID`, zsh 5.9.2 with
+// `$sysparams[pid]`, bash with no terminal and each shell in a group of its
+// own, zsh and dash on a pseudo-terminal:
+//
+//	set -m; echo $( p=<pid>; kill -0 -$p; echo k=$? )
+//	        no such process, k=1 in bash, zsh and dash; here, before: k=0
+//	…without `set -m`                             the same, here too
+//	set -m; ( p=<pid>; kill -0 -$p; echo k=$? )   k=0: a job's group
+//	set -m; ( echo $( p=<pid>; kill -0 -$p; echo k=$? ) )
+//	        bash, zsh: no such process; here, before: k=0
+//	set -m; ( set -m; echo $( p=<pid>; kill -0 -$p; echo k=$? ) )
+//	        bash: no such process, where `( set -m; ( … ) )` is k=0
+//
+// The last pair is the noun: with job control back on inside the parentheses
+// bash makes a `( … )` a group again and a `$( … )` still none, so it is the
+// kind of body that decides and not the depth. ksh93u+ forks neither, and the
+// number read back from a child is the shell's own (#7324).
 
 // aimedAtAGroupNoForkLeads reports that pid names, as a process group, the
 // group this body or one it was copied from leads here and would not lead in
-// a shell that forks: a body forked with the monitor off, or the one the
-// shell forked under it as something that leads no group.
+// a shell that forks: a body forked with the monitor off, a `$( … )`, or the
+// one the shell forked under the monitor as something that leads no group.
 func (r *Runner) aimedAtAGroupNoForkLeads(pid int) bool {
 	if pid >= allProcesses {
 		return false
 	}
 	for p := r.process; p != nil; p = p.outer {
 		if p.anchor.leads(-pid) {
-			if !p.monitored {
+			if !p.monitored || p.job == aCommandSubstitution {
 				return true
 			}
 			return p.outer == nil && p.job != notAJob && !r.jobLeadsItsGroup(p)

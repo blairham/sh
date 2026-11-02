@@ -2363,8 +2363,36 @@ So under the monitor a foreground pipeline is a group of its own led by
 its first element in bash, zsh, dash and ash and not in ksh93
 (MonitoredPipelineIsAGroupOfItsOwn, #7318), and a `<(…)` leads one in
 zsh alone (MonitoredProcessSubstitutionIsAGroupOfItsOwn, #7306). A later
-element never leads the group, in any column. A `$( … )` is neither: no
-shell forks it as a job, and its own number is #7324's.
+element never leads the group, in any column.
+
+A `$( … )` is neither, and not a split: no shell forks it as a job, so it
+leads no group with the monitor or without it, and a kill aimed at its own
+number is refused as one no fork leads. Measured 2026-11-01, bash 5.3.20
+with `$BASHPID`, bash 5.3.20, 3.2.57 and dash with the number read back
+from a child (`p=$(exec /bin/sh -c 'echo $PPID')`), zsh 5.9.2 with
+`$sysparams[pid]`; bash with no terminal, zsh and dash on a
+pseudo-terminal:
+
+    set -m; echo $( p=<pid>; kill -0 -$p; echo k=$? )
+                                 bash, zsh, dash: no such process, k=1
+    …without `set -m`             the same
+    set -m; ( p=<pid>; kill -0 -$p; echo k=$? )
+                                 bash, zsh, dash: k=0
+    set -m; ( echo $( p=<pid>; kill -0 -$p; echo k=$? ) )
+                                 bash, zsh: no such process
+    set -m; ( set -m; echo $( p=<pid>; kill -0 -$p; echo k=$? ) )
+                                 bash: no such process, where
+                                 `( set -m; ( … ) )` is k=0
+    set -m; trap 'echo T' USR1; echo "x$(kill -USR1 0; echo in)y"
+                                 xy and T in every column, with the
+                                 monitor and without it
+
+The kind of body decides, not its depth: with job control back on inside
+the parentheses bash makes a `( … )` a group again and a `$( … )` still
+none. And a group kill to `0` from inside one reaches the shell's group,
+which is the group the substitution is in. ksh93u+ forks neither, and the
+number read back from a child is the shell's own. Here the own-number row
+was k=0 under the monitor, the placeholder's group answering (#7324).
 
 The lesson is about the instrument: a corpus records what a shell does,
 and it cannot record a *sometimes*. Anything measured has to be

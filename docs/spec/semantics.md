@@ -28595,6 +28595,47 @@ it rather than that command's own. zsh alone: after `false; kill -INT
 $$`, zsh's handler reads 1 where the others read 0, because `kill`
 succeeded.
 
+Only where the handler runs inside the shell's own builtin, which is its
+own `kill` or a `wait` that an arrival interrupts, or as a command
+substitution ends. A signal from another process that lands while the
+shell waits for a child (a program, a `( … )`, an element of a pipeline of
+several) is answered as the pipeline ends, and zsh's handler then sees the
+status the child left, as every other shell's does. Measured 2026-11-02
+under `-c`, after `trap 'echo U $?' USR1; false;`, with `S` a script that
+signals the shell, lingers a tenth of a second and exits with its operand:
+`$S 3; echo b$?` is `U 3, b3` in bash 5.3.20, bash 3.2.57, zsh 5.9.2,
+ksh93u+ and dash, and so are an `if` or `while` condition and a function
+whose body runs it. `if $S 3; then :; fi` is `U 3` in all five, because the
+handler runs before the `if` decides its status, and `{ $S 3; } >/dev/null`
+writes the handler's output into the group's redirection in all five
+(#7364). A pipeline of builtins alone keeps the earlier status in zsh: an
+arrival that interrupts `wait` shows 1 there, and `128 + N` in bash and
+dash.
+
+**`SignalHandlerSeesTheNegatedStatus`** — bash yes · dash no · ksh93 no ·
+zsh no
+
+Answers a signal from another process that lands during a negated pipeline
+of one command after the `!` has inverted its status, so the handler sees
+the inverted status. The others answer it before the `!`, and the handler
+sees the command's own. Measured as above (#7365):
+
+| row | bash 5.3.20 · 3.2.57 | zsh 5.9.2 · ksh93u+ · dash |
+| --- | --- | --- |
+| `false; ! $S 3; echo b$?` | `U 0`, `b0` | `U 3`, `b0` |
+| `false; ! $S 3 && echo a$?` | `U 0`, `a0` | `U 3`, `a0` |
+| `true; ! $S 0; echo b$?` | `U 1`, `b1` | `U 0`, `b1` |
+| `false; ! ( $S 3 ); echo b$?` | `U 0`, `b0` | `U 3`, `b0` |
+
+The rule is keyed on the pipeline being one command. `! $S 3 | /bin/cat` is
+`U 0` in all five, before the `!`, and `! { $S 3; }` is `U 3` in all five,
+because the group's own command ends inside it and is answered there. Asked
+only where the shell itself, not a subshell, ends a negated pipeline of one
+command with a handler waiting for a signal another process sent. Not
+modeled: bash's own `kill` gives the same split, `true; ! kill -USR1 $$`
+being `U 1` there and `U 0` in the others, and this shell answers it as the
+builtin returns, before the `!`.
+
 **`WaitingHandlersRun`** — bash, dash, ash up the signal numbers · ksh93
 down them · zsh as they arrived
 

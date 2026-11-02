@@ -107,6 +107,9 @@ func (r *Runner) childReaped() {
 // sites: a background job waits inside its own cloned runner, so the lists
 // touched here are never another goroutine's.
 func (r *Runner) childWaitedFor() {
+	// And the pipeline running has waited for a child, which is what a
+	// handler as it ends is shown. See Runner.answerArrivalsAsThePipelineEnds.
+	r.waitedForAChild = true
 	// Where the shell notices what else has ended, too. See
 	// Runner.noticeElementEnds.
 	r.noticeElementEnds()

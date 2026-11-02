@@ -4400,6 +4400,12 @@ type Runner struct {
 	// statusBefore is `$?` as it was before the current statement, which one
 	// dialect shows to a signal handler instead of the current one.
 	statusBefore int
+	// waitedForAChild says the pipeline now running has waited for a child
+	// of this shell to end: an external command, a `( … )`, a substitution,
+	// or an element of a pipeline of several. One dialect's handler for a
+	// signal from another process sees the status that child left rather
+	// than an earlier one. See Runner.answerArrivalsAsThePipelineEnds.
+	waitedForAChild bool
 	// statusWhenTheCommandBegan is `$?` as it stood when the command now
 	// running was dispatched — per command rather than per statement, so
 	// the second command of a `&&` list reads the first's. One dialect
@@ -8705,6 +8711,11 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 }
 
 func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
+	// Whether this pipeline waits for a child is its own question, and the
+	// answer is the enclosing one's too: a call that ran a program has.
+	outerWaited := r.waitedForAChild
+	r.waitedForAChild = false
+	defer func() { r.waitedForAChild = r.waitedForAChild || outerWaited }()
 	// An operand of an `&&`/`||` list whose firing was made once for the
 	// whole list makes none of its own — not the pipeline's, and not the
 	// head or the simple command's firing one element would otherwise make.
@@ -8794,6 +8805,8 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 		if err := r.runPipeline(ctx, p, timing, timed, quiet); err != nil {
 			return err
 		}
+		// Every element is a child of the shell in the shells this models.
+		r.waitedForAChild = true
 		// A fatal signal from outside that landed while the shell waited:
 		// what the EXIT trap reads for it. See outsidedeath.go.
 		r.aPipelineGaveUpForADeath(began)
@@ -8814,7 +8827,17 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 		// as the wait for it ends. See answerCopiesAsTheWaitEnds.
 		r.answerCopiesAsTheWaitEnds(ctx, r.status)
 	}
-	if p.Negated && r.negationInverts() {
+	// What arrived from another process while the pipeline ran, answered as
+	// it ends and before a `!` inverts its status — after it, in the one case
+	// of one dialect's. See answerArrivalsAsThePipelineEnds.
+	inverts := p.Negated && r.negationInverts()
+	afterTheNegation := inverts && r.handlerSeesTheNegatedStatus(p)
+	if !afterTheNegation && r.ctl == controlNone {
+		if r.answerArrivalsAsThePipelineEnds(ctx); r.ctl != controlNone {
+			return nil
+		}
+	}
+	if inverts {
 		// `!` applies to the whole pipeline and inverts its status.
 		if r.status == 0 {
 			r.status = 1
@@ -8822,6 +8845,9 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 			r.status = 0
 		}
 		r.judgeANegatedCall(ctx, outerTested)
+	}
+	if afterTheNegation {
+		r.answerArrivalsAsThePipelineEnds(ctx)
 	}
 	return nil
 }

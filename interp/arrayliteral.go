@@ -1256,6 +1256,14 @@ func (r *Runner) literalSubscriptIsAKey(name string, parsed []literalElem, appen
 			return false
 		}
 	}
+	return r.literalSubscriptsAreKeys(answer, parsed)
+}
+
+// literalSubscriptsAreKeys is literalSubscriptIsAKey's question asked of the
+// literal alone, with nothing about a name to change the answer: the reading a
+// literal standing in one element's place takes too. See
+// interp/nestedtable.go (#6778).
+func (r *Runner) literalSubscriptsAreKeys(answer Answer, parsed []literalElem) bool {
 	for _, e := range parsed {
 		if !e.subscripted {
 			continue

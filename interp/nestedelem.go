@@ -148,6 +148,11 @@ func (r *Runner) nestedLiteral(name string, elems []*syntax.ArrayElem) (Element,
 	if !ok {
 		return Element{}, false
 	}
+	if table, keyed := r.nestedTable(parsed); keyed {
+		// Subscripts that are keys build a table, as they do for a name.
+		// See interp/nestedtable.go (#6778).
+		return table, true
+	}
 	built, ok := r.literalInto(name, NewArray(0), 0, parsed, false)
 	if !ok {
 		return Element{}, false
@@ -248,6 +253,11 @@ func (r *Runner) storeAssocElement(name, key string, value Element) {
 // read out of the store may be the one a saved scope is holding: see
 // clonetables.go, where the outer maps are cloned a level at a time.
 func nestedAppended(held, value Element, appendTo bool) Element {
+	if appendTo && held.Table != nil && value.Table != nil {
+		// A table joined by a table: the keys written land beside the ones
+		// already there. See interp/nestedtable.go (#6778).
+		return Element{Table: tableJoined(held.Table, value.Table)}
+	}
 	if !appendTo || held.Nested == nil {
 		return value
 	}
@@ -292,6 +302,9 @@ func (r *Runner) listedElement(e Element, place ListedValuePlace) string {
 		// which asks about the *nested array* an element holds and so
 		// answers no for this one without being told.
 		return "(" + r.compoundVariableBody(e.Str, true) + ")"
+	}
+	if e.Table != nil {
+		return r.nestedTableListing(e.Table)
 	}
 	if e.Nested == nil {
 		return r.declareQuoted(e.Str, place)
@@ -347,7 +360,7 @@ func (r *Runner) nestedListing(a Array) string {
 // No axis: only the dialect that nests can produce an element this answers
 // for, so no other column can reach it.
 func nestTrailingSpace(last Element, any bool) string {
-	if any && last.Nested.Len() > 0 {
+	if any && (last.Nested.Len() > 0 || len(last.Table) > 0) {
 		return " "
 	}
 	return ""
@@ -389,7 +402,7 @@ func keyedNestedAppended(t AssocArray, key string, value Element) Element {
 	if !had {
 		return value
 	}
-	if held.Nested == nil {
+	if held.Nested == nil && held.Table == nil {
 		held = Element{Nested: ArrayOf(Scalar(held.Str))}
 	}
 	return nestedAppended(held, value, true)

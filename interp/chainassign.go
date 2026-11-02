@@ -202,6 +202,19 @@ func (r *Runner) chainWrite(name string, held Element, there bool, place func(El
 ) (links []string, wrote bool) {
 	links = make([]string, 0, len(rest)+1)
 	for _, text := range rest {
+		if held.Table != nil {
+			// A table a keyed literal made of an element takes the link as a
+			// key, as the name's own table takes the first one. See
+			// interp/nestedtable.go (#6778).
+			tbl, key, outerPlace := held.Table.clone(), text, place
+			links = append(links, key)
+			held, there = tbl[key]
+			place = func(e Element) {
+				tbl[key] = e
+				outerPlace(Element{Table: tbl})
+			}
+			continue
+		}
 		inner := nestedForWrite(held, there, r.arrayBase())
 		idx, err := r.subscriptValue(text)
 		if err != nil {
@@ -215,6 +228,9 @@ func (r *Runner) chainWrite(name string, held Element, there bool, place func(El
 			outer.Set(idx, e)
 			outerPlace(Element{Nested: outer})
 		}
+	}
+	if held.Table != nil {
+		return r.chainWriteIntoATable(name, held.Table, place, links, last, value, appendTo, build)
 	}
 	inner := nestedForWrite(held, there, r.arrayBase())
 	idx, err := r.subscriptValue(last)

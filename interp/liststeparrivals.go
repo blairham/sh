@@ -44,11 +44,11 @@ import "context"
 // The handler sees the left side's status, the one the list decides on — in
 // zsh too, the dialect whose handler between commands is shown an earlier one
 // (Semantics.SignalHandlerSeesEarlierStatus). Not a dialect split at this
-// moment, so nothing asks a Semantics axis. Two splits next to it are recorded
-// and not modeled here: zsh shows the command's status between commands too,
-// for an arrival from outside during an external command (#7364), and a
-// negated left side's handler sees the status before the `!` in zsh, ksh93
-// and dash where bash sees the inverted one (#7365).
+// moment, so nothing asks a Semantics axis. An arrival from another process
+// is answered sooner now, as the left side's pipeline ends — before its `!`
+// in zsh, ksh93 and dash, after it in bash — so what this step still finds
+// waiting is a copy's, or one that landed after that pipeline's end
+// (answerArrivalsAsThePipelineEnds, #7364, #7365).
 
 // answerArrivalsBeforeTheListGoesOn runs, at an and-or list's step, the
 // handlers for what arrived while the left side ran, showing seen — the left

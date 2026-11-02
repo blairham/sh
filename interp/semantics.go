@@ -6424,7 +6424,57 @@ type Semantics struct {
 	// before the command that triggered it rather than that command's own.
 	// zsh alone: after `false; kill -INT $$`, zsh's handler reads 1 where
 	// the others read 0, because `kill` succeeded.
+	//
+	// Only where the handler runs inside the shell's own builtin — its own
+	// `kill`, or a `wait` an arrival interrupts — or as a substitution ends.
+	// A handler that runs as the wait for a child ends, for a signal from
+	// another process, sees the status the child left in zsh too: `false;
+	// /bin/kill -USR1 $$` reads 0 in all five (#7364). So the shell shows
+	// that one there, as the pipeline ends.
 	SignalHandlerSeesEarlierStatus Answer
+	// SignalHandlerSeesTheNegatedStatus answers a signal from another
+	// process that lands during a negated pipeline of one command after the
+	// `!` has inverted its status, so the handler sees the inverted one. No
+	// answers it before the `!`, and the handler sees the command's own.
+	//
+	// bash 5.3.20 and 3.2.57 answer yes; zsh 5.9.2, ksh93u+ 2012-08-01 and
+	// dash no. Measured 2026-11-02 under `-c`, each shell in a process group
+	// of its own, `S` a `/bin/sh` script that signals `$$`, lingers a tenth
+	// of a second and exits with its second operand, after `trap 'echo U
+	// $?' USR1; false;` (#7365):
+	//
+	//	! $S $$ 3; echo b$?          bash U 0, b0     zsh, ksh93, dash U 3, b0
+	//	! $S $$ 3 && echo a$?        bash U 0, a0     the others U 3, a0
+	//	true; ! $S $$ 0; echo b$?    bash U 1, b1     the others U 0, b1
+	//	! ( $S $$ 3 ); echo b$?      bash U 0, b0     the others U 3, b0
+	//
+	// Keyed on the pipeline being one command, not on what the command is:
+	// `! $S $$ 3 | /bin/cat` is U 0 in all five, before the `!`, and `! {
+	// $S $$ 3; }` is U 3 in all five because the group's own command ends
+	// inside it, where the handler is answered.
+	//
+	// Asked only where the shell itself, not a subshell, ends a negated
+	// pipeline of one command with a handler waiting for a signal another
+	// process sent. Not modeled: bash's own `kill` gives the same split —
+	// `true; ! kill -USR1 $$` is U 1 there and U 0 in the others — and is
+	// answered here as the builtin returns, before the `!`.
+	//
+	// unpinned zsh: no corpus row times a signal from another process
+	// against a negated command. Pinned by
+	// TestASignalFromAnotherProcessIsAnsweredAsThePipelineEnds.
+	//
+	// unpinned ksh: the same reach. Pinned by
+	// TestASignalFromAnotherProcessIsAnsweredAsThePipelineEnds.
+	//
+	// unpinned bash: the same reach. Pinned by
+	// TestASignalFromAnotherProcessIsAnsweredAsThePipelineEnds.
+	//
+	// unpinned dash: the same reach. Pinned by
+	// TestASignalFromAnotherProcessIsAnsweredAsThePipelineEnds.
+	//
+	// unpinned ash: the same reach, and not measured: BusyBox ash holds
+	// PosixSemantics' answer.
+	SignalHandlerSeesTheNegatedStatus Answer
 	// WaitingHandlersRun is the order the handlers of several signals run
 	// in when they are waiting together — arrived while a foreground command
 	// ran, and run when it is done. See WaitingHandlerOrder for the
@@ -37793,6 +37843,9 @@ func PosixSemantics() Semantics {
 		// construction; BusyBox ash is the one that overrides it.
 		ReplacementEndsTheJoinedFieldList: No,
 		SignalHandlerSeesEarlierStatus:    No,
+		// And a signal from another process during a negated command is
+		// answered before the `!`: zsh, ksh93 and dash. See the field.
+		SignalHandlerSeesTheNegatedStatus: No,
 		// POSIX says a bare `exit` reports the status of the last command,
 		// and in an EXIT trap it names the value `$?` had when the trap was
 		// entered — which is what six of the seven columns do. Measured

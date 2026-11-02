@@ -268,3 +268,78 @@ func TestASignalFromAnotherProcessIsAnsweredBeforeTheListGoesOn(t *testing.T) {
 		}
 	}
 }
+
+// A signal from another process that lands while a pipeline runs is answered
+// as the pipeline ends, the handler showing the status it left — zsh's too,
+// where a child was waited for (#7364) — and before a `!` inverts it, except
+// for a negated command of one in bash, whose handler sees the inverted status
+// (#7365): interp.Semantics.SignalHandlerSeesTheNegatedStatus.
+//
+// Measured 2026-11-02 under `-c`, each shell in a process group of its own,
+// against bash 5.3.20, bash 3.2.57, zsh 5.9.2, ksh93u+ 2012-08-01 and dash.
+// The sender lingers a tenth of a second before it exits, as in the test
+// above, so the arrival has reached the shell by the time the command ends;
+// `/bin/kill -USR1 $$; echo b$?`, U 0 in all five, is that row with no
+// linger, and the runtime may hand the signal over after the next command
+// here. The rows of a negated command of one split bash, U 0 after `false` and U 1
+// after `true`, from zsh, ksh93 and dash, U 3 and U 0; the rest agree in all
+// five but the last two. There zsh's handler sees the earlier status, inside
+// its own builtin — the shell's own `kill`, U 1 where the others show 0, and a
+// `wait` the arrival interrupts, U 1 where bash and dash show 128 + USR1 and
+// ksh93 shows 1 and its `wait` returns 1 — which is
+// interp.Semantics.SignalHandlerSeesEarlierStatus and holds. The handler of
+// the last row prints whether `$?` is past 128, the numbers being the
+// platform's.
+func TestASignalFromAnotherProcessIsAnsweredAsThePipelineEnds(t *testing.T) {
+	const shown = `trap 'echo U $?' USR1; false; `
+	send := func(status string) string {
+		return `/bin/sh -c 'kill -USR1 $1; /bin/sleep 0.1; exit $2' sh $$ ` + status
+	}
+	const interrupted = `trap 'echo U $(($? > 128))' USR1; ` +
+		`/bin/sh -c '/bin/sleep 0.2; kill -USR1 $1' sh $$ >/dev/null 2>&1 & ` +
+		`/bin/sleep 3 >/dev/null 2>&1 & false; wait $!; echo b$(($? > 128))`
+	for _, dialect := range []string{"bash", "zsh", "dash", "ksh"} {
+		negated, ownKill, waited := "U 3", "U 0 b0", "U 1 b1"
+		switch dialect {
+		case "bash":
+			negated = "U 0"
+		case "zsh":
+			ownKill, waited = "U 1 b0", "U 0 b1"
+		case "ksh":
+			waited = "U 0 b0"
+		}
+		afterTrue := "U 0 b1"
+		if dialect == "bash" {
+			afterTrue = "U 1 b1"
+		}
+		// The last command's row ends the shell at its status. ksh93 runs that
+		// command in place of itself and answers nothing; this shell's ksh
+		// answers as the others do.
+		for _, c := range []struct {
+			src, want string
+			st        int
+		}{
+			{shown + send("3") + `; echo b$?`, "U 3 b3", 0},
+			{shown + `if ` + send("3") + `; then :; else echo e$?; fi`, "U 3 e3", 0},
+			{shown + `while ` + send("0") + `; do echo w$?; break; done`, "U 0 w0", 0},
+			{shown + `f() { ` + send("3") + `; }; f; echo b$?`, "U 3 b3", 0},
+			{shown + send("3"), "U 3", 3},
+			{shown + `if ` + send("3") + `; then :; fi; echo b$?`, "U 3 b0", 0},
+			{shown + `{ ` + send("3") + `; } >/dev/null; echo a$?`, "a3", 0},
+			{shown + `! { ` + send("3") + `; }; echo b$?`, "U 3 b0", 0},
+			{shown + `! ` + send("3") + ` | /bin/cat; echo b$?`, "U 0 b1", 0},
+			{shown + `! ` + send("3") + `; echo b$?`, negated + " b0", 0},
+			{shown + `! ` + send("3") + ` && echo a$?`, negated + " a0", 0},
+			{shown + `! ( ` + send("3") + ` ); echo b$?`, negated + " b0", 0},
+			{shown + `f() { ! ` + send("3") + `; }; f; echo b$?`, negated + " b0", 0},
+			{`trap 'echo U $?' USR1; true; ! ` + send("0") + `; echo b$?`, afterTrue, 0},
+			{shown + `kill -USR1 $$; echo b$?`, ownKill, 0},
+			{interrupted, waited, 0},
+		} {
+			ws, out := endsOnItsOwn(t, dialect, c.src)
+			if got := strings.Join(strings.Fields(out), " "); got != c.want || ws.Signaled() || ws.ExitStatus() != c.st {
+				t.Errorf("%s: %s\n got %q, ended %v\nwant %q at %d", dialect, c.src, got, ws, c.want, c.st)
+			}
+		}
+	}
+}

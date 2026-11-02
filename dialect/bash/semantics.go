@@ -1234,6 +1234,12 @@ func Semantics() interp.Semantics {
 	// Measured 2026-10-31 on 5.3.20 and 3.2.57; see
 	// interp.Semantics.HandlersRunAsASubstitutionEnds (#7175).
 	s.HandlersRunAsASubstitutionEnds = interp.No
+	// A signal another process sends during a negated command of one is
+	// answered after the `!`, so its handler sees the inverted status:
+	// `false; ! $S $$ 3` shows U 0, where the others show the command's 3.
+	// Measured 2026-11-02 on 5.3.20 and 3.2.57; see
+	// interp.Semantics.SignalHandlerSeesTheNegatedStatus (#7365).
+	s.SignalHandlerSeesTheNegatedStatus = interp.Yes
 	// A directory the PATH search walked past leaves no trace: with nothing
 	// runnable anywhere, bash says the name was never found at all.
 	s.DirectoryOnPathIsACandidate = interp.No

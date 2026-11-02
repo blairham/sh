@@ -93,6 +93,7 @@ func TestAProcessSubstitutionWritesNothingToTheFilesystem(t *testing.T) {
 // writing end a later command is holding, and there is nothing to time out
 // but the test binary.
 func TestALaterCommandDoesNotInheritASubstitutionsDescriptor(t *testing.T) {
+	t.Parallel()
 	out, st := run(t, "echo x | tee >(tr a-z A-Z) >/dev/null\nsleep 0.4\n", nil)
 	if st != 0 {
 		t.Fatalf("status %d, want 0", st)

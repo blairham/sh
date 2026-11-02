@@ -174,6 +174,7 @@ func TestTheStatusForAJobSpecThatNamesNothing(t *testing.T) {
 // tell it from the one above and from a plain `wait`. See
 // interp.WaitNextJobFirstToSucceed for the measurement behind each (#3245).
 func TestWaitNextJobIsTheFirstToSucceed(t *testing.T) {
+	t.Parallel()
 	succeeds := func(s *Semantics) { s.WaitNextJob = WaitNextJobFirstToSucceed }
 	for _, tc := range []struct {
 		name string
@@ -207,9 +208,9 @@ func TestWaitNextJobIsTheFirstToSucceed(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			// Side by side with each other and with nothing else: every row
-			// is a Runner and jobs of its own, the test itself stays serial,
-			// and the rows' time is their jobs' sleeps (#7290).
+			// Side by side with each other and with the package's other
+			// parallel tests: every row is a Runner and jobs of its own, and
+			// the rows' time is their jobs' sleeps (#7290).
 			t.Parallel()
 			out, errs, _ := declRun(t, tc.src, succeeds, Diagnostics{})
 			if !strings.Contains(out, tc.want) || errs != "" {

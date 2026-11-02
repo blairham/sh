@@ -51,6 +51,7 @@ import (
 // half a row asserting only the ordering would let go: every `want` below
 // holds `[PIPE]`, and the axis moves where it sits (#2197).
 func TestAWritingSubstitutionsBodyIsWaitedForByTheCommandThatNamedIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 	}{
@@ -102,6 +103,7 @@ func TestAWritingSubstitutionsBodyIsWaitedForByTheCommandThatNamedIt(t *testing.
 // and a subshell is not — and a reading where the subshell joined would pass
 // the rows above, since neither of them has one.
 func TestWhereAnUnwaitedForBodyIsJoined(t *testing.T) {
+	t.Parallel()
 	const body = `>(read -r v; sleep 0.2; printf "[%s]" "$v")`
 	for _, tc := range []struct{ name, src, want string }{
 		{

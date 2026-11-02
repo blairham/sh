@@ -25,6 +25,7 @@ import (
 // external fired for the external rather than for the subshell — so a test
 // that only covered the broken rows would leave the accident in place.
 func TestTheChildTrapFiresOncePerFork(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src string
 		want      int
@@ -79,6 +80,7 @@ func TestTheChildTrapFiresOncePerFork(t *testing.T) {
 // any other child; this shell runs each as a job of its own, which is the same
 // place the count belongs.
 func TestAProcessSubstitutionAndACoprocessAreForksToo(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, src string
 		enable    func(*syntax.Dialect)

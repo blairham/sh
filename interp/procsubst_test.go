@@ -59,6 +59,7 @@ func TestProcessSubstitutionReadsACommandAsAFile(t *testing.T) {
 // per writer gives two substitutions two locks over one io.Writer, which
 // excludes nothing and is what this was first written as.
 func TestProcessSubstitutionSharesTheCallersStreamsSafely(t *testing.T) {
+	t.Parallel()
 	w := &overlapWriter{}
 	if _, st := run(t, `echo a > >(cat); echo b > >(cat); sleep 0.5`, func(r *Runner) {
 		r.Stdout = w

@@ -110,6 +110,7 @@ func TestABackgroundJobIsOneChildTrapArrival(t *testing.T) {
 // stopped the flake: two of the three failures were an arrival that never
 // arrived at all.
 func TestAWaitIsNotEndedByTheDeathOfAChildItIsWaitingFor(t *testing.T) {
+	t.Parallel()
 	const src = "n=0\ntrap 'n=$((n+1))' CHLD\n" +
 		"/bin/sleep 0.1 &\n/bin/sleep 0.2 &\n/bin/sleep 0.3 &\n" +
 		"wait\n" +

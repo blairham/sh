@@ -54,6 +54,7 @@ func toldWith(t *testing.T, src string, monitor bool, announces, withoutMonitor 
 // and dash say nothing. With the monitor on all four but dash announce, which
 // is the axis above and is held still here so that what moves is this one.
 func TestTheStartNoticeUnderAMonitorThatIsOff(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name           string
 		monitor        bool
@@ -83,6 +84,7 @@ func TestTheStartNoticeUnderAMonitorThatIsOff(t *testing.T) {
 // the panel says anything when one finishes, so this is shared ground and
 // FinishedJobNotices is simply silent.
 func TestTheFinishNoticeRidesOnTheMonitor(t *testing.T) {
+	t.Parallel()
 	_, on := toldWith(t, `true & sleep 0.05`, true, No, Unspecified)
 	if notices := on.FinishedJobNotices(); len(notices) != 1 || !strings.Contains(notices[0], "Done") {
 		t.Errorf("with the monitor on: notices = %q, want the finished job reported", notices)

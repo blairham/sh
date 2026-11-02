@@ -30,6 +30,7 @@ import (
 // the half that must not be traded away: a shell that named a signal whenever
 // the status was non-zero would pass a grid that only ever killed things.
 func TestAFinishedJobsNoticeNamesTheSignal(t *testing.T) {
+	t.Parallel()
 	const killsItself = `/bin/sh -c 'kill -USR1 $$' & sleep 0.2`
 	// And the same job ending by its own hand, with the same non-zero status
 	// shape, which is what says the branch is keyed on the signal.
@@ -120,6 +121,7 @@ func TestAFinishedJobsNoticeNamesTheSignal(t *testing.T) {
 // shell. What it guards is the opposite mistake: a signal word wired into
 // FinishedJobNotices alone would leave `jobs` calling the same job done.
 func TestAListingUsesTheSignalWordToo(t *testing.T) {
+	t.Parallel()
 	var r *Runner
 	dg := Diagnostics{
 		JobSignaled:        "%[1]s",

@@ -444,6 +444,7 @@ func itoaForTest(n int) string { return strconv.Itoa(n) }
 // at is 4, so every reading answers a different number: 4, 123, 0, and the
 // refusal an unanswered axis gives.
 func TestABareReturnInATrapActionHasFourReadings(t *testing.T) {
+	t.Parallel()
 	const src = "f() { return $1; }\n" +
 		"h() { ( /bin/sleep 0.1; kill -USR1 $$ ) & ( /bin/sleep 0.5; exit 4 ); return 7; }\n" +
 		"trap 'f 123; return' USR1\n" +

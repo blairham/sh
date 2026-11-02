@@ -122,6 +122,7 @@ func TestAnUnansweredHandlerOrderIsRefusedOnlyWhereItDecides(t *testing.T) {
 // `read` that goes on: bash 5.3.20, bash 3.2.57 and zsh 5.9.2 run USR1 HUP,
 // and USR1 > HUP by number.
 func TestSignalsLandingInAReadRunInTheOrderTheyCame(t *testing.T) {
+	t.Parallel()
 	src := "/usr/bin/mkfifo p; exec 4<>p 3<p\n" +
 		"for s in HUP USR1; do trap \"echo $s\" $s; done\n" +
 		"(/bin/sleep 0.2; kill -USR1 $$; /bin/sleep 0.2; kill -HUP $$; /bin/sleep 0.2; echo cd >p) &\n" +

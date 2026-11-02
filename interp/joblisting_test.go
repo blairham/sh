@@ -14,6 +14,7 @@ import (
 // shells split two ways — so both are the dialect's to answer and neither is
 // something the core may decide.
 func TestWhatAJobsListingContains(t *testing.T) {
+	t.Parallel()
 	// Instant, so the job has certainly ended by the time `jobs` runs.
 	const src = `true & sleep 0.05; jobs; echo "---"; jobs`
 
@@ -55,6 +56,7 @@ func TestWhatAJobsListingContains(t *testing.T) {
 // own number either way — the number says which job `%2` means, so it cannot
 // be the row's place in the listing.
 func TestWhichEndAJobsListingStartsFrom(t *testing.T) {
+	t.Parallel()
 	const src = `sleep 0.3 & sleep 0.3 & jobs`
 	for _, tc := range []struct {
 		name    string
@@ -84,6 +86,7 @@ func TestWhichEndAJobsListingStartsFrom(t *testing.T) {
 // The core refuses rather than picking an end, and asks only where the answer
 // decides something: one job is in the same place either way.
 func TestAJobsListingRefusesOnlyWhereTheAnswerMatters(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src, axis string
 	}{

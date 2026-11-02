@@ -111,6 +111,7 @@ func TestAJobNobodyStoppedIsNotWaitedForOnTheWayOut(t *testing.T) {
 // at all rather than being a plain receive. The row asserts the bound holds
 // from both sides: the shell really waited, and it really stopped waiting.
 func TestAStopNoteThatNeverComesCostsTheWindowAndNoMore(t *testing.T) {
+	t.Parallel()
 	var errs strings.Builder
 	r := leavingRunner(t, &errs)
 	j := expectedStopJob(r)

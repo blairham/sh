@@ -20,6 +20,7 @@ import (
 // The monitor is what tells the two apart, and that is the whole test: the
 // same script, the same finished job, one `set -m` between them.
 func TestAnEndedJobIsListedAsRunningWithoutTheMonitor(t *testing.T) {
+	t.Parallel()
 	const ended = `true & sleep 0.05; jobs`
 
 	endedListing := func(t *testing.T, src string, blind Answer) string {

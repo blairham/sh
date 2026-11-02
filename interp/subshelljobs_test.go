@@ -43,6 +43,7 @@ func subshellJobsRun(t *testing.T, answer SubshellJobTable, src string) string {
 // keeps them for a simple command and a substitution while clearing them for
 // a compound.
 func TestASubshellsViewOfTheParentsJobs(t *testing.T) {
+	t.Parallel()
 	const tail = `; x=; read x <s.txt; case $x in "$first") echo parents;; "") echo none;; *) echo other;; esac; wait`
 	for _, b := range []struct {
 		name string
@@ -76,9 +77,9 @@ func TestASubshellsViewOfTheParentsJobs(t *testing.T) {
 		},
 	} {
 		t.Run(b.name, func(t *testing.T) {
-			// Side by side with each other and with nothing else: every row
-			// is a Runner, a directory and a job of its own, the test itself
-			// stays serial, and the rows' time is the job's sleep (#7290).
+			// Side by side with each other and with the package's other
+			// parallel tests: every row is a Runner, a directory and a job of
+			// its own, and the rows' time is the job's sleep (#7290).
 			t.Parallel()
 			src := `/bin/sleep 0.4 & first=$!; ` + b.body + tail
 			for _, a := range []struct {
@@ -105,6 +106,7 @@ func TestASubshellsViewOfTheParentsJobs(t *testing.T) {
 // boundary does not consult it: the panel is unanimous there, and an axis
 // asked where nothing disagrees is an axis that can be answered wrongly.
 func TestABackgroundJobNeverSeesTheParentsJobs(t *testing.T) {
+	t.Parallel()
 	const src = `/bin/sleep 0.4 & first=$!; { /bin/sleep 0.1; jobs -p >s.txt; } & wait; ` +
 		`x=; read x <s.txt; case $x in "$first") echo parents;; "") echo none;; *) echo other;; esac`
 	for _, a := range []struct {
@@ -127,6 +129,7 @@ func TestABackgroundJobNeverSeesTheParentsJobs(t *testing.T) {
 // the parent's. Without this an empty listing would be evidence that `jobs`
 // does not work in a subshell rather than that the table was emptied.
 func TestASubshellListsAJobItStartedItself(t *testing.T) {
+	t.Parallel()
 	const src = `/bin/sleep 0.4 & first=$!; (/bin/sleep 0.4 & jobs -p >s.txt; wait); ` +
 		`x=; read x <s.txt; case $x in "$first") echo parents;; "") echo none;; *) echo own;; esac; wait`
 	for _, a := range []struct {
@@ -162,6 +165,7 @@ func TestAnUnansweredSubshellJobAxisIsNotReachedWithoutAJob(t *testing.T) {
 
 // And a shell that does have a job says so rather than picking a side.
 func TestAnUnansweredSubshellJobAxisIsRefused(t *testing.T) {
+	t.Parallel()
 	out, _ := run(t, `/bin/sleep 0.4 & jobs -p | cat >/dev/null; wait`, func(r *Runner) {
 		s := *r.Semantics
 		s.SubshellJobTable = SubshellJobTableUnspecified

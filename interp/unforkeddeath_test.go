@@ -103,6 +103,7 @@ func handedOverWhileWaiting(
 // the subshell; bash 5.3.20 writes `bye 7` and dies at once, the parentheses
 // carrying on in a child of their own. This shell wrote `bye 7` in both.
 func TestADeathFromOutsideWaitsForAnUnforkedSubshellInOneDialect(t *testing.T) {
+	t.Parallel()
 	const trap = `trap 'echo "bye $?"' EXIT; (exit 7); `
 	for _, tc := range []struct {
 		name, src string
@@ -165,6 +166,7 @@ func TestADeathFromOutsideWaitsForAnUnforkedSubshellInOneDialect(t *testing.T) {
 // not; an element the parentheses fork runs to its end; and parentheses that
 // start a background job are forked by it, so the shell dies at once.
 func TestWhatASubshellWaitingOutADeathDoesWithIt(t *testing.T) {
+	t.Parallel()
 	const trap = `trap 'echo "bye $?"' EXIT; (exit 7); `
 	for _, tc := range []struct {
 		name, src string
@@ -215,6 +217,7 @@ func TestABuiltinInAnUnforkedSubshellEndsItAsKilled(t *testing.T) {
 // the shell still waits the subshell out: measured 2026-10-31 on ksh93u+, a
 // second TERM 0.4 s after the first (#7068).
 func TestASecondDeathWhileASubshellHoldsTheFirstIsTheFirst(t *testing.T) {
+	t.Parallel()
 	src := `trap 'echo "bye $?"' EXIT; (exit 7); ( P; echo in ); echo after`
 	got, taken := handedOverWhileWaiting(t, src, unforkedDeathSem(Yes), syscall.SIGTERM, 2)
 	if len(taken) != 2 || !taken[0] || !taken[1] {

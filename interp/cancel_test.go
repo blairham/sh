@@ -54,6 +54,7 @@ func runCancelable(
 // guard of its own and no end of its own, so nothing but this can stop it —
 // which is why #894's test could only be bounded and not ended.
 func TestARunawayScriptStopsWhenTheCallerCancelsIt(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, src string
 		enable    func(*syntax.Dialect)

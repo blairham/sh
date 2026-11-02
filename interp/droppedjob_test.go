@@ -29,6 +29,7 @@ func droppedJobs(t *testing.T, remember Answer, src string) (string, int) {
 // reported job says, and then nothing** — and a listing and an id lookup both
 // let the table go first. See Runner.dropped.
 func TestADroppedJobAnswersItsIdOnce(t *testing.T) {
+	t.Parallel()
 	const src = `(exit 4) & p=$!; /bin/sleep 0.2; jobs; wait $p; echo a=$?; wait $p; echo b=$?
 (exit 5) & /bin/sleep 0.2; jobs; wait %1; echo spec=$?
 (exit 6) & q=$!; /bin/sleep 0.2; wait $q; echo c=$?; wait $q; echo d=$?`
@@ -43,6 +44,7 @@ func TestADroppedJobAnswersItsIdOnce(t *testing.T) {
 // **The monitor keeps a finished job until something reports it**, with or
 // without a terminal.
 func TestTheMonitorKeepsAFinishedJob(t *testing.T) {
+	t.Parallel()
 	out, st := droppedJobs(t, Yes, `set -m; (exit 3) & /bin/sleep 0.2; wait %1; echo st=$?`)
 	if !strings.HasSuffix(out, "st=3\n") || st != 0 {
 		t.Errorf("got %q (status %d), want st=3", out, st)

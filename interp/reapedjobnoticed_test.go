@@ -132,6 +132,7 @@ func TestAProgramThatExitedUnreapedIsNoticedBeforeTheTableIsRead(t *testing.T) {
 // and `jobs` must not wait for it — a wait keyed on any program the job ran
 // would hold the shell until the function returned.
 func TestAProgramAFunctionRunsIsNotTheJobsEnd(t *testing.T) {
+	t.Parallel()
 	const src = `f() { /bin/sh -c 'exit 0'; /bin/sleep 5; }
 f &
 /bin/sleep 0.3
@@ -164,6 +165,7 @@ echo end`
 // on any program the job ran would be the ended one, and `jobs` would wait
 // for the function to return (#5651).
 func TestAProgramAFunctionRanThatEndedIsNotTheJobsEnd(t *testing.T) {
+	t.Parallel()
 	const src = `f() { /bin/sh -c 'exit 0'; /bin/sleep 4 & wait; }
 f &
 /bin/sleep 0.3

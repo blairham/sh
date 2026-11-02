@@ -896,6 +896,11 @@ func Semantics() interp.Semantics {
 	// shows the body `base5`, which is the append reading the shell's value
 	// (#3161).
 	s.PrefixToAKeywordFunctionIsScopedToTheCall = interp.No
+	// And a traced function's prefix is worked through once: measured
+	// 2026-11-01 on 5.3.20, `function g { echo "in x=$x"; }; declare -ft g;
+	// x=$(echo s >&2) g; echo "after x=$x"` writes `s` once and leaves `x`
+	// empty (#7092).
+	s.PrefixToATracedKeywordFunctionIsWorkedTwice = interp.No
 	// An array literal written as a prefix is a scalar holding its text, the
 	// elements expanded and joined: measured 2026-10-15 on 5.3.20, `x=(a
 	// $(echo b)) printenv x` is `(a b)` and `f(){ typeset -p x; }; x=(a b) f`

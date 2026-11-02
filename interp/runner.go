@@ -10534,97 +10534,8 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		return nil
 	}
 
-	if prefixFollows {
-		// ksh93 writes the assignment once the redirections are open and the
-		// value has expanded, which is why this stands here and not beside
-		// the branch above: `z=1 cmd >/nope/f` writes the command's line,
-		// then the complaint, and no assignment line at all — the value is
-		// never reached. Measured 2026-09-16 on ksh93u+ 2012-08-01.
-		//
-		// And an entry at a time: each is written as its value is expanded,
-		// so a value that will not expand ends the lines there — measured
-		// 2026-10-02, `set -x; a=1 b=${x?boom} true` writes `+ true`, `+
-		// a=1` and the complaint, and no `+ b=` (#5546).
-		walk := r.beginPrefixWalk(c.Assigns)
-		kind := r.prefixCommandOf(argv)
-		// The shell the walk expands in, which for a program is the copy its
-		// own route expands in — a side effect in a value or a subscript is
-		// the child's, and reading it here in this shell made `set -x`
-		// change the answer: `i=1; y=$((i++)) /usr/bin/true` left `i` at 2
-		// traced and at 1 untraced, where ksh93u+ leaves it at 1 either way.
-		// What the walk made comes back to this shell below, so the route
-		// reads it and expands nothing twice. See
-		// Runner.prefixExpansionShell.
-		//
-		// Only where that route is the one the command takes: `command
-		// /usr/bin/true` is the `command` builtin's, which expands its
-		// prefix in this shell, and a walk that expanded in a copy made the
-		// trace disagree with it.
-		_, aBuiltinRunsIt := r.lookupBuiltin(argv[0])
-		programsOwn := kind.kind == prefixBeforeExternal && !aBuiltinRunsIt
-		ex := r
-		if programsOwn {
-			if ex = r.prefixExpansionShell(c.Assigns); r.unspecified {
-				return nil
-			}
-		}
-		// Whether the store this walk reads a subscript for is this shell's,
-		// which is what decides whether its warning is owed to it — and
-		// whether the walk reads it at all: a program's prefix is read in
-		// its child, which the program's own route makes, and the `command`
-		// builtin's route makes none and never reads the subscript.
-		subscripts := subscriptsLeftToTheStore
-		switch {
-		case !r.subscriptedPrefixReachesAChild(kind):
-			subscripts = subscriptsForThisShell
-		case programsOwn:
-			subscripts = subscriptsForTheChild
-		}
-		// Held across the entries, so each value sees the ones in front of
-		// it, with the export attribute the route gives each. See
-		// expandPrefixTraceValuesHolding and interp/prefixheldexport.go.
-		held := heldPrefix{route: r.heldExportRouteOf(argv)}
-		for i := range c.Assigns {
-			one := c.Assigns[i : i+1]
-			a := one[0]
-			if r.attrHas(a.Name, attrReadonly) && !a.Operand {
-				if r.prefixRefusalApplies(kind) {
-					// A frozen name the dialect refuses here ends the
-					// lines, and nothing behind it is expanded: the
-					// refusal comes next. Measured 2026-10-30 on ksh93u+,
-					// `readonly r=1; set -x; x=1 r=2 y=$(echo s >&2)
-					// /usr/bin/true` writes `+ /usr/bin/true`, `+ x=1` and
-					// the refusal, and never runs the substitution (#6987).
-					break
-				}
-				// A frozen name the dialect does not refuse here is a
-				// prefix like any other, and is written: measured
-				// 2026-10-02, `readonly r; set -x; a=1 r=2 true` writes
-				// `+ true`, `+ a=1` and `+ r=2` on ksh93u+ (#5546).
-				ex.recordPrefixTraceValue(a, ex.prefixExpansion(a))
-			}
-			// An element write's subscript is read in turn by the walk,
-			// written as it resolved, and its element held for the entries
-			// behind it. See interp/prefixsubscriptinturn.go.
-			if !ex.prefixWalkFailed(walk) {
-				ex.expandPrefixTraceValuesHolding(one, &held, "", subscripts)
-			}
-			if ex.prefixWalkFailed(walk) {
-				break
-			}
-			if r.dottedPrefixIsNotTaken(a, kind) {
-				// Refused once the walk below reaches it, and never written:
-				// `set -x; a.b=1 true` is `+ true` and the refusal. See
-				// interp/dottednoparent.go.
-				break
-			}
-			ex.tracePrefixAfterTheCommand(one, kind.kind == prefixBeforeExternal)
-		}
-		held.release(ex)
-		r.takeThePrefixWalkFrom(ex)
-		if r.givesUpForAFailedPrefix(walk, r.prefixCommandOf(argv)) {
-			return nil
-		}
+	if prefixFollows && r.walkThePrefixBehindTheCommand(c, argv, r.heldExportRouteOf(argv)) {
+		return nil
 	}
 
 	// A function shadows a builtin and an external command alike — with one
@@ -10722,8 +10633,6 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		// where all seven columns print `[9]` (#2407). What happens to it
 		// *after* the call, and whether a command the function starts is
 		// told about it, are the two axes taken back below.
-		var undo []savedVar
-		var callHeld []string
 		// The caller's getopts cursor, before a prefix moves it. See the
 		// take-back below.
 		callerWord, callerChar, callerAssigned := r.optWord, r.optChar, r.optindAssigned
@@ -10735,145 +10644,19 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		if r.unspecified {
 			return nil
 		}
-		for _, a := range c.Assigns {
-			if r.prefixWalkFailed(walk) {
-				// Nothing behind a value that would not expand is expanded
-				// — see interp/prefixexpansionfailed.go.
-				break
+		// A traced call's prefix is stored as the shell's own first, and
+		// then worked through again as the call's. See
+		// interp/tracedcallprefix.go (#7092).
+		var persisted []savedVar
+		if scoped && r.tracedCallWorksItsPrefixTwice(fn, argv[0]) {
+			var over bool
+			if persisted, over = r.persistThePrefixAheadOfATracedCall(ctx, c, argv, walk, refused); over {
+				return nil
 			}
-			if a.Operand {
-				continue
-			}
-			if r.prefixAssignsPositional(ctx, a) {
-				continue
-			}
-			if refused && r.prefixEntryIsFrozen(a) {
-				// The frozen name keeps what it holds, the same way the
-				// builtin route leaves it: the body runs with the shell's
-				// value, which is what every column shows for `readonly v=1;
-				// v=2 f`. Its value was already expanded above, for the
-				// refusal's ordering, so skipping it here is also what keeps
-				// a command substitution in it from running twice.
-				continue
-			}
-			if r.subscriptedPrefixDropped(a) {
-				// Refused already, and refused ahead of its own value: the
-				// body runs with the element the shell holds and nothing
-				// here evaluates the subscript or the right-hand side.
-				continue
-			}
-			// The name the prefix's entry is made on, which a **name
-			// reference** makes different from the word the script wrote:
-			// the store follows the reference, so the save, the fresh cell,
-			// the export attribute and the take-back have to follow it too
-			// or the write lands on a name the call never held. See
-			// interp/namerefprefix.go (#4110).
-			held := r.prefixEntryName(a.Name)
-			fresh := false
-			takenBack := r.subscriptedPrefixTakenBack(a) || scoped
-			if takenBack {
-				undo = append(undo, r.saveVar(held))
-				// The prefix's own cell, asked once the binding it displaces
-				// is safely saved — and only where there is a take-back to
-				// put that binding back. See interp/prefixfreshcell.go.
-				if fresh = r.prefixEntryIsFresh(held); fresh {
-					undo[len(undo)-1].freshened = true
-				}
-			}
-			if scoped {
-				switch {
-				case r.DynamicParameter(held) && r.dynamicWriters[held] != nil:
-					// A produced parameter whose assignment *does*
-					// something is shown to the body as a plain cell, and
-					// the generator comes back with the take-back: measured
-					// 2026-10-27 on ksh93u+, `function f { typeset -p
-					// RANDOM; echo $RANDOM; }; RANDOM=5 f; echo ${#RANDOM}`
-					// is `typeset -x RANDOM=5`, `5` and then a drawn number,
-					// where a hidden name's store ended the producer for
-					// good and left the shell with no RANDOM at all (#6859).
-					p := r.takeProducerAside(held)
-					undo[len(undo)-1].producer = &p
-					r.hideVar(held)
-					r.emptyPrefixEntry(held)
-				case r.DynamicParameter(held):
-					undo[len(undo)-1].producedCell = true
-					// With the script's own letters off it, as any cell:
-					// `typeset -F 5 SECONDS; SECONDS=1 f` shows the body the
-					// stated `-F 3`, measured 2026-10-27 (#6854).
-					r.dropNameAttributes(held)
-					// One of the shell's own, whose type is the shell's: the
-					// prefix is an assignment to the parameter for the length
-					// of the call, which the save above already carries, and
-					// the producer goes on answering through it. Measured
-					// the same day: `function f { typeset -p SECONDS; };
-					// SECONDS=5 f` is `typeset -x -F 3 SECONDS=5.000`, the
-					// body's `$SECONDS` ticks on from 5, `SECONDS=abc f` is
-					// `0.000`, and `typeset -p SECONDS` after the call is
-					// the shell's own clock again. Not hidden, because a
-					// hidden name's store reads as an assignment after an
-					// `unset` and ends the producer (#6859).
-				default:
-					// The cell is the call's own, so it starts from
-					// **nothing** and not from what the shell holds — which
-					// is the whole of why `s+=5` in front of one shows the
-					// body `5` and not `base5`. Emptied after the name has
-					// been saved, so the take-back below puts the shell's
-					// own back.
-					r.hideVar(held)
-					// And with none of the letters the shell's name carries,
-					// the case letter included: measured 2026-10-16 on
-					// ksh93u+, `typeset -i v=1; function g { typeset -p v;
-					// }; v=2+2 g` is `typeset -x v=2+2` and the same over
-					// `typeset -u v=x` is `typeset -x v=abc` (#6750). Not
-					// one of the shell's own, whose type is the shell's:
-					// `OPTIND=x` reads 0 in the body.
-					if !r.shellKeepsTheType(held) {
-						r.emptyPrefixEntry(held)
-					}
-				}
-			} else if r.sem().AssignmentPrefixPersistsAfterAFunction == Yes {
-				// A prefix to a function that persists, which is a POSIX-form
-				// function in one column. Read rather than asked: the take-back
-				// after the call is where that question is put. See
-				// Semantics.PersistingPrefixMakesATypedNameAPlainScalar.
-				r.persistingPrefixResetsATypedName(a, held)
-			}
-			// A prefix to a function persists here, so it is a store and
-			// fires the discipline a store fires — with `.append` for `+=`,
-			// which is the event the operator names. See
-			// interp/prefixdiscipline.go. A scoped prefix stores into a cell
-			// the call just made, which no hook is watching — see
-			// Runner.prefixScopedToTheCall.
-			r.storePrefixQuietlyIfTakenBack(ctx, a, held, !scoped, fresh, takenBack)
-			if r.ctl == controlExit {
-				// The store was refused and the refusal ended the shell —
-				// a value the name does not take, see RefuseValues. Nothing
-				// after it in the walk is asked.
-				break
-			}
-			callHeld = append(callHeld, held)
-			if r.prefixStoresAnArray(a) {
-				// An array, which takes no export attribute and drops one
-				// the name had, whichever way the axes read the prefix — a
-				// cell the call owns included: measured 2026-10-15 on
-				// ksh93u+, `function f { typeset -p x; printenv x; }; x=(a b)
-				// f` lists `typeset -a x=(a b)` and the child finds no `x`
-				// (#6547). See Runner.prefixStoresAnArray.
-				r.exportedPut(held, false)
-			} else if on, moves := r.prefixExportAtAFunction(scoped, true); moves {
-				// Recorded as `false` rather than deleted, because deleting
-				// it only makes the name unspoken and an unspoken name the
-				// shell was born with is still exported. See isExported.
-				//
-				// On the name the entry was made on, so that a prefix over a
-				// reference exports the **target** and leaves the reference
-				// carrying no `x` of its own — `declare -n foo=target;
-				// foo=bar ff` lists `declare -n foo="target"` and `declare
-				// -x target="bar"` in bash 5.3.20. See
-				// interp/namerefprefix.go.
-				r.exportedPut(held, on)
-			}
+		} else if r.unspecified {
+			return nil
 		}
+		undo, callHeld := r.applyTheFunctionPrefix(ctx, c.Assigns, walk, refused, scoped)
 		// The names this call's prefix is holding, for a valueless
 		// declaration inside the body that would otherwise hide them — see
 		// Runner.prefixEntryShadowed. Put back rather than cleared, because
@@ -10935,6 +10718,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			}
 			if !stays {
 				r.takeBackFunctionPrefix(left, scoped)
+				r.takeBackFunctionPrefix(persisted, false)
 			}
 			if scoped && slices.Contains(callHeld, "OPTIND") {
 				// A prefixed OPTIND was the call's own cursor (see
@@ -11711,6 +11495,102 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 		defer r.reachPrefixedPath(prefixPath)()
 	}
 	return r.exec(ctx, argv, env)
+}
+
+// walkThePrefixBehindTheCommand is the walk the dialect that writes a
+// command's prefix behind its line makes once the redirections are open:
+// each entry expanded, held for the entries behind it, and written. route is
+// the export attribute each held entry carries — see
+// interp/prefixheldexport.go. Reports whether the command is given up.
+func (r *Runner) walkThePrefixBehindTheCommand(c *syntax.SimpleCmd, argv []string, route heldExportRoute) bool {
+	// ksh93 writes the assignment once the redirections are open and the
+	// value has expanded, which is why this stands here and not beside
+	// the branch above: `z=1 cmd >/nope/f` writes the command's line,
+	// then the complaint, and no assignment line at all — the value is
+	// never reached. Measured 2026-09-16 on ksh93u+ 2012-08-01.
+	//
+	// And an entry at a time: each is written as its value is expanded,
+	// so a value that will not expand ends the lines there — measured
+	// 2026-10-02, `set -x; a=1 b=${x?boom} true` writes `+ true`, `+
+	// a=1` and the complaint, and no `+ b=` (#5546).
+	walk := r.beginPrefixWalk(c.Assigns)
+	kind := r.prefixCommandOf(argv)
+	// The shell the walk expands in, which for a program is the copy its
+	// own route expands in — a side effect in a value or a subscript is
+	// the child's, and reading it here in this shell made `set -x`
+	// change the answer: `i=1; y=$((i++)) /usr/bin/true` left `i` at 2
+	// traced and at 1 untraced, where ksh93u+ leaves it at 1 either way.
+	// What the walk made comes back to this shell below, so the route
+	// reads it and expands nothing twice. See
+	// Runner.prefixExpansionShell.
+	//
+	// Only where that route is the one the command takes: `command
+	// /usr/bin/true` is the `command` builtin's, which expands its
+	// prefix in this shell, and a walk that expanded in a copy made the
+	// trace disagree with it.
+	_, aBuiltinRunsIt := r.lookupBuiltin(argv[0])
+	programsOwn := kind.kind == prefixBeforeExternal && !aBuiltinRunsIt
+	ex := r
+	if programsOwn {
+		if ex = r.prefixExpansionShell(c.Assigns); r.unspecified {
+			return true
+		}
+	}
+	// Whether the store this walk reads a subscript for is this shell's,
+	// which is what decides whether its warning is owed to it — and
+	// whether the walk reads it at all: a program's prefix is read in
+	// its child, which the program's own route makes, and the `command`
+	// builtin's route makes none and never reads the subscript.
+	subscripts := subscriptsLeftToTheStore
+	switch {
+	case !r.subscriptedPrefixReachesAChild(kind):
+		subscripts = subscriptsForThisShell
+	case programsOwn:
+		subscripts = subscriptsForTheChild
+	}
+	// Held across the entries, so each value sees the ones in front of
+	// it, with the export attribute the route gives each. See
+	// expandPrefixTraceValuesHolding and interp/prefixheldexport.go.
+	held := heldPrefix{route: route}
+	for i := range c.Assigns {
+		one := c.Assigns[i : i+1]
+		a := one[0]
+		if r.attrHas(a.Name, attrReadonly) && !a.Operand {
+			if r.prefixRefusalApplies(kind) {
+				// A frozen name the dialect refuses here ends the
+				// lines, and nothing behind it is expanded: the
+				// refusal comes next. Measured 2026-10-30 on ksh93u+,
+				// `readonly r=1; set -x; x=1 r=2 y=$(echo s >&2)
+				// /usr/bin/true` writes `+ /usr/bin/true`, `+ x=1` and
+				// the refusal, and never runs the substitution (#6987).
+				break
+			}
+			// A frozen name the dialect does not refuse here is a
+			// prefix like any other, and is written: measured
+			// 2026-10-02, `readonly r; set -x; a=1 r=2 true` writes
+			// `+ true`, `+ a=1` and `+ r=2` on ksh93u+ (#5546).
+			ex.recordPrefixTraceValue(a, ex.prefixExpansion(a))
+		}
+		// An element write's subscript is read in turn by the walk,
+		// written as it resolved, and its element held for the entries
+		// behind it. See interp/prefixsubscriptinturn.go.
+		if !ex.prefixWalkFailed(walk) {
+			ex.expandPrefixTraceValuesHolding(one, &held, "", subscripts)
+		}
+		if ex.prefixWalkFailed(walk) {
+			break
+		}
+		if r.dottedPrefixIsNotTaken(a, kind) {
+			// Refused once the walk below reaches it, and never written:
+			// `set -x; a.b=1 true` is `+ true` and the refusal. See
+			// interp/dottednoparent.go.
+			break
+		}
+		ex.tracePrefixAfterTheCommand(one, kind.kind == prefixBeforeExternal)
+	}
+	held.release(ex)
+	r.takeThePrefixWalkFrom(ex)
+	return r.givesUpForAFailedPrefix(walk, r.prefixCommandOf(argv))
 }
 
 // prefixValue is what an assignment prefix hands the command it stands in
@@ -13985,6 +13865,158 @@ func (r *Runner) restoreVar(u savedVar) {
 			write(r, *u.produced)
 		}
 	}
+}
+
+// applyTheFunctionPrefix makes the stores of a prefix in front of a function
+// call, on the shell's own cells or, where scoped, on cells of the call's own
+// — see Runner.prefixScopedToTheCall — and hands back what the take-back puts
+// back and the names the call is holding.
+func (r *Runner) applyTheFunctionPrefix(
+	ctx context.Context,
+	assigns []*syntax.Assign,
+	walk prefixWalk,
+	refused, scoped bool,
+) (undo []savedVar, callHeld []string) {
+	for _, a := range assigns {
+		if r.prefixWalkFailed(walk) {
+			// Nothing behind a value that would not expand is expanded
+			// — see interp/prefixexpansionfailed.go.
+			break
+		}
+		if a.Operand {
+			continue
+		}
+		if r.prefixAssignsPositional(ctx, a) {
+			continue
+		}
+		if refused && r.prefixEntryIsFrozen(a) {
+			// The frozen name keeps what it holds, the same way the
+			// builtin route leaves it: the body runs with the shell's
+			// value, which is what every column shows for `readonly v=1;
+			// v=2 f`. Its value was already expanded above, for the
+			// refusal's ordering, so skipping it here is also what keeps
+			// a command substitution in it from running twice.
+			continue
+		}
+		if r.subscriptedPrefixDropped(a) {
+			// Refused already, and refused ahead of its own value: the
+			// body runs with the element the shell holds and nothing
+			// here evaluates the subscript or the right-hand side.
+			continue
+		}
+		// The name the prefix's entry is made on, which a **name
+		// reference** makes different from the word the script wrote:
+		// the store follows the reference, so the save, the fresh cell,
+		// the export attribute and the take-back have to follow it too
+		// or the write lands on a name the call never held. See
+		// interp/namerefprefix.go (#4110).
+		held := r.prefixEntryName(a.Name)
+		fresh := false
+		takenBack := r.subscriptedPrefixTakenBack(a) || scoped
+		if takenBack {
+			undo = append(undo, r.saveVar(held))
+			// The prefix's own cell, asked once the binding it displaces
+			// is safely saved — and only where there is a take-back to
+			// put that binding back. See interp/prefixfreshcell.go.
+			if fresh = r.prefixEntryIsFresh(held); fresh {
+				undo[len(undo)-1].freshened = true
+			}
+		}
+		if scoped {
+			switch {
+			case r.DynamicParameter(held) && r.dynamicWriters[held] != nil:
+				// A produced parameter whose assignment *does*
+				// something is shown to the body as a plain cell, and
+				// the generator comes back with the take-back: measured
+				// 2026-10-27 on ksh93u+, `function f { typeset -p
+				// RANDOM; echo $RANDOM; }; RANDOM=5 f; echo ${#RANDOM}`
+				// is `typeset -x RANDOM=5`, `5` and then a drawn number,
+				// where a hidden name's store ended the producer for
+				// good and left the shell with no RANDOM at all (#6859).
+				p := r.takeProducerAside(held)
+				undo[len(undo)-1].producer = &p
+				r.hideVar(held)
+				r.emptyPrefixEntry(held)
+			case r.DynamicParameter(held):
+				undo[len(undo)-1].producedCell = true
+				// With the script's own letters off it, as any cell:
+				// `typeset -F 5 SECONDS; SECONDS=1 f` shows the body the
+				// stated `-F 3`, measured 2026-10-27 (#6854).
+				r.dropNameAttributes(held)
+				// One of the shell's own, whose type is the shell's: the
+				// prefix is an assignment to the parameter for the length
+				// of the call, which the save above already carries, and
+				// the producer goes on answering through it. Measured
+				// the same day: `function f { typeset -p SECONDS; };
+				// SECONDS=5 f` is `typeset -x -F 3 SECONDS=5.000`, the
+				// body's `$SECONDS` ticks on from 5, `SECONDS=abc f` is
+				// `0.000`, and `typeset -p SECONDS` after the call is
+				// the shell's own clock again. Not hidden, because a
+				// hidden name's store reads as an assignment after an
+				// `unset` and ends the producer (#6859).
+			default:
+				// The cell is the call's own, so it starts from
+				// **nothing** and not from what the shell holds — which
+				// is the whole of why `s+=5` in front of one shows the
+				// body `5` and not `base5`. Emptied after the name has
+				// been saved, so the take-back below puts the shell's
+				// own back.
+				r.hideVar(held)
+				// And with none of the letters the shell's name carries,
+				// the case letter included: measured 2026-10-16 on
+				// ksh93u+, `typeset -i v=1; function g { typeset -p v;
+				// }; v=2+2 g` is `typeset -x v=2+2` and the same over
+				// `typeset -u v=x` is `typeset -x v=abc` (#6750). Not
+				// one of the shell's own, whose type is the shell's:
+				// `OPTIND=x` reads 0 in the body.
+				if !r.shellKeepsTheType(held) {
+					r.emptyPrefixEntry(held)
+				}
+			}
+		} else if r.sem().AssignmentPrefixPersistsAfterAFunction == Yes {
+			// A prefix to a function that persists, which is a POSIX-form
+			// function in one column. Read rather than asked: the take-back
+			// after the call is where that question is put. See
+			// Semantics.PersistingPrefixMakesATypedNameAPlainScalar.
+			r.persistingPrefixResetsATypedName(a, held)
+		}
+		// A prefix to a function persists here, so it is a store and
+		// fires the discipline a store fires — with `.append` for `+=`,
+		// which is the event the operator names. See
+		// interp/prefixdiscipline.go. A scoped prefix stores into a cell
+		// the call just made, which no hook is watching — see
+		// Runner.prefixScopedToTheCall.
+		r.storePrefixQuietlyIfTakenBack(ctx, a, held, !scoped, fresh, takenBack)
+		if r.ctl == controlExit {
+			// The store was refused and the refusal ended the shell —
+			// a value the name does not take, see RefuseValues. Nothing
+			// after it in the walk is asked.
+			break
+		}
+		callHeld = append(callHeld, held)
+		if r.prefixStoresAnArray(a) {
+			// An array, which takes no export attribute and drops one
+			// the name had, whichever way the axes read the prefix — a
+			// cell the call owns included: measured 2026-10-15 on
+			// ksh93u+, `function f { typeset -p x; printenv x; }; x=(a b)
+			// f` lists `typeset -a x=(a b)` and the child finds no `x`
+			// (#6547). See Runner.prefixStoresAnArray.
+			r.exportedPut(held, false)
+		} else if on, moves := r.prefixExportAtAFunction(scoped, true); moves {
+			// Recorded as `false` rather than deleted, because deleting
+			// it only makes the name unspoken and an unspoken name the
+			// shell was born with is still exported. See isExported.
+			//
+			// On the name the entry was made on, so that a prefix over a
+			// reference exports the **target** and leaves the reference
+			// carrying no `x` of its own — `declare -n foo=target;
+			// foo=bar ff` lists `declare -n foo="target"` and `declare
+			// -x target="bar"` in bash 5.3.20. See
+			// interp/namerefprefix.go.
+			r.exportedPut(held, on)
+		}
+	}
+	return undo, callHeld
 }
 
 // takeBackFunctionPrefix ends an assignment prefix that stood in front of a

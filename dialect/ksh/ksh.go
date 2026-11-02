@@ -1889,6 +1889,13 @@ func Semantics() interp.Semantics {
 	// 5. The same split this shell makes for a `typeset` inside the body,
 	// read from the prefix's side (#3161).
 	s.PrefixToAKeywordFunctionIsScopedToTheCall = interp.Yes
+	// And where such a function is marked `typeset -ft`, the prefix is worked
+	// through ahead of the call as a POSIX-form call's is, persisting, and
+	// then again as the call's own: measured 2026-11-01, `function g { echo
+	// "in x=$x"; }; typeset -ft g; x=$(echo s >&2) g; echo "after x=$x"`
+	// writes `s` twice, and `n=0; x=$((n+=1)) g` shows the body `2` and
+	// leaves `1` (#7092).
+	s.PrefixToATracedKeywordFunctionIsWorkedTwice = interp.Yes
 	// And a prefix in front of `typeset` inside such a body, which persists
 	// because `typeset` is special here, is the body's own local: measured
 	// 2026-10-29, `function g { echo "g v=$v"; }; function f { v=new typeset

@@ -246,6 +246,7 @@ ash   PrefixInAWholeTableListing
 ash   PrefixListingNamesADeclaredOnlyCompound
 ash   PrefixRefusalCostsTheCommand
 ash   PrefixToAKeywordFunctionIsScopedToTheCall
+ash   PrefixToATracedKeywordFunctionIsWorkedTwice
 ash   PrintfCountAttribute
 ash   PrintfCountBadNameStopsThePass
 ash   PrintfCountEmptyNameIsIgnored
@@ -668,6 +669,7 @@ dash  PrefixInAWholeTableListing
 dash  PrefixListingNamesADeclaredOnlyCompound
 dash  PrefixRefusalCostsTheCommand
 dash  PrefixToAKeywordFunctionIsScopedToTheCall
+dash  PrefixToATracedKeywordFunctionIsWorkedTwice
 dash  PrintfCountAttribute
 dash  PrintfCountBadNameStopsThePass
 dash  PrintfCountEmptyNameIsIgnored

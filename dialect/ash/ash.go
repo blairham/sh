@@ -1017,6 +1017,8 @@ func Semantics() interp.Semantics {
 	// unanswered PrefixToAKeywordFunctionIsScopedToTheCall: the same wall —
 	// BusyBox ash has no `function` keyword, so there is only one function
 	// spelling and the prefix axis beside this one answers for it (#3161).
+	// unanswered PrefixToATracedKeywordFunctionIsWorkedTwice: the same wall,
+	// and there is no `typeset -ft` to mark a function traced with (#7092).
 	// unanswered PrefixArrayLiteralIsAnArray: nor an array literal to write
 	// as a prefix — there are no arrays here at all (#6547).
 	// unanswered NamerefCycleIsRefused: there are no name references to make

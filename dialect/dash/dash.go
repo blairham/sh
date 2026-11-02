@@ -977,6 +977,9 @@ func Semantics() interp.Semantics {
 	// `function` keyword here, so there is no second function spelling for a
 	// prefix to be scoped differently in front of. Measured 2026-09-18,
 	// `function kf { :; }` is `Syntax error: "{" unexpected` (#3161).
+	// unanswered PrefixToATracedKeywordFunctionIsWorkedTwice: nor a
+	// `function`-form function to trace, and no `typeset -ft` to mark one
+	// with (#7092).
 	// unanswered PrefixArrayLiteralIsAnArray: there is no array literal to
 	// write as a prefix. Measured 2026-10-15, `x=(a b) true` is `Syntax
 	// error: "(" unexpected` (#6547).

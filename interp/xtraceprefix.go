@@ -198,19 +198,20 @@ func (r *Runner) tracePrefixFollowsTheCommand(assigns []*syntax.Assign, argv []s
 // keeps — see Semantics.PrefixToAKeywordFunctionIsScopedToTheCall — which is
 // traced behind the call and expanded once the redirections are open.
 //
-// **Not where the function is traced.** A function marked with `typeset -ft`
-// has its prefix worked through ahead of the call and again inside it:
-// measured 2026-10-30 on ksh93u+, `function g { echo in; }; typeset -ft g;
-// set -x; x=$(echo s >&2) g` runs the substitution and writes `+ x=”` on both
-// sides of `+ g`, and runs it twice without `set -x` too. The front half is
-// the persisting shape and is what this engine does; the second pass is not
-// modeled (#7092).
+// **Not where the function is traced**, in the dialect that works such a
+// call's prefix through twice. A function marked with `typeset -ft` has its
+// prefix worked through ahead of the call, as a persisting prefix is, and
+// then again as the call's own: measured 2026-10-30 on ksh93u+, `function g {
+// echo in; }; typeset -ft g; set -x; x=$(echo s >&2) g` runs the substitution
+// and writes `+ x=”` on both sides of `+ g`, and runs it twice without `set
+// -x` too. This is the front half's question; the second pass is made where
+// the call is. See interp/tracedcallprefix.go (#7092).
 func (r *Runner) prefixIsTheCallsOwn(assigns []*syntax.Assign, argv []string) bool {
 	fn, ok := r.funcs[argv[0]]
-	if !ok || r.tracesFunction(argv[0], fn.Keyword) {
+	if !ok || !r.prefixScopedToTheCall(fn, assigns) {
 		return false
 	}
-	return r.prefixScopedToTheCall(fn, assigns)
+	return !r.tracedCallWorksItsPrefixTwice(fn, argv[0])
 }
 
 // tracePrefixRepeatsBeforeTheCommand is zsh's second trace prefix: whether

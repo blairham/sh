@@ -973,6 +973,12 @@ func Semantics() interp.Semantics {
 	// unanswered SubscriptedPrefixIsTakenBack: nothing is stored to take
 	// back. The axis is asked only where SubscriptedAssignmentPrefix writes
 	// the element, and this dialect refuses it instead.
+	//
+	// unanswered SubscriptedPrefixToABuiltinIsAFreshArray: the same refusal
+	// stands in front of a builtin, so there is no element to place in any
+	// array. Measured 2026-11-02 on 5.3.20, `declare -A a; a[z]=old; a[k]=1
+	// echo hi` writes the identifier complaint, runs `echo` at 0 and leaves
+	// `declare -A a=([z]="old" )` (#6982).
 	s.SubscriptedAssignmentPrefix = interp.SubscriptedPrefixIsRefused
 	// echo reads -n, -e and -E, the last of -e/-E deciding, with the hex
 	// and ESC escapes on top of the XSI set.

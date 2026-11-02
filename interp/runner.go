@@ -11018,6 +11018,20 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 					undo[len(undo)-1].freshened = true
 				}
 			}
+			if r.subscriptedPrefixIsAFreshArray(a, takenBack) && !slices.Contains(held, landsOn) {
+				// An element of a fresh array in the builtin's own scope,
+				// made once and written into by every entry behind it, so
+				// the subscript is read as an indexed name's and the name
+				// the shell holds is not touched — its words and value
+				// read first, from the name as it stands. See
+				// interp/prefixfresharray.go.
+				inTurn, read := r.readTheEntryAheadOfItsArray(a)
+				r.hideVar(landsOn)
+				r.emptyPrefixEntry(landsOn)
+				if !r.placeTheEntryInItsArray(a, inTurn, read) {
+					continue
+				}
+			}
 			if persists {
 				// And a value this shell keeps is not an enclosing call's to
 				// give back. See Runner.callPrefixesLetTheNameGo, which is
@@ -11663,7 +11677,9 @@ func (r *Runner) walkThePrefixBehindTheCommand(c *syntax.SimpleCmd, argv []strin
 	subscripts := subscriptsLeftToTheStore
 	switch {
 	case !r.subscriptedPrefixReachesAChild(kind):
-		subscripts = subscriptsForThisShell
+		// Into a fresh array where the prefix is the command's own. See
+		// interp/prefixfresharray.go.
+		subscripts = r.subscriptsForThisShellsStore(route)
 	case programsOwn:
 		subscripts = subscriptsForTheChild
 	}
@@ -14032,7 +14048,21 @@ func (r *Runner) applyTheFunctionPrefix(
 		held := r.prefixEntryName(a.Name)
 		fresh := false
 		takenBack := r.subscriptedPrefixTakenBack(a) || scoped
-		if takenBack {
+		// The call's own cell is made once per name: an entry behind one
+		// that already made it writes into it, so `s=1 s+=2 g` shows the
+		// body `12` and `a[1]=x a[2]=y g` both elements. See
+		// interp/prefixfresharray.go.
+		ownedAlready := scoped && slices.Contains(callHeld, held)
+		// A subscripted entry making the call's cell is the first element of
+		// a fresh array, whose words and value are read from the name as the
+		// shell holds it and whose subscript is placed in the array once it
+		// is made. See interp/prefixfresharray.go.
+		freshArray := scoped && !ownedAlready && prefixIsSubscripted(a)
+		inTurn, read := false, true
+		if freshArray {
+			inTurn, read = r.readTheEntryAheadOfItsArray(a)
+		}
+		if takenBack && !ownedAlready {
 			undo = append(undo, r.saveVar(held))
 			// The prefix's own cell, asked once the binding it displaces
 			// is safely saved — and only where there is a take-back to
@@ -14043,6 +14073,9 @@ func (r *Runner) applyTheFunctionPrefix(
 		}
 		if scoped {
 			switch {
+			case ownedAlready:
+				// Saved and made by the entry in front, and nothing to do
+				// but store into it.
 			case r.DynamicParameter(held) && r.dynamicWriters[held] != nil:
 				// A produced parameter whose assignment *does*
 				// something is shown to the body as a plain cell, and
@@ -14098,6 +14131,9 @@ func (r *Runner) applyTheFunctionPrefix(
 			// after the call is where that question is put. See
 			// Semantics.PersistingPrefixMakesATypedNameAPlainScalar.
 			r.persistingPrefixResetsATypedName(a, held)
+		}
+		if freshArray && !r.placeTheEntryInItsArray(a, inTurn, read) {
+			continue
 		}
 		// A prefix to a function persists here, so it is a store and
 		// fires the discipline a store fires — with `.append` for `+=`,

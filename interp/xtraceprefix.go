@@ -275,7 +275,7 @@ func (r *Runner) expandPrefixTraceValues(assigns []*syntax.Assign, argv []string
 	// gives each entry — see interp/prefixheldexport.go.
 	held := heldPrefix{route: r.heldExportRouteOf(argv)}
 	defer held.release(r)
-	r.expandPrefixTraceValuesHolding(assigns, &held, "", r.prefixSubscriptsReadHere(assigns, argv))
+	r.expandPrefixTraceValuesHolding(assigns, &held, "", r.prefixSubscriptsReadHere(assigns, argv, held.route))
 }
 
 // expandPrefixTraceValuesHolding is expandPrefixTraceValues for a caller that
@@ -344,8 +344,9 @@ func (r *Runner) expandPrefixTraceValuesHolding(
 		// in, so the element is held below. See
 		// interp/prefixsubscriptinturn.go.
 		inTurn, expanded := false, true
+		fresh := subscripts == subscriptsIntoAFreshArray
 		if subscripts != subscriptsLeftToTheStore {
-			inTurn, expanded = r.readPrefixSubscriptBeforeTheValue(a)
+			inTurn, expanded = r.readPrefixSubscriptBeforeTheValueFor(a, fresh)
 		}
 		if !expanded {
 			return
@@ -361,7 +362,13 @@ func (r *Runner) expandPrefixTraceValuesHolding(
 		if inTurn && !r.assignmentGaveUp() {
 			r.prefixEntryValueIsIn(a)
 		}
-		if inTurn && !r.assignmentGaveUp() && !r.placePrefixSubscript(a, subscripts == subscriptsForThisShell) {
+		if inTurn && fresh && !r.assignmentGaveUp() {
+			// The words and the value were read from the name as the shell
+			// holds it; the element is placed in the command's own array.
+			// See interp/prefixfresharray.go.
+			held.holdTheCommandsOwnArray(r, a.Name)
+		}
+		if inTurn && !r.assignmentGaveUp() && !r.placePrefixSubscript(a, subscripts != subscriptsForTheChild) {
 			return
 		}
 		r.holdPrefixEntry(held, a, joined)

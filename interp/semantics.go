@@ -1804,6 +1804,46 @@ type Semantics struct {
 	// asked here.
 	SubscriptedPrefixIsTakenBack Answer
 
+	// SubscriptedPrefixToABuiltinIsAFreshArray makes a subscripted prefix
+	// that a builtin is handed for the length of its run — one
+	// SubscriptedPrefixIsTakenBack gives back — an element of a **fresh
+	// indexed array** in the builtin's own scope, rather than an element of
+	// the name the shell holds. No writes the shell's own element and gives
+	// it back.
+	//
+	// Measured 2026-11-02 on ksh93u+ 2012-08-01 (`/bin/ksh`), script files
+	// under `env -i PATH=/usr/bin:/bin` with `typeset -A a; a[z]=old` and
+	// `set -x` on the two lines above each one:
+	//
+	//	a[k]=1 echo hi                 `+ echo hi`, `+ a[0]=1`, `hi`
+	//	a["p q"]=1 echo hi; echo $?    `+ echo hi`, `S[3]: p q: arithmetic
+	//	                               syntax error`, `1`, and no `hi`
+	//	a[k]=1 a[""]=2 echo hi         `+ a[0]=1`, `+ a[0]=2`, no warning
+	//	a[k]=7 let "x=a[0]"            x is 7: the builtin reads index 0
+	//	a[k]=5 y=${#a[@]} let "x=y"    x is 1: an entry behind sees one
+	//	b=(10 20 30); b[1]=5 let "x=b[0]+b[1]"
+	//	                               x is 5: an indexed name's elements
+	//	                               are not there either
+	//	a[k]=1 :; typeset -p a         `+ a[k]=1`, and the table keeps
+	//	                               `[k]=1`: a special builtin's prefix
+	//	                               persists, and is the table's element
+	//
+	// and `typeset -p a` after every line but the last is the table as it
+	// was. So the subscript is read as arithmetic — `k` is 0 and `p q` is a
+	// syntax error that costs the command — and the shell's own name is never
+	// touched. The words and the value are read first, from the name as the
+	// shell holds it: `a[${#a[@]}]=${a[z]} echo hi` writes `+ a[1]=old`.
+	//
+	// A `function`-form call makes its prefix a cell of the call's own
+	// already, through PrefixToAKeywordFunctionIsScopedToTheCall, and the
+	// same shell gives that cell the same reading; this axis is the builtin's
+	// half, where nothing else made the prefix the command's own.
+	//
+	// Asked only of a subscripted entry a builtin's route takes back, so only
+	// where SubscriptedAssignmentPrefix stores the element and
+	// SubscriptedPrefixIsTakenBack gives it back.
+	SubscriptedPrefixToABuiltinIsAFreshArray Answer
+
 	// PrefixToARegularBuiltinIsRefused applies the readonly refusal to an
 	// assignment written in front of a *regular builtin* — `readonly x=1;
 	// x=2 true`.

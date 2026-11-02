@@ -1686,6 +1686,11 @@ func Semantics() interp.Semantics {
 	// Measured 2026-09-16 on zsh 5.9.2 (#3433).
 	s.SubscriptedAssignmentPrefix = interp.SubscriptedPrefixStoresTheElement
 	s.SubscriptedPrefixIsTakenBack = interp.No
+	// unanswered SubscriptedPrefixToABuiltinIsAFreshArray: asked only of an
+	// element a builtin's route gives back, and this shell gives none back —
+	// it writes the shell's own. Measured 2026-11-02 on zsh 5.9.2, `typeset
+	// -A a; a[z]=old; a[k]=1 echo hi; typeset -p a` is `typeset -A a=( [k]=1
+	// [z]=old )` (#6982).
 	// An assignment prefix to a frozen name is answered by the kind of
 	// command too, and on a different line from ksh93's: everything this
 	// shell runs itself ends the script, and an external one does not.

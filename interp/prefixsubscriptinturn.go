@@ -156,6 +156,11 @@ const (
 	// program's prefix expands in, for the store its child makes. See
 	// Runner.prefixExpansionShell.
 	subscriptsForTheChild
+	// subscriptsIntoAFreshArray reads them for a store this shell makes into
+	// a fresh array of the command's own: an indexed name's words, whatever
+	// the name is bound to, and the arithmetic against the array the walk
+	// holds for the command. See interp/prefixfresharray.go.
+	subscriptsIntoAFreshArray
 )
 
 // prefixSubscriptsReadHere is how a walk made in this shell reads the
@@ -163,7 +168,14 @@ const (
 // command is one this shell stores the prefix for, and not at all where a
 // child makes the store. Asks nothing where no entry is subscripted, which is
 // nearly every prefixed command.
-func (r *Runner) prefixSubscriptsReadHere(assigns []*syntax.Assign, argv []string) prefixSubscriptTurn {
+//
+// route is the command as the walk holds it, which says whether the store is
+// into the command's own fresh array — see interp/prefixfresharray.go.
+func (r *Runner) prefixSubscriptsReadHere(
+	assigns []*syntax.Assign,
+	argv []string,
+	route heldExportRoute,
+) prefixSubscriptTurn {
 	for _, a := range assigns {
 		if a.Operand || !prefixIsSubscripted(a) {
 			continue
@@ -171,9 +183,19 @@ func (r *Runner) prefixSubscriptsReadHere(assigns []*syntax.Assign, argv []strin
 		if len(argv) == 0 || r.subscriptedPrefixReachesAChild(r.prefixCommandOf(argv)) {
 			return subscriptsLeftToTheStore
 		}
-		return subscriptsForThisShell
+		return r.subscriptsForThisShellsStore(route)
 	}
 	return subscriptsLeftToTheStore
+}
+
+// subscriptsForThisShellsStore is the turn of a walk whose store this shell
+// makes: into a fresh array where the route makes the prefix the command's
+// own, and into the name the shell holds otherwise.
+func (r *Runner) subscriptsForThisShellsStore(route heldExportRoute) prefixSubscriptTurn {
+	if r.prefixRouteMakesFreshArrays(route) {
+		return subscriptsIntoAFreshArray
+	}
+	return subscriptsForThisShell
 }
 
 // readsPrefixSubscriptInTurn reports whether this prefix entry is an element
@@ -219,11 +241,19 @@ func (r *Runner) prefixSubscriptReadFor(a *syntax.Assign) *prefixSubscriptRead {
 // expanded — false is a failure that has been said, and the value is not
 // reached.
 func (r *Runner) readPrefixSubscriptBeforeTheValue(a *syntax.Assign) (inTurn, expanded bool) {
+	return r.readPrefixSubscriptBeforeTheValueFor(a, false)
+}
+
+// readPrefixSubscriptBeforeTheValueFor is readPrefixSubscriptBeforeTheValue
+// for a walk that knows whether the element goes into a fresh array of the
+// command's own, whose words are an indexed name's. See
+// interp/prefixfresharray.go.
+func (r *Runner) readPrefixSubscriptBeforeTheValueFor(a *syntax.Assign, fresh bool) (inTurn, expanded bool) {
 	if !r.readsPrefixSubscriptInTurn(a) {
 		return false, true
 	}
 	if r.subscriptExpandsBeforeTheValue(a) {
-		return true, r.readPrefixSubscriptWords(a) != nil
+		return true, r.readPrefixSubscriptWords(a, fresh) != nil
 	}
 	return true, true
 }
@@ -235,7 +265,11 @@ func (r *Runner) readPrefixSubscriptBeforeTheValue(a *syntax.Assign) (inTurn, ex
 // Runner.assocAssignKey, an indexed name's expression through
 // Runner.indexedAssignSubscriptText — so the store taking the record and the
 // store reading for itself cannot come to different text.
-func (r *Runner) readPrefixSubscriptWords(a *syntax.Assign) *prefixSubscriptRead {
+//
+// fresh says the element goes into a fresh array of the command's own, so the
+// words are an indexed name's even over a table — see
+// interp/prefixfresharray.go.
+func (r *Runner) readPrefixSubscriptWords(a *syntax.Assign, fresh bool) *prefixSubscriptRead {
 	if s := r.prefixSubscriptReadFor(a); s != nil {
 		return s
 	}
@@ -243,7 +277,7 @@ func (r *Runner) readPrefixSubscriptWords(a *syntax.Assign) *prefixSubscriptRead
 	// See interp/prefixfailurelocation.go.
 	defer r.speakForAPrefixValue()()
 	s := &prefixSubscriptRead{assign: a}
-	if r.assocDeclared(a.Name) {
+	if !fresh && r.assocDeclared(a.Name) {
 		key, ok := r.assocAssignKey(a.Name, a.Subscript())
 		if !ok {
 			return nil
@@ -271,7 +305,7 @@ func (r *Runner) readPrefixSubscriptWords(a *syntax.Assign) *prefixSubscriptRead
 // program's prefix is stored by its child, which this engine never makes, so
 // nothing is owed there.
 func (r *Runner) placePrefixSubscript(a *syntax.Assign, storedHere bool) bool {
-	s := r.readPrefixSubscriptWords(a)
+	s := r.readPrefixSubscriptWords(a, false)
 	if s == nil || s.placed {
 		return s != nil
 	}

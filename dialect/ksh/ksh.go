@@ -1990,6 +1990,13 @@ func Semantics() interp.Semantics {
 	// 2012-08-01 (#3433).
 	s.SubscriptedAssignmentPrefix = interp.SubscriptedPrefixStoresTheElement
 	s.SubscriptedPrefixIsTakenBack = interp.Yes
+	// And the element a regular builtin is handed is one of a fresh indexed
+	// array in the builtin's own scope, not the shell's: with `typeset -A a;
+	// a[z]=old`, `set -x; a[k]=1 echo hi` writes `+ a[0]=1`, `a["p q"]=1
+	// echo hi` is an arithmetic syntax error that costs the command, and the
+	// table is `([z]=old)` after both. Measured 2026-11-02 on ksh93u+
+	// 2012-08-01 (#6982).
+	s.SubscriptedPrefixToABuiltinIsAFreshArray = interp.Yes
 	s.PrefixRefusalFatality = interp.PrefixRefusalFatalOnASpecialBuiltinOrFunction
 	s.PrefixRefusalCostsTheCommand = interp.Yes
 	// The attribute cannot come off, though, which is where this shell parts

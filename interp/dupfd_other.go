@@ -6,6 +6,7 @@
 package interp
 
 import (
+	"context"
 	"errors"
 	"os"
 )
@@ -17,3 +18,9 @@ func dupFile(*os.File, int) (*os.File, int, error) { return nil, 0, errors.ErrUn
 
 // raiseScriptFile leaves the file where it is, for dupFile's reason.
 func (r *Runner) raiseScriptFile(f *os.File) *os.File { return f }
+
+// openRegularRaised leaves every open to openRaised's ordinary road: with
+// nothing raised there is no window to close.
+func (r *Runner) openRegularRaised(context.Context, *Action, string, int) (*os.File, bool, error) {
+	return nil, false, nil
+}

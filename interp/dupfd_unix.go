@@ -6,8 +6,13 @@
 package interp
 
 import (
+	"context"
+	"errors"
+	"io/fs"
 	"os"
 	"syscall"
+
+	"github.com/blairham/sh/internal/opened"
 )
 
 // dupFile opens a second descriptor onto the same open file, which is the
@@ -162,3 +167,98 @@ func (r *Runner) raiseScriptFile(f *os.File) *os.File {
 	_ = f.Close()
 	return raised
 }
+
+// openRegularRaised opens a path that names a regular file, or nothing yet,
+// inside transientFds from the open to the move, as openRaised opens a
+// command's own substitution pipe and for the same reason: a file the parent
+// has just opened is on the lowest free number until raiseScriptFile moves it,
+// and a park in a body already running found it there and stepped over it.
+// Measured on darwin with three substitutions in one body beside a parent's
+// `> "$tmp/out"`, everything below the base taken: `10 12 11` or `10 12 13`
+// in 70 runs of 300, and with a 10 ms hold between the open and the move, in
+// 20 of 20; with this, none (#7335).
+//
+// done says the open was made here, and false leaves it to the caller's
+// ordinary road, outside the lock.
+//
+// **The lock is never held across an open that can wait**, and two things
+// keep that true. The path is asked about first, and only a regular file, or
+// a name with nothing on it for O_CREAT to make one, is opened here: a FIFO, a
+// device and a directory go the ordinary road exactly as before. And the open
+// is made non-blocking, which is what answers the name changing between the
+// question and the open — a FIFO put there in between is opened at once for
+// reading, and refused at once with ENXIO for writing where it has no reader,
+// rather than waiting with the lock held for a peer that may be a process
+// waiting on the lock to start. Whatever the open reached is asked about
+// again, and anything but a regular file is opened a second time the
+// ordinary way, outside, with the first closed only after: a writer the first
+// let through never meets a pipe with no reader. A regular file ignores the
+// flag at the open, and it is cleared from the file before it is handed on.
+//
+// Asked with a stat of the path's own, not through Runner.stat: this is the
+// shell choosing how to open, not a probe the script wrote, and the open that
+// follows is recorded as what it is. Not with a Gate, whose questions are put
+// from inside the open and after it, which is no place to be holding
+// something every start waits on; not with `set -C`, for openRaised's reason;
+// and not in a dialect without process substitution, where nothing parks.
+func (r *Runner) openRegularRaised(ctx context.Context, a *Action, path string, flags int) (*os.File, bool, error) {
+	if flags&os.O_EXCL != 0 || r.Gate != nil || !r.lang().ProcessSubstitution {
+		return nil, false, nil
+	}
+	st, err := opened.AtHeld(path, os.Stat)
+	if err == nil && !st.Mode().IsRegular() || err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, false, nil
+	}
+	if betweenAFilesStatAndOpen != nil {
+		betweenAFilesStatAndOpen(path)
+	}
+	f, regular, err := r.openRegularHeld(ctx, a, path, flags)
+	if regular {
+		return f, true, err
+	}
+	if err != nil {
+		if errors.Is(err, syscall.ENXIO) || errors.Is(err, syscall.EAGAIN) {
+			// The answer the flag gave rather than the file: a FIFO with no
+			// reader. Asked again the ordinary way, which waits for one.
+			return nil, false, nil
+		}
+		return nil, true, err
+	}
+	// Something other than a regular file is on the name now.
+	defer func() { _ = f.Close() }()
+	again, err := r.openGated(ctx, a, path, flags)
+	if err != nil {
+		return nil, true, err
+	}
+	return r.raiseScriptFile(again), true, nil
+}
+
+// openRegularHeld is openRegularRaised's open and move, inside the lock.
+// regular is false, with the file, where what the open reached is not a
+// regular file, and false with the error where the open failed.
+func (r *Runner) openRegularHeld(ctx context.Context, a *Action, path string, flags int) (*os.File, bool, error) {
+	transientFds.RLock()
+	defer transientFds.RUnlock()
+	f, err := r.openGated(ctx, a, path, flags|syscall.O_NONBLOCK)
+	if err != nil {
+		return nil, false, err
+	}
+	if st, serr := f.Stat(); serr != nil || !st.Mode().IsRegular() {
+		return f, false, nil
+	}
+	if conn, cerr := f.SyscallConn(); cerr == nil {
+		_ = conn.Control(func(fd uintptr) { _ = syscall.SetNonblock(int(fd), false) })
+	}
+	if whileAFileIsLow != nil {
+		whileAFileIsLow(path, f)
+	}
+	return r.raiseScriptFile(f), true, nil
+}
+
+// betweenAFilesStatAndOpen and whileAFileIsLow are nil outside a test: the
+// moment the name can change under openRegularRaised, and the window between
+// its open and its move, which only a test can hold open.
+var (
+	betweenAFilesStatAndOpen func(path string)
+	whileAFileIsLow          func(path string, f *os.File)
+)

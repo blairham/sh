@@ -1483,18 +1483,24 @@ func (r *Runner) applyRedirList(
 // TestASiblingLettingGoInsideTheParksQuestionIsTaken did the same in 2 runs
 // of 10,000 under load (#7035).
 //
-// Only that pipe, because it is the one open here that cannot wait: on darwin
-// `/dev/fd/N` duplicates a descriptor this process holds, and on Linux it
-// reopens an anonymous pipe, which the kernel never holds waiting for its
-// other end the way it holds a FIFO. An open that can wait, a FIFO for its
-// writer, must not hold the lock: a park queued behind it holds up every
-// start, and the writer can be one of them. Nor with `set -C`, whose second
-// open follows a stat a Gate is asked about, which is no place to be holding
-// something every start waits on.
+// That pipe, because it is an open that cannot wait: on darwin `/dev/fd/N`
+// duplicates a descriptor this process holds, and on Linux it reopens an
+// anonymous pipe, which the kernel never holds waiting for its other end the
+// way it holds a FIFO. An open that can wait, a FIFO for its writer, must not
+// hold the lock: a park queued behind it holds up every start, and the writer
+// can be one of them. Nor with `set -C`, whose second open follows a stat a
+// Gate is asked about, which is no place to be holding something every start
+// waits on.
+//
+// **And a regular file, which is the other open that cannot wait** — made
+// non-blocking so that it cannot wait even when the name has become something
+// else since it was looked at. See Runner.openRegularRaised (#7335).
 func (r *Runner) openRaised(ctx context.Context, a *Action, path string, flags int) (*os.File, bool, error) {
 	if _, pipe := r.ownPipeDirection(path); pipe && flags&os.O_EXCL == 0 {
 		transientFds.RLock()
 		defer transientFds.RUnlock()
+	} else if f, done, err := r.openRegularRaised(ctx, a, r.substOpenPath(path), flags); done {
+		return f, false, err
 	}
 	f, fellBack, err := r.openThroughNoclobber(ctx, a, r.substOpenPath(path), flags)
 	if err != nil {

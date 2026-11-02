@@ -233,7 +233,7 @@ func (r *Runner) tracePrefixRepeatsBeforeTheCommand(argv []string) bool {
 		// in front: `x=1 exec /usr/bin/true` is one prompt, `x=1 exec true`
 		// two, and `x=1 builtin command true` one, as `command` alone is.
 		// See interp/xtraceprecommand.go. A modifier with nothing behind it
-		// is still answered for itself (#7097).
+		// writes no command and is not asked about here (#7097).
 		if t.throughCommand {
 			return false
 		}
@@ -522,6 +522,27 @@ func (r *Runner) tracePrefixAndCommand(c *syntax.SimpleCmd, argv []string) {
 		// it. See openTraceLine.lead.
 		flushed, lead = open.flushed, open.lead
 		open.lead = ""
+	}
+	if t := r.precommandTraceScan(argv); t.runsNothing {
+		// A modifier that leaves nothing to run has no line of its own, in
+		// the dialect that writes the command the scan left. One that
+		// refuses what is behind it writes no prefix either; one with no
+		// command behind it writes the prefix with no newline, and the next
+		// line finishes it: `x=1 exec 3>/dev/null; echo ok` is `+zsh:1> x=1
+		// +zsh:1> echo ok`. What a substitution's child was handed goes out
+		// either way, ahead of a refusal: `x=$( a=1 builtin nosuch )` is
+		// `+zsh:1> x=` and then the complaint. See interp/xtraceprecommand.go
+		// (#7097).
+		text := lead
+		if !t.refused {
+			text += strings.TrimPrefix(r.tracePrefix()+line, flushed)
+		}
+		if text != "" {
+			r.awaitTraceTurn()
+			defer r.releaseTraceTurn()
+			r.tracef("%s", text)
+		}
+		return
 	}
 	if flushed != "" || d.TracePrefixAssignment == TracePrefixOnTheCommandLineRepeatingThePrefix &&
 		r.tracePrefixRepeatsBeforeTheCommand(argv) {

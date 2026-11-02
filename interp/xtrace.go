@@ -411,6 +411,12 @@ func (r *Runner) traceCommand(words []string) {
 	if !r.tracing() || len(words) == 0 {
 		return
 	}
+	if r.precommandTraceScan(words).runsNothing {
+		// A modifier that leaves nothing to run has no line, in the dialect
+		// that writes the command the scan left. See
+		// interp/xtraceprecommand.go (#7097).
+		return
+	}
 	r.awaitTraceTurn()
 	defer r.releaseTraceTurn()
 	if r.disablesTrace(words) && !r.ask(r.sem().TraceShowsItsOwnDisabling, "whether `set +x` traces itself") {

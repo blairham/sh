@@ -10503,8 +10503,11 @@ type Diagnostics struct {
 	// TraceLeavesOutPrecommandModifiers writes a command behind a precommand
 	// modifier as the command the scan left: `builtin true` traces `true`,
 	// `command -p true` traces `true`, and a program is written under the
-	// name it is started with. zsh alone, the one dialect with the modifier
-	// class. See interp/xtraceprecommand.go.
+	// name it is started with. Where the scan leaves nothing to run there is
+	// no line: `exec 3>/dev/null` and a refused `builtin nosuch` write none,
+	// and a prefix in front is left open for the next line to finish. zsh
+	// alone, the one dialect with the modifier class; bash and ksh93 write
+	// both as any other command. See interp/xtraceprecommand.go.
 	TraceLeavesOutPrecommandModifiers bool
 	// TraceAssignmentNamesTheReferencedVariable writes an assignment through
 	// a name reference under the variable the store lands in: `typeset -n

@@ -90,6 +90,23 @@ func (r *Runner) attributeFollowsTheReference(name string, df declareFlags) (str
 	return target, true
 }
 
+// declarationFollowsTheReference is attributeFollowsTheReference for the
+// declaration word's operand, which follows a reference on one line more in
+// the column whose bare `-n` does: a valueless `typeset -n m` over an aimed
+// `m` is a declaration of what `m` reaches, so `x=0; typeset -n m=x; typeset
+// -n m` is `typeset -n x`, and refuses `0` as the name to aim at (#7115). A
+// valued `-n` still re-aims the reference itself, and a `+n` is about the
+// reference too. See Semantics.BareReferenceLetterFollowsTheReference.
+func (r *Runner) declarationFollowsTheReference(name string, df declareFlags, hasValue bool) (string, bool) {
+	if df.nameref && !hasValue && !df.namerefOff &&
+		r.sem().BareReferenceLetterFollowsTheReference == Yes {
+		through := df
+		through.nameref = false
+		return r.attributeFollowsTheReference(name, through)
+	}
+	return r.attributeFollowsTheReference(name, df)
+}
+
 // referenceValueTarget is the other half of attributeFollowsTheReference: the
 // name a declaration's **value** is stored through, where that is not the name
 // its attributes land on.

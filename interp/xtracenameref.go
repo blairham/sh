@@ -35,7 +35,9 @@ import (
 //
 // and the word as written for a reference aimed at nothing, whose store aims
 // it rather than landing anywhere: `typeset -n u; u=y` is `+ u=y`, and a
-// second `u=z` is `+ y=z`. This column writes a bare assignment's line after
+// second `u=z` is `+ y=z`. Through a reference to one aimed at nothing it is
+// the one the value aims: `typeset -n m; typeset -n l=m; l=y` is `+ m=y`, and
+// `typeset l=y` the same (#7114). This column writes a bare assignment's line after
 // its store, so the name is settled before the store and carried to the line
 // (expandedAssign.tracedAs) — read at the line, it named the variable the
 // store had just aimed the reference at, `+ y=y`.
@@ -107,7 +109,17 @@ func (r *Runner) nameTracedThroughTheReference(name string, whole bool, operandO
 		return name
 	}
 	target, cycle, aimed := r.namerefWalk(name)
-	if cycle || !aimed || target == name {
+	if cycle {
+		return name
+	}
+	if !aimed {
+		// Aimed at nothing, so the store aims a reference rather than
+		// landing anywhere, and the line names the one it aims: the name
+		// itself, or the end of the chain where the value follows it there
+		// — `typeset -n m; typeset -n l=m; l=y` is `+ m=y` (#7114).
+		target = r.referenceAValueAims(name, target)
+	}
+	if target == name {
 		return name
 	}
 	if operandOf != nil && !r.operandStoresThroughTheReference(name, operandOf) {

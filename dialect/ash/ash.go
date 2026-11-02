@@ -1036,6 +1036,9 @@ func Semantics() interp.Semantics {
 	// unanswered ContainerWriteThroughAReferenceNamesTheReference: no references.
 	// unanswered DeclarationThroughAReferenceMakesTheTargetLocal: no
 	// references, and no `typeset` to declare through one (#7352).
+	// unanswered ValueThroughAReferenceAimsTheUnaimedEnd: no references (#7114).
+	// unanswered BareReferenceLetterFollowsTheReference: no references, and no
+	// `typeset` to write the letter on (#7115).
 	// unanswered DeclarationOperandSplitsAfterTheSubscript: no arrays, so no
 	// operand has a subscript to hold an `=`.
 	// unanswered DeclarationThroughAReferenceNamesTheOperand: the same wall

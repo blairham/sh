@@ -198,7 +198,7 @@ func (r *Runner) holdPlacedLiteral(h *heldPrefix, a *syntax.Assign, name string,
 			return
 		}
 	}
-	if r.assocDeclared(name) || r.literalSubscriptIsAKey(name, elems) {
+	if r.assocDeclared(name) || r.literalSubscriptIsAKey(name, elems, false) {
 		table := AssocArray{}
 		for _, e := range elems {
 			if !e.subscripted || e.nested != nil || e.appendValue {

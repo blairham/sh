@@ -123,3 +123,49 @@ func TestASubshellEndedWhereItsSignalLandedRunsNoExitTrap(t *testing.T) {
 		}
 	}
 }
+
+// What a copy aims at `$$` is answered before an and-or list goes on, the
+// handler showing the copy's status, and a fatal one ends the shell before the
+// list's next command (#7358). Where it waited for the next statement the
+// handler ran after the rest of the list, and `a` was written by a shell
+// already dying of TERM.
+//
+// Measured 2026-11-02 under `-c`, each shell in a process group of its own,
+// against bash 5.3.20, bash 3.2.57, zsh 5.9.2 and dash, which agree on every
+// row. ksh93u+ 2012-08-01 runs the `( … )` in its own process, which ends
+// there at 256 + N without running the list on — this shell's ksh answers so
+// already (TestASubshellEndsOnATrappedSignalToTheShellInOneDialect) — and
+// agrees on the pipeline and the TERM rows.
+func TestACopysSignalToTheShellIsAnsweredBeforeTheListGoesOn(t *testing.T) {
+	const trap = `trap 'echo U' USR1; `
+	term := strconv.Itoa(128 + int(syscall.SIGTERM))
+	for _, dialect := range []string{"bash", "zsh", "dash", "ksh"} {
+		for _, c := range []struct{ src, want, status string }{
+			{trap + `{ kill -USR1 $$; } | /bin/cat && echo a`, "U a", "0"},
+			{`( kill $$ ) && echo a`, "", term},
+			{`{ kill $$; } | /bin/cat && echo a`, "", term},
+		} {
+			out, st, err := presets[dialect].Combined(t, dialecttest.Base{Dir: t.TempDir()}, c.src)
+			if err != nil {
+				t.Fatalf("%s: %s: %v", dialect, c.src, err)
+			}
+			if got := strings.Join(strings.Fields(out), " "); got != c.want || strconv.Itoa(st) != c.status {
+				t.Errorf("%s: %s\n got %q at %d\nwant %q at %s", dialect, c.src, got, st, c.want, c.status)
+			}
+		}
+	}
+	for _, dialect := range []string{"bash", "zsh", "dash"} {
+		for _, c := range []struct{ src, want string }{
+			{trap + `( kill -USR1 $$ ) && echo a`, "U a"},
+			{`trap 'echo U $?' USR1; false; ( kill -USR1 $$; exit 3 ) || echo a$?`, "U 3 a3"},
+		} {
+			out, st, err := presets[dialect].Combined(t, dialecttest.Base{Dir: t.TempDir()}, c.src)
+			if err != nil {
+				t.Fatalf("%s: %s: %v", dialect, c.src, err)
+			}
+			if got := strings.Join(strings.Fields(out), " "); got != c.want || st != 0 {
+				t.Errorf("%s: %s\n got %q at %d\nwant %q at 0", dialect, c.src, got, st, c.want)
+			}
+		}
+	}
+}

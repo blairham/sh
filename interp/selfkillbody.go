@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"slices"
 	"syscall"
 )
 
@@ -216,8 +217,8 @@ func (r *Runner) selfSignaledBody(key string) {
 // So every row is the body's own `kill $BASHPID`, answered once the copy has
 // finished: the copy posts the signal on the body's process, and the body
 // settles it through signalThisBody at its next moment between commands —
-// or, where the copy was an element of a pipeline, as its wait for the
-// pipeline ends (answerCopiesAsAPipelineEnds) — the same switch, on the
+// or, where the moment is one every shell agrees on, as its wait for the copy
+// ends (answerCopiesAsTheWaitEnds) — the same switch, on the
 // goroutine that owns the table it reads. Not a dialect split, so nothing
 // asks a Semantics axis.
 //
@@ -332,30 +333,113 @@ func (r *Runner) settleCopiesSignals() bool {
 // ksh93u+ runs a `( … )` in its own process, so it reaches only the element
 // row. Not a dialect split, so nothing asks a Semantics axis.
 //
-// **A pipeline, and not every copy.** A lone `( … )` copy is a split: with
-// it last in `{ … } 2>/dev/null` or `eval '…' 2>/dev/null`, zsh runs the
-// handler inside both redirections, bash 5.3 and 3.2 outside both, and dash
-// outside the group's and inside the `eval`'s. A `$( … )` copy's handler sees
-// `$?` from before the command in zsh and the substitution's in bash and dash,
-// which is the shape Semantics.HandlersRunAsASubstitutionEnds has at the top.
-// Neither is this rule's, and both still settle between commands.
+// **A lone `( … )` and a `$( … )` copy are answered by the same moves**, at
+// the moments every shell agrees on: before an and-or list goes on, as the
+// simple command that held a `$( … )` ends, and as a body that is one simple
+// command ends (#7358). Waiting for the next statement put the handler after
+// the rest of the list, outside the `eval` a `$( … )` was in, and nowhere at
+// all at a simple-command element's end. Measured 2026-11-02 the same way:
 //
-// The arrival is the one the copy left on the body's process and it settles
-// through settleCopiesSignals, as at the next command; only the moment moves.
+//	( trap "echo U" USR1; p=<pid>; ( kill -USR1 $p ) && echo a )
+//	        U, a         bash 5.3.20, bash 3.2.57, zsh 5.9.2, dash;
+//	                     here, before: a, U
+//	( trap 'echo U $?' USR1; p=<pid>; false
+//	  ( kill -USR1 $p; exit 3 ) || echo a$? )
+//	        U 3, a3      the same four, zsh too: the copy's status
+//	( trap "echo U" USR1; p=<pid>; x=$(kill -USR1 $p; echo s) && echo a$x )
+//	        U, as        the same four; here, before: as, U
+//	( trap "echo U >&2" USR1; p=<pid>
+//	  eval 'x=$(kill -USR1 $p)' 2>/dev/null; echo b )
+//	        b            the same four and ksh93u+: inside the `eval`'s
+//	                     redirection; here, before: U, b
+//	eval 'trap "echo U" USR1; p=<pid>; ( kill -USR1 $p )' | /bin/cat
+//	        U            the same four, with `x=$(kill -USR1 $p)` too, and
+//	                     as a `&` job's body; here, before: nothing
+//	( trap 'echo U $?' USR1; p=<pid>; false
+//	  x=$(kill -USR1 $p; exit 3); echo st=$? )
+//	        U 3, st=3    bash 5.3, 3.2 and dash; zsh U 1, the status from
+//	                     before the command, which is what its handler
+//	                     between commands sees too
+//
+// And at the top level, for what a copy aims at `$$`, which is the shell:
+// `trap "echo U" USR1; ( kill -USR1 $$ ) && echo a` and the same with `{ kill
+// -USR1 $$; } | /bin/cat` are U, a in all four and ksh93u+, where this wrote
+// a, U; `( kill $$ ) && echo a` dies of TERM before `a` in all five, where
+// this wrote `a` first.
+//
+// **Not as the wait for a lone `( … )` ends**, which is where zsh answers it:
+// with the copy last inside a redirection the shells split, so the moment a
+// `( … )` copy's handler runs between there and the next command is left
+// where it was. Measured the same way, U written to the redirected stream:
+//
+//	… { ( kill -USR1 $p ); } 2>/dev/null; echo b
+//	        U, b         bash 5.3, 3.2 and dash; b in zsh and here
+//	… eval '( kill -USR1 $p )' 2>/dev/null; echo b
+//	        U, b         bash 5.3, 3.2 and here; b in zsh and dash
+//	… { ( kill -USR1 $p ); } 2>/dev/null       — the body's last command
+//	        U            bash 5.3, 3.2 and dash; nothing in zsh and here
+//
+// zsh runs the handler as the wait ends, inside both redirections; bash at
+// the next command, outside both; dash outside the group's and inside the
+// `eval`'s, while a function call's redirection holds it in all four. That is
+// a split keyed on which construct's redirection ends with the copy, and it
+// is #7358's to settle. A `$( … )` copy's handler runs as the substitution
+// ends in zsh — `echo x$(kill -USR1 $p; echo s)` is U, xs there and xs, U in
+// bash and dash — which is Semantics.HandlersRunAsASubstitutionEnds's shape,
+// and is not asked here either: this runs it as the command ends.
+//
+// The arrival is the one the copy left and it settles through
+// settleCopiesSignals, as at the next command; only the moment moves.
 
-// answerCopiesAsAPipelineEnds runs, as a pipeline the body waited for ends,
-// the handlers for what copies of the body aimed at it, and dies of what
-// they aimed at it untrapped. The handler sees the pipeline's status, in the
-// dialect whose handler between commands sees the one from before the command
-// too, since that is where this one was measured.
-func (r *Runner) answerCopiesAsAPipelineEnds(ctx context.Context) {
-	if !r.inSubshell || r.ctl != controlNone || !r.copiesSignaled() {
+// answerCopiesAsTheWaitEnds runs, as the wait for a copy of this shell ends,
+// the handlers for what copies aimed at it, and dies of what they aimed at it
+// untrapped: a pipeline's end, an and-or list's step, and the end of a simple
+// command whose `$( … )` the copy was. seen is the `$?` the handler is shown
+// in the dialect whose handler between commands sees an earlier one: the
+// pipeline's or the step's status, and for a simple command the status from
+// before it.
+//
+// A body answers what its copies posted and anything else it raised on
+// itself (Runner.selfPending). The shell at the top answers only where a copy
+// aimed at `$$` — a fatal signal it sent, or a trapped one it raised — so a
+// signal from another process still waits for the next statement.
+func (r *Runner) answerCopiesAsTheWaitEnds(ctx context.Context, seen int) {
+	if r.ctl != controlNone || !r.aCopysArrivalWaits() {
 		return
 	}
 	before := r.statusBefore
-	r.statusBefore = r.status
+	r.statusBefore = seen
 	r.runPendingTraps(ctx)
 	r.statusBefore = before
+}
+
+// aCopysArrivalWaits reports whether a copy of this shell has left it
+// something to answer.
+func (r *Runner) aCopysArrivalWaits() bool {
+	if r.inSubshell {
+		return r.copiesSignaled() || len(r.selfPending) > 0
+	}
+	s := r.signals
+	return s != nil && !s.nothingArrived() && s.aCopysArrivalWaits()
+}
+
+// aCopysArrivalWaits reports whether an arrival waiting for the shell came
+// from a copy of it: a death recordSharedDeath noted, or a signal a copy's
+// `kill` raised on `$$`, which selfSignaled records as originElsewhere. A
+// substitution's own `kill $$` is not one: its moment is
+// Semantics.HandlersRunAsASubstitutionEnds's question and is left there.
+func (s *signalState) aCopysArrivalWaits() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.diedSig != 0 {
+		return true
+	}
+	for _, name := range s.pending {
+		if slices.Contains(s.origins[name], originElsewhere) {
+			return true
+		}
+	}
+	return false
 }
 
 // A **group** kill aimed at that same number — `kill -- -$BASHPID`, `kill

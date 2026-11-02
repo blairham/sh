@@ -228,6 +228,80 @@ func TestAPipelineCopysSignalToTheBodyIsAnsweredAsTheWaitEnds(t *testing.T) {
 	}
 }
 
+// A lone `( … )` or a `$( … )` that signals the body's `$BASHPID` has the
+// body's handler run before an and-or list goes on, showing the copy's status;
+// a `$( … )`'s inside the `eval` it was in; and before a body that is one
+// simple command ends, where it used to wait for a next command that never
+// came and was lost (#7358).
+//
+// Measured 2026-11-02 under `-c`, each shell in a process group of its own,
+// against bash 5.3.20 and 3.2.57 (3.2 reading the pid back from a child's
+// `$PPID`); zsh 5.9.2 and dash agree on every row but the last, and ksh93u+
+// on the `$( … )` element. Each row's want is what bash wrote. The last row is
+// the split's: bash runs a `( … )` copy's handler after an `eval`'s
+// redirection is put back, where zsh and dash run it inside, so it stays
+// where the next command answers it.
+func TestASubshellOrSubstitutionCopysSignalToTheBodyIsAnsweredBeforeTheListGoesOn(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{
+			"a ( ) copy, before the and-or list goes on",
+			`( trap 'echo U' USR1; p=$BASHPID; ( kill -USR1 $p ) && echo a ); echo out=$?`,
+			"U\na\nout=0\n",
+		},
+		{
+			"a ( ) copy, seeing the copy's status",
+			`( trap 'echo U $?' USR1; p=$BASHPID; false; ( kill -USR1 $p; exit 3 ) || echo a$? )`,
+			"U 3\na3\n",
+		},
+		{
+			"a ( ) copy, in a job's body",
+			`( trap 'echo U' USR1; p=$BASHPID; ( kill -USR1 $p ) && echo a ) & wait $!; echo out=$?`,
+			"U\na\nout=0\n",
+		},
+		{
+			"a $( ) copy, before the and-or list goes on",
+			`( trap 'echo U' USR1; p=$BASHPID; x=$(kill -USR1 $p; echo s) && echo a$x )`,
+			"U\nas\n",
+		},
+		{
+			"a $( ) copy, seeing the command's status",
+			`( trap 'echo U $?' USR1; p=$BASHPID; false; x=$(kill -USR1 $p; exit 3) || echo a$? )`,
+			"U 3\na3\n",
+		},
+		{
+			"a $( ) copy, inside the eval's redirection",
+			`( trap 'echo U >&2' USR1; p=$BASHPID; eval 'x=$(kill -USR1 $p)' 2>/dev/null; echo b ); echo out=$?`,
+			"b\nout=0\n",
+		},
+		{
+			"a ( ) copy, before a simple-command element ends",
+			`eval 'trap "echo U" USR1; p=$BASHPID; ( kill -USR1 $p )' | /bin/cat; echo out=$?`,
+			"U\nout=0\n",
+		},
+		{
+			"a $( ) copy, before a simple-command element ends",
+			`eval 'trap "echo U" USR1; p=$BASHPID; x=$(kill -USR1 $p)' | /bin/cat; echo out=$?`,
+			"U\nout=0\n",
+		},
+		{
+			"a ( ) copy, before a simple-command job ends",
+			`eval 'trap "echo U" USR1; p=$BASHPID; ( kill -USR1 $p )' & wait $!; echo out=$?`,
+			"U\nout=0\n",
+		},
+		{
+			"a ( ) copy, after the eval's redirection",
+			`( trap 'echo U >&2' USR1; p=$BASHPID; eval '( kill -USR1 $p )' 2>/dev/null; echo b )`,
+			"b\nU\n", // the U on standard error, read after standard output
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := runBashAnchored(t, c.src); got != c.want {
+				t.Errorf("%s\n got %q\nwant %q", c.src, got, c.want)
+			}
+		})
+	}
+}
+
 // A **group** kill at `$BASHPID` is refused as no such process, from wherever
 // in the subshell it is sent, and nothing is signaled (#7238).
 //

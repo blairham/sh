@@ -3800,6 +3800,17 @@ func Semantics() interp.Semantics {
 	// b+=(x [5]=y)` is `( x 8 9 '' y )` (#7079). See
 	// interp.Semantics.AppendingSubscriptedLiteralStoresFromTheFirstPosition.
 	s.AppendingSubscriptedLiteralStoresFromTheFirstPosition = interp.Yes
+	// In such a literal, `=` or `+=`, a bare element that expanded to nothing
+	// still takes a position: measured 2026-11-02 on 5.9.2, with `e=`, `b=(7 8
+	// 9); b+=(x $e [6]=y)` is `( x '' 9 '' '' y )` (#7321). See
+	// interp.Semantics.EmptyBareElementOfASubscriptedLiteralTakesAPosition.
+	s.EmptyBareElementOfASubscriptedLiteralTakesAPosition = interp.Yes
+	// And a negative subscript in a literal is refused rather than counted
+	// back from the end: measured 2026-11-02 on 5.9.2, `b=(7 8 9); b+=(x
+	// [-1]=y)` is `bad subscript for direct array assignment: -1` and the
+	// script ends at 1 (#7322). See
+	// interp.Semantics.NegativeSubscriptInAnIndexedLiteralIsBad.
+	s.NegativeSubscriptInAnIndexedLiteralIsBad = interp.Yes
 	// Measured 2026-10-16 (#6781): see
 	// interp.Semantics.DeclarationOperandSplitsAfterTheSubscript.
 	s.DeclarationOperandSplitsAfterTheSubscript = interp.No

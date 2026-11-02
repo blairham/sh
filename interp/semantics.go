@@ -36341,6 +36341,73 @@ type Semantics struct {
 	// it on; see dialect/ksh.
 	AppendingSubscriptedLiteralStoresFromTheFirstPosition Answer
 
+	// EmptyBareElementOfASubscriptedLiteralTakesAPosition keeps a bare
+	// element that expanded to **no word at all** as one empty element, in a
+	// literal that holds any `[k]=v` element: it takes the next position and
+	// moves the position on. No removes it, as every literal with no
+	// subscripted element does.
+	//
+	// Measured 2026-11-02 from script files under `env -i PATH=/usr/bin:/bin`
+	// with `e=`, read back with `typeset -p b` in zsh and `declare -p b` in
+	// bash, where the same rows are written with the subscripts one lower:
+	//
+	//	row (zsh's spelling)               zsh 5.9.2 (-f)          bash 5.3.20
+	//	b=(7 8 9); b+=(x $e [6]=y)         ( x '' 9 '' '' y )      7 8 9 x, [5]=y
+	//	b=(x $e z [5]=y)                   ( x '' z '' y )         x z, [4]=y
+	//	b=([2]=q x $e y)                   ( '' q x '' y )         [1]=q [2]=x [3]=y
+	//	b=(x [3]=y $e)                     ( x '' y '' )           [0]=x [2]=y
+	//	typeset -a b=(x $e z [5]=y)        ( x '' z '' y )         x z, [4]=y
+	//	b=(x $e z)                         ( x z )                 x z
+	//	b=(7 8 9); b+=(x $e z)             ( 7 8 9 x z )           7 8 9 x z
+	//
+	// The last two are the controls: with no subscripted element the empty
+	// word goes as it always does. The element is the word and not `$e`
+	// alone: an unset `e`, `e=()`, `"${e[@]}"` over an empty array, `"$@"`
+	// with no parameters and `$(true)` each take a position the same way. A
+	// pattern removed under `nullglob` does not — `b=(x nomatch* z [5]=y)`
+	// is `( x z '' '' y )` — since it is the pathname stage that removes it,
+	// after the element has expanded to its word.
+	//
+	// The empty fields *inside* a longer expansion are kept there too, which
+	// this does not reach: `e=(p '' q); b=(x $e z [9]=y)` is `( x p '' q z ''
+	// '' '' y )` (#7321).
+	//
+	// ksh93 has no line to ask it on: a bare element behind a subscripted one
+	// is refused while the program is read. dash and BusyBox ash have no array
+	// literal.
+	EmptyBareElementOfASubscriptedLiteralTakesAPosition Answer
+
+	// NegativeSubscriptInAnIndexedLiteralIsBad refuses a `[k]=v` element of an
+	// indexed array literal whose subscript is negative, wherever counting
+	// back from the end would have found an element. No counts it back from
+	// the end of what the literal is placing into, as `a[-1]=v` does on its
+	// own.
+	//
+	// Measured 2026-11-02 from script files under `env -i PATH=/usr/bin:/bin`,
+	// each row after `b=(7 8 9)`:
+	//
+	//	row                                zsh 5.9.2 (-f)   bash 5.3.20   ksh93u+
+	//	b+=(x [-1]=y)                      refused, 1       7 8 9 y       text
+	//	b+=([-1]=y)                        refused, 1       7 8 y         text
+	//	b=(x [-1]=y)                       refused, 1       y             text
+	//	b+=([2]=q [-1]=y)                  refused, 1       7 8 y         text
+	//	typeset -a b=([0]=z [1]=w [-1]=x)  refused, 1       z x           (z x)
+	//
+	// with the last row's subscripts one higher in zsh. zsh's refusal is `bad
+	// subscript for direct array assignment: -1`, quoting the subscript as
+	// written (`[i]` with `i=-1` names `i`), which is the refusal `[0]=y`
+	// already was there: it ends the script, from a file and under `-c` alike,
+	// at 1, and leaves the name as it was —
+	// Semantics.RefusedPlacementKeepsWhatTheLiteralPlaced says what is kept.
+	// So zsh refuses every subscript below the first element in a literal.
+	// ksh93's `text` is a mixed literal's `[…]=` kept as a word, and the last
+	// row is the one it reads a subscript on (#7322).
+	//
+	// Asked only where the two readings part, which is a negative subscript
+	// that counts back to an element; one that counts back past the start is
+	// refused either way. dash and BusyBox ash have no array literal.
+	NegativeSubscriptInAnIndexedLiteralIsBad Answer
+
 	// EmptySubscriptTextIsAMathError refuses a subscript whose text is
 	// *empty or blank once it has been expanded* — `${a[$w]}` with an empty
 	// `$w`, and `${a[ ]}` beside it — where an expression reads it.

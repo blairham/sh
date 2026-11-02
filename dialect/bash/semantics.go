@@ -3465,6 +3465,16 @@ func Semantics() interp.Semantics {
 	// 5.3.20 and 3.2.57 alike (#7079). See
 	// interp.Semantics.AppendingSubscriptedLiteralStoresFromTheFirstPosition.
 	s.AppendingSubscriptedLiteralStoresFromTheFirstPosition = interp.No
+	// A bare element that expanded to nothing is removed from a subscripted
+	// literal as from any other: measured 2026-11-02, with `e=`, `b=(x $e z
+	// [4]=y)` is `([0]="x" [1]="z" [4]="y")` on 5.3.20 (#7321). See
+	// interp.Semantics.EmptyBareElementOfASubscriptedLiteralTakesAPosition.
+	s.EmptyBareElementOfASubscriptedLiteralTakesAPosition = interp.No
+	// And a negative subscript in a literal counts back from the end:
+	// measured 2026-11-02, `b=(7 8 9); b+=(x [-1]=y)` is `([0]="7" [1]="8"
+	// [2]="9" [3]="y")` on 5.3.20 (#7322). See
+	// interp.Semantics.NegativeSubscriptInAnIndexedLiteralIsBad.
+	s.NegativeSubscriptInAnIndexedLiteralIsBad = interp.No
 	// The comma inside a subscript is the arithmetic operator here, as it is
 	// everywhere else: measured 2026-09-12, `a=(p q r s); i="2,3";
 	// ${a[$i]}` is the *third* element, which is the operator's right

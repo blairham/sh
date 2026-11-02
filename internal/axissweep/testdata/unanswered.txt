@@ -143,6 +143,7 @@ ash   ElementWriteThroughAnElementReferenceNests
 ash   EmptySubscriptInAnIndexedLiteralIsBad
 ash   FrozenElementIsRefusedBeforeItsSubscript
 ash   FrozenLiteralIsExpandedBeforeItIsRefused
+ash   EmptyBareElementOfASubscriptedLiteralTakesAPosition
 ash   EmptyArithSubscript
 ash   EmptyAssociativeKeyIsAnError
 ash   EmptyAssociativeKeyIsReportedWhenRead
@@ -228,6 +229,7 @@ ash   NamerefDroppedByASubscriptedOperand
 ash   NamerefLetterStandsAlone
 ash   NamerefTargetResolvedWhenAimed
 ash   NegatedTestRecordsThePostNegationStatus
+ash   NegativeSubscriptInAnIndexedLiteralIsBad
 ash   NegativeSubscriptCountsOverAPromotedScalar
 ash   NegativeSubscriptPastTheStartInserts
 ash   NoclobberProtectsAnFdVariable
@@ -561,6 +563,7 @@ dash  ElementWriteThroughAnElementReferenceNests
 dash  EmptySubscriptInAnIndexedLiteralIsBad
 dash  FrozenElementIsRefusedBeforeItsSubscript
 dash  FrozenLiteralIsExpandedBeforeItIsRefused
+dash  EmptyBareElementOfASubscriptedLiteralTakesAPosition
 dash  EmptyArithSubscript
 dash  EmptyAssociativeKeyIsAnError
 dash  EmptyAssociativeKeyIsReportedWhenRead
@@ -655,6 +658,7 @@ dash  NamerefDroppedByASubscriptedOperand
 dash  NamerefLetterStandsAlone
 dash  NamerefTargetResolvedWhenAimed
 dash  NegatedTestRecordsThePostNegationStatus
+dash  NegativeSubscriptInAnIndexedLiteralIsBad
 dash  NegativeSubscriptCountsOverAPromotedScalar
 dash  NegativeSubscriptPastTheStartInserts
 dash  NumericAttributeReplacesTheArrayAttribute
@@ -834,6 +838,7 @@ ksh   CoprocEndsInAnArray
 ksh   DeclarationMayShadowAnEnclosingScopesReadonly
 ksh   DeclareGlobalReachesPastALocal
 ksh   EchoLastEscapeFlagWins
+ksh   EmptyBareElementOfASubscriptedLiteralTakesAPosition
 ksh   EmptySubscriptToAnAssignment
 ksh   ErrtraceReachesSubshells
 ksh   ExportContainerLetterNeedsAValue

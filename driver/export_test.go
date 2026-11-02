@@ -6,6 +6,7 @@ package driver
 import (
 	"io"
 	"os"
+	"os/signal"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
@@ -81,3 +82,35 @@ func FunctionSearchDirsForTest(prefix string) []string { return functionSearchDi
 // would go on passing after the constant changed, which is the one failure a
 // test of a spelling can have.
 const AnchorArgForTest = anchorArg
+
+// WatchHasAnsweredForTest returns once the watch for fatal signals, where one
+// is up, has answered every arrival of sig this process had received when it
+// was called. With no watch up it returns at once, and where the watch's
+// answer is a death it does not return at all.
+//
+// Exposed because the watch answers on a goroutine of its own and the test
+// that asks is in the same process. A test that returned and let its process
+// exit could end it before the watch had answered, and that read as a watch
+// that never heard the signal (#7391).
+func WatchHasAnsweredForTest(sig os.Signal) {
+	// signal.Stop returns only once os/signal has handed every arrival the
+	// runtime had received to every subscribed channel, the watch's among
+	// them: sigbook.Settle, for one signal.
+	if !signal.Ignored(sig) {
+		probe := make(chan os.Signal, 1)
+		signal.Notify(probe, sig)
+		signal.Stop(probe)
+	}
+	// Under mu, so the watch cannot be taken down and ch closed between the
+	// look and the send.
+	fatalWatch.mu.Lock()
+	ch := fatalWatch.ch
+	if ch == nil {
+		fatalWatch.mu.Unlock()
+		return
+	}
+	done := make(answeredSoFar)
+	ch <- done
+	fatalWatch.mu.Unlock()
+	<-done
+}

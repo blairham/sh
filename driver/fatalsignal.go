@@ -355,6 +355,10 @@ func watchFatalSignals(r *interp.Runner) {
 		}
 		go func() {
 			for s := range ch {
+				if done, ok := s.(answeredSoFar); ok {
+					close(done)
+					continue
+				}
 				sig, ok := s.(syscall.Signal)
 				if !ok {
 					continue
@@ -412,6 +416,18 @@ func watchFatalSignals(r *interp.Runner) {
 		}()
 	}
 }
+
+// answeredSoFar is not a signal. Queued on the watch's channel behind the
+// arrivals os/signal has already handed it, it is closed once the watch has
+// answered everything ahead of it, so it is never closed if one of those
+// arrivals is a death. Nothing in a binary sends it. It exists for a test that
+// has to know the watch has answered, and cannot learn that by letting its
+// process end first (#7391). See WatchHasAnsweredForTest.
+type answeredSoFar chan struct{}
+
+func (answeredSoFar) String() string { return "what the watch has answered so far" }
+
+func (answeredSoFar) Signal() {}
 
 // watchWhatTheShellIgnores tells the watch what the shell ignores untrapped,
 // and subscribes it to SIGTERM where an interactive shell ignores that too.

@@ -79,7 +79,8 @@ func TestARunThatReturnedLeavesNoWatchBehind(t *testing.T) {
 }
 
 // trapAfterARun is the re-executed half: a front-end run in this process, and
-// then a library Runner running src, with what it writes on standard output.
+// then a library Runner running src, with what it writes on standard output,
+// and then the watch's answer, where there is a watch to give one.
 func trapAfterARun(t *testing.T, keep bool, src string) {
 	if keep {
 		driver.KeepFatalSignalWatch()
@@ -103,6 +104,20 @@ func trapAfterARun(t *testing.T, keep bool, src string) {
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
+	// And the process does not end before whatever watch is up has answered
+	// the USR1 (#7391). os/signal hands the arrival to the watch and to the
+	// Runner in the same delivery, and nothing orders the two. The Runner
+	// answers as the pipeline ends, and the rest of the script and of this
+	// test takes microseconds. So a watch that had the arrival and had decided
+	// to kill could still be scheduled after the binary had exited 0, and the
+	// kept case failed as though the signal never reached it. Measured over
+	// 3000 runs with every core busy: 183 on macOS, and 2754 of 5000 at idle
+	// on Linux without -race. The released case had the same hole the other
+	// way, because a watch left behind could lose the same race and the case
+	// would pass. Waiting for the watch's answer here, rather than for a
+	// length of time, means the kept case passes only by being killed and the
+	// released case cannot outrun a leftover watch.
+	driver.WatchHasAnsweredForTest(syscall.SIGUSR1)
 }
 
 // interruptProbe is a child that sends itself an interrupt: it says `survived`

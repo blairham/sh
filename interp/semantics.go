@@ -1234,7 +1234,8 @@ type Semantics struct {
 	// back before it ends, and the other four do not. An interactive zsh
 	// that carries on past the failure puts them back as well (`v=old`
 	// afterwards), which is why the question is about the end of the shell
-	// and not about the failure.
+	// and not about the failure — and an interactive ksh93 does not, which
+	// is PrefixEntriesStayWhenAnInteractiveShellCarriesOn's question.
 	//
 	// Read rather than asked, on a path that has already written one
 	// complaint: an unanswered vector puts the entries back, which is what
@@ -1248,6 +1249,47 @@ type Semantics struct {
 	// unpinned dash: the same, and the same test.
 	// unpinned ash: the same, and the same test.
 	PrefixEntriesStayWhenAFailureEndsTheShell Answer
+
+	// PrefixEntriesStayWhenAnInteractiveShellCarriesOn leaves the prefix
+	// entries a command had already assigned where they are when a failure in
+	// the command is one that would end a script, and the shell is
+	// interactive and carries on past it instead. Measured 2026-11-02 under
+	// `-i` with the script on standard input, `env -i PATH=/usr/bin:/bin
+	// HOME=<scratch> PS1= ENV=`, with `f() { :; }` and `v=old` on the lines
+	// before and `echo "v=$v"` on the line after:
+	//
+	//	                                  ksh93u+  zsh 5.9.2  bash 5.3  dash, ash
+	//	v=new w=${q?boom} :               new      old        old       new
+	//	v=new w=${q?boom} f               new      old        old       old
+	//	v=new w=${q?boom} true            old      old        old       old
+	//
+	// The same question as PrefixEntriesStayWhenAFailureEndsTheShell, asked
+	// where that one cannot be: a prompt is the one place a failure that
+	// ends a script is carried on past. ksh93 leaves the entries in front of
+	// a special builtin and a function whether or not the shell ends, so its
+	// answer is the same both times; the other four put them back here. The
+	// `true` row is the control: ksh93 carries on past a regular builtin's
+	// failed prefix in a script too, and Runner.prefixFailureIsThisCommandsAlone
+	// answers it before this is read. dash and BusyBox ash 1.38.0 keep a
+	// special builtin's prefix whatever happens to the command
+	// (AssignmentPrefixPersistsOnSpecialBuiltin), so their `:` row is not this
+	// question and their function row is. Neither is reached from `-c` or a
+	// script file, which is why this is a second axis and not a third value
+	// of that one (#7098).
+	//
+	// Read rather than asked, on a path that has already written one
+	// complaint: an unanswered vector puts the entries back, which is what
+	// this shell did before the question was put.
+	//
+	// unpinned bash: the corpus runs nothing interactive;
+	// TestAnInteractiveBashPutsAFailedPrefixsEntriesBack pins it.
+	// unpinned ksh: the same reach;
+	// TestAnInteractiveKshKeepsAFailedPrefixsEntries pins it.
+	// unpinned zsh: the same reach;
+	// TestAnInteractiveZshPutsAFailedPrefixsEntriesBack pins it.
+	// unpinned dash: the same reach, and measured by hand above.
+	// unpinned ash: the same reach, and measured by hand above.
+	PrefixEntriesStayWhenAnInteractiveShellCarriesOn Answer
 
 	// AssignmentPrefixPersistsAfterAFunction keeps `v=9 f` set once `f` has
 	// returned, instead of giving the name back what it held before the call.

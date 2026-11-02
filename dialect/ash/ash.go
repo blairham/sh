@@ -479,6 +479,11 @@ func Semantics() interp.Semantics {
 	// `trap 'echo $v' EXIT; v=old; v=new w=${q?boom} sh -c :` writes `new`
 	// (#7004).
 	s.PrefixEntriesStayWhenAFailureEndsTheShell = interp.Yes
+	// But an interactive shell that carries on past the failure puts them
+	// back: measured 2026-11-02 in `busybox:latest` (1.38.0) under `-i` with
+	// the script on standard input, `v=old`, then `v=new w=${q?boom} f`, then
+	// `echo "v=$v"` writes `v=old` (#7098).
+	s.PrefixEntriesStayWhenAnInteractiveShellCarriesOn = interp.No
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
 	s.DeclarationPromotesThePrefixEntry = interp.No
 	// unanswered SubscriptedAssignmentPrefix, SubscriptedPrefixIsTakenBack:

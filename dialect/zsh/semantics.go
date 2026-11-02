@@ -1661,6 +1661,11 @@ func Semantics() interp.Semantics {
 	// measured 2026-10-30, `trap 'echo $v' EXIT; v=old; v=new w=${q?boom} true`
 	// writes `new` (#7004).
 	s.PrefixEntriesStayWhenAFailureEndsTheShell = interp.Yes
+	// But an interactive shell that carries on past the failure puts them
+	// back: measured 2026-11-02 under `-i` with the script on standard input,
+	// `v=old`, then `v=new w=${q?boom} :`, then `echo "v=$v"` writes `v=old`
+	// (#7098).
+	s.PrefixEntriesStayWhenAnInteractiveShellCarriesOn = interp.No
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
 	// And a listing with no operand sees the prefix's entry as an ordinary
 	// one: its value is written and the attribute tables say the rest, so

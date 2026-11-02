@@ -1960,6 +1960,11 @@ func Semantics() interp.Semantics {
 	// measured 2026-10-30, `trap 'echo $v' EXIT; v=old; v=new w=${q?boom} :`
 	// writes `new` (#7004).
 	s.PrefixEntriesStayWhenAFailureEndsTheShell = interp.Yes
+	// And so does one an interactive shell carries on past, in front of a
+	// special builtin or a function: measured 2026-11-02 under `-i` with the
+	// script on standard input, `v=old`, then `v=new w=${q?boom} :`, then
+	// `echo "v=$v"` writes `v=new` (#7098).
+	s.PrefixEntriesStayWhenAnInteractiveShellCarriesOn = interp.Yes
 	// Off at every builtin but `export`, which exports its own prefix as it
 	// is assigned and leaves it exported: measured 2026-10-30, `v=old;
 	// v=new export y=1; printenv v` is `new`, and `v=new w=$(printenv v)

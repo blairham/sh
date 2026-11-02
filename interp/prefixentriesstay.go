@@ -14,24 +14,23 @@ import "strings"
 // ahead of the redirections, the walk ahead of a declaration's operand, the
 // trace walks, and the builtin's, the function's and the program's own
 // stores — and each of them asks this on its way out, rather than the shell
-// re-applying anything at its end. A failure that does not end the shell is
-// no reason to leave anything, so it is the prefix's ordinary end there.
+// re-applying anything at its end. A failure contained in the command is no
+// reason to leave anything, so it is the prefix's ordinary end there.
+//
+// An interactive shell is the one place a failure that would end a script is
+// carried on past instead, and that is a question of its own: ksh93 leaves the
+// entries there too and the other four columns put them back — see
+// Semantics.PrefixEntriesStayWhenAnInteractiveShellCarriesOn (#7098).
 
 // prefixEntriesStay reports whether the entries a command's prefix has
 // assigned so far stay where they are, rather than being put back, because a
-// failure in the command is ending the shell.
+// failure in the command is one that ends a script.
 //
 // kind is the command, which decides whether the failure is contained in it
 // rather than ending anything — see Runner.prefixFailureIsThisCommandsAlone.
 // Asked only once something has failed, so an ordinary prefix reads nothing.
 func (r *Runner) prefixEntriesStay(kind prefixCommand) bool {
 	if !r.expandErr && !r.givingUpAlready() {
-		return false
-	}
-	if r.Interactive {
-		// A shell that carries on past the failure gives the entries back:
-		// measured 2026-10-30, `v=old`, then `v=new w=${q?boom} :`, then
-		// `echo $v` at an interactive zsh 5.9.2 is `v=old`.
 		return false
 	}
 	if r.prefixFailureIsThisCommandsAlone(kind) {
@@ -41,6 +40,9 @@ func (r *Runner) prefixEntriesStay(kind prefixCommand) bool {
 	// complaint, and an unanswered vector keeps the answer this shell gave
 	// before the question was put — see Runner.failedExpansion for the same
 	// reasoning.
+	if r.Interactive {
+		return r.sem().PrefixEntriesStayWhenAnInteractiveShellCarriesOn == Yes
+	}
 	return r.sem().PrefixEntriesStayWhenAFailureEndsTheShell == Yes
 }
 

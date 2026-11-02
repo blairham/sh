@@ -945,6 +945,10 @@ func Semantics() interp.Semantics {
 	// `-o posix` too: measured 2026-10-30, `trap 'echo $v' EXIT; v=old;
 	// v=new w=${q?boom} :` writes `old` (#7004).
 	s.PrefixEntriesStayWhenAFailureEndsTheShell = interp.No
+	// And at a prompt that carries on past the failure: measured 2026-11-02
+	// under `-i` with the script on standard input, `v=old`, then `v=new
+	// w=${q?boom} :`, then `echo "v=$v"` writes `v=old` (#7098).
+	s.PrefixEntriesStayWhenAnInteractiveShellCarriesOn = interp.No
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinOn
 	// And a listing with **no operand** does not see that prefix at all: it
 	// answers from the shell's own variables, so `export k=1; k=9 export -p`

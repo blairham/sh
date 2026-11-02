@@ -307,6 +307,12 @@ func Semantics() interp.Semantics {
 	// in front of a program too: measured 2026-10-30, `trap 'echo $v' EXIT;
 	// v=old; v=new w=${q?boom} /usr/bin/true` writes `new` (#7004).
 	s.PrefixEntriesStayWhenAFailureEndsTheShell = interp.Yes
+	// But an interactive shell that carries on past the failure puts them
+	// back: measured 2026-11-02 under `-i` with the script on standard input,
+	// `v=old`, then `v=new w=${q?boom} f`, then `echo "v=$v"` writes `v=old`.
+	// The last line has to arrive after the failure, because an interactive
+	// dash drops what it had already read when it carries on (#7098).
+	s.PrefixEntriesStayWhenAnInteractiveShellCarriesOn = interp.No
 	s.PrefixExportAtABuiltin = interp.PrefixExportAtABuiltinUnchanged
 	// This shell has no declaration word but `readonly` and `export`, both
 	// special builtins whose prefix persists here by the axis above — so the

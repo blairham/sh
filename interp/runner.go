@@ -3808,6 +3808,10 @@ type Runner struct {
 	// builtin runs, so a failure is only ever read by the builtin it
 	// belongs to.
 	writeFailed error
+	// writePipeCopies counts the SIGPIPEs the running builtin's failed writes
+	// may have had the kernel raise: every failed write's, where writeFailed
+	// keeps one error. See Runner.writeFailedAfter.
+	writePipeCopies int
 	// printfOut is the writer of the `printf` pass that is running, or nil
 	// when none is. It is here because two things outside that loop need to
 	// reach it: a diagnostic written while a conversion is being formatted
@@ -6544,7 +6548,7 @@ func (emptyReader) Read([]byte) (int, error) { return 0, io.EOF }
 func (r *Runner) printf(format string, args ...any) {
 	r.releaseHeldTraceBeforeWriting()
 	if n, err := fmt.Fprintf(r.lockedStdout(), format, args...); err != nil {
-		r.writeFailed = failedPartWay(n, err)
+		r.writeFailedAfter(n, err)
 	}
 }
 

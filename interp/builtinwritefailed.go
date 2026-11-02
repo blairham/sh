@@ -26,6 +26,6 @@ package interp
 // not call this: the reference writes one sentence there, not two.
 func (r *Runner) BuiltinWriteFailed(err error) {
 	if err != nil {
-		r.writeFailed = err
+		r.writeFailedAfter(0, err)
 	}
 }

@@ -3684,7 +3684,7 @@ func (p *printfWriter) write(s string) {
 		return
 	}
 	if n, err := io.WriteString(p.w, s); err != nil {
-		p.r.writeFailed = failedPartWay(n, err)
+		p.r.writeFailedAfter(n, err)
 	}
 }
 

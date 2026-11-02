@@ -285,7 +285,7 @@ func (r *Runner) arrayLiteralHiddenByQuotingUnder(name, value string, appends, g
 		r.assignAssocLiteral(name, elems, appends)
 		return true
 	}
-	r.assignArrayLiteral(name, elems, appends)
+	r.assignArrayLiteral(name, elems, appends, nil)
 	return true
 }
 

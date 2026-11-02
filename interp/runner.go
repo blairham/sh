@@ -16616,24 +16616,27 @@ func (r *Runner) assign(ctx context.Context, a *syntax.Assign) {
 		// output — and a `[sub]=value` element places its value instead.
 		// `a+=(d)` adds to the end rather than to the first element, which is
 		// what makes append two operations sharing a spelling rather than one.
+		var startOver func()
 		if r.arrayLiteralStartsTheNameOver(a) {
 			// One dialect reads this spelling as a *new* name rather than as
 			// new elements for the one that is there, so the attributes go
 			// before the elements land — see
-			// Semantics.ArrayLiteralAssignmentStartsTheNameOver.
+			// Semantics.ArrayLiteralAssignmentStartsTheNameOver. Asked here,
+			// of the name the literal found, and done once the words have
+			// expanded: a literal that fails leaves the name as it was,
+			// letters and export included (#7317).
+			startOver = func() { r.clearAttributesAReCreationDrops(a.Name) }
 			if a.Operand {
 				// A declaration's own literal takes the type letters away
 				// and leaves the export alone — see
 				// interp/operandrecreates.go for why.
-				r.clearTypeAttributes(a.Name)
-			} else {
-				r.clearAttributesAReCreationDrops(a.Name)
+				startOver = func() { r.clearTypeAttributes(a.Name) }
 			}
 		}
 		if r.unspecified {
 			return
 		}
-		r.assignArrayLiteral(a.Name, a.Elems, a.Append)
+		r.assignArrayLiteral(a.Name, a.Elems, a.Append, startOver)
 	case len(a.Leading) > 0:
 		// A chain of subscripts — `a[1][2]=v` — where each one after the
 		// first reaches into the value the one before it named. Ahead of

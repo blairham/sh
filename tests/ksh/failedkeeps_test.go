@@ -67,6 +67,37 @@ const failedBareScript = "row() { ( trap 'typeset -p b 2>/dev/null; echo .' EXIT
 	"row 'b=s; b+=(1 $((1/0)))'\n" +
 	"row 'b=(7); b=(1 $((1/0)) 3)'\n"
 
+// A bare literal that fails over a name carrying a letter leaves the letter
+// as well as the value — the integer, the export, the width, and a valueless
+// integer still declared — appended or assigned. The controls: one that
+// expands still takes the letter off, and its words see the name as it was.
+// Measured 2026-11-01 on ksh93u+ 2012-08-01 from a file, this script, byte
+// for byte. We dropped the letter on the first four rows and the valueless
+// name with it, and the substitution saw no letter (#7317).
+func TestAFailedBareLiteralKeepsTheLetters(t *testing.T) {
+	t.Parallel()
+	checkFailedKeep(t, failedLetterScript,
+		"typeset -i b=5\n.\n"+
+			"typeset -x b=s\n.\n"+
+			"typeset -i b\n.\n"+
+			"typeset -R 4 b='  ab'\n.\n"+
+			"typeset -i b=5\n.\n"+
+			"typeset -a b=(1 2 3)\n.\n"+
+			"typeset -a b=('typeset -i b=5' x)\n.\n")
+}
+
+// failedLetterScript fails a bare literal over a name carrying a letter,
+// each row in a subshell of its own, and lists what is left of the name; the
+// last two rows expand.
+const failedLetterScript = "row() { ( trap 'typeset -p b 2>/dev/null; echo .' EXIT; eval \"$1\" ) 2>/dev/null; }\n" +
+	"row 'typeset -i b=5; b=(1 $((1/0)) 3)'\n" +
+	"row 'typeset -x b=s; b=(1 $((1/0)) 3)'\n" +
+	"row 'typeset -i b; b=(1 $((1/0)) 3)'\n" +
+	"row 'typeset -R 4 b=ab; b=(1 $((1/0)) 3)'\n" +
+	"row 'typeset -i b=5; b+=(1 $((1/0)))'\n" +
+	"row 'typeset -i b=5; b=(1 2 3)'\n" +
+	"row 'typeset -i b=5; b=(\"$(typeset -p b)\" x)'\n"
+
 // failedTableScript appends to and assigns a table whose literal fails, each
 // row in a subshell of its own, and reads the keys back in a fixed order so
 // that no row depends on the order a table lists its keys in.

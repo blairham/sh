@@ -92,12 +92,19 @@ type bodyInbox struct {
 	fatal     syscall.Signal
 	fatalName string
 	died      chan struct{}
+	// wake is poked as a handled arrival is queued, for a body sitting in
+	// `wait`. See waitinabody.go.
+	wake chan struct{}
 }
 
 // newBodyInbox makes the inbox for a body starting with the trap table it
 // was handed.
 func newBodyInbox(traps map[string]string) *bodyInbox {
-	return &bodyInbox{traps: maps.Clone(traps), died: make(chan struct{})}
+	return &bodyInbox{
+		traps: maps.Clone(traps),
+		died:  make(chan struct{}),
+		wake:  make(chan struct{}, 1),
+	}
 }
 
 // kill records the signal the body is to die of. The first one wins: a body
@@ -257,6 +264,7 @@ func (b *bodyInbox) deliver(key string) bool {
 	}
 	if action != "" {
 		b.pending = append(b.pending, key)
+		pokeWake(b.wake)
 	}
 	return true
 }

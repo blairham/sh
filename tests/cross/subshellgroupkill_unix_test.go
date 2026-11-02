@@ -10,6 +10,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -432,6 +433,98 @@ func TestAMonitoredPipelineOrProcessSubstitutionIsAGroupInOneDialect(t *testing.
 			}
 			if out != c.out {
 				t.Errorf("wrote %q, want %q (stderr %q)", out, c.out, errs)
+			}
+		})
+	}
+}
+
+// **A `$( … )` leads no process group, under the monitor or not**, so a kill
+// aimed at its own number as a group is refused as one that is not there
+// (#7324). Not a split: no shell forks it as a job.
+//
+// Measured 2026-11-01, bash 5.3.20 with no terminal and the shell in a process
+// group of its own, zsh 5.9.2 on a pseudo-terminal, where it grants `set -m`:
+//
+//	set -m; echo $( p=$BASHPID; kill -0 -- -$p; echo k=$? ); echo outer $?
+//	        bash: no such process, k=1, outer 0; zsh, with
+//	        $sysparams[pid]: no such process, k=1; here, before: k=0 in both
+//	…without `set -m`                       the same, and here too
+//	…with `( … )` for `$( … )`              k=0 in both: a job's group
+//	set -m; ( set -m; echo $( p=$BASHPID; kill -0 -- -$p; echo k=$? ); : )
+//	        bash: no such process, k=1; here, before: k=0
+//	…with `( … )` for `$( … )`              k=0: with job control back on
+//	        inside, a `( … )` leads a group and a `$( … )` still none
+//	set -m; trap 'echo T' USR1; echo "x$(kill -USR1 0; echo in)y"; echo out=$?
+//	        bash: xy, T, out=0 — the shell's group, with the monitor as
+//	        without it; here the same, before and after
+//
+// dash agrees, with the number read back from a child, and ksh93u+ forks no
+// `$( … )` at all; neither has a parameter that names the body's own number,
+// so neither is reachable here.
+func TestACommandSubstitutionLeadsNoGroupUnderTheMonitor(t *testing.T) {
+	bashRefusal := regexp.MustCompile(`^bash: line 1: kill: \(-[0-9]+\) - No such process\n$`)
+	zshRefusal := regexp.MustCompile(`^zsh:kill:1: kill -[0-9]+ failed: no such process\n$`)
+	const (
+		bashOwn = `p=$BASHPID; kill -0 -- -$p; echo k=$?`
+		zshOwn  = `p=$sysparams[pid]; kill -0 -$p; echo k=$?`
+		zshSet  = `zmodload zsh/system; set -m; `
+	)
+	for _, c := range []struct {
+		name, dialect, script, out string
+		// refusal is the shape stderr must have, nil for nothing at all.
+		refusal  *regexp.Regexp
+		terminal bool
+	}{
+		{
+			"bash/its own number", "bash", `set -m; echo $( ` + bashOwn + ` ); echo outer $?`,
+			"k=1\nouter 0\n", bashRefusal, false,
+		},
+		{
+			"bash/without the monitor", "bash", `echo $( ` + bashOwn + ` ); echo outer $?`,
+			"k=1\nouter 0\n", bashRefusal, false,
+		},
+		{
+			"bash/a subshell's own number", "bash", `set -m; ( ` + bashOwn + ` ); echo outer $?`,
+			"k=0\nouter 0\n", nil, false,
+		},
+		{
+			"bash/inside a subshell that turns the monitor on", "bash",
+			`set -m; ( set -m; echo $( ` + bashOwn + ` ); : ); echo outer $?`, "k=1\nouter 0\n", bashRefusal, false,
+		},
+		{
+			"bash/a subshell inside one that turns the monitor on", "bash",
+			`set -m; ( set -m; ( ` + bashOwn + ` ); : ); echo outer $?`, "k=0\nouter 0\n", nil, false,
+		},
+		{
+			"bash/a group kill to 0", "bash",
+			`set -m; trap 'echo T' USR1; echo "x$(kill -USR1 0; echo in)y"; echo out=$?`, "xy\nT\nout=0\n", nil, false,
+		},
+		{
+			"zsh/its own number", "zsh", zshSet + `echo $( ` + zshOwn + ` ); echo outer $?`,
+			"k=1\nouter 0\n", zshRefusal, true,
+		},
+		{
+			"zsh/a subshell's own number", "zsh", zshSet + `( ` + zshOwn + ` ); echo outer $?`,
+			"k=0\nouter 0\n", nil, true,
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			run := runInAGroup
+			if c.terminal {
+				run = runOnATerminal
+			}
+			ws, out, errs := run(t, c.dialect, c.script)
+			if ws.Signaled() || ws.ExitStatus() != 0 {
+				t.Errorf("ended %v, want an exit at 0 (stderr %q)", ws, errs)
+			}
+			if out != c.out {
+				t.Errorf("wrote %q, want %q (stderr %q)", out, c.out, errs)
+			}
+			if c.refusal == nil && errs != "" {
+				t.Errorf("wrote %q to stderr, want nothing", errs)
+			}
+			if c.refusal != nil && !c.refusal.MatchString(errs) {
+				t.Errorf("wrote %q to stderr, want the refusal %s", errs, c.refusal)
 			}
 		})
 	}

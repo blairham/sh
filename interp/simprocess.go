@@ -60,7 +60,8 @@ type Process struct {
 	// job records what a real shell forks this body as, which is what
 	// decides, for the body the shell itself forked under the monitor, the
 	// process group it is in: a job of its own, an element of a pipeline's,
-	// a process substitution, or nothing that leads a group at all. Read
+	// a process substitution, a command substitution, which leads none, or
+	// nothing else that leads a group at all. Read
 	// here and asked only at a group kill. See jobgroupsignal.go.
 	job jobKind
 }
@@ -69,8 +70,8 @@ type Process struct {
 type jobKind uint8
 
 const (
-	// notAJob is a body no shell forks as a job: a `$( … )`, or a body the
-	// dialect runs in its own process.
+	// notAJob is a body no shell forks as a job and that is not a `$( … )`:
+	// a body the dialect runs in its own process.
 	notAJob jobKind = iota
 	// aJob is a `( … )` the dialect forks, or a background job's body: a
 	// group of its own under the monitor in every dialect that forks it.
@@ -84,6 +85,11 @@ const (
 	// aProcessSubstitution is a `<(…)` or `>(…)`, a group of its own where
 	// the dialect gives it one.
 	aProcessSubstitution
+	// aCommandSubstitution is a `$( … )` or a backquoted body, which no
+	// shell forks as a job and which leads no group anywhere: under the
+	// monitor or not, forked by the shell itself or inside another body
+	// (#7324).
+	aCommandSubstitution
 )
 
 // Process answers which process this runner's code would be running in. Nil

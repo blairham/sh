@@ -91,12 +91,13 @@ func startProcAnchor(argv []string) (*exec.Cmd, *os.File, error) {
 // kill aimed at a body forked with the monitor off, as both references do,
 // because no shell that forks has that group — see aimedAtAGroupNoForkLeads.
 // What still reaches the placeholder is a kill this shell does not answer: a
-// group kill under the monitor at a body that is no job's — a `$( … )`
-// (#7324), a body forked inside a job — where the group is a real one, and a
-// signal sent from another program, `/bin/kill` included. A job's group is
-// answered by the bodies in it and sends nothing (#7246), a pipeline's and a
-// `<(…)`'s where the dialect makes them one (#7318, #7306), and their own
-// number is refused where it does not; see jobgroupsignal.go.
+// group kill under the monitor at a body that is no job's — a body forked
+// inside a job — where the group is a real one, and a signal sent from
+// another program, `/bin/kill` included. A job's group is answered by the
+// bodies in it and sends nothing (#7246), a pipeline's and a `<(…)`'s where
+// the dialect makes them one (#7318, #7306), and their own number is refused
+// where it does not, as a `$( … )`'s always is (#7324); see
+// jobgroupsignal.go.
 func procGroupExists(pgid int) bool {
 	return syscall.Kill(-pgid, 0) == nil
 }

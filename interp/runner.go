@@ -8646,10 +8646,13 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 		}
 		// What a copy the left side ran aimed at this shell, answered before
 		// the list goes on and showing the left side's status. See
-		// answerCopiesAsTheWaitEnds.
-		r.answerCopiesAsTheWaitEnds(ctx, r.status)
-		if r.ctl != controlNone {
-			return nil
+		// answerCopiesAsTheWaitEnds. A handler that ended the shell ends the
+		// list; a left side that stopped on its own is judged below as before.
+		if r.ctl == controlNone {
+			r.answerCopiesAsTheWaitEnds(ctx, r.status)
+			if r.ctl != controlNone {
+				return nil
+			}
 		}
 		if x.Op == syntax.TokAndAnd && r.status == 0 && r.finishedConditionAbandoned &&
 			r.ctl == controlExit && r.abandon == abandonError &&

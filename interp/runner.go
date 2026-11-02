@@ -7969,7 +7969,7 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 	// Cleared before running so the body cannot fire it again, and so a
 	// `trap` inside it replaces rather than recurses.
 	r.exitTrap = nil
-	before := r.status
+	before, beforeSig := r.status, r.diedOfSig
 	if r.exitTrapAfterAGiveUp(r.ctl) &&
 		r.ask(r.sem().ExitTrapAfterAGiveUpSeesEarlierStatus, "the `$?` an EXIT trap reads after a fatal error") {
 		// Shown to the body alone: the shell still leaves with `before`,
@@ -8041,8 +8041,13 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 	exitedInTheBody = r.ctl == controlExit && !endedBySignal
 	if !exitedInTheBody && !r.returnNamedTheExitStatus() {
 		// The body ran to the end without naming a status, so the script
-		// keeps the one it already had.
-		r.status = before
+		// keeps the one it already had — and what produced it, which travels
+		// with it. The body's commands cleared diedOfSig as every command
+		// does, and a body a signal it sent itself ended is reported by the
+		// shell around it from that field, after this: it named `Signal 0:
+		// 0` in the located form, TERM included, where bash 5.3.20 names
+		// the signal exactly as it does with no trap at all (#7388).
+		r.status, r.diedOfSig = before, beforeSig
 	}
 	r.takeTheDeathBack()
 	r.stopTheShell()

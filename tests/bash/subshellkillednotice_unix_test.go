@@ -83,6 +83,74 @@ func TestAForegroundSubshellKilledBySignalIsReported(t *testing.T) {
 	}
 }
 
+// An EXIT trap in the body changes nothing about the notice: the shell names
+// the signal that ended the body, not anything the trap ran (#7388).
+//
+// Measured 2026-11-02 under `-c`, each shell in a process group of its own,
+// against GNU bash 5.3.20(1)-release at /opt/homebrew/bin/bash:
+//
+//	( trap 'echo E' EXIT; kill -USR1 $BASHPID; echo after )
+//	    E, then bash: line 1: PID User defined signal 1: 30  ( … )   158
+//	( trap "echo E" EXIT; kill -TERM $BASHPID; echo after )
+//	    E, then Terminated: 15             ( … )                     143
+//
+// Both are the same notice the body gets with no trap at all. This shell
+// wrote `bash: line 1: PID Signal 0: 0` for both, TERM included, because the
+// trap's own `echo` cleared the record of which signal produced the status,
+// and the status was put back without it.
+//
+// So each signal runs twice, once with no trap and once with one, and the two
+// notices must agree. That holds the signal fixed and changes only the trap.
+// The words are the host's, as above, so the trapped notice is checked
+// against the untrapped one and never against a string written here.
+func TestASubshellWithAnExitTrapIsReportedForTheSignalThatEndedIt(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		signal  string
+		number  syscall.Signal
+		located bool
+	}{
+		{name: "terminate is still bare", signal: "TERM", number: syscall.SIGTERM},
+		{
+			name: "and a user signal still located", signal: "USR1",
+			number: syscall.SIGUSR1, located: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			located := regexp.MustCompile(`^bash: line 1:\s+\d+ `)
+			// The state column of the notice: the words for the signal,
+			// with the prefix and the command taken off.
+			state := func(got, command string) string {
+				t.Helper()
+				line := killedNoticeLine(t, got, command)
+				where := located.FindString(line)
+				if (where != "") != tc.located {
+					t.Fatalf("the notice is %q, want the located form: %v", line, tc.located)
+				}
+				words, _, ok := strings.Cut(line[len(where):], command)
+				if !ok || len(words) != killedStateColumn {
+					t.Fatalf("the notice is %q: the command does not start at %d",
+						line, killedStateColumn)
+				}
+				return words
+			}
+			want := "st=" + strconv.Itoa(128+int(tc.number))
+			plain := "( kill -" + tc.signal + " $BASHPID; echo after )"
+			trapped := "( trap 'echo E' EXIT; kill -" + tc.signal + " $BASHPID; echo after )"
+			without := runBashAnchored(t, plain+"\necho \"st=$?\"\n")
+			with := runBashAnchored(t, trapped+"\necho \"st=$?\"\n")
+			// Standard output first, so an `after` would come before the
+			// status and this would not hold.
+			if !strings.HasPrefix(with, "E\n"+want+"\n") {
+				t.Errorf("got %q, want the trap's E and then %q", with, want)
+			}
+			if got, ref := state(with, trapped), state(without, plain); got != ref {
+				t.Errorf("with the EXIT trap the notice names %q, without it %q", got, ref)
+			}
+		})
+	}
+}
+
 // And the two ordinary deaths are still silent, here as everywhere else.
 //
 // ^C is how a person stops something they started; the row exists because a

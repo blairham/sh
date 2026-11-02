@@ -14,14 +14,32 @@ import (
 
 // The three values of Semantics.ReapedCoprocessEnds, named by the axis rather
 // than by the shells that hold them, over one snippet that can tell all three
-// apart: the coprocess ends, the shell is made to notice by a subshell, and
-// then both ends are asked after.
+// apart: the coprocess ends, the shell is made to notice by a `wait`, and then
+// both ends are asked after.
 //
 // `${CP[1]}` empty and the redirection ambiguous means the array went with the
 // ends; `read` answering `hi` means the read end outlived the reaping.
+//
+// # Why a `wait` and not a subshell
+//
+// The row asks what the reaping takes back, so it needs a reaping, and `( : )`
+// only delivers one if the coprocess got there first. Nothing orders the two:
+// the body is a goroutine and the subshell costs microseconds, so at
+// GOMAXPROCS=1 the subshell sometimes arrived with nothing to reap. The array
+// was then still there and the "ends go" row read `n=2` and died on SIGPIPE
+// like the "ends survive" one — 3 runs in 8000 on macOS, and on CI's ubuntu
+// leg (#7299). Real bash loses the same race: `coproc CP { echo hi; sleep
+// 0.2; }; ( : )` leaves `${#CP[@]}` at 2 in bash 5.3.20, and a `wait` in its
+// place answers 0. That is TestASubshellDeliversTheReapNotice's #2661 again,
+// which pins the subshell as a trigger on its own.
+//
+// A `wait` reaps the coprocess itself, so the notice is delivered once the
+// body has ended and not merely once it is about to, and it leaves what the
+// body wrote in the pipe — which is what the `read` row needs, and why the
+// read-to-end-of-file handshake that test uses would not do here.
 func TestReapedCoprocessEndsDecidesWhatIsTakenBack(t *testing.T) {
 	const src = `coproc CP { echo hi; }
-( : )
+wait
 echo "n=${#CP[@]}"
 read -r a <&"${CP[0]}"
 echo "read=$? a=[$a]"

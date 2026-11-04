@@ -12,6 +12,14 @@ Pre-stable releases (`v0.x.y`) make no compatibility promise. Until `v1.0.0`,
 `feat` and `fix` both bump the patch version and a breaking change bumps the
 minor.
 
+## [0.0.42](https://github.com/blairham/sh/compare/v0.0.41...v0.0.42) (2026-11-04)
+
+
+### Performance
+
+* **interp:** run a plain builtin's line by a route beside simpleCommand ([#7409](https://github.com/blairham/sh/issues/7409)) ([d02a95b](https://github.com/blairham/sh/commit/d02a95b6cebdd18859ffe406695702e672d849e1))
+* **interp:** take a plain declaration line without the utility's setup ([#7410](https://github.com/blairham/sh/issues/7410)) ([a02bd72](https://github.com/blairham/sh/commit/a02bd727ea7a5edb0ba21aebdb85285adc785dfe)), closes [#6373](https://github.com/blairham/sh/issues/6373)
+
 ## [0.0.41](https://github.com/blairham/sh/compare/v0.0.40...v0.0.41) (2026-11-04)
 
 

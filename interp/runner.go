@@ -9115,7 +9115,14 @@ func (r *Runner) commandAt(ctx context.Context, c syntax.Command) error {
 		// for a group, a function body or an `if` — and only the subshell
 		// is a job of its own. The Subshell node is recorded here, on the
 		// way in, and the copy inherits it.
-		if !r.inSubshell {
+		//
+		// Except the copy a background job runs in, which is a fork and so
+		// a shell of its own: what it reports is a command *it* ran. It
+		// inherits nothing worth naming — the shell that started it never
+		// recorded the `&` statement, so the copy held whatever that shell
+		// ran last, and a body's `( kill -USR1 $BASHPID )` was reported
+		// with the prelude's last definition written out (#7387).
+		if !r.inSubshell || r.forkedForABackgroundJob {
 			r.killed = c
 		}
 	}

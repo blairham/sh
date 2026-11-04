@@ -5870,6 +5870,10 @@ type Runner struct {
 	// subscript that would not evaluate in place of the shell writing it, for
 	// the one caller that words it as its own. See testIsSetSubscriptFailed.
 	heldSubscriptFailure *string
+	// patternPolicyRouted counts the matches whose setup read the pattern's
+	// text facts from its family rather than scanning it, so a test can show
+	// that route is reached. See interp/patternpolicy.go.
+	patternPolicyRouted int
 	// envNotAdopted names the parameters whose entry in the environment this
 	// shell **did not take over**: the value is the shell's own, the entry
 	// goes to a child as it arrived, and the export the environment brought

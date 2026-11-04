@@ -5544,6 +5544,9 @@ type Runner struct {
 	// argv, so that a command line of plain words builds no slice per word.
 	// See simple, which is the only reader.
 	plainScratch [1]string
+	// plainBuiltins counts the commands plainBuiltinCommand ran itself, so a
+	// test can show the route is reached. See interp/plainbuiltin.go.
+	plainBuiltins int
 	// beforePrelude is the status pair as it stood when a prelude began,
 	// put back when it ends. See SourcingPrelude.
 	beforePrelude keptStatus
@@ -9375,6 +9378,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	}()
 	if assignmentsAlone(c) {
 		return r.assignmentsAloneCommand(ctx, c, fired)
+	}
+	if plainBuiltinShape(c) {
+		return r.plainBuiltinCommand(ctx, c, fired)
 	}
 	return r.simpleCommand(ctx, c, fired)
 }

@@ -33,6 +33,12 @@ type scopeSpares struct {
 	// has read the last thing it needs off it — callFuncInPlace reads the
 	// trap record after the unwind.
 	scopes []*scope
+	// turns are finished declaration operand walks, emptied. The column that
+	// stores every operand in turn starts one for every declaration it runs,
+	// and each is over a kilobyte, most of it the room four holds are saved
+	// into. Released by the command that started it, once it has put back
+	// what the walk held — see Runner.simpleCommand.
+	turns []*operandsInTurn
 }
 
 // takeScope is an empty scope, a kept one where there is one.
@@ -56,6 +62,33 @@ func (s *scopeSpares) releaseScope(sc *scope) {
 		s.scopes = append(s.scopes, sc)
 	}
 }
+
+// takeTurn is an empty operand walk, a kept one where there is one.
+func (s *scopeSpares) takeTurn() *operandsInTurn {
+	if n := len(s.turns); n > 0 {
+		t := s.turns[n-1]
+		s.turns[n-1] = nil
+		s.turns = s.turns[:n-1]
+		return t
+	}
+	return new(operandsInTurn)
+}
+
+// releaseTurn empties a finished operand walk, so nothing its holds saved is
+// kept alive, and keeps it for the next declaration. Walks nest only as deep
+// as a declaration runs inside another's operands, so a few are kept.
+func (s *scopeSpares) releaseTurn(t *operandsInTurn) {
+	if t == nil {
+		return
+	}
+	*t = operandsInTurn{}
+	if len(s.turns) < maxTurnSpares {
+		s.turns = append(s.turns, t)
+	}
+}
+
+// maxTurnSpares bounds the kept operand walks.
+const maxTurnSpares = 8
 
 // maxScopeSpares bounds each list. A call stack deeper than this holds more
 // records at once than are kept, and the surplus is left to the collector, so

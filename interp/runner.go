@@ -5852,6 +5852,10 @@ type Runner struct {
 	// one step an empty shadow over a still-plain name needs, so a test can
 	// show that route is reached. See emptyshadow.go.
 	emptyReturns int
+	// unreadHolds counts the declaration operands stored in turn that were
+	// not held, because nothing behind them could read the hold, so a test
+	// can show that route is reached. See interp/unreadoperandhold.go.
+	unreadHolds int
 	// heldSubscriptFailure, where it is set, receives the sentence about a
 	// subscript that would not evaluate in place of the shell writing it, for
 	// the one caller that words it as its own. See testIsSetSubscriptFailed.
@@ -9492,14 +9496,19 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 	// The operands stored one at a time as they are reached, in the column
 	// that does, and what that walk holds for the operands behind each. Put
 	// back at the end of the command as the backstop; the walk releases it
-	// once every operand is expanded. See interp/declarationinturn.go.
+	// once every operand is expanded. See interp/declarationinturn.go. Kept
+	// for the next declaration once the command is over — see
+	// interp/scopespares.go.
 	var turn *operandsInTurn
 	// The assignment prefix's values, held under their names while a
 	// declaration's operands expand in the columns that work through the
 	// prefix first, and put back beneath what the walk held. See
 	// interp/prefixoperandorder.go.
 	var prefixHeld heldPrefix
-	defer func() { turn.release(r, &prefixHeld) }()
+	defer func() {
+		turn.release(r, &prefixHeld)
+		r.spares.releaseTurn(turn)
+	}()
 	// Whether that walk gave the command up: a frozen entry it refused, or an
 	// axis nobody answered. Either has said what it costs.
 	prefixStopped := false
@@ -9702,7 +9711,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 				}
 				operandAt = append(operandAt, len(argv))
 				argv = append(argv, r.expandADeclarationsAssignArg(w))
-				argv = r.storeOperandInTurn(argv, turn)
+				argv = r.storeOperandInTurn(argv, turn, c, c.Args[i+1:])
 				if turn != nil && turn.stopped {
 					break
 				}
@@ -9764,7 +9773,7 @@ func (r *Runner) simpleCommand(ctx context.Context, c *syntax.SimpleCmd, fired b
 			}
 			operandAt = append(operandAt, len(argv))
 			argv = append(argv, r.expandADeclarationsAssignArg(w))
-			argv = r.storeOperandInTurn(argv, turn)
+			argv = r.storeOperandInTurn(argv, turn, c, c.Args[i+1:])
 			if turn != nil && turn.stopped {
 				break
 			}

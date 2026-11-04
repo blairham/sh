@@ -5550,6 +5550,9 @@ type Runner struct {
 	// plainDeclarationLines counts the declaration lines among them. See
 	// plainDeclarationName.
 	plainDeclarationLines int
+	// plainValuedDeclarationLines counts the ones with a `name=$param`
+	// operand. See paramValuedOperand.
+	plainValuedDeclarationLines int
 	// beforePrelude is the status pair as it stood when a prelude began,
 	// put back when it ends. See SourcingPrelude.
 	beforePrelude keptStatus

@@ -6,6 +6,7 @@ package interp
 import (
 	"context"
 	"io"
+	"strings"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -90,8 +91,9 @@ func plainBuiltinShape(c *syntax.SimpleCmd) bool {
 
 // plainDeclarationOperands reports whether a declaration's operand words are
 // written as the route takes them, from the tree: at least one, and each a
-// single unquoted literal that is a plain name. Asked here and not only of
-// the argv, so that a line with a value on it — most declarations — goes
+// single unquoted literal that is a plain name, or a plain name given the
+// value of a bare parameter, `name=$1` (see paramValuedOperand). Asked here
+// and not only of the argv, so that a line with any other value on it goes
 // straight to simpleCommand rather than starting down the route to be
 // declined there.
 func plainDeclarationOperands(words []*syntax.Word) bool {
@@ -99,6 +101,9 @@ func plainDeclarationOperands(words []*syntax.Word) bool {
 		return false
 	}
 	for _, w := range words {
+		if paramValuedOperand(w) {
+			continue
+		}
 		if len(w.Spans) != 1 {
 			return false
 		}
@@ -107,6 +112,39 @@ func plainDeclarationOperands(words []*syntax.Word) bool {
 		}
 	}
 	return true
+}
+
+// paramValuedOperand reports whether a declaration's operand is written
+// `name=$param`: a plain name and its `=` as one unquoted literal, then a bare
+// unquoted parameter. simpleCommand takes such a word as the assignment
+// operand it is, and expandAssignArg reads its value through plainParamValue
+// whenever that answers, which is what the route does with it too.
+func paramValuedOperand(w *syntax.Word) bool {
+	if len(w.Spans) != 2 {
+		return false
+	}
+	s, p := &w.Spans[0], &w.Spans[1]
+	if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted ||
+		p.Kind != syntax.ParamExp || p.Quoting != syntax.Unquoted || !bareParamOnly(p.Param) {
+		return false
+	}
+	name, rest, eq := strings.Cut(s.Value, "=")
+	return eq && rest == "" && isPlainName(name)
+}
+
+// paramValuedOperandsAt is where the operands paramValuedOperand accepts stand
+// in a declaration's argv, which is where they stand among its words: each
+// word of a line the route takes is one field. It is the record simpleCommand
+// keeps of a declaration's assignment operands — see Runner.declarationOperands
+// — and nil for a line with none.
+func paramValuedOperandsAt(words []*syntax.Word) []int {
+	var at []int
+	for i, w := range words {
+		if i > 0 && paramValuedOperand(w) {
+			at = append(at, i)
+		}
+	}
+	return at
 }
 
 // plainDeclarationName is the declaration words the route runs a line of for,
@@ -145,12 +183,30 @@ func (r *Runner) plainBuiltinArgv(c *syntax.SimpleCmd) (argv []string, fn Builti
 	if r.tracing() || len(r.procSubs) > 0 || r.ctl != controlNone {
 		return nil, nil, false
 	}
+	declaring := plainDeclarationName(c.Args[0].Spans[0].Value)
 	// Sized for one field a word, as simpleCommand sizes its own: a plain
 	// word is exactly one.
 	argv = make([]string, 0, len(c.Args))
 	for _, w := range c.Args {
 		if lit, plain := r.plainLiteralWord(w); plain {
 			argv = append(argv, lit)
+			continue
+		}
+		if declaring && len(argv) > 0 && paramValuedOperand(w) {
+			// A declaration's `name=$param`, which simpleCommand takes as an
+			// assignment operand only where it is a declaration's at all, and
+			// takes through `set -k` or the store in turn where those apply;
+			// the route takes neither. Its text is expandAssignArg's own, from
+			// the same read, or the word is simpleCommand's.
+			if !r.paramValuedOperandsPlain(c, argv) {
+				return nil, nil, false
+			}
+			one := syntax.Word{Spans: w.Spans[1:]}
+			v, plain := r.plainParamValue(&one)
+			if !plain {
+				return nil, nil, false
+			}
+			argv = append(argv, w.Spans[0].Value+v)
 			continue
 		}
 		if v, plain := r.plainParamWord(w); plain {
@@ -175,6 +231,15 @@ func (r *Runner) plainBuiltinArgv(c *syntax.SimpleCmd) (argv []string, fn Builti
 	return argv, fn, true
 }
 
+// paramValuedOperandsPlain reports whether a declaration's `name=$param`
+// operand is, in this runner, the assignment operand that simpleCommand would
+// store with nothing in front of it: the line is a declaration utility's in
+// the dialect's reading, `set -k` is not reaching for it, and its operands are
+// not stored in turn before the utility runs. argv is the line's words so far.
+func (r *Runner) paramValuedOperandsPlain(c *syntax.SimpleCmd, argv []string) bool {
+	return !r.keywordAssignments && !r.declarationOperandsStoredInTurn() && r.declarationCommand(c, argv)
+}
+
 // plainBuiltinCommand is simpleCommand for a command plainBuiltinShape
 // accepted. See the file comment. The statements below are the ones
 // simpleCommand reaches for such a command, in its order; each says what it
@@ -188,8 +253,13 @@ func (r *Runner) plainBuiltinCommand(ctx context.Context, c *syntax.SimpleCmd, f
 		return r.simpleCommand(ctx, c, true)
 	}
 	r.plainBuiltins++
-	if plainDeclarationName(argv[0]) {
+	declaring := plainDeclarationName(argv[0])
+	var valuedAt []int
+	if declaring {
 		r.plainDeclarationLines++
+		if valuedAt = paramValuedOperandsAt(c.Args); valuedAt != nil {
+			r.plainValuedDeclarationLines++
+		}
 	}
 	// What a plain word's expansion leaves behind it. See plainLiteralFields.
 	r.braceName = false
@@ -205,9 +275,19 @@ func (r *Runner) plainBuiltinCommand(ctx context.Context, c *syntax.SimpleCmd, f
 	r.dashPrecommand = false
 	r.declarationOperands, r.lexedSubscriptOperands, r.sourceClosedSubscriptOperands = nil, nil, nil
 	r.arrayOperands, r.operandWasRejoined = nil, false
-	// `$_` moves to the last word before the command runs. See simpleCommand.
+	// A declaration's `name=$param` operands, recorded as simpleCommand
+	// records the assignment operands it expands.
+	r.declarationOperands = valuedAt
+	// `$_` moves to the last word before the command runs, or, behind a
+	// declaration the reserved word runs, to the word in front of its first
+	// assignment operand. See simpleCommand.
 	r.noteInputLevelArgument(argv)
 	r.lastArg, r.lastArgSet = argv[len(argv)-1], true
+	if declaring {
+		if w, ok := r.underscoreBeforeADeclarationsAssignment(c); ok {
+			r.lastArg = w
+		}
+	}
 	// The redirections — none — are applied for what applying them clears
 	// and for the pipeline element's entry they settle, and what that holds
 	// is put back once the builtin is over, as simpleCommand's deferred

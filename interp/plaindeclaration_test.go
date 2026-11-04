@@ -18,7 +18,10 @@ import (
 // top level, where the word refuses or declares a global; a frozen name; a
 // name already declared, which lists in the column that lists it; `$_`
 // behind the line; `set -e` and the ERR and DEBUG traps over a refusal; a
-// pipeline; and output held around a listing.
+// pipeline; output held around a listing; and the operands written
+// `name=$param` — a positional, a named scalar, an unset one under `set -u`,
+// one holding a separator, an `=` or nothing, one naming an operand of the
+// same line, one over a frozen name, and `set -k`.
 //
 // Shapes a vector may refuse are run through `command eval` or a subshell,
 // so a refusal is part of the output both runs must agree on.
@@ -43,12 +46,23 @@ inner() { local ia na; na=in; ia=x; }; nested; show na ia
 (local() { echo "fn local $*"; }; fl() { local fa fb; }; fl; unset -f local); echo "after fn $?"
 ret() { local ra rb; return 5; }; ret; echo "ret $?"
 out() { local oa ob; p held; }; out | cat
+vn=named; va() { local v1=$1 v2=$vn v3 v4=$2; p "$v1" "$v2" "<${v3-unset}>" "$v4"; show v1 v2 v3 v4; }; va one two
+show v1 v2 v3 v4
+uv() { local ux=$1 uy; p "$_"; }; uv x
+(uu() { set -u; local ux=$2 uy; p "<$ux>"; }; uu x) 2>&1; echo "after uu $?"
+sp() { local s1=$1 s2=$2 s3=$3; p "$s1" "$s2" "<$s3>"; }; sp 'a b' 'k=v' ''
+ob=outer; same() { local ob=$1 oc=$ob; p "$ob" "$oc"; }; same in
+(fv() { local f1=$1 frz=$1 f2=$1; echo "fv $?"; show f1 f2; }; fv x) 2>&1; echo "after fv $?"
+(set -k; kv() { local k1=$1 k2; show k1 k2; }; kv x) 2>&1; echo "after kv $?"
+tv() { local t1=$1; t1=changed; inner2; p "$t1"; }; inner2() { local t1=$1 t2=$t1; p "$t2"; }; tv first
 p decl-end
 `
 
 // declarationCommandRows are lines declarationCommandScript writes, which the
 // full road must write for a comparison to have compared it.
-var declarationCommandRows = []string{"[7]\n", "[held]\n", "[decl-end]\n"}
+var declarationCommandRows = []string{
+	"[7]\n", "[held]\n", "[one][named][<", "[in][outer]\n", "[changed]\n", "[decl-end]\n",
+}
 
 // declarationCommandVectors are the plain line's vectors, with `$_` tracked by
 // the command and by the input line, and exit values reported.
@@ -66,26 +80,30 @@ func declarationCommandVectors() map[string]Semantics {
 
 // declarationCommandCompare runs prog with plainBuiltinCommand on and off, with
 // the plain line's own route as line says, and requires the same output and
-// status, at least atLeast declaration lines run by the route with it on and
-// none with it off, and the full road's output to hold every row.
+// status, at least least.lines declaration lines run by the route with it on,
+// least.valued of them with a `name=$param` operand, and none with it off, and
+// the full road's output to hold every row.
 func declarationCommandCompare(
-	t *testing.T, prog *syntax.File, sem Semantics, inheritsOuter, line bool, atLeast int, rows []string,
+	t *testing.T, prog *syntax.File, sem Semantics, inheritsOuter, line bool, least routeBar, rows []string,
 ) {
 	t.Helper()
 	was := SetPlainLineShortcutForTest(line)
 	defer SetPlainLineShortcutForTest(was)
 	run := declarationRouteRun(t, prog, sem, inheritsOuter, SetPlainBuiltinShortcutForTest,
-		func(r *Runner) (int, int) { return PlainDeclarationLinesForTest(r), 0 })
+		func(r *Runner) (int, int) {
+			return PlainDeclarationLinesForTest(r), PlainValuedDeclarationLinesForTest(r)
+		})
 	full, fullStatus, fullTaken, _ := run(false)
-	short, shortStatus, taken, _ := run(true)
+	short, shortStatus, taken, valued := run(true)
 	if short != full || shortStatus != fullStatus {
 		t.Errorf("with the route:\n%s(status %d)\nwithout it:\n%s(status %d)", short, shortStatus, full, fullStatus)
 	}
 	if fullTaken != 0 {
 		t.Errorf("the route ran %d declaration lines with it off; want none", fullTaken)
 	}
-	if taken < atLeast {
-		t.Errorf("the route ran %d declaration lines; want at least %d", taken, atLeast)
+	if taken < least.lines || valued < least.valued {
+		t.Errorf("the route ran %d declaration lines, %d with a value; want at least %d and %d",
+			taken, valued, least.lines, least.valued)
 	}
 	for _, row := range rows {
 		if !strings.Contains(full, row) {
@@ -103,16 +121,16 @@ func declarationCommandCompare(
 // byte-identical output and status, and the route taken (#6373).
 func TestAPlainDeclarationLineAnswersAsSimpleCommandDoes(t *testing.T) {
 	// least is how many of each script's lines are plain declarations the
-	// route must run, counted: most lines of the plain line's script hold a
-	// value, which the route leaves to simpleCommand.
+	// route must run, and how many of those carry a `name=$param`, counted:
+	// a line holding any other value is left to simpleCommand.
 	scripts := []struct {
 		name, src string
 		rows      []string
-		least     int
+		least     routeBar
 	}{
-		{"shadow", emptyShadowScript + emptyShadowGlobalLines, emptyShadowRows, 17},
-		{"line", plainLineScript, plainLineRows, 4},
-		{"command", declarationCommandScript, declarationCommandRows, 9},
+		{"shadow", emptyShadowScript + emptyShadowGlobalLines, emptyShadowRows, routeBar{18, 1}},
+		{"line", plainLineScript, plainLineRows, routeBar{10, 6}},
+		{"command", declarationCommandScript, declarationCommandRows, routeBar{13, 4}},
 	}
 	for _, sc := range scripts {
 		for _, word := range []string{"local", "typeset", "declare"} {
@@ -132,13 +150,43 @@ func TestAPlainDeclarationLineAnswersAsSimpleCommandDoes(t *testing.T) {
 							if vname == "empty open" {
 								// The first valueless operand stops the
 								// plain line's script on the question.
-								atLeast, rows = min(atLeast, 1), nil
+								atLeast, rows = routeBar{min(atLeast.lines, 1), 0}, nil
 							}
 							declarationCommandCompare(t, prog, sem, vname == "inherits outer", line, atLeast, rows)
 						})
 					}
 				}
 			}
+		}
+	}
+}
+
+// routeBar is how many declaration lines a script must send down the route,
+// and how many of those with a `name=$param` operand.
+type routeBar struct{ lines, valued int }
+
+// TestAReservedWordDeclarationLineAnswersAsSimpleCommandDoes is the same
+// comparison over declarationCommandScript parsed where `local`, `typeset` and
+// `declare` are reserved words, so a line with an assignment operand is one
+// the reserved word runs — and `$_`, where the dialect says so, stops at the
+// word in front of that operand (#6373).
+func TestAReservedWordDeclarationLineAnswersAsSimpleCommandDoes(t *testing.T) {
+	d := syntax.Core()
+	d.DeclarationReservedWords = map[string]bool{"local": true, "typeset": true, "declare": true}
+	for _, word := range []string{"local", "typeset", "declare"} {
+		prog, err := syntax.Parse(strings.ReplaceAll(declarationCommandScript, "local ", word+" "), d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v := declarationCommandVectors()
+		stops := v["underscore"]
+		stops.UnderscoreStopsAtADeclarationsAssignment = Yes
+		for vname, sem := range map[string]Semantics{"base": v["base"], "underscore stops": stops} {
+			sem.DeclareOptions = "aAgilnprux"
+			sem.TypesetLocalNeedsKeywordFunction = No
+			t.Run(word+"/"+vname, func(t *testing.T) {
+				declarationCommandCompare(t, prog, sem, false, true, routeBar{13, 4}, declarationCommandRows)
+			})
 		}
 	}
 }

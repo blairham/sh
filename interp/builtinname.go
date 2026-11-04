@@ -324,6 +324,16 @@ func (r *Runner) builtinNames(
 		takes = PlainNamesOnly
 	}
 	for i, a := range args {
+		if isPlainName(a) {
+			// A bare identifier: no value, no append operator, no dot and
+			// no subscript, so every question below answers "a name" and
+			// isBuiltinName takes it under every rule. Asked first because
+			// it is nearly every operand a declaration line has, and the
+			// questions cut and search the operand several times over
+			// (#6373).
+			rest = keepOperand(rest, args, i)
+			continue
+		}
 		name := r.operandName(a)
 		if base, appends := r.appendOperand(a); appends && builtin != "unset" {
 			// `declare a+=2` carries the append operator, which one shell

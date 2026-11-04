@@ -223,6 +223,11 @@ func (r *Runner) reachOperandInTurn(
 // utilities and one column has no such command, so nothing is about to store
 // the operands and nothing is held. The same gate the trace's split uses, see
 // Runner.traceOperandSplitsBefore.
+//
+// The state is a kept one where the runner has one, since the column that
+// walks every operand starts a walk for every declaration it runs: a
+// `typeset a=$1 b=$2 c` in a function body made a kilobyte for it on every
+// call (#6373). Runner.simpleCommand hands it back.
 func (r *Runner) startOperandsInTurn(c *syntax.SimpleCmd, argv []string) *operandsInTurn {
 	all := r.declarationOperandsStoredInTurn()
 	if !all && !aLiteralOperandIsWritten(c.Assigns) {
@@ -231,7 +236,8 @@ func (r *Runner) startOperandsInTurn(c *syntax.SimpleCmd, argv []string) *operan
 	if !r.declarationUtilityIsHere(argv) {
 		return nil
 	}
-	turn := &operandsInTurn{literalsOnly: !all}
+	turn := r.spares.takeTurn()
+	turn.literalsOnly = !all
 	turn.held.undo = turn.undoBuf[:0]
 	return turn
 }
@@ -330,8 +336,10 @@ func (r *Runner) declarationWouldShadow(name string) bool {
 
 // storeOperandInTurn holds the declaration operand just appended to argv under
 // its name and writes its trace line. argv is handed back with the operand
-// rewritten where its subscript was evaluated.
-func (r *Runner) storeOperandInTurn(argv []string, turn *operandsInTurn) []string {
+// rewritten where its subscript was evaluated. behind is the command's words
+// written after the operand, which decide whether anything could read the
+// hold — see Runner.holdIsUnread.
+func (r *Runner) storeOperandInTurn(argv []string, turn *operandsInTurn, c *syntax.SimpleCmd, behind []*syntax.Word) []string {
 	if turn == nil || turn.stopped {
 		return argv
 	}
@@ -375,7 +383,11 @@ func (r *Runner) storeOperandInTurn(argv []string, turn *operandsInTurn) []strin
 			old, _ := r.getVar(name)
 			held = old + value
 		}
-		r.holdOperandInTurn(turn, name, held, argv)
+		if !appends && r.holdIsUnread(c, behind, name, argv) {
+			r.unreadHolds++
+		} else {
+			r.holdOperandInTurn(turn, name, held, argv)
+		}
 		if r.tracing() {
 			// Under the variable a reference lands it in, where the utility
 			// stores through one. See interp/xtracenameref.go (#7102).

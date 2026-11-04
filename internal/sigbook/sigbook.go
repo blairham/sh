@@ -105,6 +105,32 @@ func PutBack(sigs ...os.Signal) {
 	}
 }
 
+// Deliver hands sig to every channel in the book that asked for it, as
+// os/signal would have, for the arrivals os/signal is never told about.
+//
+// There are two on darwin, and a front end that owns its process observes them
+// another way (see driver/signalobserver_darwin.go): the runtime keeps PROF for
+// its profiler and drops every PIPE before os/signal is consulted, so a `trap`
+// for either never ran for one sent from another process (#7056). What it
+// observes it passes on here, to the same channels a forwarded signal would
+// have reached.
+//
+// Without blocking, as os/signal does: a full channel misses the arrival
+// rather than holding up everyone after it.
+func Deliver(sig os.Signal) {
+	book.mu.Lock()
+	defer book.mu.Unlock()
+	for c, want := range book.subs {
+		if !want[sig] {
+			continue
+		}
+		select {
+		case c <- sig:
+		default:
+		}
+	}
+}
+
 // probe is the channel Settle subscribes for a moment, reused because every
 // use of it is under book.mu.
 var probe = make(chan os.Signal, 1)

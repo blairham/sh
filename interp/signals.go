@@ -629,6 +629,13 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 		//
 		// Through the book, so that a window that has to ignore the signal
 		// for a moment can hand this subscription back. See sigbook.
+		//
+		// The process's half first, where the front end owns the process: a
+		// signal it leaves at the kernel's default would end the process
+		// before any subscription could hear it. See Runner.HandleSignal.
+		if r.HandleSignal != nil {
+			r.HandleSignal(sig)
+		}
 		sigbook.Notify(s.ch, sig)
 		return
 	}

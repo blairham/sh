@@ -15,3 +15,17 @@ var platformEndsTheShellFromOutside = []namedSignal{
 	{"PWR", syscall.SIGPWR},
 	{"40", syscall.Signal(40)},
 }
+
+// trappedProfFromOutside is what `trap 'echo caught' PROF; sleep 1; echo after`
+// writes when a PROF arrives from another process. The handler never runs on
+// this kernel, where every reference runs it: nothing in a Go program can hear
+// a PROF the runtime keeps for its profiler, and the one way around it, a
+// handler written outside Go, was decided against (2026-11-04, #7056 stays
+// open for this cell). The shell surviving it is what this row asserts — the
+// trap put the runtime's handler back over the default.
+const trappedProfFromOutside = "after\n"
+
+// standardStreamCopyArrivesApart is whether the runtime's own SIGPIPE for a
+// broken standard output reaches the shell apart from the kernel's. Not
+// reliably here: both are forwarded, and they usually fold into one arrival.
+const standardStreamCopyArrivesApart = false

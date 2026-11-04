@@ -5550,6 +5550,9 @@ type Runner struct {
 	// plainDeclarationLines counts the declaration lines among them. See
 	// plainDeclarationName.
 	plainDeclarationLines int
+	// plainValuedDeclarationLines counts the ones with a `name=$param`
+	// operand. See paramValuedOperand.
+	plainValuedDeclarationLines int
 	// beforePrelude is the status pair as it stood when a prelude began,
 	// put back when it ends. See SourcingPrelude.
 	beforePrelude keptStatus
@@ -9386,8 +9389,8 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	if assignmentsAlone(c) {
 		return r.assignmentsAloneCommand(ctx, c, fired)
 	}
-	if plainBuiltinShape(c) {
-		return r.plainBuiltinCommand(ctx, c, fired)
+	if plain, valued := r.plainBuiltinShape(c); plain {
+		return r.plainBuiltinCommand(ctx, c, fired, valued)
 	}
 	return r.simpleCommand(ctx, c, fired)
 }

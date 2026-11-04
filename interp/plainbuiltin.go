@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"io"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -32,8 +33,7 @@ import (
 //     word is one simpleCommand's own plain-word shortcuts would answer (see
 //     interp/plainword.go), the name is no function's and no modifier's, it
 //     resolves to a builtin, and nothing is in a state the route does not
-//     carry — tracing, an element's pipe still being entered, a process
-//     substitution an enclosing command holds.
+//     carry — tracing, or a process substitution an enclosing command holds.
 //
 // Where the second half declines, the command goes to simpleCommand with its
 // DEBUG firing marked as made, which is what fired=true says: the trap has
@@ -88,12 +88,11 @@ func plainBuiltinShape(c *syntax.SimpleCmd) bool {
 func (r *Runner) plainBuiltinArgv(c *syntax.SimpleCmd) (argv []string, fn Builtin, ok bool) {
 	// The state a line of plain words passes through in simpleCommand
 	// without touching, but only in these conditions: a traced command
-	// writes its line, an element whose pipe is still being entered settles
-	// it in applyRedirs, and a process substitution an enclosing command
-	// holds is set aside for the length of this one by scopeProcSubs and
-	// released by releaseHeldBodyTraces. And a command reached with the
-	// shell already unwinding is simpleCommand's to give up.
-	if r.tracing() || r.entering.pending || len(r.procSubs) > 0 || r.ctl != controlNone {
+	// writes its line, and a process substitution an enclosing command holds
+	// is set aside for the length of this one by scopeProcSubs and released
+	// by releaseHeldBodyTraces. And a command reached with the shell already
+	// unwinding is simpleCommand's to give up.
+	if r.tracing() || len(r.procSubs) > 0 || r.ctl != controlNone {
 		return nil, nil, false
 	}
 	// Sized for one field a word, as simpleCommand sizes its own: a plain
@@ -148,7 +147,6 @@ func (r *Runner) plainBuiltinCommand(ctx context.Context, c *syntax.SimpleCmd, f
 	// openWordList and raiseHeldRefusal.
 	outerGlob := r.progGlob
 	r.progGlob = programGlob{}
-	defer func() { r.progGlob = outerGlob }()
 	// The per-command records simpleCommand writes once the words are in,
 	// each of which comes to nothing for a line with no operands.
 	r.dashPrecommand = false
@@ -157,21 +155,23 @@ func (r *Runner) plainBuiltinCommand(ctx context.Context, c *syntax.SimpleCmd, f
 	// `$_` moves to the last word before the command runs. See simpleCommand.
 	r.noteInputLevelArgument(argv)
 	r.lastArg, r.lastArgSet = argv[len(argv)-1], true
-	// The redirections — none — are applied for what applying them clears.
-	// See applyRedirs. No process substitution is held, so there is no body
-	// for releaseHeldBodyTraces to let go.
+	// The redirections — none — are applied for what applying them clears
+	// and for the pipeline element's entry they settle, and what that holds
+	// is put back once the builtin is over, as simpleCommand's deferred
+	// closing does: none of the five keeps its redirections the way `exec`
+	// does. See applyRedirs. No process substitution is held, so there is
+	// no body for releaseHeldBodyTraces to let go.
 	r.fdVarStores, r.openedStdin = nil, nil
-	if closers, err := r.applyRedirs(ctx, nil, false, redirOwnerThisShell); err != nil || closers != nil {
-		// Not reachable with no element entry pending, which
-		// plainBuiltinArgv made sure of, and said so rather than dropped: a
-		// closer here would be one this route never closes.
-		panic("interp: a plain builtin's empty redirection list opened something")
+	closers, err := r.applyRedirs(ctx, nil, false, redirOwnerThisShell)
+	if err != nil {
+		r.endPlainBuiltin(closers, outerGlob)
+		return err
 	}
 	r.fdVarStores, r.openedStdin = nil, nil
 	r.redirectForBuiltin, r.redirForCommandWord = "", ""
 	r.exitWaived = false
 	st, fatal := r.runPlainBuiltin(ctx, argv, fn)
-	r.endPlainBuiltin()
+	r.endPlainBuiltin(closers, outerGlob)
 	switch {
 	case fatal:
 		r.fatalStatusSettled = false
@@ -275,14 +275,20 @@ func (r *Runner) runPlainBuiltin(ctx context.Context, argv []string, fn Builtin)
 }
 
 // endPlainBuiltin is what simpleCommand's deferred calls do once such a
-// command is over: a prefix's trace line held for a shell that stopped, the
-// open trace line handed back from a child, and this command's process
-// substitutions — none were open when it started — taken away.
-func (r *Runner) endPlainBuiltin() {
+// command is over, in their order: what the redirection list held put back,
+// a prefix's trace line held for a shell that stopped, the open trace line
+// handed back from a child, the outer word list's hold for a refused pattern,
+// and this command's process substitutions — none were open when it started
+// — taken away.
+func (r *Runner) endPlainBuiltin(closers []io.Closer, outerGlob programGlob) {
+	for _, c := range closers {
+		_ = c.Close()
+	}
 	r.writeHeldPrefixTrace()
 	if line := r.openTrace; line != nil && line.owner == r {
 		line.keptForAChild = false
 	}
+	r.progGlob = outerGlob
 	if len(r.procSubs) > 0 {
 		r.removeProcSubs(r.takeProcSubs())
 	}

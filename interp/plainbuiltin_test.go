@@ -51,6 +51,8 @@ set -x; [ 3 -eq 3 ]; : traced; set +x
 test() { echo "fn $*"; }; test 1 = 1; unset -f test; test 1 = 1; p "$?"
 trap 'true() { echo shadowed; }' DEBUG; true; trap - DEBUG; unset -f true; true; p "$?"
 [ 1 -eq 1 ] | cat; p "$?"
+: | [ 1 -eq 1 ]; p "$?"
+[ 1 -eq 1 ] | [ 2 -eq 3 ]; p "$?"
 IFS=2; v=121; [ $v = 121 ]; p "$?"; IFS=' '
 [ $nosuch ]; p "$?"
 (set -u; [ $nosuch ]; echo no) 2>&1 | cat; p done
@@ -73,7 +75,7 @@ f() { [ 1 -eq 1 ]; cat "$1"; }; f <(echo ps)
 eval ': y' x; p "$_"
 eval '[ 4 -eq 4 ]; cat' <(echo held)
 [ 1 -lt ] 2>/dev/null; p quiet
-(exec; p kept >/dev/null; p after-exec)
+(exec; echo kept >/dev/null; echo after-exec)
 v='x=5'; x=1 eval '[ v -eq 5 ]'; p "$x"
 p end
 `
@@ -105,7 +107,7 @@ var plainBuiltinRows = []string{
 	"sh: nosuch: parameter not set\n<done>\n",
 	"<4>\n<until>\n<2>\n<help>\n",
 	"<false>\nsh: ro: readonly variable\ndbg\ndbg\nps\n",
-	"held\n<quiet>\n<after-exec>\n",
+	"held\n<quiet>\nafter-exec\n",
 	"<end>\n",
 }
 
@@ -140,7 +142,7 @@ func plainBuiltinVectors() map[string]plainBuiltinVector {
 			rows: []string{
 				underscores, "sh: [: x: integer expected\n<2>\n", "dbg\ndbg\ndbg\n",
 				"sh: [: a: integer expected\n<2>\nsh: [: v: integer expected\n<2><1>\n", lone,
-				"<after-exec>\nsh: [: v: integer expected\n<1>\n<end>\n",
+				"after-exec\nsh: [: v: integer expected\n<1>\n<end>\n",
 			},
 		},
 		"arithmetic operands": {
@@ -148,7 +150,7 @@ func plainBuiltinVectors() map[string]plainBuiltinVector {
 				s.TestBuiltinComparisonOperandsAreArithmetic = Yes
 				s.ReadonlyRefusalInABuiltinIsFatal = No
 			}),
-			rows: []string{underscores, "<help>\n<0>\nsh: ro: readonly variable\n", "<1><1>\n", lone, "<after-exec>\n<5>\n<end>\n"},
+			rows: []string{underscores, "<help>\n<0>\nsh: ro: readonly variable\n", "<1><1>\n", lone, "after-exec\n<5>\n<end>\n"},
 		},
 		"input-level underscore": {
 			setup: with(func(s *Semantics) { s.UnderscoreMovesOnlyBetweenInputCommands = Yes }),
@@ -161,7 +163,7 @@ func plainBuiltinVectors() map[string]plainBuiltinVector {
 		"an unanswered operand axis": {
 			setup: with(func(s *Semantics) { s.TestBuiltinComparisonOperandsAreArithmetic = Unspecified }),
 			rows: []string{
-				lone, "<after-exec>\nsh: `[ n -eq 5 ]` reading its operands as arithmetic: " +
+				lone, "after-exec\nsh: `[ n -eq 5 ]` reading its operands as arithmetic: " +
 					"the shells disagree here and no dialect was chosen\n<1>\n<end>\n",
 			},
 		},

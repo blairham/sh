@@ -75,18 +75,32 @@ func plainBuiltinName(name string) bool {
 // not one never starts down the route. Whether its words really are plain is
 // plainBuiltinArgv's question, asked of each word with plainLiteralWord, so
 // the first word is only looked at here for the name it spells.
-func plainBuiltinShape(c *syntax.SimpleCmd) bool {
+//
+// valued is whether the command is a declaration with a `name=$param`
+// operand, which only some runners let the route take: see
+// Runner.valuedDeclarationsMayBePlain, asked by the caller before the route
+// starts so that a line the route will not take does not start twice.
+func plainBuiltinShape(c *syntax.SimpleCmd) (ok, valued bool) {
 	if !plainBuiltinShortcut || len(c.Args) == 0 || len(c.Assigns) != 0 || len(c.Redirs) != 0 {
-		return false
+		return false, false
 	}
 	w := c.Args[0]
 	if len(w.Spans) != 1 || w.Spans[0].Kind != syntax.Literal {
-		return false
+		return false, false
 	}
 	if plainDeclarationName(w.Spans[0].Value) {
 		return plainDeclarationOperands(c.Args[1:])
 	}
-	return plainBuiltinName(w.Spans[0].Value)
+	return plainBuiltinName(w.Spans[0].Value), false
+}
+
+// valuedDeclarationsMayBePlain reports whether this runner leaves a
+// declaration's `name=$param` operand nothing to do but be read: `set -k` is
+// not reaching for it, and operands are not stored in turn. See
+// paramValuedOperandsPlain, which plainBuiltinArgv asks again once the command
+// has started.
+func (r *Runner) valuedDeclarationsMayBePlain() bool {
+	return !r.keywordAssignments && !r.declarationOperandsStoredInTurn()
 }
 
 // plainDeclarationOperands reports whether a declaration's operand words are
@@ -96,33 +110,25 @@ func plainBuiltinShape(c *syntax.SimpleCmd) bool {
 // and not only of the argv, so that a line with any other value on it goes
 // straight to simpleCommand rather than starting down the route to be
 // declined there.
-func plainDeclarationOperands(words []*syntax.Word) bool {
+//
+// valued is whether any of them is a `name=$param`.
+func plainDeclarationOperands(words []*syntax.Word) (ok, valued bool) {
 	if len(words) == 0 {
-		return false
+		return false, false
 	}
 	for _, w := range words {
 		if len(w.Spans) != 1 {
 			if paramValuedOperand(w) {
+				valued = true
 				continue
 			}
-			return false
+			return false, false
 		}
 		if s := w.Spans[0]; s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted || !isPlainName(s.Value) {
-			return false
+			return false, false
 		}
 	}
-	return true
-}
-
-// hasParamValuedOperand reports whether any of a declaration's operands is
-// one paramValuedOperand accepts.
-func hasParamValuedOperand(words []*syntax.Word) bool {
-	for _, w := range words {
-		if len(w.Spans) == 2 && paramValuedOperand(w) {
-			return true
-		}
-	}
-	return false
+	return true, valued
 }
 
 // paramValuedOperand reports whether a declaration's operand is written
@@ -248,24 +254,17 @@ func (r *Runner) plainBuiltinArgv(c *syntax.SimpleCmd) (argv []string, fn Builti
 // the dialect's reading, `set -k` is not reaching for it, and its operands are
 // not stored in turn before the utility runs. argv is the line's words so far.
 func (r *Runner) paramValuedOperandsPlain(c *syntax.SimpleCmd, argv []string) bool {
-	return !r.keywordAssignments && !r.declarationOperandsStoredInTurn() && r.declarationCommand(c, argv)
+	return r.valuedDeclarationsMayBePlain() && r.declarationCommand(c, argv)
 }
 
 // plainBuiltinCommand is simpleCommand for a command plainBuiltinShape
 // accepted. See the file comment. The statements below are the ones
 // simpleCommand reaches for such a command, in its order; each says what it
 // stands for there.
-func (r *Runner) plainBuiltinCommand(ctx context.Context, c *syntax.SimpleCmd, fired bool) error {
-	// A declaration's `name=$param` operands are the route's only where the
-	// runner neither reaches for them with `set -k` nor stores them in turn:
-	// see paramValuedOperandsPlain, which plainBuiltinArgv asks again once
-	// the command has started. Asked first as well so that a line the route
-	// will not take, in a runner that never would, does not start twice.
-	declaring := plainDeclarationName(c.Args[0].Spans[0].Value)
-	valued := declaring && hasParamValuedOperand(c.Args[1:])
-	if valued && (r.keywordAssignments || r.declarationOperandsStoredInTurn()) {
-		return r.simpleCommand(ctx, c, fired)
-	}
+//
+// valued is plainBuiltinShape's: the command is a declaration with a
+// `name=$param` operand.
+func (r *Runner) plainBuiltinCommand(ctx context.Context, c *syntax.SimpleCmd, fired, valued bool) error {
 	if !r.startSimpleCommand(ctx, fired) {
 		return nil
 	}
@@ -274,6 +273,7 @@ func (r *Runner) plainBuiltinCommand(ctx context.Context, c *syntax.SimpleCmd, f
 		return r.simpleCommand(ctx, c, true)
 	}
 	r.plainBuiltins++
+	declaring := plainDeclarationName(argv[0])
 	var valuedAt []int
 	if declaring {
 		r.plainDeclarationLines++

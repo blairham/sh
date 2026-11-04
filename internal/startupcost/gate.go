@@ -35,6 +35,11 @@ import (
 // measured and reported and does not. See Cases — the short version is that
 // the bar was read off macOS numbers, and on Linux what is underneath the
 // bare case is the Go runtime's process start rather than anything here.
+//
+// #6496 settled what the workload row is graded on: its time with each
+// shell's own bare start subtracted, both from the same run. The start keeps
+// its own row, so nothing it costs goes unprinted; it is only no longer paid
+// for twice. See Case.NetOf.
 
 // Pair is one dialect measured against the shell it claims to be.
 //
@@ -167,6 +172,22 @@ type Case struct {
 	// being measured and reported. See Cases for why the two programs
 	// answer differently, which is #2813's finding.
 	Gating bool
+	// NetOf names the case whose time is taken off this one's before it is
+	// graded, each shell's own and from the same run. Empty means the case
+	// is graded on its whole time.
+	//
+	// The workload is graded net of the bare case (#6496). Its whole time is
+	// a start plus the interpretation, and the start is already the bare
+	// row: grading the workload on its whole time charges that start a
+	// second time, on the one row that gates. Net of it, the workload is the
+	// thing Cases says it is for, which is interpreter throughput. The whole
+	// time is still printed beside it, so the subtraction hides nothing.
+	//
+	// A case graded net of another cannot be graded at all without it. If
+	// the start is missing from the run, or could not be measured, or is
+	// not shorter than the case it is taken off, the comparison is
+	// unmeasured and fails, rather than being graded on whatever is left.
+	NetOf string
 }
 
 // Cases are the two programs, in the order a report should read them.
@@ -192,6 +213,17 @@ type Case struct {
 // work rather than physics. Every dialect still has to beat the shell it
 // claims to be there, strictly, with no epsilon.
 //
+// **It is graded net of the bare case**, and that is #6496's answer
+// (2026-11-04). The workload's whole time contains a start, and that start is
+// the same Go runtime floor the paragraphs above take out of the bar. Graded
+// whole, the gating row was paying for it anyway: across main's last 41 runs
+// the whole-time column read bash 1.23–1.38x and zsh 1.40–1.60x, while the
+// same runs with each shell's own start subtracted read bash 0.87–1.01x and
+// zsh 1.02–1.30x. The first would need the interpreter 29–62% faster to pay
+// for a start no interpreter work can reach. The second is the interpreter's
+// own number, and it is the one the row now gates on. Both are printed; see
+// Report.
+//
 // The bare case keeps being measured and keeps being printed. It is what a
 // script's every subshell pays, a regression in it is worth seeing, and
 // deleting the row would lose the only number that shows the floor. Report
@@ -200,7 +232,7 @@ type Case struct {
 func Cases() []Case {
 	return []Case{
 		{Name: "bare", Program: bareProgram, Gating: false},
-		{Name: "workload", Program: workloadProgram, Answer: workloadAnswer, Gating: true},
+		{Name: "workload", Program: workloadProgram, Answer: workloadAnswer, Gating: true, NetOf: "bare"},
 	}
 }
 
@@ -352,11 +384,93 @@ type Comparison struct {
 	// comparison carrying one is a failure and never a pass, whatever the
 	// times say.
 	Err error
+	// Start is the comparison this one is graded net of: the same pair on
+	// the case Case.NetOf names, from the same run. Measure fills it in. It
+	// is nil for a case graded on its whole time, and a case that names one
+	// and has none cannot be graded; see Unmeasured.
+	Start *Comparison
 }
 
-// Ratio is ours over the original on wall time. Below 1 is the requirement
-// met, and it is what Passed consults.
+// Ratio is ours over the original on wall time, the whole of each run. For a
+// case graded on its whole time it is the graded figure; for one graded net
+// of its start it is printed beside NetRatio and does not decide anything.
 func (c Comparison) Ratio() float64 { return ratio(c.Ours.Best.Wall, c.Real.Best.Wall) }
+
+// Net is what each side cost with its own start taken off, on both clocks.
+//
+// ok is false for a case graded on its whole time, and for one whose start is
+// missing. A wall half that comes out at zero or less is returned as it is:
+// Unmeasured is what refuses it. A CPU half is zero wherever any of the four
+// CPU figures it is made from is, because a run the kernel gave no
+// accounting for is not a run that cost nothing (see Measure).
+func (c Comparison) Net() (ours, real Timing, ok bool) {
+	if c.Case.NetOf == "" || c.Start == nil {
+		return Timing{}, Timing{}, false
+	}
+	less := func(whole, start Timing) Timing {
+		t := Timing{Wall: whole.Wall - start.Wall}
+		if whole.CPU > 0 && start.CPU > 0 {
+			t.CPU = whole.CPU - start.CPU
+		}
+		return t
+	}
+	return less(c.Ours.Best, c.Start.Ours.Best), less(c.Real.Best, c.Start.Real.Best), true
+}
+
+// NetRatio is ours over the original on wall time, each with its own start
+// subtracted. It is what Passed consults for a case graded net of its start,
+// and zero for a case that is not.
+func (c Comparison) NetRatio() float64 {
+	ours, real, ok := c.Net()
+	if !ok || ours.Wall <= 0 {
+		return 0
+	}
+	return ratio(ours.Wall, real.Wall)
+}
+
+// NetCPURatio is NetRatio on the work done rather than the time taken, and is
+// reported beside it for the reason CPURatio is reported beside Ratio.
+func (c Comparison) NetCPURatio() float64 {
+	ours, real, ok := c.Net()
+	if !ok || ours.CPU <= 0 {
+		return 0
+	}
+	return ratio(ours.CPU, real.CPU)
+}
+
+// Unmeasured says why this comparison could not honestly be graded, and is
+// nil when it could.
+//
+// Err is the first reason. A case graded net of its start adds three more,
+// because the subtraction needs a start to subtract: none was measured beside
+// it, or that one could not be measured, or a side's whole run took no longer
+// than its own start. The last cannot happen with a real start and a real
+// workload; if it does, the two numbers are not measuring what they claim
+// to, and grading what is left would score a shell on noise.
+func (c Comparison) Unmeasured() error {
+	if c.Err != nil {
+		return c.Err
+	}
+	if c.Case.NetOf == "" {
+		return nil
+	}
+	if c.Start == nil {
+		return fmt.Errorf("graded net of the %s case, which was not measured beside it", c.Case.NetOf)
+	}
+	if c.Start.Err != nil {
+		return fmt.Errorf("graded net of the %s case, which could not be measured: %w", c.Case.NetOf, c.Start.Err)
+	}
+	ours, real, _ := c.Net()
+	if ours.Wall <= 0 || real.Wall <= 0 {
+		return fmt.Errorf(
+			"graded net of the %s case, and a whole run took no longer than its own start (ours %.2fms, original %.2fms left)",
+			c.Case.NetOf,
+			ms(ours.Wall),
+			ms(real.Wall),
+		)
+	}
+	return nil
+}
 
 // CPURatio is the same comparison on the work done rather than the time taken.
 //
@@ -387,7 +501,18 @@ func ratio(ours, real time.Duration) float64 {
 // loss and says so here; whether that loss stops a release is Gating's
 // question, and the two are kept apart so that #2813's decision changed which
 // rows are counted rather than what a row means.
-func (c Comparison) Passed() bool { return c.Err == nil && c.Ours.Best.Wall < c.Real.Best.Wall }
+//
+// For a case graded net of its start, what is compared is the two net wall
+// times (#6496), and the same strictness holds: a net tie is not a pass.
+func (c Comparison) Passed() bool {
+	if c.Unmeasured() != nil {
+		return false
+	}
+	if ours, real, ok := c.Net(); ok {
+		return ours.Wall < real.Wall
+	}
+	return c.Ours.Best.Wall < c.Real.Best.Wall
+}
 
 // Gating reports whether losing this comparison fails the release bar.
 //
@@ -414,9 +539,9 @@ func (c Comparison) Gating() bool { return c.Case.Gating }
 func Failures(cs []Comparison) (gating, reported, unmeasured []string) {
 	for _, c := range cs {
 		name := c.Pair.Name + "/" + c.Case.Name
-		switch {
-		case c.Err != nil:
-			unmeasured = append(unmeasured, name+": "+c.Err.Error())
+		switch err := c.Unmeasured(); {
+		case err != nil:
+			unmeasured = append(unmeasured, name+": "+err.Error())
 		case c.Passed():
 		case c.Gating():
 			gating = append(gating, name)
@@ -445,6 +570,9 @@ func Failures(cs []Comparison) (gating, reported, unmeasured []string) {
 // freshly linked binary on macOS pays a one-time validation cost that a shell
 // installed months ago does not, and 288 ms of it landed in the first sample
 // the day this package was written — a fact about a build, not about a shell.
+//
+// A case graded net of another (Case.NetOf) is handed that case's comparison
+// for the same pair once every sample is in; see linkStarts.
 func Measure(pairs []Pair, cases []Case, batches, per int) []Comparison {
 	type slot struct {
 		pair Pair
@@ -537,7 +665,35 @@ func Measure(pairs []Pair, cases []Case, batches, per int) []Comparison {
 		clearUnmeasured(&c.Ours)
 		clearUnmeasured(&c.Real)
 	}
+	linkStarts(out)
 	return out
+}
+
+// linkStarts gives each comparison graded net of another case the same pair's
+// comparison on that case, from the same run.
+//
+// From the same run and not from anywhere else, and that is the whole of why
+// the subtraction is honest: the start and the whole run were interleaved on
+// one machine in one minute, so a runner that is slow at starting processes
+// is slow on both. A copy rather than a pointer into the slice, so nothing a
+// caller does to the slice afterwards can change what a row was graded on.
+//
+// A case whose start is not among the cases measured is left without one, and
+// Unmeasured reports it rather than grading the whole time instead.
+func linkStarts(cs []Comparison) {
+	for i := range cs {
+		c := &cs[i]
+		if c.Case.NetOf == "" {
+			continue
+		}
+		for j := range cs {
+			if j != i && cs[j].Pair.Name == c.Pair.Name && cs[j].Case.Name == c.Case.NetOf {
+				start := cs[j]
+				c.Start = &start
+				break
+			}
+		}
+	}
 }
 
 // clearUnmeasured turns the sentinel a minimum starts at back into a zero, so
@@ -572,17 +728,29 @@ func clearUnmeasured(r *Result) {
 // been able to tell those apart before, which is how "perfgate is failing"
 // has been passed on second-hand for a week without anybody knowing what it
 // meant.
+//
+// A case graded net of its start carries four more columns: each side's time
+// less its own start, the ratio between those, and the same on CPU. The
+// verdict on that row is read from the net ratio, and the whole-run ratio
+// stays beside it so the subtraction is visible rather than taken on trust.
+// A row graded on its whole time prints a dash there. The line above the
+// table says which figure each verdict reads, because a table whose verdict
+// column disagrees with the ratio next to it reads as a bug otherwise.
 func Report(cs []Comparison) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "load average: %s\n", LoadAverage())
-	fmt.Fprintf(&b, "%-10s %-9s %10s %10s %8s %10s %10s %8s %7s  %s\n",
-		"dialect", "case", "ours", "original", "ratio", "ours cpu", "orig cpu", "cpu", "samples", "verdict")
+	b.WriteString("graded on: `net` where a row has one (its time less the same shell's own bare start, " +
+		"both from this run), `ratio` otherwise\n")
+	fmt.Fprintf(&b, "%-10s %-9s %10s %10s %8s %10s %10s %8s %10s %10s %8s %8s %7s  %s\n",
+		"dialect", "case", "ours", "original", "ratio", "ours cpu", "orig cpu", "cpu",
+		"ours net", "orig net", "net", "net cpu", "samples", "verdict")
 	sorted := append([]Comparison(nil), cs...)
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].Pair.Name < sorted[j].Pair.Name })
 	for _, c := range sorted {
 		verdict := "FASTER"
+		err := c.Unmeasured()
 		switch {
-		case c.Err != nil:
+		case err != nil:
 			verdict = "NOT MEASURED"
 		case c.Passed():
 		case c.Gating():
@@ -595,16 +763,27 @@ func Report(cs []Comparison) string {
 			// by people who could not tell which rows meant it.
 			verdict = "SLOWER (not gating)"
 		}
-		fmt.Fprintf(&b, "%-10s %-9s %8.2fms %8.2fms %7.2fx %8.2fms %8.2fms %7.2fx %7d  %s\n",
+		fmt.Fprintf(&b, "%-10s %-9s %8.2fms %8.2fms %7.2fx %8.2fms %8.2fms %7.2fx %s %7d  %s\n",
 			c.Pair.Name, c.Case.Name,
 			ms(c.Ours.Best.Wall), ms(c.Real.Best.Wall), c.Ratio(),
 			ms(c.Ours.Best.CPU), ms(c.Real.Best.CPU), c.CPURatio(),
+			netColumns(c),
 			c.Ours.Samples, verdict)
-		if c.Err != nil {
-			fmt.Fprintf(&b, "%-10s %-9s   %v\n", "", "", c.Err)
+		if err != nil {
+			fmt.Fprintf(&b, "%-10s %-9s   %v\n", "", "", err)
 		}
 	}
 	return b.String()
+}
+
+// netColumns is the four net columns of a report row, or dashes where the row
+// is graded on its whole time or has no start to subtract.
+func netColumns(c Comparison) string {
+	ours, real, ok := c.Net()
+	if !ok {
+		return fmt.Sprintf("%10s %10s %8s %8s", "-", "-", "-", "-")
+	}
+	return fmt.Sprintf("%8.2fms %8.2fms %7.2fx %7.2fx", ms(ours.Wall), ms(real.Wall), c.NetRatio(), c.NetCPURatio())
 }
 
 func ms(d time.Duration) float64 { return float64(d.Microseconds()) / 1000 }

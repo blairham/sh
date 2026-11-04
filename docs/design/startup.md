@@ -267,6 +267,9 @@ compared against has to be the shell the corpus was recorded from.
 **The workload is the gate. The bare case is measured and reported and
 does not gate** (#2813) — see *Why the bare case does not gate* below,
 which is the one place this bar has been narrowed and the reason it was.
+**The workload is graded net of each shell's own bare start** (#6496) —
+see *Why the workload is graded net of its start*, which is what that
+narrowing left the gating row still paying for.
 
 Two programs per dialect, and the second one is why the first is
 trustworthy:
@@ -280,7 +283,9 @@ trustworthy:
   common-denominator language so that all four dialects and all four
   references run the same text. It **prints what it computed**, and a
   time is accepted only if the run also produced
-  `ANS:2017:defghij:abcdefg`.
+  `ANS:2017:defghij:abcdefg`. Its verdict is read from the `net` column:
+  each shell's workload time less that same shell's bare time from the
+  same run. The whole-run `ratio` is printed beside it.
 
 That check is the whole reason the workload is shaped that way rather
 than as a bare loop. This repository has now been caught three times by
@@ -338,7 +343,10 @@ the gate to refuse rather than score it, one checks the workload's
 expected answer against every reference shell installed, one fails if a
 dialect is missing from the table altogether, and one requires the
 report to carry the CPU ratio so a reader can tell a slow dialect from a
-busy machine.
+busy machine. Two more pin the net grading: a dialect slower only at
+starting passes the workload row and one slower at the work fails it,
+and a row whose start is missing, unmeasured or longer than the work is
+reported as not measured rather than graded on what is left.
 
 ### The runner is not this machine, and bash does not pass there
 
@@ -465,6 +473,49 @@ An earlier attempt at these figures reported "empty C 2.06 ms, empty Go
 2.05 ms, Go pays no startup penalty". That does not reproduce, and the
 reason is the fourth measurement trap: a harness whose own overhead is
 within an order of magnitude of what it measures is measuring itself.
+
+### Why the workload is graded net of its start
+
+**Decided 2026-11-04 (#6496): the workload row is graded with each
+shell's own bare start subtracted, and the start keeps its own row.**
+
+#2813 took the start out of the bar and left it in the gating row. The
+workload's whole time is a start plus the interpretation, and its start
+is the same Go runtime floor the section above says no work in this tree
+moves. So the row that gates was still paying for it. Across main's last
+41 gate runs on the ubuntu runner:
+
+| workload row | bash | zsh |
+| --- | --- | --- |
+| whole run | 1.23–1.38x | 1.40–1.60x |
+| each shell's own start subtracted | 0.87–1.01x | 1.02–1.30x |
+
+To pass on the whole run, the interpreter would have to be 29–62% faster,
+mostly to pay for a start gap made of the Go runtime floor and the
+signal watch accepted on #7263. Net of start, the row measures what
+`startupcost.Cases` says it is for, which is interpreter throughput.
+
+What the subtraction is, exactly:
+
+- **Each shell's own start, from the same run.** Ours less our bare row,
+  and the reference less its bare row, both interleaved in the same
+  batches. It is not a synthetic floor and not a constant: a runner that
+  is slow at starting processes is slow on both rows, and the subtraction
+  follows it.
+- **The verdict reads the net figure, strictly.** A net tie is not a pass,
+  as before.
+- **The whole-run ratio stays in the table**, beside the net one, with
+  both clocks for each. The line above the table says which figure the
+  verdict reads.
+- **A row with nothing honest to subtract fails as not measured.** If the
+  start is missing from the run, could not be measured, or is not shorter
+  than the work, the row reads `NOT MEASURED`. It is not graded on its
+  whole time instead.
+
+`startupcost.Case.NetOf` names the case a row is graded net of,
+`startupcost.Measure` hands each such row its own pair's start from the
+same run, and `Comparison.Unmeasured` is where a row with nothing to
+subtract is refused.
 
 ### Two things that were ours, and were removed
 

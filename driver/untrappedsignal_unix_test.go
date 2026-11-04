@@ -44,6 +44,13 @@ var outsideSignalHolds = []struct{ name, src string }{
 // ksh93u+, zsh 5.9.2 and dash die of USR1, USR2, ALRM, VTALRM, XCPU and EMT in
 // every cell and print nothing. This shell carried on in every cell, and wrote
 // a page of Go for EMT (#7046).
+//
+// XFSZ and PROF are the same row, and needed more than a subscription: the
+// runtime keeps PROF for its profiler on every platform, and the watch may die
+// of an XFSZ only while no file-size limit has been in force. Measured
+// 2026-11-04 with the same probe, on macOS and in golang:1.26.9: every
+// reference dies of both at 153 and 155, and this shell carried on. See
+// driver/signalobserver_darwin.go and driver/signalobserver_linux.go.
 func TestAnUntrappedSignalFromOutsideEndsTheShell(t *testing.T) {
 	dieRunningAsAShell()
 	sigs := append([]namedSignal{
@@ -52,6 +59,8 @@ func TestAnUntrappedSignalFromOutsideEndsTheShell(t *testing.T) {
 		{"ALRM", syscall.SIGALRM},
 		{"VTALRM", syscall.SIGVTALRM},
 		{"XCPU", syscall.SIGXCPU},
+		{"XFSZ", syscall.SIGXFSZ},
+		{"PROF", syscall.SIGPROF},
 	}, platformEndsTheShellFromOutside...)
 	for _, hold := range outsideSignalHolds {
 		for _, s := range sigs {
@@ -72,9 +81,14 @@ func TestAnUntrappedSignalFromOutsideEndsTheShell(t *testing.T) {
 // than a start takes, and the signal goes the moment the script says it is
 // ready. Without the join the script is ready long before the watch is, the
 // runtime drops the signal, and the shell sits in its `read`.
+//
+// PROF is here for what stands in for a subscription — darwin's kqueue, and
+// Linux's default action — which is set up in the same held half.
 func TestASignalFromOutsideFindsTheWatchReadyAtTheFirstCommand(t *testing.T) {
 	dieRunningAsAShell()
-	for _, s := range []namedSignal{{"USR1", syscall.SIGUSR1}, {"ALRM", syscall.SIGALRM}} {
+	for _, s := range []namedSignal{
+		{"USR1", syscall.SIGUSR1}, {"ALRM", syscall.SIGALRM}, {"XFSZ", syscall.SIGXFSZ}, {"PROF", syscall.SIGPROF},
+	} {
 		t.Run(s.name, func(t *testing.T) {
 			ws, out := signaledInAGroupOfItsOwn(t, "^TestASignalFromOutsideFindsTheWatchReadyAtTheFirstCommand$",
 				outsideSignal{hold: "read line", sig: s.sig, env: []string{dyingHeldWatch + "=1"}})
@@ -189,6 +203,10 @@ func TestAResetHandsASignalFromOutsideBackToItsDefault(t *testing.T) {
 		{"QUIT", syscall.SIGQUIT},
 		{"USR1", syscall.SIGUSR1},
 		{"ALRM", syscall.SIGALRM},
+		{"XFSZ", syscall.SIGXFSZ},
+		// On Linux a trap or an ignore of PROF puts the runtime's handler
+		// back, and a reset has to put the default on again.
+		{"PROF", syscall.SIGPROF},
 	}
 	if len(platformEndsTheShellFromOutside) > 0 {
 		sigs = append(sigs, platformEndsTheShellFromOutside[0])
@@ -222,6 +240,19 @@ func TestAResetHandsASignalFromOutsideBackToItsDefault(t *testing.T) {
 // so the watch must not have been put on PIPE or XFSZ by the reset. darwin's
 // runtime never hands a PIPE to anybody, which is why the second row is here,
 // and `capped` is what says the limit was in force and the write ran into it.
+//
+// The PROF and PIPE rows are #7056: a handler for either from another
+// process ran in bash 5.3, bash 3.2, ksh93, zsh and dash and never here,
+// measured 2026-11-04 — darwin's runtime drops PIPE, and every runtime keeps
+// PROF. darwin's kqueue hands both to the handler now; Linux forwards PIPE and
+// has nothing that can hear PROF, so its row there is the shell surviving,
+// which is the runtime's handler put back over the default by the trap. The
+// last row is the kernel's copy of an element's broken pipe, which on darwin
+// now reaches the shell at all, and which no reference runs the outer handler
+// for (measured 2026-11-04, `{ printf '%70000s' x; } | true` under `trap 'echo
+// outer' PIPE` in bash 5.3, bash 3.2, ksh93 and dash). An external reader
+// ends the pipeline here, because the core leaves where a builtin last element
+// runs to the dialect.
 func TestASignalFromOutsideTheScriptArrangedIsTheScripts(t *testing.T) {
 	dieRunningAsAShell()
 	for _, tc := range []struct {
@@ -232,6 +263,13 @@ func TestASignalFromOutsideTheScriptArrangedIsTheScripts(t *testing.T) {
 		{"ignored USR1", "trap '' USR1; ", "sleep 1; echo survived", syscall.SIGUSR1, "survived\n"},
 		{"ignored TERM", "trap '' TERM; ", "sleep 1; echo survived", syscall.SIGTERM, "survived\n"},
 		{"handled ALRM", "trap 'echo caught' ALRM; ", "sleep 1; echo after", syscall.SIGALRM, "caught\nafter\n"},
+		{"ignored PROF", "trap '' PROF; ", "sleep 1; echo survived", syscall.SIGPROF, "survived\n"},
+		{"handled PROF", "trap 'echo caught' PROF; ", "sleep 1; echo after", syscall.SIGPROF, trappedProfFromOutside},
+		{"handled PIPE", "trap 'echo caught' PIPE; ", "sleep 1; echo after", syscall.SIGPIPE, "caught\nafter\n"},
+		{
+			"an element's broken pipe under a handler", "trap 'echo outer' PIPE; ",
+			"{ printf '%70000s' x; } | head -c 1 >/dev/null; echo after", 0, "after\n",
+		},
 		{
 			"handled again after a reset", "trap '' USR2; trap - USR2; trap 'echo caught' USR2; ",
 			"sleep 1; echo after", syscall.SIGUSR2, "caught\nafter\n",
@@ -462,4 +500,84 @@ func signaledInAGroupOfItsOwn(t *testing.T, name string, o outsideSignal) (sysca
 		t.Fatalf("no wait status for the shell half")
 	}
 	return ws, readLog(t, logPath)
+}
+
+// A shell running under the CPU profiler is not ended by the profiler's own
+// ticks, which are PROF.
+//
+// `make pgo` runs shells in-process under the profiler, so the watch that now
+// answers an untrapped PROF from outside has to know the difference, and the
+// only thing that says so is the timer the profiler arms: darwin's kqueue sees
+// every tick, and on Linux the default action the watch would otherwise put on
+// PROF ends the process at the first one. The shell half profiles itself from
+// before its start to its end.
+func TestAProfiledShellIsNotEndedByItsOwnProfiler(t *testing.T) {
+	dieRunningAsAShell()
+	ws, out := signaledInAGroupOfItsOwn(t, "^TestAProfiledShellIsNotEndedByItsOwnProfiler$", outsideSignal{
+		hold:        "i=0; while [ $i -lt 30000 ]; do i=$((i+1)); done; echo done",
+		env:         []string{dyingProfiled + "=1"},
+		stdinClosed: true,
+	})
+	if ws.Signaled() {
+		t.Fatalf("killed by %v under its own profiler (wrote %q)", ws.Signal(), firstLine(out))
+	}
+	if ws.ExitStatus() != 0 || out != "done\n" {
+		t.Errorf("status %d, wrote %q; want 0 and %q", ws.ExitStatus(), out, "done\n")
+	}
+}
+
+// A top-level handler for PIPE runs once for one broken write to the shell's
+// own standard output, as it does in every reference: measured 2026-11-04,
+// `trap 'echo got >&2' PIPE; sleep 0.2; echo hi; echo after >&2` into a reader
+// that has left writes `got` once in bash 5.3, bash 3.2 and ksh93.
+//
+// Two copies of that signal reach a shell that is a Go program: the kernel's,
+// and the one os.File raises for a broken standard stream. On darwin they
+// arrive apart — the runtime drops the kernel's and the kqueue passes it on —
+// and the shell's credit for its own write covered only one, so the handler
+// ran twice. On Linux the two usually fold into one arrival before the shell
+// sees either, so the row is darwin's.
+func TestATrappedBrokenStandardOutputRunsTheHandlerOnce(t *testing.T) {
+	dieRunningAsAShell()
+	if !standardStreamCopyArrivesApart {
+		t.Skip("the two copies are not told apart on this kernel")
+	}
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The reader is gone before the shell starts, so its first write breaks.
+	_ = r.Close()
+	logPath := filepath.Join(t.TempDir(), "err")
+	log, err := os.Create(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = log.Close() }()
+	cmd := exec.Command(os.Args[0], "-test.run=^TestATrappedBrokenStandardOutputRunsTheHandlerOnce$")
+	script := "trap 'echo got >&2' PIPE; echo hi; sleep 1; echo after >&2"
+	cmd.Env = testenv.WithoutRaceExitPause(append(os.Environ(), dyingScript+"="+script))
+	cmd.Stdout, cmd.Stderr = w, log
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	_ = w.Close()
+	t.Cleanup(func() { _ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) })
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case <-done:
+	case <-time.After(deathDeadline):
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		<-done
+		t.Fatalf("the shell was still running after %v: %q", deathDeadline, readLog(t, logPath))
+	}
+	out := readLog(t, logPath)
+	if got := strings.Count(out, "got\n"); got != 1 {
+		t.Errorf("the handler ran %d times for one broken write, want once:\n%s", got, out)
+	}
+	if !strings.HasSuffix(out, "after\n") {
+		t.Errorf("the shell did not carry on after the handler:\n%s", out)
+	}
 }

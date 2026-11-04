@@ -107,10 +107,25 @@ func emptyShadowRun(
 	t *testing.T, prog *syntax.File, sem Semantics, inheritsOuter bool,
 ) func(on bool) (string, int, int, int) {
 	t.Helper()
+	return declarationRouteRun(t, prog, sem, inheritsOuter, SetEmptyShadowShortcutForTest,
+		func(r *Runner) (int, int) { return EmptyShadowsForTest(r), EmptyReturnsForTest(r) })
+}
+
+// declarationRouteRun is emptyShadowRun for any route a declaration may take:
+// toggle switches it, and counts reads how often it was taken.
+func declarationRouteRun(
+	t *testing.T,
+	prog *syntax.File,
+	sem Semantics,
+	inheritsOuter bool,
+	toggle func(bool) bool,
+	counts func(*Runner) (int, int),
+) func(on bool) (string, int, int, int) {
+	t.Helper()
 	dir, tmp := t.TempDir(), t.TempDir()
 	return func(on bool) (string, int, int, int) {
-		was := SetEmptyShadowShortcutForTest(on)
-		defer SetEmptyShadowShortcutForTest(was)
+		was := toggle(on)
+		defer toggle(was)
 		var out strings.Builder
 		dg := PosixDiagnostics()
 		r := newTestRunner(t, &Runner{
@@ -135,7 +150,8 @@ func emptyShadowRun(
 		if err != nil {
 			t.Fatalf("route %v: %v", on, err)
 		}
-		return out.String(), st, EmptyShadowsForTest(r), EmptyReturnsForTest(r)
+		taken, returns := counts(r)
+		return out.String(), st, taken, returns
 	}
 }
 
@@ -219,7 +235,14 @@ function kc { local kz; pc; show kz kq; }; pc () { local kz kq=in; show kz kq; }
 // and every function defined with the `function` word where keyword is set.
 func emptyShadowSpelled(t *testing.T, word string, keyword bool) *syntax.File {
 	t.Helper()
-	src := strings.ReplaceAll(emptyShadowScript+emptyShadowGlobalLines, "local ", word+" ")
+	return declarationsSpelled(t, emptyShadowScript+emptyShadowGlobalLines, word, keyword)
+}
+
+// declarationsSpelled is emptyShadowSpelled over any script written the same
+// way.
+func declarationsSpelled(t *testing.T, script, word string, keyword bool) *syntax.File {
+	t.Helper()
+	src := strings.ReplaceAll(script, "local ", word+" ")
 	if keyword {
 		src = posixFunctionHead.ReplaceAllString(src, "${1}function $2 {")
 	}

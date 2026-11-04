@@ -1387,6 +1387,16 @@ func (r *Runner) numberEndsTheWord(c byte, rest string, later []string) bool {
 }
 
 func biDeclare(r *Runner, _ context.Context, args []string) int {
+	// A line of plain names over nothing, where this word makes locals, needs
+	// none of the setup below: see plainline.go. What it does not take is the
+	// rest of the line.
+	if plainLineWords(args) && r.plainLineRunner() && r.plainTypesetLine(declareFlags{}) {
+		rest, status, done := r.typesetPlainLine(args)
+		if done {
+			return status
+		}
+		args = rest
+	}
 	defer func() { r.listsOneElementPerLine = false }()
 	// A function without the `function` word declares into the keyword call
 	// it runs in, where the dialect gives only such a call a scope (#6488).
@@ -2046,12 +2056,9 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 		plainScope, plainAsked = r.scopes[len(r.scopes)-1], askLetters(f)
 	}
 	for _, a := range args {
-		r.caseFoldHeld = ""
-		name, value, hasValue, appends := r.declarationOperand(a)
 		// This line's numeric letter is what evaluates the value, which is
 		// the question typedValueFatalf asks.
-		r.declarationEvaluatesItsValue = hasValue && (f.integer || f.float)
-		r.caseFoldOperandValued = hasValue
+		name, value, hasValue, appends := r.typesetOperandHead(a, f)
 		if !hasValue && f.plusBlocked && !r.literalOperands[name] {
 			// A line carrying a plus word declares nothing for a valueless
 			// operand over a name with no binding: not the letters a minus
@@ -2077,15 +2084,16 @@ func (r *Runner) declareNames(name string, args []string, f declareFlags) (endSt
 			}
 		}
 		r.rereadingAQuotedLiteral = hasValue && r.operandHidesALiteral(name, value, f, false)
-		if plainScope != nil && !appends && r.shadowsNothing(plainScope, name) {
-			// The first thing shadowTypeset does for a name it shadows, kept
-			// so the operand leaves no OPTIND mark standing for the next.
-			r.optindCursorMadeHere = false
-			r.declareOverNothing(plainScope, name, value, hasValue, f, plainAsked, assignedByDeclaration)
-			if hasValue && r.ctl == controlExit {
+		if plainScope != nil {
+			// The line has no letters, so f is the empty set here and the
+			// step is the one typesetPlainLine takes: see plainline.go.
+			taken, stop := r.typesetOverNothing(plainScope, name, value, hasValue, appends, plainAsked)
+			if stop {
 				return r.status
 			}
-			continue
+			if taken {
+				continue
+			}
 		}
 		// A **member path** whose base is a reference is a member of the name
 		// the reference points at, and the whole operand is about that cell.

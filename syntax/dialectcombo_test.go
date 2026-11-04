@@ -218,14 +218,9 @@ func vectorShard(t *testing.T) (offset, stride int) {
 	return offset, stride
 }
 
-// raceProbeCases is how many corpus cases a vector parses when the binary was
-// built with -race. It is not a sample of the sweep; the sweep is elsewhere.
-// See casesFor.
-const raceProbeCases = 100
-
 // casesFor is the corpus a vector parses, which is all of it — except under
-// the race detector, where it is a window of raceProbeCases that moves with
-// the vector's index.
+// the race detector, where it is a window that moves with the vector's index,
+// sized so the windows of all vectors laid end to end cover the corpus once.
 //
 // The distinction is between the two properties this file used to answer at
 // once. The one it exists for is that no combination of dialect flags can make
@@ -259,29 +254,38 @@ const raceProbeCases = 100
 // gives the detector two goroutines to compare. What shrinks is how far each
 // one reads, and the window rotates with the index so the vectors between them
 // still walk the whole corpus.
-func casesFor(index int) []oracle.Case {
+//
+// That walk is the whole of what the window's size is for, so the size is
+// derived from it rather than chosen: the smallest window whose copies, one
+// per vector, cover the corpus. A fixed 100 walked it nearly seven times over,
+// and that was most of this package's time on CI's Linux leg, where the
+// runner is CPU-bound under -race and every package beside this one pays for
+// it (#7290).
+func casesFor(index, vectors int) []oracle.Case {
 	n := len(oracle.Corpus)
-	if !testenv.RaceDetector || n <= raceProbeCases {
+	window := (n + vectors - 1) / vectors
+	if !testenv.RaceDetector || n <= window {
 		return oracle.Corpus
 	}
-	start := (index * raceProbeCases) % n
-	if end := start + raceProbeCases; end <= n {
+	start := (index * window) % n
+	if end := start + window; end <= n {
 		return oracle.Corpus[start:end]
 	}
 	out := append([]oracle.Case(nil), oracle.Corpus[start:]...)
-	return append(out, oracle.Corpus[:start+raceProbeCases-n]...)
+	return append(out, oracle.Corpus[:start+window-n]...)
 }
 
 func TestNoDialectCombinationPanics(t *testing.T) {
 	t.Parallel()
 	offset, stride := vectorShard(t)
-	for i, v := range combinationVectors() {
+	vectors := combinationVectors()
+	for i, v := range vectors {
 		if i%stride != offset {
 			continue
 		}
 		t.Run(v.name, func(t *testing.T) {
 			t.Parallel()
-			for _, c := range casesFor(i) {
+			for _, c := range casesFor(i, len(vectors)) {
 				for _, src := range inputsFor(c.Snippet) {
 					func() {
 						defer func() {

@@ -103,6 +103,22 @@ jobs:
   # honest: it reads this file, and fails if the shards that answer for the
   # whole of it stop covering the whole of it.
   #
+  # The Linux leg also runs with `-vet=off`. The checks `go test` vets with
+  # are a subset of `govet` in the `Lint` job, which runs over the whole tree
+  # on Linux with test files included, and the macOS leg still vets on every
+  # run, so the leg was answering that question a third time. It is not
+  # free there: under -race this runner is CPU-bound for nearly the whole
+  # step (vmstat 80-100% busy on all four cores, #7290), so any work on it
+  # is time every package beside it pays for.
+  #
+  # Two scheduling changes were measured there and are not taken (runs
+  # 41461930054, 41462020023, 41462027999). Listing the longest packages
+  # ahead of `./...` gave 468s of `go test` against 454s: go test starts
+  # test binaries strictly in its package order, so the long ones all waited
+  # for interp's compile and the short ones' compiles were left for the end.
+  # Adding `-p 8` to that made it 602s, with compiling and testing both
+  # slower on an oversubscribed runner.
+  #
   # Then the boundary, tried from outside the process against the binaries
   # just built, on **both** platforms: what the gate is asked is portable, but
   # what the kernel does underneath it is not -- the resolving walk uses
@@ -117,7 +133,7 @@ jobs:
       os: '["ubuntu-latest","macos-latest"]'
       golangci-lint-hook: false
       test-command: >-
-        if [ "$RUNNER_OS" = Linux ]; then go test -race -timeout 30m ./...; else go test -skip='^TestNoDialectCombinationPanics$' ./...; fi
+        if [ "$RUNNER_OS" = Linux ]; then go test -race -vet=off -timeout 30m ./...; else go test -skip='^TestNoDialectCombinationPanics$' ./...; fi
         && make sandbox
 
   # Change detection alone, for the jobs below. `code` is go-ci's own answer

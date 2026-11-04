@@ -160,6 +160,11 @@ var theRoadToNoWords = []string{
 	// expanded (#6768): a command with no words holds no run of fields for
 	// it, so it matches nothing and moves nothing.
 	"pathnameStage",
+	// The kept declaration operand walks (#6373): the deferred hand-back
+	// releases the command's walk, which a command with no words never starts
+	// — startOperandsInTurn needs a declaration utility in argv — so it hands
+	// back nil and releaseTurn keeps nothing.
+	"spares",
 }
 
 // TestTheAssignmentsAloneRoadIsTheOneItWasCheckedAgainst fails when what

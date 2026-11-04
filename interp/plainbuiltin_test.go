@@ -80,6 +80,18 @@ v='x=5'; x=1 eval '[ v -eq 5 ]'; p "$x"
 p end
 `
 
+// plainBuiltinExitValueScript is the builtins failing at the top level of a
+// shell reading its commands from standard input with the exit value
+// reported, which the dialect with the option writes for a builtin's failure.
+const plainBuiltinExitValueScript = `p() { printf '<%s>' "$@"; echo; }
+false
+[ 1 -lt 0 ]
+[ 1 -lt ]
+true
+: x
+p end
+`
+
 // plainBuiltinModifierScript is the shapes the route meets in a dialect with
 // modifiers: one the grammar takes in front of the command, a name the
 // dialect reads as a modifier, and a builtin switched off.
@@ -150,7 +162,10 @@ func plainBuiltinVectors() map[string]plainBuiltinVector {
 				s.TestBuiltinComparisonOperandsAreArithmetic = Yes
 				s.ReadonlyRefusalInABuiltinIsFatal = No
 			}),
-			rows: []string{underscores, "<help>\n<0>\nsh: ro: readonly variable\n", "<1><1>\n", lone, "after-exec\n<5>\n<end>\n"},
+			rows: []string{
+				underscores, "<help>\n<0>\nsh: ro: readonly variable\n", "<1><1>\n", lone,
+				"after-exec\n<5>\n<end>\n",
+			},
 		},
 		"input-level underscore": {
 			setup: with(func(s *Semantics) { s.UnderscoreMovesOnlyBetweenInputCommands = Yes }),
@@ -170,6 +185,16 @@ func plainBuiltinVectors() map[string]plainBuiltinVector {
 		"saved streams": {
 			setup: with(func(s *Semantics) { s.OwnDescriptors = SavedStreamsAndPipeReadEndsTakeNumbers }),
 			rows:  []string{underscores, lone},
+		},
+		"exit values reported": {
+			script: plainBuiltinExitValueScript,
+			setup: func(r *Runner) {
+				with(nil)(r)
+				r.Route = RouteStandardInput
+				r.SetPrintExitValue(true)
+			},
+			rows: []string{"sh: exit 1\nsh: exit 1\nsh: [: 1: unary operator expected\nsh: exit 2\n<end>\n"},
+			min:  5,
 		},
 		"modifiers": {
 			script: plainBuiltinModifierScript,

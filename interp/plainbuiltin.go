@@ -25,10 +25,13 @@ import (
 //
 //   - plainBuiltinShape, from the tree alone: no assignment, no redirection,
 //     and a first word that is a literal naming a builtin plainBuiltinName
-//     lists. A modifier the grammar took in front of it, zsh's `nocorrect`,
-//     decides nothing for a command with a word behind it: simpleCommand
-//     reads it only for the line that has nothing left to run, and for the
-//     trace, which the route leaves to simpleCommand;
+//     lists — or a declaration word plainDeclarationName lists, every operand
+//     of which is a plain name written as itself (plainDeclarationOperands),
+//     which is `local a b c` (#6373). A modifier the grammar took in front
+//     of it, zsh's `nocorrect`, decides nothing for a command with a word
+//     behind it: simpleCommand reads it only for the line that has nothing
+//     left to run, and for the trace, which the route leaves to
+//     simpleCommand;
 //   - plainBuiltinArgv, from the runner once the command has started: every
 //     word is one simpleCommand's own plain-word shortcuts would answer (see
 //     interp/plainword.go), the name is no function's and no modifier's, it
@@ -39,8 +42,9 @@ import (
 // DEBUG firing marked as made, which is what fired=true says: the trap has
 // run once, and running it again would be a second firing for one command.
 //
-// TestAPlainBuiltinAnswersAsSimpleCommandDoes runs the same scripts with the
-// route on and off and requires the same output and status;
+// TestAPlainBuiltinAnswersAsSimpleCommandDoes and, for the declaration lines,
+// TestAPlainDeclarationLineAnswersAsSimpleCommandDoes run the same scripts
+// with the route on and off and require the same output and status;
 // TestThePlainBuiltinRoadIsTheOneItWasCheckedAgainst fails when what
 // simpleCommand reaches on the way to a builtin changes, which is the moment
 // to read this file again.

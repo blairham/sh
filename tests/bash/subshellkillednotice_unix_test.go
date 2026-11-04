@@ -151,6 +151,74 @@ func TestASubshellWithAnExitTrapIsReportedForTheSignalThatEndedIt(t *testing.T) 
 	}
 }
 
+// And an `exit` in that trap does not save the body: the copy still dies of
+// the signal, so the status is the signal's and the notice names it (#7403).
+//
+// Measured 2026-11-04 under `-c`, each shell in a process group of its own,
+// against GNU bash 5.3.20(1)-release at /opt/homebrew/bin/bash:
+//
+//	( trap 'echo E; exit 5' EXIT; kill -USR1 $BASHPID; echo after )
+//	    E, then bash: line 1: PID User defined signal 1: 30  ( … )   158
+//	( trap 'echo E; exit 5' EXIT; kill -TERM $BASHPID; echo after )
+//	    E, then Terminated: 15             ( … )                     143
+//	( trap 'echo E; exit' EXIT; kill -USR1 $BASHPID; echo after )   the USR1 notice, 158
+//	x=$(trap 'echo E; exit 5' EXIT; kill -USR1 $BASHPID; echo after)   158, x=E
+//	( … exit 5 … ) & wait $!                                         the job's notice, 158
+//
+// This shell left 5 for the first, second and fourth, 5 for the job, and
+// named `Signal 0: 0` in every notice it wrote: the trap's `exit` was the last
+// command and cleared the signal. Each row's notice is checked against the
+// same body with no trap, so the words are the host's and never written here.
+func TestAnExitInASubshellsExitTrapDoesNotSaveItFromItsSignal(t *testing.T) {
+	located := regexp.MustCompile(`^bash: line 1:\s+\d+ `)
+	// The state column of the notice: the words for the signal, with the
+	// prefix and the command taken off.
+	state := func(got, command string) string {
+		t.Helper()
+		line := killedNoticeLine(t, got, command)
+		words, _, ok := strings.Cut(line[len(located.FindString(line)):], command)
+		if !ok {
+			t.Fatalf("the notice is %q, which does not name %q", line, command)
+		}
+		return words
+	}
+	for _, tc := range []struct {
+		name, signal, exit string
+		number             syscall.Signal
+	}{
+		{name: "a user signal and exit 5", signal: "USR1", exit: "exit 5", number: syscall.SIGUSR1},
+		{name: "terminate and exit 5", signal: "TERM", exit: "exit 5", number: syscall.SIGTERM},
+		{name: "a user signal and a bare exit", signal: "USR1", exit: "exit", number: syscall.SIGUSR1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			want := "st=" + strconv.Itoa(128+int(tc.number))
+			plain := "( kill -" + tc.signal + " $BASHPID; echo after )"
+			trapped := "( trap 'echo E; " + tc.exit + "' EXIT; kill -" + tc.signal + " $BASHPID; echo after )"
+			without := runBashAnchored(t, plain+"\necho \"st=$?\"\n")
+			with := runBashAnchored(t, trapped+"\necho \"st=$?\"\n")
+			if !strings.HasPrefix(with, "E\n"+want+"\n") {
+				t.Errorf("got %q, want the trap's E and then %q", with, want)
+			}
+			if got, ref := state(with, trapped), state(without, plain); got != ref {
+				t.Errorf("with the trap's %s the notice names %q, without a trap %q", tc.exit, got, ref)
+			}
+		})
+	}
+	t.Run("a command substitution", func(t *testing.T) {
+		got := runBashAnchored(t, `x=$(trap 'echo E; exit 5' EXIT; kill -USR1 $BASHPID; echo after); echo "st=$? x=$x"`)
+		if want := "st=" + strconv.Itoa(128+int(syscall.SIGUSR1)) + " x=E\n"; got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+	t.Run("a background job", func(t *testing.T) {
+		const src = `( trap 'echo E; exit 5' EXIT; kill -USR1 $BASHPID; echo after ) & wait $!; echo "st=$?"`
+		got := runBashAnchored(t, src)
+		if want := "E\nst=" + strconv.Itoa(128+int(syscall.SIGUSR1)) + "\n"; !strings.HasPrefix(got, want) {
+			t.Errorf("got %q, want it to start %q", got, want)
+		}
+	})
+}
+
 // And the two ordinary deaths are still silent, here as everywhere else.
 //
 // ^C is how a person stops something they started; the row exists because a

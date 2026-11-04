@@ -24,7 +24,7 @@ import (
 // simpleCommand reaches that makes a difference here and none that does not.
 // Two halves decide whether it may answer at all:
 //
-//   - plainBuiltinShape, from the tree alone: no assignment, no redirection,
+//   - plainBuiltinShape, from the tree: no assignment, no redirection,
 //     and a first word that is a literal naming a builtin plainBuiltinName
 //     lists — or a declaration word plainDeclarationName lists, every operand
 //     of which is a plain name written as itself (plainDeclarationOperands),
@@ -71,16 +71,17 @@ func plainBuiltinName(name string) bool {
 }
 
 // plainBuiltinShape reports whether c is written as a command the route may
-// take, from the tree alone: a cheap first look, so that a command which is
+// take, from the tree: a cheap first look, so that a command which is
 // not one never starts down the route. Whether its words really are plain is
 // plainBuiltinArgv's question, asked of each word with plainLiteralWord, so
 // the first word is only looked at here for the name it spells.
 //
 // valued is whether the command is a declaration with a `name=$param`
-// operand, which only some runners let the route take: see
-// Runner.valuedDeclarationsMayBePlain, asked by the caller before the route
-// starts so that a line the route will not take does not start twice.
-func plainBuiltinShape(c *syntax.SimpleCmd) (ok, valued bool) {
+// operand, which only some runners let the route take at all: see
+// Runner.valuedDeclarationsMayBePlain, asked here, at the first such word, so
+// that a line the route will not take neither starts twice nor has its words
+// read for a value it will not be given.
+func (r *Runner) plainBuiltinShape(c *syntax.SimpleCmd) (ok, valued bool) {
 	if !plainBuiltinShortcut || len(c.Args) == 0 || len(c.Assigns) != 0 || len(c.Redirs) != 0 {
 		return false, false
 	}
@@ -89,7 +90,7 @@ func plainBuiltinShape(c *syntax.SimpleCmd) (ok, valued bool) {
 		return false, false
 	}
 	if plainDeclarationName(w.Spans[0].Value) {
-		return plainDeclarationOperands(c.Args[1:])
+		return r.plainDeclarationOperands(c.Args[1:])
 	}
 	return plainBuiltinName(w.Spans[0].Value), false
 }
@@ -112,12 +113,15 @@ func (r *Runner) valuedDeclarationsMayBePlain() bool {
 // declined there.
 //
 // valued is whether any of them is a `name=$param`.
-func plainDeclarationOperands(words []*syntax.Word) (ok, valued bool) {
+func (r *Runner) plainDeclarationOperands(words []*syntax.Word) (ok, valued bool) {
 	if len(words) == 0 {
 		return false, false
 	}
 	for _, w := range words {
 		if len(w.Spans) != 1 {
+			if !valued && !r.valuedDeclarationsMayBePlain() {
+				return false, false
+			}
 			if paramValuedOperand(w) {
 				valued = true
 				continue

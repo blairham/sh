@@ -9389,7 +9389,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd, fired bool) er
 	if assignmentsAlone(c) {
 		return r.assignmentsAloneCommand(ctx, c, fired)
 	}
-	if plain, valued := plainBuiltinShape(c); plain && (!valued || r.valuedDeclarationsMayBePlain()) {
+	if plain, valued := r.plainBuiltinShape(c); plain {
 		return r.plainBuiltinCommand(ctx, c, fired, valued)
 	}
 	return r.simpleCommand(ctx, c, fired)

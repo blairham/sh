@@ -71,9 +71,12 @@ func TestNoDialectIsSlowerThanItsOriginal(t *testing.T) {
 		t.Logf("slower, reported but not gating (see startupcost.Cases and #2813): %s",
 			strings.Join(notGating, ", "))
 	}
+	// The gating row is graded net of each shell's own bare start (#6496):
+	// what it asks is whether the interpreter is slower, and the start it
+	// would otherwise pay for twice is the bare row above.
 	if len(slower) > 0 {
 		t.Errorf(
-			"these dialects are slower than the shell they claim to be on the gating case, which #1403 does not allow before v0.0.0: %s\n%s",
+			"these dialects are slower than the shell they claim to be on the gating case, net of each shell's own start, which #1403 does not allow before v0.0.0: %s\n%s",
 			strings.Join(slower, ", "),
 			report,
 		)
@@ -90,13 +93,26 @@ func TestNoDialectIsSlowerThanItsOriginal(t *testing.T) {
 // go on passing if Gating were deleted and nothing gated at all.
 func TestTheBareCaseIsMeasuredButDoesNotGate(t *testing.T) {
 	t.Parallel()
+	// A row that lost. Where the case is graded net of a start, it is given
+	// one that is level on both sides, so the loss is in the case itself and
+	// survives the subtraction; a row with no start would be unmeasured, which
+	// is a different bucket and not what this test is about.
 	lost := func(c startupcost.Case) startupcost.Comparison {
-		return startupcost.Comparison{
+		cmp := startupcost.Comparison{
 			Pair: startupcost.Pair{Name: "behind"},
 			Case: c,
 			Ours: startupcost.Result{Best: at(4 * time.Millisecond), Samples: 4},
 			Real: startupcost.Result{Best: at(2 * time.Millisecond), Samples: 4},
 		}
+		if c.NetOf != "" {
+			cmp.Start = &startupcost.Comparison{
+				Pair: cmp.Pair,
+				Case: startupcost.Case{Name: c.NetOf},
+				Ours: startupcost.Result{Best: at(time.Millisecond), Samples: 4},
+				Real: startupcost.Result{Best: at(time.Millisecond), Samples: 4},
+			}
+		}
+		return cmp
 	}
 	var bare, workload startupcost.Case
 	for _, c := range startupcost.Cases() {
@@ -192,6 +208,14 @@ func TestAnUnmeasuredBareRowStillFails(t *testing.T) {
 // shell reached by a slower road: the answer is identical and only the time
 // differs. That needs no second shell installed to make the point.
 //
+// The delay is paid on the workload and **not** on the bare start, and the
+// gate's own two cases are measured. That is what puts the manufactured loss
+// where #6496's grading looks: the workload is graded net of each shell's own
+// start, so a wrapper that burned its time on every program would be slower
+// by the same amount on both rows and the subtraction would take it straight
+// back out. A loss the gate is built to subtract is not a loss it is built to
+// catch. This one is in the interpretation, and the net row has to see it.
+//
 // The first draft of this test tried to make one side slower by giving it a
 // heavier *program*, and it could not work: Measure hands both halves of a
 // pair the same Case.Program, by construction, because a comparison between
@@ -205,46 +229,265 @@ func TestTheGateCatchesADialectThatIsSlower(t *testing.T) {
 	if !ok {
 		t.Skip("no reference shell here to compare against itself")
 	}
+	workload := caseNetOfAStart(t)
+	start := caseNamed(t, workload.NetOf)
 	slow := real
-	slow.Path = slowWrapper(t, real.Path)
+	slow.Path = slowWrapper(t, real.Path, start.Program)
 	pair := startupcost.Pair{Name: "deliberately-slow", Ours: slow, Real: real}
-	kase := startupcost.Case{Name: "workload", Program: workloadProgramFor(t), Answer: workloadAnswerFor(t)}
-	got := startupcost.Measure([]startupcost.Pair{pair}, []startupcost.Case{kase}, 1, 3)
-	if len(got) != 1 {
-		t.Fatalf("measured %d comparisons, want 1", len(got))
+	// A second pair, the reference against itself, and only so that there is
+	// a second start in the run: a row handed the wrong pair's start would be
+	// graded on a subtraction from somebody else's run.
+	level := startupcost.Pair{Name: "level", Ours: real, Real: real}
+	// And a third case ahead of the start, running the same program under
+	// another name, so that a row handed the wrong case of its own pair is
+	// seen too: with only two cases, "any other case" and "the start" are
+	// the same answer.
+	decoy := startupcost.Case{Name: "decoy", Program: start.Program}
+	got := startupcost.Measure([]startupcost.Pair{pair, level}, []startupcost.Case{decoy, start, workload}, 1, 3)
+	if len(got) != 6 {
+		t.Fatalf("measured %d comparisons, want 6", len(got))
 	}
-	if got[0].Err != nil {
-		t.Fatalf("the deliberately slow subject could not be measured: %v", got[0].Err)
+	rows := map[string]startupcost.Comparison{}
+	for _, c := range got {
+		rows[c.Pair.Name+"/"+c.Case.Name] = c
 	}
-	if got[0].Passed() {
+	// Measure has to hand each row the start it measured beside it for the
+	// same pair, and not some other start: the subtraction is only honest
+	// when both terms came from the same subjects in the same run.
+	for _, p := range []string{pair.Name, level.Name} {
+		row, startRow := rows[p+"/"+workload.Name], rows[p+"/"+start.Name]
+		if err := row.Unmeasured(); err != nil {
+			t.Fatalf("%s could not be measured: %v\n%s", p, err, startupcost.Report(got))
+		}
+		if row.Start == nil {
+			t.Fatalf("Measure did not give %s's %s row its %s start, so the net grading never ran",
+				p, workload.Name, start.Name)
+		}
+		if row.Start.Pair.Name != p || row.Start.Case.Name != start.Name ||
+			row.Start.Ours.Best != startRow.Ours.Best || row.Start.Real.Best != startRow.Real.Best {
+			t.Errorf("%s's %s row was graded net of %s/%s %+v/%+v, which is not the %s row measured beside it (%+v/%+v)",
+				p, workload.Name, row.Start.Pair.Name, row.Start.Case.Name, row.Start.Ours.Best, row.Start.Real.Best,
+				start.Name, startRow.Ours.Best, startRow.Real.Best)
+		}
+	}
+	row := rows[pair.Name+"/"+workload.Name]
+	if row.Passed() {
 		t.Errorf(
-			"a shell reached by a road that burns tens of milliseconds first was reported as faster than the same shell (%.2fx), so the gate cannot catch a slow dialect:\n%s",
-			got[0].Ratio(),
+			"a shell reached by a road that burns tens of milliseconds on the workload was reported as faster than the same shell (net %.2fx), so the gate cannot catch a slow interpreter:\n%s",
+			row.NetRatio(),
 			startupcost.Report(got),
 		)
 	}
+	gating, _, _ := startupcost.Failures([]startupcost.Comparison{row})
+	if len(gating) != 1 {
+		t.Errorf("a slower %s row did not fail the gate (%v):\n%s", workload.Name, gating, startupcost.Report(got))
+	}
 }
 
-// slowWrapper is a shell that is the given shell plus a fixed delay.
+// slowWrapper is a shell that is the given shell plus a fixed delay on every
+// program except spare.
 //
-// A busy loop rather than `sleep`, because what is being manufactured is a
-// slow *start* and sleep is the one thing a scheduler is free to return from
-// early. The count is large enough that the delay is tens of milliseconds —
-// an order of magnitude above the spread this package sees at load 30 — so
-// three samples settle it and the test does not become the flaky thing it is
+// A busy loop rather than `sleep`, because what is being manufactured is slow
+// work and sleep is the one thing a scheduler is free to return from early.
+// The count is large enough that the delay is tens of milliseconds — an order
+// of magnitude above the spread this package sees at load 30 — so three
+// samples settle it and the test does not become the flaky thing it is
 // checking for.
 //
 // It ends in `exec`, so the process the gate times really is the reference
 // shell answering the reference shell's answer; nothing about the output can
-// differ.
-func slowWrapper(t *testing.T, real string) string {
+// differ. The program is the wrapper's second argument, after `-c`.
+func slowWrapper(t *testing.T, real, spare string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "slow-shell")
-	body := "#!/bin/sh\ni=0\nwhile [ $i -lt 40000 ]; do i=$((i + 1)); done\nexec " + real + " \"$@\"\n"
+	body := "#!/bin/sh\n" +
+		"if [ \"$2\" != '" + spare + "' ]; then\n" +
+		"\ti=0\n\twhile [ $i -lt 40000 ]; do i=$((i + 1)); done\n" +
+		"fi\n" +
+		"exec " + real + " \"$@\"\n"
 	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return path
+}
+
+// TestTheWorkloadIsGradedNetOfItsStart is #6496's decision made executable.
+//
+// The decision has two halves and a test of either alone would pass with the
+// other deleted. A dialect that is slower **only at starting** has to pass the
+// workload row, because the start is the bare row's to report; and a dialect
+// whose start is level and whose interpretation is slower has to fail it,
+// because that is the half the gate is for. Hand-built comparisons, so it
+// costs no measurement and runs in the unit lane like the other guards here.
+func TestTheWorkloadIsGradedNetOfItsStart(t *testing.T) {
+	t.Parallel()
+	workload := caseNetOfAStart(t)
+	if !workload.Gating {
+		t.Fatalf("the case graded net of a start is %q, and it does not gate", workload.Name)
+	}
+	start := caseNamed(t, workload.NetOf)
+	if start.NetOf != "" {
+		t.Fatalf("the start %q is itself graded net of %q, so nothing is a start", start.Name, start.NetOf)
+	}
+	row := func(oursWhole, oursStart, realWhole, realStart time.Duration) startupcost.Comparison {
+		pair := startupcost.Pair{Name: "net"}
+		return startupcost.Comparison{
+			Pair: pair,
+			Case: workload,
+			Ours: startupcost.Result{Best: at(oursWhole), Samples: 4},
+			Real: startupcost.Result{Best: at(realWhole), Samples: 4},
+			Start: &startupcost.Comparison{
+				Pair: pair,
+				Case: start,
+				Ours: startupcost.Result{Best: at(oursStart), Samples: 4},
+				Real: startupcost.Result{Best: at(realStart), Samples: 4},
+			},
+		}
+	}
+	const ms = time.Millisecond
+
+	// Slower on the whole run, and all of it start: 6.0 against 4.0 whole,
+	// 3.0 against 3.5 once each start is off. This is the shape every main
+	// run has had, and it has to pass.
+	startOnly := row(6*ms, 3*ms, 4*ms, ms/2)
+	if got := startOnly.Ratio(); got != 1.5 {
+		t.Fatalf("the whole-run ratio is %.3f, want 1.500", got)
+	}
+	if !startOnly.Passed() {
+		t.Errorf(
+			"a dialect slower only at starting failed the workload row (whole %.2fx, net %.2fx): the start is the bare row's to report, and #6496 took it out of this one",
+			startOnly.Ratio(),
+			startOnly.NetRatio(),
+		)
+	}
+	gating, reported, unmeasured := startupcost.Failures([]startupcost.Comparison{startOnly})
+	if len(gating)+len(reported)+len(unmeasured) != 0 {
+		t.Errorf(
+			"a row that passes net of its start was sorted as a failure: gating=%v reported=%v unmeasured=%v",
+			gating,
+			reported,
+			unmeasured,
+		)
+	}
+	report := startupcost.Report([]startupcost.Comparison{startOnly})
+	for _, want := range []string{"1.50x", "0.86x", "ours net", "orig net", "3.00ms", "3.50ms", "FASTER"} {
+		if !strings.Contains(report, want) {
+			t.Errorf("the report does not carry %q, so the whole run and the net figure are not both visible:\n%s",
+				want, report)
+		}
+	}
+
+	// Level at starting and slower at the work: 5.0 against 4.0 whole and
+	// 4.0 against 3.0 net. This is the loss the gate exists for.
+	slowWork := row(5*ms, ms, 4*ms, ms)
+	if slowWork.Passed() {
+		t.Errorf("a dialect whose interpretation is slower passed the workload row (net %.2fx)", slowWork.NetRatio())
+	}
+	if gating, _, _ := startupcost.Failures([]startupcost.Comparison{slowWork}); len(gating) != 1 {
+		t.Errorf("a slower interpreter did not fail the gate: %v", gating)
+	}
+
+	// Faster on the whole run and slower net of start: 3.5 against 4.0
+	// whole, 3.0 against 2.5 net. The whole-run ratio alone would pass this.
+	fastStartSlowWork := row(3*ms+ms/2, ms/2, 4*ms, ms+ms/2)
+	if fastStartSlowWork.Passed() {
+		t.Errorf(
+			"a dialect whose interpretation is slower passed because its start was faster (whole %.2fx, net %.2fx); the net figure is the graded one",
+			fastStartSlowWork.Ratio(),
+			fastStartSlowWork.NetRatio(),
+		)
+	}
+
+	// The requirement's one word still holds net of start: level is not
+	// faster, and one nanosecond either side answers.
+	if row(4*ms, ms, 5*ms, 2*ms).Passed() {
+		t.Error("a net tie was reported as faster; the requirement is faster, not comparable")
+	}
+	if !row(4*ms-1, ms, 5*ms, 2*ms).Passed() {
+		t.Error("a dialect one nanosecond faster net of its start did not pass")
+	}
+}
+
+// TestANetRowWithNothingToSubtractIsNotMeasured is the hole the subtraction
+// could open.
+//
+// A row graded net of its start is graded on a difference, and a difference
+// with a missing or meaningless term is not a smaller number, it is no number.
+// If the start was not measured beside it, or could not be, or is not shorter
+// than the whole run, the row must be unmeasured — never graded on its whole
+// time instead, and never on whatever the subtraction left.
+func TestANetRowWithNothingToSubtractIsNotMeasured(t *testing.T) {
+	t.Parallel()
+	workload := caseNetOfAStart(t)
+	start := caseNamed(t, workload.NetOf)
+	base := func() startupcost.Comparison {
+		return startupcost.Comparison{
+			Pair: startupcost.Pair{Name: "no-start"},
+			Case: workload,
+			// Far faster on the whole run, so a row that fell back to the
+			// whole time would pass and the test would see it.
+			Ours: startupcost.Result{Best: at(time.Millisecond), Samples: 4},
+			Real: startupcost.Result{Best: at(10 * time.Millisecond), Samples: 4},
+		}
+	}
+	missing := base()
+	failed := base()
+	failed.Start = &startupcost.Comparison{Case: start, Err: errors.New("the reference refused `:`")}
+	longer := base()
+	longer.Start = &startupcost.Comparison{
+		Case: start,
+		Ours: startupcost.Result{Best: at(2 * time.Millisecond), Samples: 4},
+		Real: startupcost.Result{Best: at(time.Millisecond), Samples: 4},
+	}
+	for name, c := range map[string]startupcost.Comparison{
+		"no start measured":             missing,
+		"the start could not be":        failed,
+		"the start is longer than work": longer,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if c.Unmeasured() == nil {
+				t.Error("a row with nothing honest to subtract was graded")
+			}
+			if c.Passed() {
+				t.Errorf("a row with nothing honest to subtract passed (whole %.2fx)", c.Ratio())
+			}
+			gating, reported, unmeasured := startupcost.Failures([]startupcost.Comparison{c})
+			if len(unmeasured) != 1 || len(gating) != 0 || len(reported) != 0 {
+				t.Errorf("sorted as gating=%v reported=%v unmeasured=%v, want it unmeasured alone",
+					gating, reported, unmeasured)
+			}
+			if !strings.Contains(startupcost.Report([]startupcost.Comparison{c}), "NOT MEASURED") {
+				t.Errorf("the report does not say the row was not measured:\n%s",
+					startupcost.Report([]startupcost.Comparison{c}))
+			}
+		})
+	}
+}
+
+// caseNetOfAStart is the gate's case that is graded net of another, read out
+// of Cases so these tests cannot drift from what the gate runs.
+func caseNetOfAStart(tb testing.TB) startupcost.Case {
+	tb.Helper()
+	for _, c := range startupcost.Cases() {
+		if c.NetOf != "" {
+			return c
+		}
+	}
+	tb.Fatal("no case of the gate is graded net of a start, so the workload is graded on a start it pays twice (#6496)")
+	return startupcost.Case{}
+}
+
+// caseNamed is the gate's case of that name.
+func caseNamed(tb testing.TB, name string) startupcost.Case {
+	tb.Helper()
+	for _, c := range startupcost.Cases() {
+		if c.Name == name {
+			return c
+		}
+	}
+	tb.Fatalf("the gate has no case named %q", name)
+	return startupcost.Case{}
 }
 
 // TestAComparisonThatCouldNotBeMeasuredNeverPasses is the assertion the

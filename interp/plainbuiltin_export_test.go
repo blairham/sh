@@ -12,3 +12,7 @@ func SetPlainBuiltinShortcutForTest(on bool) (was bool) {
 
 // PlainBuiltinsForTest is how many commands plainBuiltinCommand ran itself.
 func PlainBuiltinsForTest(r *Runner) int { return r.plainBuiltins }
+
+// PlainDeclarationLinesForTest is how many declaration lines
+// plainBuiltinCommand ran itself.
+func PlainDeclarationLinesForTest(r *Runner) int { return r.plainDeclarationLines }

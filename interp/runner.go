@@ -5547,6 +5547,9 @@ type Runner struct {
 	// plainBuiltins counts the commands plainBuiltinCommand ran itself, so a
 	// test can show the route is reached. See interp/plainbuiltin.go.
 	plainBuiltins int
+	// plainDeclarationLines counts the declaration lines among them. See
+	// plainDeclarationName.
+	plainDeclarationLines int
 	// beforePrelude is the status pair as it stood when a prelude began,
 	// put back when it ends. See SourcingPrelude.
 	beforePrelude keptStatus

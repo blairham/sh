@@ -75,7 +75,28 @@ func plainBuiltinShape(c *syntax.SimpleCmd) bool {
 		return false
 	}
 	w := c.Args[0]
-	return len(w.Spans) == 1 && w.Spans[0].Kind == syntax.Literal && plainBuiltinName(w.Spans[0].Value)
+	if len(w.Spans) != 1 || w.Spans[0].Kind != syntax.Literal {
+		return false
+	}
+	return plainBuiltinName(w.Spans[0].Value) || plainDeclarationName(w.Spans[0].Value)
+}
+
+// plainDeclarationName is the declaration words the route runs a line of for,
+// where every operand is a plain name written as itself: `local a b c`. Such a
+// line goes through simpleCommand as the five do. Its words are literals with
+// no `=` in them, so none is an assignment operand and the declaration's own
+// steps there — the operand walk, the prefix ordering, the operands' array
+// literals and the store after the utility — have nothing to do, and the
+// utility's own route for a plain line takes it from there (see
+// interp/plainline.go). The one record simpleCommand writes for a declaration
+// that it does not write for the five is the line's assignment words, and the
+// route writes it the same way. See plainDeclarationArgv.
+func plainDeclarationName(name string) bool {
+	switch name {
+	case "local", "typeset", "declare":
+		return true
+	}
+	return false
 }
 
 // plainBuiltinArgv is the command's argv and the builtin it names, where the
@@ -95,15 +116,24 @@ func (r *Runner) plainBuiltinArgv(c *syntax.SimpleCmd) (argv []string, fn Builti
 	if r.tracing() || len(r.procSubs) > 0 || r.ctl != controlNone {
 		return nil, nil, false
 	}
+	// A declaration's operands are plain names written as themselves, and
+	// nothing else: see plainDeclarationArgv.
+	declaring := plainDeclarationName(c.Args[0].Spans[0].Value)
+	if declaring && len(c.Args) < 2 {
+		return nil, nil, false
+	}
 	// Sized for one field a word, as simpleCommand sizes its own: a plain
 	// word is exactly one.
 	argv = make([]string, 0, len(c.Args))
 	for _, w := range c.Args {
 		if lit, plain := r.plainLiteralWord(w); plain {
+			if declaring && len(argv) > 0 && !isPlainName(lit) {
+				return nil, nil, false
+			}
 			argv = append(argv, lit)
 			continue
 		}
-		if v, plain := r.plainParamWord(w); plain {
+		if v, plain := r.plainParamWord(w); plain && !declaring {
 			argv = append(argv, v)
 			continue
 		}
@@ -138,6 +168,9 @@ func (r *Runner) plainBuiltinCommand(ctx context.Context, c *syntax.SimpleCmd, f
 		return r.simpleCommand(ctx, c, true)
 	}
 	r.plainBuiltins++
+	if plainDeclarationName(argv[0]) {
+		r.plainDeclarationLines++
+	}
 	// What a plain word's expansion leaves behind it. See plainLiteralFields.
 	r.braceName = false
 	r.lastWordEdges = wordEdges{}
@@ -170,7 +203,7 @@ func (r *Runner) plainBuiltinCommand(ctx context.Context, c *syntax.SimpleCmd, f
 	r.fdVarStores, r.openedStdin = nil, nil
 	r.redirectForBuiltin, r.redirForCommandWord = "", ""
 	r.exitWaived = false
-	st, fatal := r.runPlainBuiltin(ctx, argv, fn)
+	st, fatal := r.runPlainBuiltin(ctx, c, argv, fn)
 	r.endPlainBuiltin(closers, outerGlob)
 	switch {
 	case fatal:
@@ -189,7 +222,8 @@ func (r *Runner) plainBuiltinCommand(ctx context.Context, c *syntax.SimpleCmd, f
 // prefix and no operand: the state it sets for the builtin's call and puts
 // back, the call, and what it decides from what the call left. fatal is the
 // case simpleCommand returns on without writing the status.
-func (r *Runner) runPlainBuiltin(ctx context.Context, argv []string, fn Builtin) (st int, fatal bool) {
+func (r *Runner) runPlainBuiltin(ctx context.Context, c *syntax.SimpleCmd, argv []string, fn Builtin,
+) (st int, fatal bool) {
 	// The prefix's names, held and kept — none — for the call. See
 	// Runner.prefixHeldNames.
 	outerHeld, outerKept, outerShadowed := r.prefixHeldNames, r.prefixKeptNames, r.prefixShadowed
@@ -205,6 +239,15 @@ func (r *Runner) runPlainBuiltin(ctx context.Context, argv []string, fn Builtin)
 	r.literalOperands = nil
 	outerAssignments := r.assignmentWordsOf
 	r.assignmentWordsOf = nil
+	if plainDeclarationName(argv[0]) {
+		// The one declaration record of the line that is not empty for a
+		// line of plain names: in the column that stores a declaration's
+		// assignment words ahead of the utility, it is the command itself,
+		// which a refusal reads for a name written as an assignment. None
+		// is, here, but the record is what simpleCommand leaves for the
+		// call. See Runner.declarationWithAssignmentWords.
+		r.assignmentWordsOf = r.declarationWithAssignmentWords(c, argv)
+	}
 	outerLetterContainers := r.containerByThisLinesLetter
 	r.containerByThisLinesLetter = nil
 	outerOverANonArray := r.operandsOverANonArray

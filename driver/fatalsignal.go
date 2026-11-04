@@ -93,6 +93,30 @@ import (
 // front end's half of a reset subscribes the watch again — see watchAgain —
 // and the watch decides as it always has, by the shell's table.
 //
+// # The start does not wait for the dropped class; the first command does
+//
+// os/signal enables a signal nothing has asked for before by a synchronous
+// round trip to the runtime's signal-mask thread, a goroutine locked to an OS
+// thread of its own, so each one is about four thread handoffs. The throwing
+// class is eight or nine of those. The dropped class is five more on darwin
+// and thirty-seven on Linux, where the real-time range is most of it, and with
+// HUP that put about 1 ms of CPU on every start on Linux and 1.3 to 1.6 ms of
+// wall on the ubuntu runner, in every dialect (#7263, after #7060).
+//
+// So the throwing class is taken where the watch is set up, as before, and the
+// watch's own goroutine takes the dropped class and HUP before it starts
+// reading, while the start goes on to the prelude and everything else that
+// comes before a script. awaitTheWatch is the join, and nothing that runs a
+// command gets past it: a signal sent once the shell has done anything another
+// process could see finds every subscription in place, exactly as it did when
+// the start waited. Until then an arrival of the dropped class is dropped,
+// which is what the runtime already did with it for the whole of the start
+// before the watch existed — and nothing outside can have seen the shell
+// ready, because nothing has run.
+//
+// Every hook that changes a disposition joins too, because a subscription
+// still in flight would take an ignore it raced away.
+//
 // # A shell with an EXIT trap takes the death over
 //
 // Ending the process from this goroutine is right for a shell with nothing to
@@ -179,7 +203,9 @@ var killingSignals = []syscall.Signal{syscall.SIGHUP, syscall.SIGINT, syscall.SI
 var fatalWatch struct {
 	// mu guards setting the watch up and taking it down, and every
 	// subscription made to ch: a run that subscribes on its way through
-	// must never reach a channel another run has just stopped.
+	// must never reach a channel another run has just stopped. All but the
+	// half the watch's goroutine takes at the start, which a take-down
+	// waits for instead; see letGoOfTheWatch.
 	mu sync.Mutex
 	// keepers counts what is keeping the watch up: each run of MainArgs
 	// while it runs, and a binary's main for good. See keepTheWatch.
@@ -220,6 +246,10 @@ var fatalWatch struct {
 	// is no watch, and closed when one is taken down, which is what ends its
 	// goroutine.
 	ch chan os.Signal
+	// settled is closed once the watch holds every subscription it takes
+	// at the start. Nil while there is no watch, and set with ch. See
+	// awaitTheWatch.
+	settled chan struct{}
 }
 
 // KeepFatalSignalWatch keeps the watch for fatal signals up for the rest of
@@ -267,9 +297,16 @@ func letGoOfTheWatch() {
 	// What the shell's answers were is left in place: an arrival from the
 	// run's last moments may still be in the buffer, and it is answered as
 	// that shell would have answered it. The next run replaces them.
+	//
+	// The one subscription to ch not made under mu is the half the watch's
+	// goroutine takes at the start, so the stop waits for it: a run that
+	// ended before its first command could otherwise have that half land
+	// after the stop, on a channel closed here. It is a wait for something
+	// already under way, and once a command has run it has already landed.
+	<-fatalWatch.settled
 	signal.Stop(fatalWatch.ch)
 	close(fatalWatch.ch)
-	fatalWatch.ch, fatalWatch.holding = nil, false
+	fatalWatch.ch, fatalWatch.settled, fatalWatch.holding = nil, nil, false
 	// HUP and INT are the two the runtime lets an ignore stand for, and it
 	// tells an inherited ignore from its own handler by what the disposition
 	// was when a subscription last put that handler on. A shell that ignored
@@ -309,6 +346,11 @@ func subscribeTheWatch(sigs ...os.Signal) bool {
 	return true
 }
 
+// holdTheRestOfTheWatch, when set, runs on the watch's goroutine before it
+// takes the dropped class. Nil outside tests: it is how one holds that half
+// back for longer than a start takes, to show nothing runs before it lands.
+var holdTheRestOfTheWatch func()
+
 // watchFatalSignals arranges for an untrapped fatal signal from outside to end
 // this process the way it ends any other shell.
 //
@@ -344,16 +386,26 @@ func watchFatalSignals(r *interp.Runner) {
 		ch := make(chan os.Signal, len(fatalSignals)+len(discardedSignals)+len(killingSignals))
 		fatalWatch.ch = ch
 		signal.Notify(ch, fatalSignals...)
-		signal.Notify(ch, discardedSignals...)
-		if !fatalWatch.bornIgnoring[syscall.SIGHUP] {
-			// HUP is the runtime's to end the process with, and it does —
-			// by the signal. One shell in the panel ends on it the way
-			// `exit 1` ends it instead, from outside as from a `kill`
-			// the script sent itself, so the watch has to be the one to
-			// answer it. See interp.Semantics.HangupIsAnOrderlyExit.
-			signal.Notify(ch, syscall.SIGHUP)
-		}
+		settled := make(chan struct{})
+		fatalWatch.settled = settled
+		hangup := !fatalWatch.bornIgnoring[syscall.SIGHUP]
 		go func() {
+			// Here rather than before the `go`, so the start does not wait
+			// a round trip per signal for them; see the file comment.
+			if holdTheRestOfTheWatch != nil {
+				holdTheRestOfTheWatch()
+			}
+			signal.Notify(ch, discardedSignals...)
+			if hangup {
+				// HUP is the runtime's to end the process with, and it
+				// does — by the signal. One shell in the panel ends on it
+				// the way `exit 1` ends it instead, from outside as from a
+				// `kill` the script sent itself, so the watch has to be
+				// the one to answer it. See
+				// interp.Semantics.HangupIsAnOrderlyExit.
+				signal.Notify(ch, syscall.SIGHUP)
+			}
+			close(settled)
 			for s := range ch {
 				if done, ok := s.(answeredSoFar); ok {
 					close(done)
@@ -429,6 +481,22 @@ func (answeredSoFar) String() string { return "what the watch has answered so fa
 
 func (answeredSoFar) Signal() {}
 
+// awaitTheWatch waits until the watch holds every subscription it takes at the
+// start: the join for the half its goroutine takes. Called before the first
+// command a shell runs and by every hook that changes a disposition, and
+// immediate once the watch has settled or where there is no watch at all.
+//
+// Not under mu while it waits: the goroutine it waits for takes no lock, and
+// a caller holding mu would keep every other subscription waiting with it.
+func awaitTheWatch() {
+	fatalWatch.mu.Lock()
+	settled := fatalWatch.settled
+	fatalWatch.mu.Unlock()
+	if settled != nil {
+		<-settled
+	}
+}
+
 // watchWhatTheShellIgnores tells the watch what the shell ignores untrapped,
 // and subscribes it to SIGTERM where an interactive shell ignores that too.
 //
@@ -472,6 +540,7 @@ func tellTheWatchWhatTheShellIgnores(r *interp.Runner) {
 // process: SIGINT comes to the watch, which asks the shell before dying of
 // it, rather than ending the process where the runtime's default would.
 func holdInterrupts() {
+	awaitTheWatch()
 	fatalWatch.mu.Lock()
 	defer fatalWatch.mu.Unlock()
 	if fatalWatch.ch == nil || fatalWatch.holding {
@@ -499,6 +568,7 @@ func holdInterrupts() {
 // shell's trap table, its untrapped ignores and a held interrupt each come
 // before the death, so a subscription here is never itself a death.
 func watchAgain(sig syscall.Signal) {
+	awaitTheWatch()
 	if fatalWatch.bornIgnoring[sig] || !watched(sig) {
 		return
 	}
@@ -581,6 +651,7 @@ func handedOver(takes takesAFatalSignal, sig syscall.Signal) bool {
 // a subscription takes an ignore away, from every child as well. A reset
 // subscribes the watch again — see watchAgain.
 func listenForFatalSignals() {
+	awaitTheWatch()
 	for _, sig := range []syscall.Signal{syscall.SIGTERM, syscall.SIGINT} {
 		if !fatalWatch.bornIgnoring[sig] && !signal.Ignored(sig) {
 			subscribeTheWatch(sig)

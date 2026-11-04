@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
@@ -113,4 +114,12 @@ func WatchHasAnsweredForTest(sig os.Signal) {
 	ch <- done
 	fatalWatch.mu.Unlock()
 	<-done
+}
+
+// HoldTheWatchForTest has the fatal-signal watch take the signals the runtime
+// drops only after d, which is far longer than a start takes — so a shell
+// that ran a command before they were taken would be seen to. See
+// awaitTheWatch.
+func HoldTheWatchForTest(d time.Duration) {
+	holdTheRestOfTheWatch = func() { time.Sleep(d) }
 }

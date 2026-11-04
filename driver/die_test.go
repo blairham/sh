@@ -69,6 +69,15 @@ const dyingTailExec = "SH_TEST_DYING_TAIL_EXEC"
 // alarm is ignored, which is the one dialect that has both.
 const dyingInteractiveAlarm = "SH_TEST_DYING_INTERACTIVE_ALARM"
 
+// dyingHeldWatch holds back the half of the fatal-signal watch a start does
+// not wait for, by heldWatch, in the shell half. See
+// driver.HoldTheWatchForTest.
+const dyingHeldWatch = "SH_TEST_DYING_HELD_WATCH"
+
+// heldWatch is how long dyingHeldWatch holds it: many starts' worth, so that
+// a command run before it lands is a command run well before it lands.
+const heldWatch = 300 * time.Millisecond
+
 // deathDeadline is how long a shell that has been asked to die is given
 // before this test gives up on it and says so.
 //
@@ -181,6 +190,9 @@ func dieRunningAsAShell() {
 	}
 	if os.Getenv(dyingTailExec) != "" {
 		sh.Semantics.TailExec = interp.TailExecPlainTopLevel
+	}
+	if os.Getenv(dyingHeldWatch) != "" {
+		driver.HoldTheWatchForTest(heldWatch)
 	}
 	args := []string{"testsh", "-c", src}
 	if os.Getenv(dyingInteractive) != "" {

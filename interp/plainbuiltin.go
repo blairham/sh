@@ -101,10 +101,10 @@ func plainDeclarationOperands(words []*syntax.Word) bool {
 		return false
 	}
 	for _, w := range words {
-		if paramValuedOperand(w) {
-			continue
-		}
 		if len(w.Spans) != 1 {
+			if paramValuedOperand(w) {
+				continue
+			}
 			return false
 		}
 		if s := w.Spans[0]; s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted || !isPlainName(s.Value) {
@@ -112,6 +112,17 @@ func plainDeclarationOperands(words []*syntax.Word) bool {
 		}
 	}
 	return true
+}
+
+// hasParamValuedOperand reports whether any of a declaration's operands is
+// one paramValuedOperand accepts.
+func hasParamValuedOperand(words []*syntax.Word) bool {
+	for _, w := range words {
+		if len(w.Spans) == 2 && paramValuedOperand(w) {
+			return true
+		}
+	}
+	return false
 }
 
 // paramValuedOperand reports whether a declaration's operand is written
@@ -245,6 +256,16 @@ func (r *Runner) paramValuedOperandsPlain(c *syntax.SimpleCmd, argv []string) bo
 // simpleCommand reaches for such a command, in its order; each says what it
 // stands for there.
 func (r *Runner) plainBuiltinCommand(ctx context.Context, c *syntax.SimpleCmd, fired bool) error {
+	// A declaration's `name=$param` operands are the route's only where the
+	// runner neither reaches for them with `set -k` nor stores them in turn:
+	// see paramValuedOperandsPlain, which plainBuiltinArgv asks again once
+	// the command has started. Asked first as well so that a line the route
+	// will not take, in a runner that never would, does not start twice.
+	declaring := plainDeclarationName(c.Args[0].Spans[0].Value)
+	valued := declaring && hasParamValuedOperand(c.Args[1:])
+	if valued && (r.keywordAssignments || r.declarationOperandsStoredInTurn()) {
+		return r.simpleCommand(ctx, c, fired)
+	}
 	if !r.startSimpleCommand(ctx, fired) {
 		return nil
 	}
@@ -253,11 +274,11 @@ func (r *Runner) plainBuiltinCommand(ctx context.Context, c *syntax.SimpleCmd, f
 		return r.simpleCommand(ctx, c, true)
 	}
 	r.plainBuiltins++
-	declaring := plainDeclarationName(argv[0])
 	var valuedAt []int
 	if declaring {
 		r.plainDeclarationLines++
-		if valuedAt = paramValuedOperandsAt(c.Args); valuedAt != nil {
+		if valued {
+			valuedAt = paramValuedOperandsAt(c.Args)
 			r.plainValuedDeclarationLines++
 		}
 	}
@@ -283,7 +304,9 @@ func (r *Runner) plainBuiltinCommand(ctx context.Context, c *syntax.SimpleCmd, f
 	// assignment operand. See simpleCommand.
 	r.noteInputLevelArgument(argv)
 	r.lastArg, r.lastArgSet = argv[len(argv)-1], true
-	if declaring {
+	if valued {
+		// Only an assignment operand moves it, so a line of names alone
+		// leaves it on the last word.
 		if w, ok := r.underscoreBeforeADeclarationsAssignment(c); ok {
 			r.lastArg = w
 		}

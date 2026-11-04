@@ -2856,7 +2856,13 @@ func (r *Runner) builtinWriteStatus(name string, st int) int {
 		// Every failed write of the builtin's is credited, not the last one
 		// alone: see writeFailedAfter. The answered error's own count is the
 		// floor, for a failure recorded without being counted.
-		r.writeSignalAbsorbed("PIPE", arranged == signalHandledBy, max(copies, kernelPipeCopies(err)))
+		//
+		// And the runtime's own copy of each broken write to a standard
+		// stream, where that arrives apart from the kernel's: see
+		// standardStreamPipeCopies.
+		copies = max(copies, kernelPipeCopies(err))
+		copies += copies * standardStreamPipeCopies(r.Stdout)
+		r.writeSignalAbsorbed("PIPE", arranged == signalHandledBy, copies)
 		if arranged == signalFatal {
 			r.signalDeath("PIPE", syscall.SIGPIPE)
 			return r.status

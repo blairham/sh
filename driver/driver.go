@@ -3159,6 +3159,11 @@ func (sh *Shell) newRunnerAs(
 		// land, heard by the watch once the shell has an EXIT trap to run
 		// before dying of one. See fatalsignal.go.
 		r.ListenForFatalSignals = listenForFatalSignals
+		// And the process's half of a top-level `trap` with a body, for the
+		// one signal that half is not os/signal's: PROF, which Linux keeps at
+		// the kernel's default until the shell arranges something for it.
+		// See signalobserver_linux.go.
+		r.HandleSignal = handleSignal
 	}
 	// The part of composing a shell that is not a field, applied here and
 	// *remembered*, because interp has one shell of its own to build: the

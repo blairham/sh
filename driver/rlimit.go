@@ -6,6 +6,7 @@ package driver
 import (
 	"fmt"
 	"sort"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/blairham/sh/interp"
@@ -183,7 +184,49 @@ func setRlimit(res interp.Resource, soft, hard int64) error {
 	if !ok {
 		return fmt.Errorf("this build has no such limit")
 	}
-	return syscall.Setrlimit(id, &syscall.Rlimit{Cur: toRlim(soft), Max: toRlim(hard)})
+	err := syscall.Setrlimit(id, &syscall.Rlimit{Cur: toRlim(soft), Max: toRlim(hard)})
+	if id == syscall.RLIMIT_FSIZE {
+		// Before the write that runs into it can be made, so the watch knows
+		// an XFSZ may be the kernel's from here on. See fileSizeLimitInForce.
+		noteTheFileSizeLimit()
+	}
+	return err
+}
+
+// fileSizeLimited is set once this process has had a finite RLIMIT_FSIZE, and
+// is never cleared.
+var fileSizeLimited atomic.Bool
+
+// noteTheFileSizeLimit records whether the file-size limit is finite now.
+func noteTheFileSizeLimit() {
+	var l syscall.Rlimit
+	if err := syscall.Getrlimit(syscall.RLIMIT_FSIZE, &l); err == nil && l.Cur != rlimInfinity {
+		fileSizeLimited.Store(true)
+	}
+}
+
+// fileSizeLimitInForce reports whether an XFSZ could be the kernel's copy of a
+// write of this process's own, which is the one thing that keeps the watch
+// from dying of an untrapped XFSZ from outside.
+//
+// The kernel raises it at a write only past the soft limit, so a process whose
+// limit has never been finite has made no write that could raise it, and every
+// XFSZ it is sent came from another process. Once a limit has been in force the
+// two cannot be told apart — a subshell's write past `ulimit -f` raises a copy
+// exactly as a `kill` does, and it must end the subshell and not the shell — so
+// the answer stays yes for the life of the process, even after the limit is
+// raised again: a copy raised under the old one can land after the new.
+//
+// What this leaves is a shell running under a limit, which an XFSZ from
+// outside still does not end where every reference dies of it. Telling the two
+// apart there needs the sender's pid, which only a handler written outside Go
+// could read (#7046).
+func fileSizeLimitInForce() bool {
+	if fileSizeLimited.Load() {
+		return true
+	}
+	noteTheFileSizeLimit()
+	return fileSizeLimited.Load()
 }
 
 // rlimInfinity is this platform's "no limit", which is not the same number

@@ -22,7 +22,8 @@ import (
 // pipeline; output held around a listing; and the operands written
 // `name=$param` — a positional, a named scalar, an unset one under `set -u`,
 // one holding a separator, an `=` or nothing, one naming an operand of the
-// same line, one over a frozen name, and `set -k`.
+// same line, one over a frozen name, a subscripted and a dotted name beside
+// them, and `set -k`, which one column takes the operand away for.
 //
 // Shapes a vector may refuse are run through `command eval` or a subshell,
 // so a refusal is part of the output both runs must agree on.
@@ -56,6 +57,8 @@ ob=outer; same() { local ob=$1 oc=$ob; p "$ob" "$oc"; }; same in
 (fv() { local f1=$1 frz=$1 f2=$1; echo "fv $?"; show f1 f2; }; fv x) 2>&1; echo "after fv $?"
 (set -k; kv() { local k1=$1 k2; show k1 k2; }; kv x) 2>&1; echo "after kv $?"
 tv() { local t1=$1; t1=changed; inner2; p "$t1"; }; inner2() { local t1=$1 t2=$t1; p "$t2"; }; tv first
+(su() { local s9=$1 sx[1]=$1 s8=$1; echo "su $?"; show s9 s8; }; su x) 2>&1; echo "after su $?"
+(dn() { local d9=$1 d.x=$1 d8=$1; echo "dn $?"; show d9 d8; }; dn x) 2>&1; echo "after dn $?"
 p decl-end
 `
 
@@ -81,6 +84,11 @@ func declarationCommandVectors() map[string]Semantics {
 	turn := v["base"]
 	turn.DeclarationOperandsAreStoredInTurn = Yes
 	v["stored in turn"] = turn
+	// And `set -k` taking a declaration's operand for a prefix, which the
+	// route leaves to simpleCommand.
+	promotes := v["base"]
+	promotes.KeywordAssignments, promotes.KeywordPromotesADeclarationsOperand = Yes, Yes
+	v["set -k promotes"] = promotes
 	return v
 }
 

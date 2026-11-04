@@ -1427,6 +1427,9 @@ type programFamily struct {
 	// compiles at all, which are facts about its text and one setting each
 	// — see scannedOnce. Two bits a question: asked, and the answer.
 	scans atomic.Uint32
+	// text holds the pattern's text facts for matchPatternChecked's setup,
+	// zero until they are read. See patternTextFacts.
+	text atomic.Uint32
 }
 
 // programEntry is one pattern under one reading. Its counters are shared by
@@ -1481,7 +1484,12 @@ func (c *programCache) family(pattern string) *programFamily {
 
 // entry answers the entry for pattern under rd, making one on a miss.
 func (c *programCache) entry(pattern string, rd *patternReading) *programEntry {
-	fam := c.family(pattern)
+	return c.entryIn(c.family(pattern), rd)
+}
+
+// entryIn is entry for a family already found, so a caller holding one does
+// not look the pattern up a second time.
+func (c *programCache) entryIn(fam *programFamily, rd *patternReading) *programEntry {
 	if fam == nil {
 		// An entry of its own is a correct answer that merely is not
 		// shared.

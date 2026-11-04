@@ -3072,8 +3072,14 @@ func hasUnterminatedBracket(p string, emptyCompiles bool) bool {
 // pattern that really poses the question — and not here about every pattern
 // with a `[` in it.
 func (r *Runner) bracketAfterSubIsABadPattern(p string) bool {
+	return r.bracketAfterSubIsABadPatternIn(scanText(p))
+}
+
+// bracketAfterSubIsABadPatternIn is bracketAfterSubIsABadPattern asked of a
+// pattern's text facts.
+func (r *Runner) bracketAfterSubIsABadPatternIn(t patternText) bool {
 	return r.sem().UnterminatedBracketAfterASubExpression == BracketBadPattern &&
-		scannedOnce(p, scanLeftOpenBySub, r.readsCollatingElements(), bracketLeftOpenBySubExpression)
+		t.leftOpenBySub(r.readsCollatingElements())
 }
 
 // readsCollatingElements is whether `[.x.]` and `[=x=]` are one element here,
@@ -3641,7 +3647,13 @@ func hasCollatingDelimiter(p string, emptyCompiles bool) bool {
 // matcher, and only for a pattern that really holds a backslash inside a
 // bracket expression.
 func (r *Runner) bracketEscapeIsOnlyAMember(pattern string) bool {
-	if !hasBracketEscape(pattern, r.emptyBracketCompiles()) {
+	return r.bracketEscapeIsOnlyAMemberIn(scanText(pattern))
+}
+
+// bracketEscapeIsOnlyAMemberIn is bracketEscapeIsOnlyAMember asked of a
+// pattern's text facts.
+func (r *Runner) bracketEscapeIsOnlyAMemberIn(t patternText) bool {
+	if !t.escapesInBracket(r.emptyBracketCompiles()) {
 		return false
 	}
 	return r.bracketEscape() == BracketEscapeIsOnlyAMember
@@ -3666,8 +3678,13 @@ func (r *Runner) readsQuantifiedGroups(condition bool) bool {
 // question almost no pattern asks, and the guard is exact: `[:` is how a class
 // begins and there is no other spelling.
 func (r *Runner) patternClasses(pattern string) patternClasses {
+	return r.patternClassesIn(scanText(pattern))
+}
+
+// patternClassesIn is patternClasses asked of a pattern's text facts.
+func (r *Runner) patternClassesIn(t patternText) patternClasses {
 	names := r.sem().PatternClasses
-	if !strings.Contains(pattern, "[:") {
+	if !t.opensClass() {
 		return patternClasses{}
 	}
 	// Read rather than asked, the way Runner.failedExpansion reads its axis:
@@ -3701,7 +3718,14 @@ func (r *Runner) patternClasses(pattern string) patternClasses {
 // unknown in another. That is what makes this a question about the *pair* and
 // not about a fixed list of names.
 func (r *Runner) unknownClassPolicy(pattern string) UnknownClassPolicy {
-	if !patternHasAnUnknownClass(pattern, r.patternClasses(pattern)) {
+	return r.unknownClassPolicyIn(scanText(pattern))
+}
+
+// unknownClassPolicyIn is unknownClassPolicy asked of a pattern's text facts.
+// A pattern with no `[:` holds no class name at all, known or not, so the
+// roster is not read for it.
+func (r *Runner) unknownClassPolicyIn(t patternText) UnknownClassPolicy {
+	if !t.opensClass() || !patternHasAnUnknownClass(t.p, r.patternClassesIn(t)) {
 		return r.sem().UnknownCharacterClass
 	}
 	return r.unknownCharacterClass()
@@ -3712,7 +3736,13 @@ func (r *Runner) unknownClassPolicy(pattern string) UnknownClassPolicy {
 // the shape unknownClassPolicy uses, and for the same reason: a shell with no
 // answer must not be refused over a question the pattern never poses.
 func (r *Runner) unterminatedClassPolicy(pattern string) UnterminatedClassPolicy {
-	if !patternHasAnUnterminatedClass(pattern) {
+	return r.unterminatedClassPolicyIn(scanText(pattern))
+}
+
+// unterminatedClassPolicyIn is unterminatedClassPolicy asked of a pattern's
+// text facts.
+func (r *Runner) unterminatedClassPolicyIn(t patternText) UnterminatedClassPolicy {
+	if !t.leavesClassOpen() {
 		return r.sem().UnterminatedCharacterClass
 	}
 	return r.unterminatedCharacterClass()

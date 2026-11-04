@@ -5,7 +5,6 @@ package interp
 
 import (
 	"runtime"
-	"strings"
 	"sync"
 )
 
@@ -41979,7 +41978,12 @@ func (c CollatingElementPolicy) String() string {
 // opens a `[.` or a `[=` inside a bracket expression — so a shell with no
 // answer is not asked a question the pattern never poses.
 func (r *Runner) collatingElements(pattern string) CollatingElementPolicy {
-	if !hasCollatingDelimiter(pattern, r.emptyBracketCompiles()) {
+	return r.collatingElementsIn(scanText(pattern))
+}
+
+// collatingElementsIn is collatingElements asked of a pattern's text facts.
+func (r *Runner) collatingElementsIn(t patternText) CollatingElementPolicy {
+	if !t.opensCollating(r.emptyBracketCompiles()) {
 		return NoCollatingElements
 	}
 	p := r.sem().CollatingElements
@@ -44173,8 +44177,11 @@ func (r *Runner) subscriptedArrayLiteral() SubscriptedArrayLiteralPolicy {
 // caretNegates resolves the `[^…]` axis, and only for a pattern that actually
 // uses it — so a dialect is never questioned about syntax the pattern does not
 // contain, and `[abc]` needs no answer from anyone.
-func (r *Runner) caretNegates(pattern string) bool {
-	if !strings.Contains(pattern, "[^") {
+func (r *Runner) caretNegates(pattern string) bool { return r.caretNegatesIn(scanText(pattern)) }
+
+// caretNegatesIn is caretNegates asked of a pattern's text facts.
+func (r *Runner) caretNegatesIn(t patternText) bool {
+	if !t.opensCaret() {
 		return false
 	}
 	return r.ask(r.sem().BracketCaretNegates, "`^` negating a bracket class")
@@ -44221,6 +44228,9 @@ func (r *Runner) matchPatternChecked(pattern, s string, surface patternSurface, 
 		return m, true
 	}
 	condition := surface == patternInACondition
+	// What the setup below asks of the pattern's text, answered once per
+	// pattern rather than walked at every match. See patternTextFacts.
+	t := r.policyText(pattern)
 	o := patternOpts{
 		// A `case` arm reads a bare `(` behind a pattern group as a group
 		// where a condition and a word read the characters, which is that
@@ -44228,7 +44238,7 @@ func (r *Runner) matchPatternChecked(pattern, s string, surface patternSurface, 
 		// @(a)(b))` matches and `[[ ab == @(a)(b) ]]` does not. See
 		// patternOpts.armParens for the four surfaces measured in pairs.
 		armParens:       surface == patternInACaseArm,
-		caret:           r.caretNegates(pattern),
+		caret:           r.caretNegatesIn(t),
 		group:           r.lang().PatternAlternation,
 		bareParenIsText: r.lang().BarePatternGroupInsideAWord && !r.lang().PatternAlternation,
 		topGroup:        r.lang().PatternTopLevelAlternation.ReadsATopLevelBar(condition),
@@ -44248,13 +44258,13 @@ func (r *Runner) matchPatternChecked(pattern, s string, surface patternSurface, 
 		fold:          r.MatchOption(MatchFoldsCase),
 		chars:         r.patternMatchCountsCharacters(pattern, s),
 		escapes:       r.sem().PatternEscapeReaches,
-		bracketMember: r.bracketEscapeIsOnlyAMember(pattern),
+		bracketMember: r.bracketEscapeIsOnlyAMemberIn(t),
 		matchSkipsToAnyBracket: r.sem().MatchedBracketSkipsToAnEscapedBracket == Yes &&
-			strings.Contains(pattern, `\]`),
-		classes:           r.patternClasses(pattern),
-		collating:         r.collatingElements(pattern),
-		unknownClass:      r.unknownClassPolicy(pattern),
-		unterminatedClass: r.unterminatedClassPolicy(pattern),
+			t.escapesClose(),
+		classes:           r.patternClassesIn(t),
+		collating:         r.collatingElementsIn(t),
+		unknownClass:      r.unknownClassPolicyIn(t),
+		unterminatedClass: r.unterminatedClassPolicyIn(t),
 		// Handed as a question rather than an answer: a bracket a
 		// sub-expression left open is something only the matcher's own scan
 		// can spot, and asking up front would either put the axis to a
@@ -44273,7 +44283,7 @@ func (r *Runner) matchPatternChecked(pattern, s string, surface patternSurface, 
 	if condition {
 		badStatus = 2
 	}
-	o = r.tildeModifierOpts(r.extendedPatternOpts(o, pattern, badStatus), pattern)
+	o = r.tildeModifierOpts(r.extendedPatternOptsIn(o, t, badStatus), pattern)
 	var bad bool
 	// The place to record a pattern the dialect rejects, handed over
 	// whatever the scan below says. A bracket a `[:name:]` left open is one
@@ -44283,7 +44293,7 @@ func (r *Runner) matchPatternChecked(pattern, s string, surface patternSurface, 
 	// script on `case '[a' in [[:alpha:]])` and this shell answered the
 	// next arm. Writing to it costs nothing where no pattern is refused.
 	o.bad = &bad
-	if scannedOnce(pattern, scanOpenBracket, r.emptyBracketCompiles(), hasUnterminatedBracket) {
+	if t.leavesBracketOpen(r.emptyBracketCompiles()) {
 		o.bracket = r.bracketPolicy()
 	}
 	// A group nothing closes is the same refusal arriving by the other of
@@ -44294,7 +44304,7 @@ func (r *Runner) matchPatternChecked(pattern, s string, surface patternSurface, 
 	// `bad pattern: a(b` at 1 **in both option states** — this surface is
 	// not filename generation, so `unsetopt badpattern` does not reach it,
 	// which is the pair that says what the switch in glob.go is keyed on.
-	if r.badPatternFromAnOpenGroup(pattern) || r.bracketAfterSubIsABadPattern(pattern) {
+	if r.badPatternFromAnOpenGroupIn(t) || r.bracketAfterSubIsABadPatternIn(t) {
 		// A group nothing closes, or a bracket a `[:name:]` left open. The
 		// second is eager for the reason operandPatternOpts gives at
 		// length: asked from inside the match, *the value decides whether

@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -65,7 +66,7 @@ var declarationCommandRows = []string{
 }
 
 // declarationCommandVectors are the plain line's vectors, with `$_` tracked by
-// the command and by the input line, and exit values reported.
+// the command and by the input line, and with operands stored in turn.
 func declarationCommandVectors() map[string]Semantics {
 	v := plainLineVectors()
 	under := v["base"]
@@ -75,6 +76,11 @@ func declarationCommandVectors() map[string]Semantics {
 	input := under
 	input.UnderscoreMovesOnlyBetweenInputCommands = Yes
 	v["input underscore"] = input
+	// And the column that stores a declaration's operands in turn, whose
+	// valued lines the route leaves to simpleCommand.
+	turn := v["base"]
+	turn.DeclarationOperandsAreStoredInTurn = Yes
+	v["stored in turn"] = turn
 	return v
 }
 
@@ -101,6 +107,9 @@ func declarationCommandCompare(
 	if fullTaken != 0 {
 		t.Errorf("the route ran %d declaration lines with it off; want none", fullTaken)
 	}
+	if least.valued < 0 && valued != 0 {
+		t.Errorf("the route ran %d declaration lines with a value; want none here", valued)
+	}
 	if taken < least.lines || valued < least.valued {
 		t.Errorf("the route ran %d declaration lines, %d with a value; want at least %d and %d",
 			taken, valued, least.lines, least.valued)
@@ -122,15 +131,18 @@ func declarationCommandCompare(
 func TestAPlainDeclarationLineAnswersAsSimpleCommandDoes(t *testing.T) {
 	// least is how many of each script's lines are plain declarations the
 	// route must run, and how many of those carry a `name=$param`, counted:
-	// a line holding any other value is left to simpleCommand.
+	// a line holding any other value is left to simpleCommand. names is how
+	// many hold names alone, which is what the route runs where operands are
+	// stored in turn.
 	scripts := []struct {
 		name, src string
 		rows      []string
 		least     routeBar
+		names     int
 	}{
-		{"shadow", emptyShadowScript + emptyShadowGlobalLines, emptyShadowRows, routeBar{18, 1}},
-		{"line", plainLineScript, plainLineRows, routeBar{10, 6}},
-		{"command", declarationCommandScript, declarationCommandRows, routeBar{13, 4}},
+		{"shadow", emptyShadowScript + emptyShadowGlobalLines, emptyShadowRows, routeBar{18, 1}, 17},
+		{"line", plainLineScript, plainLineRows, routeBar{10, 6}, 4},
+		{"command", declarationCommandScript, declarationCommandRows, routeBar{13, 4}, 9},
 	}
 	for _, sc := range scripts {
 		for _, word := range []string{"local", "typeset", "declare"} {
@@ -147,6 +159,14 @@ func TestAPlainDeclarationLineAnswersAsSimpleCommandDoes(t *testing.T) {
 						lname := map[bool]string{true: "line route", false: "full road"}[line]
 						t.Run(sc.name+"/"+word+"/"+form+"/"+vname+"/"+lname, func(t *testing.T) {
 							atLeast, rows := sc.least, sc.rows
+							if vname == "stored in turn" {
+								// Where an operand is stored in turn, a later
+								// one on the line reads it: `oc=$ob` is `in`.
+								atLeast = routeBar{sc.names, -1}
+								rows = slices.DeleteFunc(slices.Clone(rows), func(r string) bool {
+									return r == "[in][outer]\n"
+								})
+							}
 							if vname == "empty open" {
 								// The first valueless operand stops the
 								// plain line's script on the question.
@@ -162,7 +182,7 @@ func TestAPlainDeclarationLineAnswersAsSimpleCommandDoes(t *testing.T) {
 }
 
 // routeBar is how many declaration lines a script must send down the route,
-// and how many of those with a `name=$param` operand.
+// and how many of those with a `name=$param` operand: -1 for none at all.
 type routeBar struct{ lines, valued int }
 
 // TestAReservedWordDeclarationLineAnswersAsSimpleCommandDoes is the same

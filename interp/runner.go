@@ -6308,6 +6308,10 @@ func (r *Runner) clone() *Runner {
 	// and nothing a fork runs is the shell's last. See unforkedtail.go.
 	c.tailCmd, c.tailPipe, c.unforkedSelf, c.slotOneIsTheBody = nil, nil, false, false
 	c.tailSubshell = false
+	// And the death an EXIT trap is running ahead of is the shell's that runs
+	// the trap: a copy made inside the body is not dying of it, and an `exit`
+	// it runs is its own. See Runner.exitOverridesTheDeath.
+	c.exitTrapDeath = setAsideDeath{}
 	c.tailPutsNothingBackOnly, c.listOnTheTail = false, false
 	// And a subshell's diagnostics are its own process's in the shells this
 	// one is measured against, which no line editor ever hears about. See
@@ -8070,6 +8074,7 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 		// the signal exactly as it does with no trap at all (#7388).
 		r.status, r.diedOfSig = before, beforeSig
 	}
+	r.copyStillDiesOfTheDeath(before, beforeSig)
 	r.takeTheDeathBack()
 	r.stopTheShell()
 	return exitedInTheBody

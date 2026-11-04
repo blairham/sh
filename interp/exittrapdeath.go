@@ -128,14 +128,45 @@ func (r *Runner) segvEndsTheShellWhereItLands(name string) bool {
 // Semantics.ExitInTheExitTrapOverridesASignalDeath.
 //
 // Asked only where there is a death to drop, which is only where the dialect
-// runs an EXIT trap on one; a copy made inside the trap is the copy's `exit`.
+// runs an EXIT trap on one; a copy made inside the trap is the copy's `exit`,
+// and carries no death of the trap's (see Runner.clone).
+//
+// A copy running its *own* EXIT trap ahead of its own death is asked too, and
+// answers as the shell at the top does. Measured 2026-11-04, each shell in a
+// process group of its own: bash 5.3.20's `( trap 'echo E; exit 5' EXIT; kill
+// -USR1 $BASHPID; echo after ); echo st=$?` writes E, the signal's notice and
+// st=158, and `x=$( … )` the same; ksh93u+'s forked `( ulimit -t unlimited;
+// trap 'echo E; exit 5' EXIT; /bin/sh -c 'kill -USR1 $PPID'; echo after )`
+// writes E and st=5. zsh, dash and BusyBox ash run no EXIT trap on the death
+// and never reach this (#7403). See Runner.copyStillDiesOfTheDeath.
 func (r *Runner) exitOverridesTheDeath() {
-	if !r.inExitTrap || r.inSubshell || r.exitTrapDeath.sig == 0 {
+	if !r.inExitTrap || r.exitTrapDeath.sig == 0 {
 		return
 	}
 	if r.ask(r.sem().ExitInTheExitTrapOverridesASignalDeath, "an `exit` in the EXIT trap of a signal death") {
 		r.exitTrapDeath = setAsideDeath{}
 	}
+}
+
+// copyStillDiesOfTheDeath puts back the status and the signal of the death a
+// copy's EXIT trap ran ahead of, once the body is done, wherever that death
+// is still the one the copy ends by — an `exit` the dialect does not let
+// override it included, bare or naming a status.
+//
+// A copy has no process to re-raise the signal in, so what the shell around
+// it reads is this status and this signal: the trap's `exit 5` left 5, and
+// its own command had cleared the signal, so `( … ); echo $?` read 5 under a
+// `Signal 0: 0` notice where bash 5.3.20 reads 158 under the signal's own
+// (#7403). The shell at the top is left alone: it dies of the signal through
+// the front end, and the status is not what anything reads there.
+//
+// Not where the body died of a signal of its own, which is the death the copy
+// ends by instead. See Runner.takeTheDeathBack.
+func (r *Runner) copyStillDiesOfTheDeath(status int, sig syscall.Signal) {
+	if !r.inSubshell || r.exitTrapDeath.sig == 0 || r.killedBySig != 0 {
+		return
+	}
+	r.status, r.diedOfSig = status, sig
 }
 
 // publishTheTrapRunning tells the front end's watch that the shell at the top

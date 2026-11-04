@@ -12,6 +12,13 @@ Pre-stable releases (`v0.x.y`) make no compatibility promise. Until `v1.0.0`,
 `feat` and `fix` both bump the patch version and a breaking change bumps the
 minor.
 
+## [0.0.41](https://github.com/blairham/sh/compare/v0.0.40...v0.0.41) (2026-11-04)
+
+
+### Performance
+
+* **interp:** leave out a declaration operand's hold when nothing can read it ([#7406](https://github.com/blairham/sh/issues/7406)) ([8b18994](https://github.com/blairham/sh/commit/8b189948b57d1ead4fe56a8da48e071ec9dc2ab2))
+
 ## [0.0.40](https://github.com/blairham/sh/compare/v0.0.39...v0.0.40) (2026-11-04)
 
 

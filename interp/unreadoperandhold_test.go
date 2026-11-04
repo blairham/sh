@@ -48,7 +48,13 @@ typeset a=$1 b=$2; echo "top [$a][$b]"
 // unreadHoldRows are lines unreadHoldScript writes from its first call to its
 // last, which the run with every operand held must reach for the comparison
 // to have compared the whole script.
-var unreadHoldRows = []string{"[p][q][pq]\nout [ga][gb][gc]\n", "[q]\nout [ga]\n", "[p]\nout [ga][gb]\n", "7\n", "top [x][y]\n"}
+var unreadHoldRows = []string{
+	"[p][q][pq]\nout [ga][gb][gc]\n",
+	"[q]\nout [ga]\n",
+	"[p]\nout [ga][gb]\n",
+	"7\n",
+	"top [x][y]\n",
+}
 
 // TestAnUnreadHoldAnswersAsTheHeldOneDoes runs unreadHoldScript with the route
 // that leaves out an operand's hold on and off, in the column that stores a

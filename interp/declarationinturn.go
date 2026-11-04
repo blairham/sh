@@ -339,7 +339,12 @@ func (r *Runner) declarationWouldShadow(name string) bool {
 // rewritten where its subscript was evaluated. behind is the command's words
 // written after the operand, which decide whether anything could read the
 // hold — see Runner.holdIsUnread.
-func (r *Runner) storeOperandInTurn(argv []string, turn *operandsInTurn, c *syntax.SimpleCmd, behind []*syntax.Word) []string {
+func (r *Runner) storeOperandInTurn(
+	argv []string,
+	turn *operandsInTurn,
+	c *syntax.SimpleCmd,
+	behind []*syntax.Word,
+) []string {
 	if turn == nil || turn.stopped {
 		return argv
 	}

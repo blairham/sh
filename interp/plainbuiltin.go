@@ -78,7 +78,31 @@ func plainBuiltinShape(c *syntax.SimpleCmd) bool {
 	if len(w.Spans) != 1 || w.Spans[0].Kind != syntax.Literal {
 		return false
 	}
-	return plainBuiltinName(w.Spans[0].Value) || plainDeclarationName(w.Spans[0].Value)
+	if plainDeclarationName(w.Spans[0].Value) {
+		return plainDeclarationOperands(c.Args[1:])
+	}
+	return plainBuiltinName(w.Spans[0].Value)
+}
+
+// plainDeclarationOperands reports whether a declaration's operand words are
+// written as the route takes them, from the tree: at least one, and each a
+// single unquoted literal that is a plain name. Asked here and not only of
+// the argv, so that a line with a value on it — most declarations — goes
+// straight to simpleCommand rather than starting down the route to be
+// declined there.
+func plainDeclarationOperands(words []*syntax.Word) bool {
+	if len(words) == 0 {
+		return false
+	}
+	for _, w := range words {
+		if len(w.Spans) != 1 {
+			return false
+		}
+		if s := w.Spans[0]; s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted || !isPlainName(s.Value) {
+			return false
+		}
+	}
+	return true
 }
 
 // plainDeclarationName is the declaration words the route runs a line of for,
@@ -90,7 +114,8 @@ func plainBuiltinShape(c *syntax.SimpleCmd) bool {
 // utility's own route for a plain line takes it from there (see
 // interp/plainline.go). The one record simpleCommand writes for a declaration
 // that it does not write for the five is the line's assignment words, and the
-// route writes it the same way. See plainDeclarationArgv.
+// route writes it the same way. See plainDeclarationOperands, which says
+// which lines those are.
 func plainDeclarationName(name string) bool {
 	switch name {
 	case "local", "typeset", "declare":
@@ -116,24 +141,15 @@ func (r *Runner) plainBuiltinArgv(c *syntax.SimpleCmd) (argv []string, fn Builti
 	if r.tracing() || len(r.procSubs) > 0 || r.ctl != controlNone {
 		return nil, nil, false
 	}
-	// A declaration's operands are plain names written as themselves, and
-	// nothing else: see plainDeclarationArgv.
-	declaring := plainDeclarationName(c.Args[0].Spans[0].Value)
-	if declaring && len(c.Args) < 2 {
-		return nil, nil, false
-	}
 	// Sized for one field a word, as simpleCommand sizes its own: a plain
 	// word is exactly one.
 	argv = make([]string, 0, len(c.Args))
 	for _, w := range c.Args {
 		if lit, plain := r.plainLiteralWord(w); plain {
-			if declaring && len(argv) > 0 && !isPlainName(lit) {
-				return nil, nil, false
-			}
 			argv = append(argv, lit)
 			continue
 		}
-		if v, plain := r.plainParamWord(w); plain && !declaring {
+		if v, plain := r.plainParamWord(w); plain {
 			argv = append(argv, v)
 			continue
 		}

@@ -8190,7 +8190,21 @@ func (r *Runner) readLine(raw bool) (line string, atEOF bool) {
 // why this saves the outer value on a stack rather than creating a new
 // environment — there is only ever one set of variables, and `local` says
 // which of them to put back.
-func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
+func biLocal(r *Runner, ctx context.Context, args []string) int {
+	// A line of plain names over nothing needs none of the setup below: see
+	// plainline.go. What it does not take is the rest of the line.
+	if plainLineWords(args) && r.plainLineRunner() && r.plainLocalLine(declareFlags{}) {
+		rest, status, done := r.localPlainLine(args)
+		if done {
+			return status
+		}
+		args = rest
+	}
+	return localLine(r, ctx, args)
+}
+
+// localLine is biLocal's full road, for a line or the rest of one.
+func localLine(r *Runner, _ context.Context, args []string) (endStatus int) {
 	written := args
 	defer func() {
 		// See biExport. Every operand of a `local` this loop declares is a
@@ -8460,20 +8474,16 @@ func biLocal(r *Runner, _ context.Context, args []string) (endStatus int) {
 		name, value, hasValue, appends := r.declarationOperand(a)
 		// See declareNames: this line's numeric letter evaluates the value.
 		r.declarationEvaluatesItsValue = hasValue && (f.integer || f.float)
-		if plainScope != nil && !appends && r.shadowsNothing(plainScope, name) {
-			r.declareOverNothing(plainScope, name, value, hasValue, f, asked, assignedAnyhow)
-			if hasValue && r.ctl == controlExit {
+		if plainScope != nil {
+			// The line has no letters, so f is the empty set here and the
+			// step is the one localPlainLine takes: see plainline.go.
+			taken, stop := r.localOverNothing(plainScope, name, value, hasValue, appends, asked)
+			if stop {
 				return r.status
 			}
-			if hasValue {
-				// setVar's form, so the store marks nothing: see the other
-				// store below for why the mark is this word's own.
-				r.markForAllexport(name)
+			if taken {
+				continue
 			}
-			if r.unspecified {
-				return r.status
-			}
-			continue
 		}
 		// The hide-in-scope letter asks for an ordinary local over the
 		// shell's own name, which is the one way past the second reason

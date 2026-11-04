@@ -5856,6 +5856,10 @@ type Runner struct {
 	// not held, because nothing behind them could read the hold, so a test
 	// can show that route is reached. See interp/unreadoperandhold.go.
 	unreadHolds int
+	// plainLineOperands counts the declaration operands a plain line's route
+	// declared without the utility's line setup, so a test can show that route
+	// is reached. See interp/plainline.go.
+	plainLineOperands int
 	// heldSubscriptFailure, where it is set, receives the sentence about a
 	// subscript that would not evaluate in place of the shell writing it, for
 	// the one caller that words it as its own. See testIsSetSubscriptFailed.

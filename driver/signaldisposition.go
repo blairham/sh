@@ -31,9 +31,17 @@ import (
 // TERM from outside for the rest of the shell (#7047). The subscription is
 // also what takes the shell's own ignore off, ahead of interp's drain. See
 // watchAgain.
+//
+// PROF is the runtime's whatever os/signal is asked — Ignore and Reset change
+// nothing the kernel sees for it — and on Linux it may be at the kernel's
+// default while nothing is arranged for it, which an ignore has to take off.
+// See signalobserver_linux.go.
 func setSignalDisposition(sig syscall.Signal, ignore bool) {
 	awaitTheWatch()
 	if ignore {
+		if sig == syscall.SIGPROF {
+			profToTheRuntime()
+		}
 		signal.Ignore(sig)
 		return
 	}

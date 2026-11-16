@@ -5,6 +5,9 @@ package interp
 
 import (
 	"errors"
+	"io"
+	"os"
+	"runtime"
 	"syscall"
 )
 
@@ -60,12 +63,56 @@ func failedPartWay(n int, err error) error {
 
 // kernelPipeCopies is how many SIGPIPEs a failed write with err may have had
 // the kernel raise: two where the pipe broke part-way, one otherwise.
+//
+// One either way on darwin, whose kernel raises a single SIGPIPE for a write
+// that broke part-way: measured 2026-11-04 on macOS arm64 by asking a kqueue,
+// a 1 MiB write whose reader left after 64 KiB came back n=65536 and EPIPE,
+// five runs of five, with one SIGPIPE each. Nothing there reached the shell
+// until a front end began passing the kernel's copies on (see
+// driver/signalobserver_darwin.go), so the count went unchecked; two would
+// leave a credit standing to swallow the next PIPE sent from outside.
 func kernelPipeCopies(err error) int {
 	var partWay pipeBrokenPartWay
-	if errors.As(err, &partWay) {
+	if errors.As(err, &partWay) && runtime.GOOS != "darwin" {
 		return 2
 	}
 	return 1
+}
+
+// standardStreamPipeCopies is how many more SIGPIPEs than the kernel's each
+// broken write to w hands the shell: one where w is the process's standard
+// output or error on darwin, none otherwise.
+//
+// os.File raises a SIGPIPE of its own at a write to descriptor 1 or 2 that
+// fails with EPIPE, after the kernel's, which is how a Go program dies of a
+// closed standard output. On Linux it usually folds into the kernel's copy,
+// both arriving before os/signal has read either. On darwin the runtime drops
+// the kernel's copy and a front end passes it on separately, so the two are
+// two arrivals: measured 2026-11-04, the kernel's one SIGPIPE and one more on
+// a subscribed channel for a write to os.Stdout, and only the kernel's for the
+// same broken pipe on descriptor 7. Uncredited, the second ran a top-level
+// PIPE handler a second time for one broken write.
+//
+// Asked of the descriptor through a raw read, because os.File's Fd would put
+// the file in blocking mode as a side effect.
+func standardStreamPipeCopies(w io.Writer) int {
+	if runtime.GOOS != "darwin" {
+		return 0
+	}
+	f, ok := w.(*os.File)
+	if !ok {
+		return 0
+	}
+	rc, err := f.SyscallConn()
+	if err != nil {
+		return 0
+	}
+	standard := false
+	_ = rc.Control(func(fd uintptr) { standard = fd == 1 || fd == 2 })
+	if standard {
+		return 1
+	}
+	return 0
 }
 
 // A builtin can fail more than one write, and each one raised its own.

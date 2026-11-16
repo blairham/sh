@@ -480,6 +480,15 @@ type Runner struct {
 	// Runner's, in an order nothing a script does can see (#7044).
 	SetSignalDisposition func(sig syscall.Signal, ignore bool)
 
+	// HandleSignal is the process's half of a top-level `trap` with a body,
+	// called before the shell subscribes to sig: a front end that answers a
+	// signal at the kernel rather than through os/signal — by leaving it at
+	// its default action while nothing is arranged for it — puts back what
+	// lets the shell survive it. Nil — the default — means this Runner may
+	// not touch the process's dispositions, and a subscription is all a trap
+	// needs. See driver/signalobserver_linux.go.
+	HandleSignal func(sig syscall.Signal)
+
 	// HoldInterrupts arranges for an untrapped SIGINT from outside to be
 	// asked about — see InterruptHeld — rather than ending the process
 	// outright, for the dialect that holds one while a foreground program

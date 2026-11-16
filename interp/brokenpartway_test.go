@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -37,6 +38,17 @@ func (p *raisingBrokenPipe) Write(b []byte) (int, error) {
 	}
 	return min(p.wrote, len(b)), &os.PathError{Op: "write", Path: "|1", Err: syscall.EPIPE}
 }
+
+// partWayCopies is how many SIGPIPEs the kernel raises for one write its
+// reader left part-way through: two on Linux, measured in ubuntu:26.04
+// (#7201), and one on darwin, measured 2026-11-04 on macOS arm64 by asking a
+// kqueue about a 1 MiB write whose reader left after 64 KiB, five runs of five.
+var partWayCopies = func() int {
+	if runtime.GOOS == "darwin" {
+		return 1
+	}
+	return 2
+}()
 
 // handledRuns runs a handled broken pipe against a stream that raises copies
 // and fails after wrote bytes, and counts how often the handler ran.
@@ -70,7 +82,7 @@ func TestAWriteTheReaderLeftPartWayRunsTheHandlerOnce(t *testing.T) {
 		copies, wrote int
 	}{
 		{"the reader gone before the write", 1, 0},
-		{"the reader gone part-way through", 2, 2},
+		{"the reader gone part-way through", partWayCopies, 2},
 	} {
 		if n, errOut := handledRuns(t, c.copies, c.wrote); n != 1 {
 			t.Errorf("%s: the handler ran %d times, want once (stderr %q)", c.name, n, errOut)
@@ -82,7 +94,7 @@ func TestAWriteTheReaderLeftPartWayRunsTheHandlerOnce(t *testing.T) {
 // outside, and it runs the handler a second time. Without this the row above
 // could pass because no copy ever reached the shell at all.
 func TestACopyNoWriteRaisedStillRunsTheHandler(t *testing.T) {
-	if n, errOut := handledRuns(t, 3, 2); n != 2 {
+	if n, errOut := handledRuns(t, partWayCopies+1, 2); n != 2 {
 		t.Errorf("the handler ran %d times, want twice: once for the write, once for the copy from outside (stderr %q)",
 			n, errOut)
 	}

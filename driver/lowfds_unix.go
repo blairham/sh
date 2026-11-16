@@ -170,14 +170,15 @@ func keepTheRuntimeOffTheLowDescriptors() {
 var runtimeDescriptors []int
 
 // heldByTheRuntime reports whether a descriptor number is one the runtime
-// answered for at initialization.
+// answered for at initialization, or the one darwin's signal observer holds
+// for as long as a watch is up (see signalobserver_darwin.go).
 func heldByTheRuntime(fd int) bool {
 	for _, held := range runtimeDescriptors {
 		if fd == held {
 			return true
 		}
 	}
-	return false
+	return heldByTheObserver(fd)
 }
 
 // runtimeDescriptorBand is how far above the ceiling the census looks.

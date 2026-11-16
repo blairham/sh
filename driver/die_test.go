@@ -7,10 +7,12 @@ package driver_test
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"syscall"
@@ -68,6 +70,10 @@ const dyingTailExec = "SH_TEST_DYING_TAIL_EXEC"
 // Semantics.InteractiveIgnoresResourceLimitSignals yes beside it where the
 // alarm is ignored, which is the one dialect that has both.
 const dyingInteractiveAlarm = "SH_TEST_DYING_INTERACTIVE_ALARM"
+
+// dyingProfiled has the shell half run under the CPU profiler, as `make pgo`
+// runs shells, so that the profiler's own PROF ticks arrive the whole time.
+const dyingProfiled = "SH_TEST_DYING_PROFILED"
 
 // dyingHeldWatch holds back the half of the fatal-signal watch a start does
 // not wait for, by heldWatch, in the shell half. See
@@ -193,6 +199,11 @@ func dieRunningAsAShell() {
 	}
 	if os.Getenv(dyingHeldWatch) != "" {
 		driver.HoldTheWatchForTest(heldWatch)
+	}
+	if os.Getenv(dyingProfiled) != "" {
+		if err := pprof.StartCPUProfile(io.Discard); err != nil {
+			os.Exit(3)
+		}
 	}
 	args := []string{"testsh", "-c", src}
 	if os.Getenv(dyingInteractive) != "" {

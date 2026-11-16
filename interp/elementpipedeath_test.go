@@ -86,7 +86,7 @@ func TestAnElementsDeathByThePipeRunsNoOuterHandler(t *testing.T) {
 			copies, wrote int
 		}{
 			{"the reader gone before the write", 1, 0},
-			{"the reader gone part-way through", 2, 2},
+			{"the reader gone part-way through", partWayCopies, 2},
 		} {
 			if n, errOut := elementDeathOuterRuns(t, e.src, c.copies, c.wrote); n != 0 {
 				t.Errorf("%q, %s: the outer handler ran %d times, want never (stderr %q)", e.src, c.name, n, errOut)
@@ -106,7 +106,7 @@ func TestACopyBeyondTheElementsDeathStillRunsTheOuterHandler(t *testing.T) {
 			copies, wrote int
 		}{
 			{"the reader gone before the write", 2, 0},
-			{"the reader gone part-way through", 3, 2},
+			{"the reader gone part-way through", partWayCopies + 1, 2},
 		} {
 			if n, errOut := elementDeathOuterRuns(t, e.src, c.copies, c.wrote); n != e.writes {
 				t.Errorf("%q, %s: the outer handler ran %d times, want %d, once per copy from outside (stderr %q)",
@@ -127,7 +127,7 @@ func TestAPrintfFailingEveryPassRunsTheHandlerOnce(t *testing.T) {
 		copies, wrote int
 	}{
 		{"the reader gone before the write", 1, 0},
-		{"the reader gone part-way through", 2, 2},
+		{"the reader gone part-way through", partWayCopies, 2},
 	} {
 		if n, errOut := outerHandlerRuns(t, `printf '%s\n' a b c`, c.copies, c.wrote); n != 1 {
 			t.Errorf("%s: the handler ran %d times, want once (stderr %q)", c.name, n, errOut)

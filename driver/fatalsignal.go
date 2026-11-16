@@ -63,7 +63,8 @@ import (
 // shell carried on in all fifteen cells (#7046). The watch takes them on and
 // answers them as it answers the throwing class.
 //
-// Three more of that class are not taken, each for a reason of its own:
+// Three more of that class need more than a subscription, each for a reason of
+// its own, and one of them is still not taken:
 //
 //   - PIPE and XFSZ are what the kernel raises at a write of the shell's
 //     *own* — into a pipe nobody reads, or past `ulimit -f` — and a pipeline
@@ -74,10 +75,29 @@ import (
 //     subshell's broken pipe. A shell's own broken pipe, and its own write
 //     past the limit, are answered at the write instead (interp's
 //     writeSignalAbsorbed and filesizedeath.go).
-//   - PROF never reaches os/signal at all: the runtime keeps it for its
-//     profiler and answers it before anything subscribed could be told.
 //
-// So those three still end nothing when another process sends them.
+//     XFSZ is taken all the same, because the kernel raises it at a write
+//     only past a limit, and a process whose RLIMIT_FSIZE has never been
+//     finite has had nothing to write past: every XFSZ it is sent is from
+//     outside. So the watch dies of one only while that is true; see
+//     fileSizeLimitInForce. PIPE has no such condition — any pipe this
+//     process writes can break — so an untrapped PIPE from outside still
+//     ends nothing. Telling the kernel's copy from a sent one needs the
+//     sender's pid, which only a handler written outside Go could read, and
+//     the maintainer decided against one (2026-11-04, #7046).
+//   - PROF never reaches os/signal at all: the runtime keeps it for its
+//     profiler and answers it before anything subscribed could be told. On
+//     darwin a kqueue is told instead and hands it to the watch; on Linux it
+//     is put at the kernel's default while the shell does nothing with it.
+//     See signalobserver_darwin.go and signalobserver_linux.go.
+//
+// Until then none of the three ended this shell. Measured 2026-11-04, bash
+// 5.3, bash 3.2, ksh93, zsh and dash on macOS, and bash 5.2, ksh93u+m, zsh 5.9
+// and dash 0.5.12 on Linux, die of each at 128 plus the number. A shell
+// *started* with XFSZ or PROF ignored now dies of one as well, where those
+// keep the ignore: the disposition a process was born with is overwritten by
+// the runtime before any Go runs, so nothing here can tell, and the maintainer
+// accepted that for these signals as #7060 did for USR1 and the rest (#7055).
 //
 // # A reset puts the watch back
 //
@@ -157,12 +177,12 @@ var fatalSignals = append([]os.Signal{
 // which the runtime catches and drops when nothing has subscribed: a shell
 // sent one from outside carried on as though nothing had happened.
 //
-// PIPE, XFSZ and PROF belong to the class and are left out of it on purpose;
-// see the file comment above. The kernel's own additions are in
-// platformDiscardedSignals.
+// XFSZ is answered only while no file-size limit has been in force, and PIPE
+// and PROF belong to the class and are left out of it on purpose; see the file
+// comment above. The kernel's own additions are in platformDiscardedSignals.
 var discardedSignals = append([]os.Signal{
 	syscall.SIGUSR1, syscall.SIGUSR2, syscall.SIGALRM, syscall.SIGVTALRM,
-	syscall.SIGXCPU,
+	syscall.SIGXCPU, syscall.SIGXFSZ,
 }, platformDiscardedSignals...)
 
 // killingSignals are the ones the runtime itself ends the process with, which
@@ -250,6 +270,10 @@ var fatalWatch struct {
 	// at the start. Nil while there is no watch, and set with ch. See
 	// awaitTheWatch.
 	settled chan struct{}
+	// unobserve ends what observeTheUnforwarded started for this watch, or
+	// is nil. Written by the watch's goroutine before it closes settled, and
+	// read only after a wait on settled.
+	unobserve func()
 }
 
 // KeepFatalSignalWatch keeps the watch for fatal signals up for the rest of
@@ -304,6 +328,14 @@ func letGoOfTheWatch() {
 	// after the stop, on a channel closed here. It is a wait for something
 	// already under way, and once a command has run it has already landed.
 	<-fatalWatch.settled
+	if fatalWatch.unobserve != nil {
+		// First, so nothing the observer passes on afterwards is answered:
+		// on darwin it stops the kqueue, which finds ch gone from the watch
+		// if it was about to hand anything over; on Linux it puts the
+		// runtime's handler for PROF back.
+		fatalWatch.unobserve()
+		fatalWatch.unobserve = nil
+	}
 	signal.Stop(fatalWatch.ch)
 	close(fatalWatch.ch)
 	fatalWatch.ch, fatalWatch.settled, fatalWatch.holding = nil, nil, false
@@ -382,8 +414,9 @@ func watchFatalSignals(r *interp.Runner) {
 		})
 		// Buffered, because os/signal drops an arrival rather than blocking
 		// and there are a dozen and more of these. Nothing here is slow, but
-		// a shell being killed is not the moment to depend on that.
-		ch := make(chan os.Signal, len(fatalSignals)+len(discardedSignals)+len(killingSignals))
+		// a shell being killed is not the moment to depend on that. One more
+		// for the PROF darwin's observer hands over.
+		ch := make(chan os.Signal, len(fatalSignals)+len(discardedSignals)+len(killingSignals)+1)
 		fatalWatch.ch = ch
 		signal.Notify(ch, fatalSignals...)
 		settled := make(chan struct{})
@@ -405,6 +438,13 @@ func watchFatalSignals(r *interp.Runner) {
 				// interp.Semantics.HangupIsAnOrderlyExit.
 				signal.Notify(ch, syscall.SIGHUP)
 			}
+			// What the process was born with, for XFSZ; see
+			// fileSizeLimitInForce.
+			noteTheFileSizeLimit()
+			// And the two os/signal is never told about. Before the join,
+			// like every subscription here: a PROF sent once the shell has
+			// run anything must find the observer, or the default, in place.
+			fatalWatch.unobserve = observeTheUnforwarded(ch)
 			close(settled)
 			for s := range ch {
 				if done, ok := s.(answeredSoFar); ok {
@@ -425,6 +465,12 @@ func watchFatalSignals(r *interp.Runner) {
 					// Ignored by the shell itself, which is not the same as
 					// trapped: no handler runs, and nothing dies. See
 					// interp.Runner.IgnoresUntrapped.
+					continue
+				}
+				if sig == syscall.SIGXFSZ && fileSizeLimitInForce() {
+					// Possibly the kernel's copy of a write of the shell's
+					// own past the limit, which the write answered — a
+					// subshell's, say, which must not end the shell.
 					continue
 				}
 				if held := fatalWatch.held.Load(); sig == syscall.SIGINT && held != nil && (*held)() {
@@ -569,10 +615,36 @@ func holdInterrupts() {
 // before the death, so a subscription here is never itself a death.
 func watchAgain(sig syscall.Signal) {
 	awaitTheWatch()
+	if sig == syscall.SIGPROF {
+		// Not a subscription, which PROF never answers: on Linux the
+		// default again, and on darwin the observer never went away. See
+		// signalobserver_linux.go.
+		fatalWatch.mu.Lock()
+		defer fatalWatch.mu.Unlock()
+		if fatalWatch.ch != nil {
+			profToItsDefault()
+		}
+		return
+	}
 	if fatalWatch.bornIgnoring[sig] || !watched(sig) {
 		return
 	}
 	subscribeTheWatch(sig)
+}
+
+// handleSignal is interp.Runner.HandleSignal for a shell that owns the
+// process: a top-level `trap` with a body for sig.
+//
+// Only PROF needs anything. On Linux it is at the kernel's default while
+// nothing is arranged for it, and a handler set over that default would never
+// see it — the kernel would end the process first. So the runtime's handler
+// goes back, which hears no PROF from outside either, but does not die of one
+// (#7056 leaves that cell open by decision; see signalobserver_linux.go).
+func handleSignal(sig syscall.Signal) {
+	awaitTheWatch()
+	if sig == syscall.SIGPROF {
+		profToTheRuntime()
+	}
 }
 
 // watched reports whether the watch answers sig at all.

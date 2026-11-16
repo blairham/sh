@@ -79,3 +79,40 @@ func TestPutBackLeavesAloneWhatWasLetGo(t *testing.T) {
 		})
 	}
 }
+
+// Deliver hands a signal to every channel that asked for it and to nothing
+// else, without a signal being sent at all: PROF, because os/signal is never
+// told of one and so cannot be what put it there.
+func TestDeliverReachesOnlyWhatAskedForTheSignal(t *testing.T) {
+	asked := make(chan os.Signal, 1)
+	other := make(chan os.Signal, 1)
+	stopped := make(chan os.Signal, 1)
+	sigbook.Notify(asked, syscall.SIGPROF)
+	sigbook.Notify(other, syscall.SIGUSR2)
+	sigbook.Notify(stopped, syscall.SIGPROF)
+	sigbook.Stop(stopped)
+	t.Cleanup(func() { sigbook.Stop(asked); sigbook.Stop(other) })
+
+	sigbook.Deliver(syscall.SIGPROF)
+	select {
+	case got := <-asked:
+		if got != syscall.SIGPROF {
+			t.Errorf("the channel that asked for PROF was handed %v", got)
+		}
+	default:
+		t.Error("the channel that asked for PROF was handed nothing")
+	}
+	select {
+	case got := <-other:
+		t.Errorf("a channel that asked only for USR2 was handed %v", got)
+	default:
+	}
+	select {
+	case got := <-stopped:
+		t.Errorf("a stopped channel was handed %v", got)
+	default:
+	}
+	// A full channel misses the arrival rather than holding up the caller.
+	asked <- syscall.SIGPROF
+	sigbook.Deliver(syscall.SIGPROF)
+}

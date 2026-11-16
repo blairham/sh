@@ -5886,6 +5886,10 @@ type Runner struct {
 	// text facts from its family rather than scanning it, so a test can show
 	// that route is reached. See interp/patternpolicy.go.
 	patternPolicyRouted int
+	// plainKeyReads counts the keys a subscript of one bare `$name` came to by
+	// a single read, so a test can show that route is reached. See
+	// interp/plainkey.go.
+	plainKeyReads int
 	// envNotAdopted names the parameters whose entry in the environment this
 	// shell **did not take over**: the value is the shell's own, the entry
 	// goes to a child as it arrived, and the export the environment brought

@@ -278,6 +278,15 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// a sentence the parentheses write the moment they die. See
 		// bodyinbox.go.
 		//
+		// Nor parentheses that *are* a background job, however the signal
+		// reached them — their own `kill $BASHPID`, a copy's, one taken in
+		// `wait`. `( … ) &` forks once and the parentheses are that fork, so
+		// their death is the job's and the job's notice is the one sentence
+		// it gets: measured 2026-11-04 on bash 5.3.20, `( kill -USR1
+		// $BASHPID; echo after ) & wait $!` writes one notice naming the
+		// parentheses and `kill -TERM` writes none (#7387). See
+		// theForkIsTheParentheses.
+		//
 		// Nor one the shell is dying of as well. A signal the body sent the
 		// group it shares with the shell killed both at once, and a shell
 		// that is dead says nothing about its child. See
@@ -289,7 +298,8 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// settled here, before anything else of this body's runs, rather
 		// than at its next command.
 		dying := r.settleCopiesSignals()
-		if sub.diedOfItsOwnSignal() && !sub.diedAsAJob && !r.dyingOfASubshellsSignal() && !dying {
+		theJob := r.inboxGoesToTheParentheses
+		if sub.diedOfItsOwnSignal() && !sub.diedAsAJob && !theJob && !r.dyingOfASubshellsSignal() && !dying {
 			// The group the body leads is its process id as far as anything
 			// that asked is concerned, and asking is how the script got the
 			// number it signaled — so it is already started and this starts

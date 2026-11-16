@@ -16,3 +16,7 @@ func PlainBuiltinsForTest(r *Runner) int { return r.plainBuiltins }
 // PlainDeclarationLinesForTest is how many declaration lines
 // plainBuiltinCommand ran itself.
 func PlainDeclarationLinesForTest(r *Runner) int { return r.plainDeclarationLines }
+
+// PlainValuedDeclarationLinesForTest is how many of those had a `name=$param`
+// operand.
+func PlainValuedDeclarationLinesForTest(r *Runner) int { return r.plainValuedDeclarationLines }

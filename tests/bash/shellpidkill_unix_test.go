@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/interp"
@@ -394,8 +395,15 @@ func runBashAnchored(t *testing.T, src string) string {
 		Dialect: presetDialect(), ProcessAnchor: []string{anchor},
 	}).SeedVars(map[string]string{"PATH": dir})
 	bash.Apply(r)
-	if _, rerr := r.Run(context.Background(), f); rerr != nil {
+	// Bounded, because these runs signal bodies and a body that misses its
+	// death waits on whatever it was waiting for.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if _, rerr := r.Run(ctx, f); rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("%s: still running after a minute", src)
 	}
 	return out.String() + errs.String()
 }

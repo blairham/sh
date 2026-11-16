@@ -65,23 +65,23 @@ func digest(b []byte) string {
 // distribution, and a shell implementation that must not be unpacked at all.
 func sample() (Suite, map[string]string) {
 	return Suite{
-			Name:     "sample",
-			Dialect:  "bash",
-			Version:  "1.0",
-			Root:     "sample-1.0",
-			Include:  []string{"tests/", "support/recho.c"},
-			Exclude:  []string{".right"},
-			TestDir:  "tests",
-			Ext:      ".tests",
-			ShellVar: "THIS_SH",
-		}, map[string]string{
-			"sample-1.0/tests/a.tests":   "echo a\n",
-			"sample-1.0/tests/a.right":   "a\n",
-			"sample-1.0/tests/lib.sub":   "echo sub\n",
-			"sample-1.0/support/recho.c": "int main(void){return 0;}\n",
-			"sample-1.0/shell.c":         "/* the implementation nobody here may read */\n",
-			"sample-1.0/builtins/echo.c": "/* nor this */\n",
-		}
+		Name:     "sample",
+		Dialect:  "bash",
+		Version:  "1.0",
+		Root:     "sample-1.0",
+		Include:  []string{"tests/", "support/recho.c"},
+		Exclude:  []string{".right"},
+		TestDir:  "tests",
+		Ext:      ".tests",
+		ShellVar: "THIS_SH",
+	}, map[string]string{
+		"sample-1.0/tests/a.tests":   "echo a\n",
+		"sample-1.0/tests/a.right":   "a\n",
+		"sample-1.0/tests/lib.sub":   "echo sub\n",
+		"sample-1.0/support/recho.c": "int main(void){return 0;}\n",
+		"sample-1.0/shell.c":         "/* the implementation nobody here may read */\n",
+		"sample-1.0/builtins/echo.c": "/* nor this */\n",
+	}
 }
 
 func TestUnpackWritesTheSuiteAndNothingElse(t *testing.T) {

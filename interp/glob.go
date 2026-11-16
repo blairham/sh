@@ -875,8 +875,14 @@ func hasUnterminatedPatternGroup(p string, emptyCompiles bool) bool {
 // and a sixth dialect that called an unterminated bracket a bad pattern
 // without taking bare groups would otherwise be asked the wrong question.
 func (r *Runner) badPatternFromAnOpenGroup(p string) bool {
+	return r.badPatternFromAnOpenGroupIn(scanText(p))
+}
+
+// badPatternFromAnOpenGroupIn is badPatternFromAnOpenGroup asked of a
+// pattern's text facts.
+func (r *Runner) badPatternFromAnOpenGroupIn(t patternText) bool {
 	return r.sem().UnterminatedBracket == BracketBadPattern &&
-		r.lang().PatternAlternation && scannedOnce(p, scanOpenGroup, r.emptyBracketCompiles(), hasUnterminatedPatternGroup)
+		r.lang().PatternAlternation && t.leavesGroupOpen(r.emptyBracketCompiles())
 }
 
 func closesBracket(s string, i int, emptyCompiles bool) bool {

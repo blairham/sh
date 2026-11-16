@@ -779,6 +779,13 @@ func planCapturesFor(pattern string, o patternOpts) capturePlan {
 // `$match[1]` empty, which reads as "the group matched nothing" rather than
 // as "this shell does not do backreferences".
 func (r *Runner) extendedPatternOpts(o patternOpts, pattern string, badStatus int) patternOpts {
+	return r.extendedPatternOptsIn(o, scanText(pattern), badStatus)
+}
+
+// extendedPatternOptsIn is extendedPatternOpts for a pattern whose family the
+// caller may already hold, which is then not looked up again.
+func (r *Runner) extendedPatternOptsIn(o patternOpts, t patternText, badStatus int) patternOpts {
+	pattern := t.p
 	if !r.MatchOption(ExtendedPatternOperators) {
 		return o
 	}
@@ -792,7 +799,11 @@ func (r *Runner) extendedPatternOpts(o patternOpts, pattern string, badStatus in
 	var e *programEntry
 	if patternFactsCached {
 		rd := readingOf(&o)
-		e = programs.entry(pattern, &rd)
+		if t.fam != nil {
+			e = programs.entryIn(t.fam, &rd)
+		} else {
+			e = programs.entry(pattern, &rd)
+		}
 		if plan := e.plan.Load(); plan != nil {
 			o.where = &matchWhere{plan: *plan}
 			return o

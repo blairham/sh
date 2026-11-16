@@ -1670,6 +1670,28 @@ func (r *Runner) noticeWaitedSignalIn(j *Job, status int, notice string) {
 // ordinary status cannot reach it once the 256 base is taken off.
 const maxNamedSignal = 64
 
+// collectedBeforeABareWait reports whether a job had been collected before a
+// bare `wait` came to it, which is what decides whether that `wait` reaped it
+// and so whether it says how the job ended. See
+// Semantics.BareWaitReportsASignalDeath.
+//
+// A job with a process of its own was collected once it finished: the
+// process ends when it ends, as the reference's does. A job with none is a
+// body on a goroutine, and it finishes far sooner than any fork could die —
+// `( kill -USR1 $BASHPID ) & wait` ended before the `wait` began, every run,
+// where the reference's fork is still alive when its parent reaches the `wait`
+// and is reported by it. So such a job is collected once the shell has noticed
+// it at a reap, the moment the reference learns of a child's end — see
+// Runner.noticeFinishedJobs. Measured 2026-11-04 on bash 5.3.20: that line
+// writes the row, and `( kill -USR1 $BASHPID ) & /bin/sleep 0.2; wait` does
+// not (#7387).
+func (r *Runner) collectedBeforeABareWait(j *Job) bool {
+	if !j.Finished() {
+		return false
+	}
+	return j.PID != 0 || r.noticedJobs[j]
+}
+
 // biWait waits for background jobs.
 //
 // With no arguments it waits for all of them and reports 0, which is what
@@ -1769,7 +1791,7 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 			if j == nil {
 				continue
 			}
-			endedBefore := j.Finished()
+			endedBefore := r.collectedBeforeABareWait(j)
 			st, sig, hit, stopped := r.waitFor(j)
 			if r.unspecified {
 				return r.status

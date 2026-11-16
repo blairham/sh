@@ -6317,6 +6317,10 @@ func (r *Runner) clone() *Runner {
 	// and nothing a fork runs is the shell's last. See unforkedtail.go.
 	c.tailCmd, c.tailPipe, c.unforkedSelf, c.slotOneIsTheBody = nil, nil, false, false
 	c.tailSubshell = false
+	// And the death an EXIT trap is running ahead of is the shell's that runs
+	// the trap: a copy made inside the body is not dying of it, and an `exit`
+	// it runs is its own. See Runner.exitOverridesTheDeath.
+	c.exitTrapDeath = setAsideDeath{}
 	c.tailPutsNothingBackOnly, c.listOnTheTail = false, false
 	// And a subshell's diagnostics are its own process's in the shells this
 	// one is measured against, which no line editor ever hears about. See
@@ -8079,6 +8083,7 @@ func (r *Runner) runExitTrap(ctx context.Context) (exitedInTheBody bool) {
 		// the signal exactly as it does with no trap at all (#7388).
 		r.status, r.diedOfSig = before, beforeSig
 	}
+	r.copyStillDiesOfTheDeath(before, beforeSig)
 	r.takeTheDeathBack()
 	r.stopTheShell()
 	return exitedInTheBody
@@ -9124,7 +9129,14 @@ func (r *Runner) commandAt(ctx context.Context, c syntax.Command) error {
 		// for a group, a function body or an `if` — and only the subshell
 		// is a job of its own. The Subshell node is recorded here, on the
 		// way in, and the copy inherits it.
-		if !r.inSubshell {
+		//
+		// Except the copy a background job runs in, which is a fork and so
+		// a shell of its own: what it reports is a command *it* ran. It
+		// inherits nothing worth naming — the shell that started it never
+		// recorded the `&` statement, so the copy held whatever that shell
+		// ran last, and a body's `( kill -USR1 $BASHPID )` was reported
+		// with the prelude's last definition written out (#7387).
+		if !r.inSubshell || r.forkedForABackgroundJob {
 			r.killed = c
 		}
 	}

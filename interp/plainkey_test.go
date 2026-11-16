@@ -71,7 +71,12 @@ func plainKeyVectors() map[string]Semantics {
 	whole := quoting
 	whole.ArrayScalarIsTheWholeArray = Yes
 	whole.ArrayNameWithoutSubscriptIsTheList = Yes
-	return map[string]Semantics{"quoting context": quoting, "as written": asWritten, "left open": open, "whole array": whole}
+	return map[string]Semantics{
+		"quoting context": quoting,
+		"as written":      asWritten,
+		"left open":       open,
+		"whole array":     whole,
+	}
 }
 
 // plainKeyRun runs plainKeyScript under sem with the single read held on or

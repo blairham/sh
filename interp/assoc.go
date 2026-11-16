@@ -563,6 +563,11 @@ func (r *Runner) assocKeyRead(e *syntax.ParamExpr) string {
 }
 
 func (r *Runner) assocKeyIn(w *syntax.Word, inDoubleQuotes bool) string {
+	// A key of one bare `$name` holding plain text is that text under both
+	// readings below, read once. See plainKeyValue.
+	if v, ok := r.plainKeyValue(w); ok {
+		return v
+	}
 	// A key is read as a double-quoted string is, as far as one refusal's
 	// wording goes. See readingQuotedText.
 	defer r.readingQuotedText()()

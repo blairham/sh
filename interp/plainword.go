@@ -117,11 +117,19 @@ var plainParamShortcut = true
 // plainParamValue is plainParamWord without the question about IFS, which is
 // the whole of it where the word is not split: an assignment's value.
 func (r *Runner) plainParamValue(w *syntax.Word) (string, bool) {
+	return r.plainParamValueIn(w, false)
+}
+
+// plainParamValueIn is plainParamValue for a word that may be another
+// expansion's subscript, where inSubscript admits an expansion marked as
+// standing in one. See bareShapeIn for why the mark changes nothing about a
+// bare name's read.
+func (r *Runner) plainParamValueIn(w *syntax.Word, inSubscript bool) (string, bool) {
 	if !plainParamShortcut || w == nil || len(w.Spans) != 1 || !r.readsAreOnlyReads() {
 		return "", false
 	}
 	s := &w.Spans[0]
-	if s.Kind != syntax.ParamExp || s.Quoting != syntax.Unquoted || !bareParamOnly(s.Param) {
+	if s.Kind != syntax.ParamExp || s.Quoting != syntax.Unquoted || !bareParamOnlyIn(s.Param, inSubscript) {
 		return "", false
 	}
 	name := s.Param.Name
@@ -185,7 +193,13 @@ func (r *Runner) readsAreOnlyReads() bool {
 // kind of name it is — an identifier, a positional parameter or a special
 // one — is the caller's question.
 func bareParamOnly(e *syntax.ParamExpr) bool {
-	return e != nil && e.Op == syntax.ParamNone && e.Arg == nil && bareShape(e)
+	return bareParamOnlyIn(e, false)
+}
+
+// bareParamOnlyIn is bareParamOnly, admitting an expansion that stands in
+// another's subscript where inSubscript says so.
+func bareParamOnlyIn(e *syntax.ParamExpr, inSubscript bool) bool {
+	return e != nil && e.Op == syntax.ParamNone && e.Arg == nil && bareShapeIn(e, inSubscript)
 }
 
 // bareApartFromTheOperator is bareParamOnly's list with the operator and its
@@ -199,13 +213,26 @@ func bareApartFromTheOperator(e *syntax.ParamExpr) bool {
 // bareShape is the list the two above share: nothing on the expansion but
 // its name and, where the caller admits one, its operator.
 func bareShape(e *syntax.ParamExpr) bool {
+	return bareShapeIn(e, false)
+}
+
+// bareShapeIn is bareShape, admitting an expansion marked as standing in
+// another's subscript where inSubscript says so.
+//
+// The mark is read in three places: the expansion's own subscript read as a
+// key, its own search operand, and a `(P)` nested inside it — see
+// syntax.ParamExpr.InsideASubscript. A bare name has none of the three, so
+// the mark changes nothing about what reading it gives. It is refused unless
+// admitted all the same, because every other caller reads a word that is not
+// a subscript, where the mark never stands.
+func bareShapeIn(e *syntax.ParamExpr, inSubscript bool) bool {
 	if e.Index != nil || e.BareIndexText != nil || e.BareIndexUnclosed ||
 		e.Length || e.Indirect || e.Prefix != 0 || e.Member != "" || e.Inner != nil ||
 		e.Arg2 != nil || e.OperandUnreadable != nil ||
 		e.RawTail != "" || e.Transform != 0 || e.HasFlags || e.QuoteModifier != 0 ||
 		e.IndexFlags != nil || e.IndexRange != nil || e.IndexDots != nil || len(e.Leading) > 0 ||
 		e.TildeFlags != 0 || e.SplitFlags != 0 || e.RcExpandFlags != 0 || e.SetTest ||
-		e.Bad || e.BadTransform || e.RefusedAtExpansion != nil || e.InsideASubscript {
+		e.Bad || e.BadTransform || e.RefusedAtExpansion != nil || (e.InsideASubscript && !inSubscript) {
 		return false
 	}
 	return true

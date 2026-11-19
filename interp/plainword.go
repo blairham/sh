@@ -125,10 +125,19 @@ func (r *Runner) plainParamValue(w *syntax.Word) (string, bool) {
 // standing in one. See bareShapeIn for why the mark changes nothing about a
 // bare name's read.
 func (r *Runner) plainParamValueIn(w *syntax.Word, inSubscript bool) (string, bool) {
-	if !plainParamShortcut || w == nil || len(w.Spans) != 1 || !r.readsAreOnlyReads() {
+	if w == nil || len(w.Spans) != 1 || !r.readsAreOnlyReads() {
 		return "", false
 	}
-	s := &w.Spans[0]
+	return r.plainParamSpan(&w.Spans[0], inSubscript)
+}
+
+// plainParamSpan is plainParamValueIn's read of the word's one span, for a
+// caller that has already asked readsAreOnlyReads: an assignment's value made
+// of more than one span reads each of its expansions here (plainAssignValue).
+func (r *Runner) plainParamSpan(s *syntax.Span, inSubscript bool) (string, bool) {
+	if !plainParamShortcut {
+		return "", false
+	}
 	if s.Kind != syntax.ParamExp || s.Quoting != syntax.Unquoted || !bareParamOnlyIn(s.Param, inSubscript) {
 		return "", false
 	}

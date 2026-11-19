@@ -2007,6 +2007,11 @@ func (r *Runner) expandAssignValue(w *syntax.Word) string {
 	if v, ok := r.plainArithValue(w); ok {
 		return v
 	}
+	// And a value that is only plain text, bare reads and their lengths,
+	// which none of the passes below would change. See plainassign.go.
+	if v, ok := r.plainAssignValue(w); ok {
+		return v
+	}
 	// The colon closes this word's leading tilde prefix as well as opening
 	// the ones expandColonTildes answers for — `foo=~:~` is two homes in
 	// every column — so the assignment road names its own set.

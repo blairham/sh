@@ -35,3 +35,16 @@ func SetPlainArithShortcutForTest(on bool) (was bool) {
 // PlainStoreHandedOnForTest is how many assignments the plain store handed to
 // the full road after expanding their value.
 func PlainStoreHandedOnForTest(r *Runner) int { return r.plainStoreHandedOn }
+
+// SetPlainAssignValueShortcutForTest switches plainAssignValue on or off and
+// returns what it was, so a test can run the same script both ways.
+func SetPlainAssignValueShortcutForTest(on bool) (was bool) {
+	was, plainAssignValueShortcut = plainAssignValueShortcut, on
+	return was
+}
+
+// PlainAssignValueForTest is plainAssignValue, for a test that has to show the
+// route is reached at all.
+func PlainAssignValueForTest(r *Runner, w *syntax.Word) (string, bool) {
+	return r.plainAssignValue(w)
+}

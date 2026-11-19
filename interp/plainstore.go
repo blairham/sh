@@ -157,10 +157,12 @@ func (r *Runner) valueOnlyReads(w *syntax.Word) bool {
 				if r.plainTrimOf(s) || r.plainArithOf(s) {
 					return true
 				}
-				_, ok := r.plainParamValue(w)
-				return ok
+				if _, ok := r.plainParamValue(w); ok {
+					return true
+				}
 			}
-			return false
+			_, ok := r.plainAssignValue(w)
+			return ok
 		}
 	}
 	return true

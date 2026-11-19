@@ -12266,12 +12266,13 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 	for {
 		var err error
 		w, err = r.awaitForegroundCommand(pid)
-		if errors.Is(err, errAbandonedForADeath) {
-			// Given up for a fatal signal from outside, with the program
-			// still running: nothing is reported and nothing set, and the
-			// shell takes the death at its next command, showing its EXIT
-			// trap the status this command began with. What the program
-			// writes from here is nobody's. See outsidedeath.go.
+		if errors.Is(err, errAbandonedForADeath) || errors.Is(err, errAbandonedForACopysSignal) {
+			// Given up for a fatal signal from outside, or one a copy aimed
+			// at the body this runs in, with the program still running:
+			// nothing is reported and nothing set, and the shell takes the
+			// death at its next command, showing its EXIT trap the status
+			// this command began with. What the program writes from here is
+			// nobody's. See outsidedeath.go and waitinabody.go.
 			detach()
 			return nil
 		}
@@ -17437,8 +17438,11 @@ func (r *Runner) awaitForegroundCommand(pid int) (Wait, error) {
 	r.aProgramLetsAHeldDeathGo()
 	note := r.jobNoticeWake()
 	dying := r.abandonsForADeath()
+	// And a copy's fatal signal to the body this program runs in. See
+	// waitinabody.go.
+	copied := r.copysDeathWake()
 	wait := r.WaitForCommand
-	if note == nil && dying == nil {
+	if note == nil && dying == nil && copied == nil {
 		return wait(pid)
 	}
 	type answer struct {
@@ -17465,6 +17469,10 @@ func (r *Runner) awaitForegroundCommand(pid int) (Wait, error) {
 			}
 			r.waitAbandonedForADeath()
 			return Wait{}, errAbandonedForADeath
+		case <-copied:
+			if r.aCopysSignalEndsThisBody() {
+				return Wait{}, errAbandonedForACopysSignal
+			}
 		}
 	}
 }

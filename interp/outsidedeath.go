@@ -602,9 +602,10 @@ func (r *Runner) waitAbandonedForADeath() syscall.Signal {
 // detector reported on the first run of the substitution row (#7054). Cut off,
 // what the program writes afterwards is dropped, as a reference's output is
 // that nobody is left to read. Where nothing could be given up the streams are
-// left exactly as they were.
+// left exactly as they were. A copy's fatal signal to the body gives a wait up
+// the same way (see waitinabody.go), so it cuts the streams off too.
 func (r *Runner) outputsDetachedOnADeath(cmd *exec.Cmd) (detach func()) {
-	if r.abandonsForADeath() == nil {
+	if r.abandonsForADeath() == nil && r.copysDeathWake() == nil {
 		return func() {}
 	}
 	var cut []*detachableWriter

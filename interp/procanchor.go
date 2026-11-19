@@ -165,6 +165,17 @@ func (a *procAnchor) group() (int, bool) {
 	return a.pgid, true
 }
 
+// numbered reports that this body has a group of its own, which is what a
+// script must have been given before it can aim at the body by number.
+func (a *procAnchor) numbered() bool {
+	if a == nil {
+		return false
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.pgid > 0
+}
+
 // existing is the group only if there already is one, so that starting a
 // command never starts an anchor. A command the body runs joins the group the
 // body asked for; it does not ask for one on the body's behalf.

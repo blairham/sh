@@ -181,3 +181,79 @@ func TestACopysUntrappedSignalEndsTheBodysWait(t *testing.T) {
 		}
 	}
 }
+
+// The same signal while the body runs a foreground program rather than sitting
+// in `wait` ends the body as it arrives too, and leaves the program running
+// (#7389). Measured 2026-11-18 under `-c`, each shell in a process group of its
+// own: bash 5.3.20 with `$BASHPID` and zsh 5.9.2 with `$sysparams[pid]` end the
+// body at 0.11 s with 128+N, the EXIT trap run in bash alone; this shell ended
+// it once the program had. A trapped signal is the other half: bash runs the
+// handler once the program ends, so it is waited out, and so is an ignored
+// one. See interp/waitinabody.go.
+func TestACopysUntrappedSignalEndsTheBodysProgram(t *testing.T) {
+	usr1 := strconv.Itoa(128 + int(syscall.SIGUSR1))
+	term := strconv.Itoa(128 + int(syscall.SIGTERM))
+	for _, dialect := range []string{"bash", "zsh"} {
+		pre, pid := "", "$BASHPID"
+		if dialect == "zsh" {
+			pre, pid = "zmodload zsh/system; ", "$sysparams[pid]"
+		}
+		// The body: a copy that aims sig at it, then a foreground program
+		// that runs for run, its output away from the pipe the test reads so
+		// that the program left running does not hold that pipe open, then
+		// the rest of the body.
+		body := func(sig, run, rest string) string {
+			return `p=` + pid + `; ( /bin/sleep 0.1; kill -` + sig + ` $p ) & /bin/sleep ` + run +
+				` >/dev/null 2>&1; ` + rest
+		}
+		killed := func(st string) string { return "st=" + st + "\n" }
+		died := killed(usr1)
+		exitTrap := ""
+		if dialect == "bash" {
+			exitTrap = "E\n"
+		}
+		for _, c := range []struct {
+			name, src, want string
+			// fast is whether the body must end well before the program
+			// does; a row that is not fast must take at least it.
+			fast bool
+		}{
+			{"USR1", `( ` + body("USR1", "2", `echo after`) + ` ); echo st=$?`, died, true},
+			{"TERM", `( ` + body("TERM", "2", `echo after`) + ` ); echo st=$?`, killed(term), true},
+			{
+				"an EXIT trap in the body",
+				`( trap "echo E" EXIT; ` + body("USR1", "2", `echo after`) + ` ); echo st=$?`,
+				exitTrap + died, true,
+			},
+			{"the program the body's last command", `( ` + body("USR1", "2", ``) + ` ); echo st=$?`, died, true},
+			// The controls: trapped, the handler runs once the program ends;
+			// ignored, it is waited out.
+			{
+				"trapped", `( trap "echo U" USR1; ` + body("USR1", "0.5", `echo after`) + ` ); echo st=$?`,
+				"U\nafter\nst=0\n", false,
+			},
+			{
+				"ignored", `( trap "" USR1; ` + body("USR1", "0.5", `echo after`) + ` ); echo st=$?`,
+				"after\nst=0\n", false,
+			},
+		} {
+			t.Run(dialect+"/"+c.name, func(t *testing.T) {
+				began := time.Now()
+				ws, out, errs := runInAGroup(t, dialect, pre+c.src)
+				took := time.Since(began)
+				if ws.Signaled() || ws.ExitStatus() != 0 {
+					t.Errorf("ended %v, want an exit at 0 (stderr %q)", ws, errs)
+				}
+				if out != c.want {
+					t.Errorf("wrote %q, want %q (stderr %q)", out, c.want, errs)
+				}
+				if c.fast && took > 1500*time.Millisecond {
+					t.Errorf("took %v, want under 1.5s: the body waited for its program", took)
+				}
+				if !c.fast && took < 500*time.Millisecond {
+					t.Errorf("took %v, want at least 0.5s: the program's wait was cut short", took)
+				}
+			})
+		}
+	}
+}

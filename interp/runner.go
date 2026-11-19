@@ -4401,6 +4401,13 @@ type Runner struct {
 	// one. Innermost wins, which is what the shell prints: a command inside
 	// a function is reported as itself and not as the call.
 	killed syntax.Command
+	// parensFork is the `( … )` this runner is the copy of, and parensTail
+	// the command its list ends on — the one a fork would have exec'd. Set
+	// only on a parentheses' own copy, and cleared in every copy made from
+	// it, since a pipeline element or a substitution inside is not the
+	// parentheses. See Runner.recordKilled.
+	parensFork *syntax.Subshell
+	parensTail syntax.Command
 	// signals is the signal-trap machinery, behind a pointer because clone
 	// copies a Runner by value and a mutex cannot be copied — the race
 	// detector says so, and it is right: handlers belong to the process, not
@@ -6325,6 +6332,9 @@ func (r *Runner) clone() *Runner {
 	// and nothing a fork runs is the shell's last. See unforkedtail.go.
 	c.tailCmd, c.tailPipe, c.unforkedSelf, c.slotOneIsTheBody = nil, nil, false, false
 	c.tailSubshell = false
+	// And the parentheses a copy was forked as are its own: see
+	// Runner.parensFork.
+	c.parensFork, c.parensTail = nil, nil
 	// And the death an EXIT trap is running ahead of is the shell's that runs
 	// the trap: a copy made inside the body is not dying of it, and an `exit`
 	// it runs is its own. See Runner.exitOverridesTheDeath.
@@ -9140,24 +9150,8 @@ func (r *Runner) commandAt(ctx context.Context, c syntax.Command) error {
 	if c != nil {
 		// And what the command *is*, for the one message that says a
 		// command back rather than naming it: a signal that ends one is
-		// reported with the command written out.
-		//
-		// Not updated inside a copy, because the *job* is what that message
-		// names and the copy is running one. Measured: the dialect that
-		// prints the command back says `( cmd )` for a subshell and `cmd`
-		// for a group, a function body or an `if` — and only the subshell
-		// is a job of its own. The Subshell node is recorded here, on the
-		// way in, and the copy inherits it.
-		//
-		// Except the copy a background job runs in, which is a fork and so
-		// a shell of its own: what it reports is a command *it* ran. It
-		// inherits nothing worth naming — the shell that started it never
-		// recorded the `&` statement, so the copy held whatever that shell
-		// ran last, and a body's `( kill -USR1 $BASHPID )` was reported
-		// with the prelude's last definition written out (#7387).
-		if !r.inSubshell || r.forkedForABackgroundJob {
-			r.killed = c
-		}
+		// reported with the command written out. See Runner.recordKilled.
+		r.recordKilled(c)
 	}
 	// The input a pipeline's pipe replaced reaches this command's *words*
 	// and no further. A compound command's body, a function's body and an

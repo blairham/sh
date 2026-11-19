@@ -152,6 +152,9 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		// this is the boundary the panel splits over: a command substitution
 		// and a pipeline element are subshells too and neither is one.
 		sub.subshellLoopFloor = sub.loopDepth
+		// And what the copy is, for the notice a child it starts dies with.
+		// See Runner.recordKilled.
+		sub.parensFork, sub.parensTail = c, tailCommandOf(c.List)
 		// And where the parentheses close, which is where this dialect
 		// reports a refusal raised by a definition inside them — measured, and
 		// not the line of the statement the parentheses sit in. Recorded here

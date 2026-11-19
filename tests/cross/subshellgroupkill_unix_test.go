@@ -155,11 +155,12 @@ func TestASubshellThatSignalsItsOwnGroupDiesOfIt(t *testing.T) {
 		},
 		{
 			// The notice is the inner parentheses', written by the outer
-			// ones, and is not what this row is about: see unchecked.
+			// ones, which report a child they start as that child (#7310).
 			"a subshell around it with a handler of its own",
-			trapped + `( trap 'echo S' USR1; (kill -USR1 0; echo in2); echo in1 ); echo out=$?`, "",
+			trapped + `( trap 'echo S' USR1; (kill -USR1 0; echo in2); echo in1 ); echo out=$?`,
+			"( kill -USR1 0; echo in2 )",
 			map[string]want{
-				"bash": {"S\nin1\nT\nout=0\n", unchecked},
+				"bash": {"S\nin1\nT\nout=0\n", "bare"},
 				"zsh":  {"S\nin1\nT\nout=0\n", ""},
 				"dash": {"S\nin1\nT\nout=0\n", "words"},
 			},

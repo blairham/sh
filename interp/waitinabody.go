@@ -3,7 +3,10 @@
 
 package interp
 
-import "syscall"
+import (
+	"errors"
+	"syscall"
+)
 
 // A trapped signal that reaches a **body** sitting in `wait` cuts the wait
 // short there exactly as it does at the top level: `wait` returns 128+N at
@@ -122,6 +125,57 @@ func (r *Runner) anArrivalEndsABodysWait() (syscall.Signal, bool) {
 		}
 	}
 	return 0, false
+}
+
+// **And a copy's untrapped fatal signal ends a body's wait for a foreground
+// program the same way** (#7389). The program's wait listened for a death from
+// outside and nothing else, so the body went on waiting for the program and
+// died of the copy's signal only once the program ended. Every reference ends
+// the body as the signal arrives and leaves the program running, as a process
+// whose parent died: the copy aimed at the body's number, not at the program.
+// Measured 2026-11-18 under `-c`, each shell in a process group of its own,
+// the body's pid from `$BASHPID` or `$sysparams[pid]`, the time being when
+// `st=` was written:
+//
+//	( p=<pid>; ( sleep 0.1; kill -USR1 $p ) & sleep 0.5; echo after ); echo st=$?
+//	        st=158 at 0.11 s in bash 5.3.20 and zsh 5.9.2, with bash's
+//	        notice; here, before: st=158 at 0.52 s
+//	… trap 'echo E' EXIT in the body
+//	        E, st=158 at 0.12 s in bash; here, before: at 0.52 s
+//
+// So the wait is given up exactly as for a death from outside, and the body
+// takes the death at the moment right after it, through settleCopiesSignals.
+// Only for an arrival the body dies of (endsThisBody): a trapped one waits for
+// the program in bash, which runs the handler once it ends, and an ignored one
+// is nothing to wait for.
+
+// errAbandonedForACopysSignal is a foreground program's wait given up for a
+// signal a copy of the body aimed at it, which the body dies of at its next
+// moment between commands.
+var errAbandonedForACopysSignal = errors.New("abandoned for a copy's fatal signal")
+
+// copysDeathWake is what a body's wait for a foreground program selects on
+// for an arrival from a copy, and nil where no copy can have aimed at this
+// body by its number: it is not a body, or it has ended, or nothing ever gave
+// its number out. See aimedAtThisBody.
+func (r *Runner) copysDeathWake() <-chan struct{} {
+	p := r.process
+	if p == nil || p.ended() || !p.anchor.numbered() {
+		return nil
+	}
+	return p.wake
+}
+
+// aCopysSignalEndsThisBody reports that a copy has left this body a signal
+// it dies of.
+func (r *Runner) aCopysSignalEndsThisBody() bool {
+	if !r.copiesSignaled() {
+		return false
+	}
+	_, ok := r.process.firstArrival(func(a bodyArrival) bool {
+		return r.endsThisBody(a.name, a.sig)
+	})
+	return ok
 }
 
 // bodysWakes are what is poked as an arrival reaches one of this body's

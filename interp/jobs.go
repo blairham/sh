@@ -1096,6 +1096,11 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		// here, before the status the shell will report for it is read.
 		sub.endSubshell(ctx)
 		status, endSig = sub.status, sub.diedOfSig
+		if endSig != 0 && !sub.diedAsTheJob(st) {
+			// A command the body ran died, and the body did not: its
+			// status is 128+N and nothing more. See Runner.diedAsTheJob.
+			endSig = 0
+		}
 	}, func() {
 		// A child of this shell has ended, which is what a `&` starts
 		// wherever it is backed by a process and wherever it is not. On the

@@ -198,6 +198,39 @@ func (r *Runner) recordKilled(c syntax.Command) {
 	}
 }
 
+// diedAsTheJob reports whether the signal a background job's body last saw a
+// command die of is the job's own death: the body died of it itself, or the
+// command was the statement's tail, which the job's fork would have exec'd and
+// so was. Any other command is a child the fork ran and reported, and the
+// fork then exits with its status as an ordinary one (#7417).
+//
+// Measured 2026-11-19 under `-c`, the shell in a process group of its own,
+// against GNU bash 5.3.20, each with `wait $!; echo st=$?` after it:
+//
+//	( kill -USR1 $BASHPID; echo a ) &            one notice, the job's; st=158
+//	{ ( kill -USR1 $BASHPID; echo a ); } &       one notice, the body's; st=158
+//	( kill -USR1 $BASHPID; echo a ) && echo b &  the same
+//	f() { ( kill -USR1 $BASHPID ); }; f &        the same
+//	{ ( kill -USR1 $BASHPID ); echo x; } &       the same, and st=0
+//
+// where this shell wrote a second, job-level notice on the second to fourth
+// rows, naming the whole statement: the job was taken as having died of the
+// signal its last command died of. A pipeline of more than one element has no
+// single tail, and is left as it was.
+//
+// Only parentheses. A *program* a job's body ran is a different question in
+// bash, which execs one at the tail of a function the job calls (`f() { prog;
+// }; f &` dies as the job, its notice naming `f`) and not inside a group
+// (`{ prog; } &` is the body's notice, naming the program). Those rows are
+// answered as they were.
+func (r *Runner) diedAsTheJob(st *syntax.Stmt) bool {
+	if _, parens := r.killed.(*syntax.Subshell); !parens || r.killedBySig != 0 {
+		return true
+	}
+	tail, _ := forkTailOf(st)
+	return tail == nil || r.killed == tail
+}
+
 // killedCommandText is the command written back out.
 //
 // Printed from the tree rather than quoted from the source, which is what the

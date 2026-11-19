@@ -73,6 +73,42 @@ func TestAJobKilledFromInsideGetsOneNoticeNamingWhatRan(t *testing.T) {
 			`f() { ( kill -USR1 $BASHPID ); echo f=$?; }; f & wait $!; echo st=$?`,
 			`( kill -USR1 $BASHPID )`, "f=" + usr1 + "\nst=0\n",
 		},
+		// A body that *ends* with the parentheses exits with their 128+N as a
+		// status, and the job is not a death of its own: one notice, the
+		// body's, and not a second for the job (#7417).
+		{
+			"parentheses ending a group job",
+			`{ ( kill -USR1 $BASHPID; echo a ); } & wait $!; echo st=$?`,
+			`( kill -USR1 $BASHPID; echo a )`, "st=" + usr1 + "\n",
+		},
+		{
+			"parentheses ending a group job, a bare wait",
+			`{ ( kill -USR1 $BASHPID ); } & wait; echo st=$?`,
+			`( kill -USR1 $BASHPID )`, "st=0\n",
+		},
+		{
+			"parentheses on the left of an and-or job",
+			`( kill -USR1 $BASHPID; echo a ) && echo b & wait $!; echo st=$?`,
+			`( kill -USR1 $BASHPID; echo a )`, "st=" + usr1 + "\n",
+		},
+		{
+			"parentheses ending a function job",
+			`f() { ( kill -USR1 $BASHPID ); }; f & wait $!; echo st=$?`,
+			`( kill -USR1 $BASHPID )`, "st=" + usr1 + "\n",
+		},
+		// And the two shapes beside them that are still the job's death: the
+		// body killed by the copy it ran last, and a program a function job
+		// ends with, which bash execs, so the notice is the job's.
+		{
+			"a body its last parentheses kill",
+			`{ p=$BASHPID; ( kill -USR1 $p ); } & wait $!; echo st=$?`,
+			`{ p=$BASHPID; ( kill -USR1 $p ); }`, "st=" + usr1 + "\n",
+		},
+		{
+			"a program ending a function job",
+			`f() { /bin/sh -c 'kill -USR1 $$'; }; f & wait $!; echo st=$?`,
+			`f`, "st=" + usr1 + "\n",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, errs := runBashCWithin(t, tc.src)

@@ -150,6 +150,54 @@ func (r *Runner) killedNotice(sig syscall.Signal, pid int, command string) {
 	r.diagf("%s\n", notice)
 }
 
+// recordKilled notes c as the command a killed notice would write back.
+//
+// The shell at the top records every command, and innermost wins: a command
+// inside a function is reported as itself and not as the call.
+//
+// A copy records what it runs only where it is a fork of its own, because the
+// notice names the *job* and a copy that is not a fork is running the one its
+// parent recorded on the way in. Two copies are forks:
+//
+//   - The copy a background job runs in. The shell that started it never
+//     recorded the `&` statement, so the copy held whatever that shell ran
+//     last, and a body's `( kill -USR1 $BASHPID )` was reported with the
+//     prelude's last definition written out (#7387).
+//   - The copy `( … )` runs in, which reports a child it starts as that child
+//     — except the one command its fork would have exec'd, where the fork
+//     *is* the child and the notice names the parentheses (#7310, #7420).
+//     That command is the list's tail, with no trap holding an action that
+//     would keep the fork standing.
+//
+// Measured 2026-11-19 under `-c` against GNU bash 5.3.20, with K standing for
+// `/bin/sh -c 'kill -USR1 $$'`:
+//
+//	( K )                              ( K )        the fork became K
+//	( true && K )                      ( true && K )
+//	( K; echo x )                      K            not the tail
+//	( if true; then K; fi )            K            the tail is inside an if
+//	( { K; } )                         K            or a group
+//	( trap 'echo t' USR2; K )          K            a trap keeps the fork
+//	( trap 'echo t' EXIT; K )          K
+//	( ( K ); echo x )                  ( K )        the inner parentheses
+//	( ( kill -USR1 $BASHPID ); echo )  ( kill -USR1 $BASHPID )
+//
+// where this shell named the outer parentheses on every row the first does
+// not (#7310). A `$( … )` and a pipeline element are copies too and are left
+// as they were.
+func (r *Runner) recordKilled(c syntax.Command) {
+	switch {
+	case !r.inSubshell || r.forkedForABackgroundJob:
+		r.killed = c
+	case r.parensFork != nil:
+		if c == r.parensTail && !r.holdsATrapWithAnAction() {
+			r.killed = r.parensFork
+			return
+		}
+		r.killed = c
+	}
+}
+
 // killedCommandText is the command written back out.
 //
 // Printed from the tree rather than quoted from the source, which is what the

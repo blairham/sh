@@ -267,6 +267,32 @@ func TestExitTrapAfterAFatalSignalIsAnAxis(t *testing.T) {
 	}
 }
 
+// TestAKillDeathRunsNoExitTrapWhateverTheAxisSays is the one named signal the
+// axis above does not reach: KILL cannot be caught, so no column runs an EXIT
+// trap for it, the two that run one for every other named signal included
+// (#7144). TERM beside it is the control: the same axis still runs the trap.
+func TestAKillDeathRunsNoExitTrapWhateverTheAxisSays(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		sig  syscall.Signal
+		want string
+	}{
+		{"KILL", syscall.SIGKILL, ""},
+		{"TERM", syscall.SIGTERM, "bye\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			src := "trap 'echo bye' EXIT\nkill -" + tt.name + " $$\necho after\n"
+			out, _, st := killRun(t, src, killSem(), Diagnostics{})
+			if out != tt.want {
+				t.Errorf("got %q, want %q", out, tt.want)
+			}
+			if want := 128 + int(tt.sig); st != want {
+				t.Errorf("status: got %d, want %d", st, want)
+			}
+		})
+	}
+}
+
 // TestDieBySignalIsAskedLast checks the order: the script stops, the EXIT trap
 // runs, and only then is the process asked to end.
 func TestDieBySignalIsAskedLast(t *testing.T) {

@@ -7933,6 +7933,17 @@ func (r *Runner) exitTrapSkippedByADeath() bool {
 	if r.killedBy == "" {
 		return true
 	}
+	// Nor does a shell killed by KILL, in any column, and that is core too:
+	// KILL cannot be caught, so a real shell is gone before anything of its
+	// own could run. Measured 2026-10-30 with `trap 'echo "bye $?"' EXIT;
+	// (exit 7); kill -KILL $$; echo after` under `-c`, each shell in a
+	// process group of its own: bash 5.3.20, bash 3.2.57, ksh93u+, zsh 5.9.2
+	// and dash all print nothing and end at 137, where this shell printed
+	// `bye 137` in the two dialects that run the trap for a named signal
+	// (#7144).
+	if r.killedBySig == syscall.SIGKILL {
+		return true
+	}
 	// A shell that was killed rather than ended is a two-two split: bash and
 	// ksh93 treat dying as exiting and run the trap, dash and zsh do not.
 	// Asked only where there is a trap and a death to disagree about — and

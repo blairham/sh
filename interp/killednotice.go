@@ -271,6 +271,14 @@ func (r *Runner) killedCommandText() string {
 	// `{ ( kill $BASHPID; echo sender-ran-on ); }`, which is not what was
 	// measured and not a listing of anything.
 	l.BodyIsAlwaysBraced = false
+	// And a declaration in it is a nested one, never a script's own: the
+	// command that died holds it, so it is spelled the way a definition
+	// inside a listed body is, which is the function listing's header and
+	// not the script listing's. Measured 2026-11-19 on bash 5.3.20, `( f() {
+	// :; }; kill -USR1 $BASHPID )` writes `( function f () …` in its notice,
+	// as `declare -f` writes a nested definition, where the whole-script
+	// listing writes a declaration at its top `f () ` (#7419).
+	l.FunctionHeader = r.functionLayout.FunctionHeader
 	return syntax.PrintWith(r.killed, l)
 }
 

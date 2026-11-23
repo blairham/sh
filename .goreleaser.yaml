@@ -141,6 +141,11 @@ notarize:
 checksum:
   name_template: 'checksums.txt'
 
+# The tarball the Homebrew formula's `url` points at, for building from source
+# (see `homebrew_bottles` below).
+source:
+  enabled: true
+
 # Keyless cosign signatures, from the release workflow's own GitHub identity:
 # no key to store or leak, and the certificate names the exact workflow and tag
 # that produced the release. Signing checksums.txt covers every archive, since
@@ -178,24 +183,39 @@ changelog:
   format: '{{ .Message }}'
 
 # A formula, like everything else in blairham/homebrew-tap — the tap has only
-# Formula/. GoReleaser marks `brews` deprecated in favor of `homebrew_casks`,
-# with no announced removal date; the reason to stay is the tap's shape, and a
-# cask would also quarantine every binary it downloads, which for a shell means
-# Gatekeeper refusing the thing `chsh` was just pointed at.
+# Formula/ — and one that works the way homebrew-core's do: it builds from the
+# release's source archive (`source:` below, so `brew install -s` works) and
+# pours bottles made from the release's darwin and linux binaries, so a plain
+# `brew install` compiles nothing. GoReleaser's `brews` wrote a formula that
+# only downloaded the prebuilt archive and is deprecated in favor of
+# `homebrew_casks`; a cask would quarantine every binary it downloads, which
+# for a shell means Gatekeeper refusing the thing `chsh` was just pointed at.
+# `homebrew_bottles` comes from blairham/goreleaser
+# (goreleaser/goreleaser#7342), which release.yml and ci.yml select with
+# `goreleaser-ref`; the official binary refuses this section.
 #
-# **It puts no shell into `bin`, on purpose.** `bin.install "bash"` would put a
-# file called `bash` in Homebrew's bin, which is ahead of /bin on the PATH of
-# every machine that has Homebrew — so `brew install sh` would silently take
-# over the system shells for every script on the machine, and undoing it would
-# need the shell it had just replaced. All six land in the keg's libexec, which
-# is off PATH, and the caveats say how to reach it. That is the same decision
-# `make install` makes, for the same reason.
+# There is no `install:`. The default one rebuilds each bottled binary with
+# `go build`, the build's main and ldflags and CGO_ENABLED=0, straight to the
+# `dst` given under `bottles.binaries`, so the source build and the bottle lay
+# the keg out from the one list below and cannot disagree about it.
+#
+# **It puts no shell into `bin`, on purpose.** A `bash` in the keg's bin would
+# be linked into Homebrew's bin, which is ahead of /bin on the PATH of every
+# machine that has Homebrew — so `brew install sh` would silently take over the
+# system shells for every script on the machine, and undoing it would need the
+# shell it had just replaced. All six land in the keg's libexec, which is off
+# PATH, and the caveats say how to reach it. That is the same decision `make
+# install` makes, for the same reason.
 #
 # `shfmt` is the exception and does go into `bin` — see the note on
-# `bin.install "shfmt"` below. The rule is about names resolved *implicitly*,
-# and nothing resolves a formatter that way.
-brews:
+# `bottles.binaries` below. The rule is about names resolved *implicitly*, and
+# nothing resolves a formatter that way.
+homebrew_bottles:
   - name: sh
+    # Every binary the build produces, `ash` included: a bottle carries only
+    # the builds named here, and the `test` below is what fails a release whose
+    # keg is quietly missing a shell the caveats promise by name.
+    ids: [sh, bash, zsh, ksh, dash, ash, shfmt]
     repository:
       owner: blairham
       name: homebrew-tap
@@ -204,35 +224,45 @@ brews:
     homepage: https://github.com/blairham/sh
     description: A shell parser, interpreter and formatter in Go, with bash, zsh, ksh, dash and ash dialects
     license: Apache-2.0
-    # See the note on `bin.install "shfmt"` below. Declared rather than left to
-    # Homebrew's symlink failure, so the error names the other formula.
+    # See the note on `shfmt` under `bottles.binaries` below. Declared rather
+    # than left to Homebrew's symlink failure, so the error names the other
+    # formula.
     conflicts: [shfmt]
-    install: |
-      # Every shell in the archive, `ash` included. An explicit list is what
-      # dropped it once already: the archive carries all six, and
-      # `libexec.install` silently skips the name it was not given, so the keg
-      # came out missing a shell the caveats below promise by name.
-      libexec.install "sh", "bash", "zsh", "ksh", "dash", "ash"
-      # **`shfmt` goes into `bin`, and it is the one binary here that should.**
-      # The rule above is about names that are *resolved implicitly*: a `bash`
-      # ahead of `/bin` on PATH answers for every shebang, every `system()` and
-      # every `chsh` on the machine. Nothing resolves a formatter that way — it
-      # is only ever called by name, on purpose, by an editor, a pre-commit hook
-      # or a Makefile, and every one of those is a caller that cannot be handed
-      # a keg-internal path. A formatter behind `opt_libexec` is a formatter
-      # nothing calls.
-      #
-      # The real hazard is the other formula: homebrew-core ships mvdan.cc/sh's
-      # `shfmt`, which wants the same `bin/shfmt`. `conflicts:` below declares
-      # that, so Homebrew refuses with a sentence naming both formulas instead
-      # of the bare "Could not symlink bin/shfmt" that silence produces.
-      bin.install "shfmt"
-      # Not into libexec beside the binaries. The function search is
-      # `<prefix>/share/sh/site-functions` then `<prefix>/share/sh/functions`,
-      # and the prefix a binary in the keg's libexec derives is the keg — so
-      # this is the directory the shell will actually look in, and
-      # `share/sh/site-functions` is left for whatever a person installs later.
-      (share/"sh").install "share/sh/functions"
+    bottles:
+      binaries:
+        # The six shells, into the keg's libexec: off PATH, named by their
+        # full path. See the note above `homebrew_bottles:`.
+        - {name: sh, dst: libexec/sh}
+        - {name: bash, dst: libexec/bash}
+        - {name: zsh, dst: libexec/zsh}
+        - {name: ksh, dst: libexec/ksh}
+        - {name: dash, dst: libexec/dash}
+        - {name: ash, dst: libexec/ash}
+        # **`shfmt` is not listed, so it takes the default `bin/shfmt`, and it
+        # is the one binary here that should.** The rule above is about names
+        # that are *resolved implicitly*: a `bash` ahead of `/bin` on PATH
+        # answers for every shebang, every `system()` and every `chsh` on the
+        # machine. Nothing resolves a formatter that way — it is only ever
+        # called by name, on purpose, by an editor, a pre-commit hook or a
+        # Makefile, and every one of those is a caller that cannot be handed a
+        # keg-internal path. A formatter behind `opt_libexec` is a formatter
+        # nothing calls.
+        #
+        # The real hazard is the other formula: homebrew-core ships
+        # mvdan.cc/sh's `shfmt`, which wants the same `bin/shfmt`. `conflicts:`
+        # above declares that, so Homebrew refuses with a sentence naming both
+        # formulas instead of the bare "Could not symlink bin/shfmt" that
+        # silence produces.
+      files:
+        # Not into libexec beside the binaries. The function search is
+        # `<prefix>/share/sh/site-functions` then `<prefix>/share/sh/functions`,
+        # and the prefix a binary in the keg's libexec derives is the keg — so
+        # this is the directory the shell will actually look in, and
+        # `share/sh/site-functions` is left for whatever a person installs
+        # later. The directory is tracked by git, so the source build installs
+        # it from the source archive as well as the bottle carrying it.
+        - src: share/sh/functions
+          dst: share/sh/functions
     caveats: |
       The binaries are named bash, zsh, ksh, dash, ash and sh, so they are NOT linked
       into #{HOMEBREW_PREFIX}/bin — that would shadow the system shells for

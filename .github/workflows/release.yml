@@ -70,10 +70,14 @@ jobs:
       # workflow's OIDC identity.
       id-token: write
       attestations: write
-    uses: blairham/.github/.github/workflows/go-release.yml@2a975269ebbb74aa0b4ec96f45773d7d68cc7bcc # v0.0.3
+    uses: blairham/.github/.github/workflows/go-release.yml@ed30c1599f3dae98165801429893d397069b433c # v0.0.4
     with:
       tag: ${{ inputs.tag }}
       snapshot: ${{ inputs.dry-run == true }}
+      # blairham/goreleaser, for homebrew_bottles (goreleaser/goreleaser#7342):
+      # the official binary refuses that section. ci.yml's render pins the same
+      # commit, so CI renders with the binary a release runs.
+      goreleaser-ref: a76c419b192457c710f8726d80913b1cd10ebb4a
       # A build, not the tests. What is released is the merge of
       # release-please's pull request, whose required checks ran on `main` as
       # it stood when release-please last rebuilt it (it does so on every

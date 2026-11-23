@@ -128,7 +128,7 @@ jobs:
   # meant to hold, so a route that got out is a regression by definition.
   ci:
     name: CI
-    uses: blairham/.github/.github/workflows/go-ci.yml@2a975269ebbb74aa0b4ec96f45773d7d68cc7bcc # v0.0.3
+    uses: blairham/.github/.github/workflows/go-ci.yml@ed30c1599f3dae98165801429893d397069b433c # v0.0.4
     with:
       os: '["ubuntu-latest","macos-latest"]'
       golangci-lint-hook: false
@@ -143,7 +143,7 @@ jobs:
   # job.
   changes:
     name: Changes
-    uses: blairham/.github/.github/workflows/go-changes.yml@2a975269ebbb74aa0b4ec96f45773d7d68cc7bcc # v0.0.3
+    uses: blairham/.github/.github/workflows/go-changes.yml@ed30c1599f3dae98165801429893d397069b433c # v0.0.4
     with:
       filters: >-
         {"packaging": ["^\\.goreleaser\\.yaml$", "^\\.github/workflows/(release|ci)\\.yml$"]}
@@ -374,9 +374,12 @@ jobs:
     if: fromJSON(needs.changes.outputs.matches).packaging == 'true'
     permissions:
       contents: read
-    uses: blairham/.github/.github/workflows/go-release.yml@2a975269ebbb74aa0b4ec96f45773d7d68cc7bcc # v0.0.3
+    uses: blairham/.github/.github/workflows/go-release.yml@ed30c1599f3dae98165801429893d397069b433c # v0.0.4
     with:
       snapshot: true
+      # .goreleaser.yaml uses homebrew_bottles, which only blairham/goreleaser
+      # parses (goreleaser/goreleaser#7342); release.yml pins the same commit.
+      goreleaser-ref: a76c419b192457c710f8726d80913b1cd10ebb4a
       # CI's own test jobs run the suite; a render only has to build.
       test-command: ''
       # dist/ is every platform's binaries and archives, and it is read once,
@@ -393,28 +396,33 @@ jobs:
           name: ${{ needs.render.outputs.snapshot-artifact }}
           path: dist
       # Rendering proves the config parses and every target builds. It does not
-      # prove the formula installs what the archive carries: the install list is
-      # an explicit `libexec.install "sh", "bash", …` and `libexec.install`
-      # silently skips a name it was not given, which is how `ash` was dropped
-      # from a release once already. A formula quietly missing a shell renders
-      # exactly like a correct one.
+      # prove the formula installs what the build produced, or that the bottles
+      # carry it: a keg layout is a list in `.goreleaser.yaml`, and a binary
+      # left out of it renders exactly like a correct formula. `brews` dropped
+      # `ash` from a release once that way, through an explicit
+      # `libexec.install` list that silently skipped the name it was not given.
       #
-      # So this compares the two rosters the render itself produced -- the
-      # binaries in `artifacts.json` against the names in the generated formula
-      # -- rather than either against a list written here. A hardcoded list is a
-      # claim about a roster it cannot see, and goes stale the next time someone
-      # adds a binary; derived, the check gets stronger when one is added.
-      - name: Does the formula install every binary the build produced?
+      # So this compares the rosters the render itself produced -- the binaries
+      # in `artifacts.json` and the functions in the release archive -- against
+      # the generated formula and against every bottle, rather than any of them
+      # against a list written here. A hardcoded list is a claim about a roster
+      # it cannot see, and goes stale the next time someone adds a binary;
+      # derived, the check gets stronger when one is added.
+      - name: Do the formula and the bottles install every binary the build produced?
         shell: bash
         run: |
           set -euo pipefail
 
-          formula=$(find dist/homebrew -name '*.rb' -print -quit 2>/dev/null || true)
+          # The formula homebrew_bottles writes: a source build (`go build`
+          # per binary, straight to its place in the keg) plus a `bottle do`
+          # block. `brews` wrote dist/homebrew/ and is gone; reading that path
+          # would find nothing, so the missing-input checks below are loud.
+          formula=$(find dist/homebrew_bottles/Formula -name '*.rb' -print -quit 2>/dev/null || true)
           # Every check below is written to fail loudly when its input is
           # missing, because the failure this job exists to catch and a job that
           # silently measured nothing look identical in a green tick.
           if [ -z "$formula" ]; then
-            echo "::error::no formula under dist/homebrew -- the brew pipe did not run, so this job proved nothing"
+            echo "::error::no formula under dist/homebrew_bottles/Formula -- the homebrew_bottles pipe did not run, so this job proved nothing"
             exit 1
           fi
           echo "reading $formula"
@@ -424,31 +432,23 @@ jobs:
           built="$work/built.txt"
           installed="$work/installed.txt"
 
-          # `.extra.ID` is the build id, `.name` the binary it produces; the
-          # same name appears once per platform, hence the dedupe.
+          # `.name` is the binary a build produces; the same name appears once
+          # per platform, hence the dedupe.
           jq -r '.[] | select(.type == "Binary") | .name' dist/artifacts.json | sort -u > "$built"
-          # **Both destinations, not just libexec.** The keg has two on purpose:
-          # the shells go to `libexec`, which is off PATH, because a `bash` ahead
-          # of `/bin` would answer for every shebang on the machine; `shfmt` goes
-          # to `bin`, because nothing resolves a formatter implicitly and one
-          # behind `opt_libexec` is a formatter nothing calls. A check that read
-          # only `libexec.install` would report the formatter as missing on a
-          # keg that installs it correctly -- which is a false alarm, and the
-          # failure mode that trains people to ignore the job.
-          #
-          # Both quoting styles too, since the formula is generated and this
-          # should not depend on which one GoReleaser emits.
-          sed -n -E 's/.*(libexec|bin)\.install (.*)/\2/p' "$formula" \
-            | tr ',' '\n' \
-            | sed -n -e 's/.*"\([^"]*\)".*/\1/p' -e "s/.*'\([^']*\)'.*/\1/p" \
-            | sort -u > "$installed"
-
           if [ ! -s "$built" ]; then
             echo "::error::artifacts.json lists no binaries at all -- the render produced nothing to install"
             exit 1
           fi
+
+          # Each binary's place in the keg, as `<dir>/<name>`, from the source
+          # build's `output: libexec/"bash"` arguments. Both quoting styles,
+          # since the formula is generated and this should not depend on which
+          # one GoReleaser emits.
+          sed -n -E -e 's/.*output: ([a-z_]+)\/"([^"]+)".*/\1\/\2/p' \
+            -e "s/.*output: ([a-z_]+)\/'([^']+)'.*/\1\/\2/p" "$formula" \
+            | sort -u > "$installed"
           if [ ! -s "$installed" ]; then
-            echo "::error::the rendered formula has no libexec.install list -- nothing would be installed"
+            echo "::error::the rendered formula builds no binary into the keg -- nothing would be installed from source"
             exit 1
           fi
 
@@ -456,20 +456,75 @@ jobs:
           echo "installed: $(tr '\n' ' ' < "$installed")"
 
           status=0
+          fail() { echo "::error::$*"; status=1; }
+
           # Built but not installed: the keg comes out missing a binary the
           # archive carries and the caveats name. This is the `ash` failure.
-          if missing=$(comm -23 "$built" "$installed") && [ -n "$missing" ]; then
-            echo "::error::the archive carries these, and the formula does not install them: $(echo $missing)"
-            status=1
+          if missing=$(comm -23 "$built" <(sed 's|.*/||' "$installed" | sort -u)) && [ -n "$missing" ]; then
+            fail "the archive carries these, and the formula does not install them: $(echo $missing)"
           fi
-          # Installed but not built: `libexec.install` raises on a name that is
-          # not in the archive, so this fails at `brew install` time instead.
-          if extra=$(comm -13 "$built" "$installed") && [ -n "$extra" ]; then
-            echo "::error::the formula installs these, and the archive does not carry them: $(echo $extra)"
-            status=1
+          # Installed but not built: a source build of a name nobody ships.
+          if extra=$(comm -13 "$built" <(sed 's|.*/||' "$installed" | sort -u)) && [ -n "$extra" ]; then
+            fail "the formula installs these, and the archive does not carry them: $(echo $extra)"
           fi
+
+          # **Both destinations, and which binary goes to which.** The keg has
+          # two on purpose: the shells go to `libexec`, which is off PATH,
+          # because a `bash` ahead of `/bin` would answer for every shebang on
+          # the machine; `shfmt` goes to `bin`, because nothing resolves a
+          # formatter implicitly and one behind `opt_libexec` is a formatter
+          # nothing calls. A shell in `bin` is the regression that matters
+          # most, so it is named on its own.
+          while read -r name; do
+            if [ "$name" = shfmt ]; then want=bin/shfmt; else want="libexec/$name"; fi
+            grep -qxF "$want" "$installed" || fail "the formula does not put $name at $want"
+          done < "$built"
+          if shadow=$(grep '^bin/' "$installed" | grep -vxF bin/shfmt) && [ -n "$shadow" ]; then
+            fail "the formula links a shell into bin, ahead of the system's on PATH: $(echo $shadow)"
+          fi
+
+          # The functions, from the source build: the second directory of the
+          # function search, so a keg without it is a shell whose `$fpath`
+          # points at nothing.
+          grep -qF '"share/sh/functions" => "functions"' "$formula" \
+            || fail "the formula's source build does not install share/sh/functions"
+          grep -qF 'conflicts_with "shfmt"' "$formula" \
+            || fail "the formula no longer declares its conflict with homebrew-core's shfmt"
+          grep -qE '^ *def caveats' "$formula" \
+            || fail "the formula has no caveats -- nothing tells a person where the shells are"
+
+          # **The bottles are what `brew install` actually pours**, so each one
+          # is read too, against the same rosters: every binary at the place
+          # the formula builds it to, and every function the release archive
+          # carries. A bottle is a tarball rooted at `<name>/<version>/`.
+          functions="$work/functions.txt"
+          archive=$(find dist -maxdepth 1 -name 'sh_*.tar.gz' -print -quit)
+          if [ -z "$archive" ]; then
+            fail "no release archive in dist/ to take the function roster from"
+          else
+            tar -tzf "$archive" | sed -n 's|^share/sh/functions/\(..*\)|\1|p' | sort -u > "$functions"
+            [ -s "$functions" ] || fail "$archive carries no share/sh/functions -- nothing to compare the bottles against"
+          fi
+          bottles=$(find dist/homebrew_bottles -maxdepth 1 -name '*.bottle.tar.gz' | sort)
+          tags=$(grep -cE '^ *sha256 cellar: .*, [a-z0-9_]+: "' "$formula" || true)
+          if [ -z "$bottles" ]; then
+            fail "the render built no bottles"
+          elif [ "$(echo "$bottles" | wc -l)" -ne "$tags" ]; then
+            fail "dist/ holds $(echo "$bottles" | wc -l | tr -d ' ') bottles and the formula's bottle block names $tags"
+          fi
+          for bottle in $bottles; do
+            listing="$work/$(basename "$bottle").txt"
+            tar -tzf "$bottle" | sed -n 's|^[^/]*/[^/]*/\(..*[^/]\)$|\1|p' | sort -u > "$listing"
+            if lost=$(comm -23 "$installed" "$listing") && [ -n "$lost" ]; then
+              fail "$(basename "$bottle") is missing $(echo $lost)"
+            fi
+            if [ -s "$functions" ] && lost=$(comm -23 "$functions" <(sed -n 's|^share/sh/functions/||p' "$listing")) && [ -n "$lost" ]; then
+              fail "$(basename "$bottle") is missing $(echo "$lost" | wc -l | tr -d ' ') of share/sh/functions, e.g. $(echo "$lost" | head -1)"
+            fi
+          done
+
           if [ "$status" -eq 0 ]; then
-            echo "the formula installs all $(wc -l < "$built" | tr -d ' ') binaries the build produced"
+            echo "the formula installs all $(wc -l < "$built" | tr -d ' ') binaries the build produced, and each of $(echo "$bottles" | wc -l | tr -d ' ') bottles carries them and $(wc -l < "$functions" | tr -d ' ') functions"
           fi
           exit "$status"
 

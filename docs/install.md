@@ -138,7 +138,9 @@ Once a version is tagged, the tap carries it:
 
 The formula installs the six shells into the keg's `libexec` and links
 **none of them** into `bin`, for the reason above. `brew --prefix sh`
-names the keg; the shells are in `$(brew --prefix sh)/libexec`.
+names the keg; the shells are in `$(brew --prefix sh)/libexec`. A plain
+`brew install` pours a prebuilt bottle; `brew install --build-from-source`
+builds the same keg from the release's source archive, which needs Go.
 
 `shfmt` is the one binary that does go into `bin`, so it is on your `PATH`
 after the install and `shfmt -w script.sh` works from anywhere. The reason

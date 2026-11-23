@@ -57,7 +57,9 @@ adoption measurable, and the alternative is arguing from stars, which
 measure something else and which we would then be optimizing directly.
 
 **Current state.** GoReleaser publishes to `blairham/homebrew-tap`
-(`brews:` in `.goreleaser.yaml`), which stays as the pre-core path and
+(`homebrew_bottles:` in `.goreleaser.yaml`: a formula that builds from the
+release's source archive and pours bottles of the release binaries, the
+shape a homebrew-core formula has), which stays as the pre-core path and
 for pre-releases. The tap and core are not in conflict: core carries
 the release, the tap carries the edge.
 
@@ -103,15 +105,17 @@ The ordering is deliberate: each of these is a place a *user* looks,
 and there is no point being in five package managers with nothing to
 install. Launch, then breadth.
 
-## A deprecation to handle before it becomes an error
+## The deprecation, handled
 
-GoReleaser is phasing `brews:` out in favor of `homebrew_casks:`, and
-says so on every run. The migration is not a rename — casks install
-differently — so it wants a release to verify against rather than a
-blind edit, and it is deliberately not bundled with the winget/scoop
-configuration. The
-tap is the pre-core path anyway; core carries a hand-written formula
-(`packaging/homebrew/sh.rb`), which this does not affect.
+GoReleaser phased `brews:` out in favor of `homebrew_casks:`. A cask was
+the wrong answer for a shell — it quarantines every binary it downloads,
+so Gatekeeper refuses the thing `chsh` was just pointed at — so the tap
+moved to `homebrew_bottles:` instead, a formula with a source build and
+bottles. That section exists only in blairham/goreleaser
+(goreleaser/goreleaser#7342), so `release.yml` and `ci.yml`'s render pin
+that build with `goreleaser-ref`. The tap is the pre-core path anyway;
+core carries a hand-written formula (`packaging/homebrew/sh.rb`), which
+this does not affect.
 
 ## What is never in a package
 

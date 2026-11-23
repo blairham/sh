@@ -393,9 +393,12 @@ that is on `PATH` unless `ALLOW_PATH_SHADOW=1` is passed with it, and
 the one Go command not to run in this repository.
 
 The Homebrew formula in `.goreleaser.yaml` makes the same choice: it
-installs into the keg's `libexec` and links nothing into `bin`. Anything
-that would put these names on a `PATH` is a change to argue for, not a
-tidy-up.
+installs the six shells into the keg's `libexec` and links none of them
+into `bin`; only `shfmt` goes there. It is `homebrew_bottles`, so the
+layout is one list (`bottles.binaries`) that both the source build and the
+bottles follow, and CI's `Render checks` job reads the rendered formula and
+every bottle against it. Anything that would put these names on a `PATH`
+is a change to argue for, not a tidy-up.
 
 ## Release
 
@@ -406,7 +409,10 @@ request, `chore(main): release X.Y.Z`, carrying the next version and its
 `.release-please-manifest.json`). **Merging it is the release**:
 release-please tags `vX.Y.Z` and creates the GitHub release, and the same run
 calls `release.yml` → `go-release.yml` → GoReleaser → `blairham/homebrew-tap`
-updated. The pull request waits until somebody merges it, so releases stay
+updated. That GoReleaser is blairham/goreleaser, pinned by `goreleaser-ref`
+in `release.yml` and in `ci.yml`'s render, because the official binary
+refuses `homebrew_bottles` (goreleaser/goreleaser#7342); the two pins move
+together. The pull request waits until somebody merges it, so releases stay
 batched. Never tag by hand, and never edit the manifest or `CHANGELOG.md`: a
 pushed tag releases nothing, and `release.yml` refuses a tag the manifest does
 not record. One archive per platform carrying all six binaries, Linux and

@@ -12,6 +12,31 @@ Pre-stable releases (`v0.x.y`) make no compatibility promise. Until `v1.0.0`,
 `feat` and `fix` both bump the patch version and a breaking change bumps the
 minor.
 
+## [0.0.42](https://github.com/blairham/sh/compare/v0.0.41...v0.0.42) (2026-11-23)
+
+
+### Fixed
+
+* **driver:** end the shell on an untrapped XFSZ or PROF from outside, and run a trapped PROF or PIPE on darwin ([#7421](https://github.com/blairham/sh/issues/7421)) ([a03d8a0](https://github.com/blairham/sh/commit/a03d8a0c995c6d452bfc31a7e72c52554d684748))
+* **interp:** a copy's exit in its EXIT trap does not save it from its signal ([#7418](https://github.com/blairham/sh/issues/7418)) ([55331d2](https://github.com/blairham/sh/commit/55331d2703b672af07fc922d24559dc44dfac1f3))
+* **interp:** a copy's untrapped fatal signal ends a body running a foreground program ([#7426](https://github.com/blairham/sh/issues/7426)) ([a5b8981](https://github.com/blairham/sh/commit/a5b898112d4ae550866fb01248a848cec865e735))
+* **interp:** give a job its body's status when parentheses it ran died ([#7431](https://github.com/blairham/sh/issues/7431)) ([f26805b](https://github.com/blairham/sh/commit/f26805b0b454d94b38c1e5c332b1e598e76c4415))
+* **interp:** give a job killed from inside one notice, naming what ran ([#7416](https://github.com/blairham/sh/issues/7416)) ([2f63b31](https://github.com/blairham/sh/commit/2f63b3181ffc1621d77637ed3c80be367e1b4546))
+* **interp:** name the child a ( … ) starts in its killed notice ([#7429](https://github.com/blairham/sh/issues/7429)) ([ae79780](https://github.com/blairham/sh/commit/ae7978005671bcdae152c0cdb1493b6ce00fc5ba))
+* **interp:** run no EXIT trap for a shell killed by its own KILL ([#7428](https://github.com/blairham/sh/issues/7428)) ([abafe36](https://github.com/blairham/sh/commit/abafe36d39713ddd8c61aab0a3ceff827e9ef09b))
+* **interp:** spell a definition in a killed notice as a nested one ([#7432](https://github.com/blairham/sh/issues/7432)) ([c695dca](https://github.com/blairham/sh/commit/c695dcabee5cd3e6d3b205d0614fd9d85262a8ec))
+
+
+### Performance
+
+* **interp:** read a pattern's policy questions from its family once ([#7415](https://github.com/blairham/sh/issues/7415)) ([305e762](https://github.com/blairham/sh/commit/305e762305b856d27388a33a399e1abe3c117a5c))
+* **interp:** read a plain assignment value without the tilde and equals passes ([#7427](https://github.com/blairham/sh/issues/7427)) ([c2a0c25](https://github.com/blairham/sh/commit/c2a0c2514c005730ab325c205f74471cbfb23e89))
+* **interp:** read a subscript of one bare $name once ([#7423](https://github.com/blairham/sh/issues/7423)) ([ce1f776](https://github.com/blairham/sh/commit/ce1f776e87259a5ef17e392794e6e00bd20b2bc0))
+* **interp:** run a declaration line of plain names by the plain builtin route ([#7413](https://github.com/blairham/sh/issues/7413)) ([559a887](https://github.com/blairham/sh/commit/559a887d4b8f381ce5aea207af285d02cb5450ea)), closes [#6373](https://github.com/blairham/sh/issues/6373)
+* **interp:** run a plain builtin's line by a route beside simpleCommand ([#7409](https://github.com/blairham/sh/issues/7409)) ([d02a95b](https://github.com/blairham/sh/commit/d02a95b6cebdd18859ffe406695702e672d849e1))
+* **interp:** take a declaration's name=$param operands by the plain builtin route ([#7414](https://github.com/blairham/sh/issues/7414)) ([ccce627](https://github.com/blairham/sh/commit/ccce62723bc5d9c62df616d38261be82f5e05733)), closes [#6373](https://github.com/blairham/sh/issues/6373)
+* **interp:** take a plain declaration line without the utility's setup ([#7410](https://github.com/blairham/sh/issues/7410)) ([a02bd72](https://github.com/blairham/sh/commit/a02bd727ea7a5edb0ba21aebdb85285adc785dfe)), closes [#6373](https://github.com/blairham/sh/issues/6373)
+
 ## [0.0.41](https://github.com/blairham/sh/compare/v0.0.40...v0.0.41) (2026-11-04)
 
 
